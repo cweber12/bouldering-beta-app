@@ -1,0 +1,57 @@
+/**
+ * In-memory session store backed by a Map.
+ *
+ * Holds route attempt data for the current browser session — no persistence.
+ * The IndexedDB layer will be added in a later commit; consumers should import
+ * from this module only, so the storage backend stays swappable.
+ */
+
+import type { PoseFrame } from "@/pipeline/poseDetection";
+
+export interface VideoMeta {
+  /** Original filename. */
+  name: string;
+  /** Duration in seconds. */
+  duration: number;
+  /** Frames per second (may be approximate). */
+  fps: number;
+  /** Frame width in pixels. */
+  width: number;
+  /** Frame height in pixels. */
+  height: number;
+}
+
+export interface RouteAttempt {
+  id: string;
+  videoMeta: VideoMeta;
+  /** Processed pose frames in chronological order. */
+  frames: PoseFrame[];
+}
+
+// Module-level store — shared across all hook/component instances.
+const store = new Map<string, RouteAttempt>();
+
+/** Save (or overwrite) a route attempt. */
+export function saveAttempt(attempt: RouteAttempt): void {
+  store.set(attempt.id, attempt);
+}
+
+/** Retrieve a route attempt by ID. Returns undefined if not found. */
+export function getAttempt(id: string): RouteAttempt | undefined {
+  return store.get(id);
+}
+
+/** Return all stored attempt IDs. */
+export function listAttemptIds(): string[] {
+  return Array.from(store.keys());
+}
+
+/** Delete an attempt by ID. No-op if the ID does not exist. */
+export function deleteAttempt(id: string): void {
+  store.delete(id);
+}
+
+/** Clear everything — useful for testing. */
+export function clearStore(): void {
+  store.clear();
+}

@@ -1,0 +1,135 @@
+"use client";
+
+import { useCallback, useRef, useState } from "react";
+import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
+import { saveAttempt, type VideoMeta } from "@/storage/sessionStore";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PoseDetector = any;
+
+export type ProcessingStatus = "idle" | "processing" | "done" | "error";
+
+export interface VideoProcessorResult {
+  /** Start processing the supplied video File. */
+  process: (file: File, detector: PoseDetector) => Promise<void>;
+  status: ProcessingStatus;
+  /** Frame index currently being processed (0-based). */
+  currentFrame: number;
+  /** Total frames to process (known after video metadata loads). */
+  totalFrames: number;
+  /** The attempt ID written to sessionStore, available when status === "done". */
+  attemptId: string | null;
+  errorMessage: string | null;
+}
+
+/**
+ * Seeks through a video file frame-by-frame, runs pose estimation on each
+ * frame, and writes the result to the session store.
+ *
+ * Processing happens entirely in the browser — no network calls.
+ *
+ * @param frameIntervalMs - How far apart sampled frames are (default 100 ms).
+ *                          Lower = more frames = slower and more data.
+ */
+export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
+  const [status, setStatus] = useState<ProcessingStatus>("idle");
+  const [currentFrame, setCurrentFrame] = useState(0);
+  const [totalFrames, setTotalFrames] = useState(0);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const abortRef = useRef(false);
+
+  const process = useCallback(
+    async (file: File, detector: PoseDetector) => {
+      abortRef.current = false;
+      setStatus("processing");
+      setCurrentFrame(0);
+      setTotalFrames(0);
+      setAttemptId(null);
+      setErrorMessage(null);
+
+      // Create an offscreen video element — never attached to the DOM.
+      const video = document.createElement("video");
+      video.muted = true;
+      video.playsInline = true;
+      const objectUrl = URL.createObjectURL(file);
+      video.src = objectUrl;
+
+      // Create a canvas for drawing individual frames.
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) {
+        setStatus("error");
+        setErrorMessage("Could not get 2D canvas context.");
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+
+      try {
+        // Wait for the browser to read the video dimensions and duration.
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => resolve();
+          video.onerror = () => reject(new Error("Failed to load video metadata."));
+        });
+
+        const { duration, videoWidth, videoHeight } = video;
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+
+        // Calculate how many frames we'll sample.
+        const frameCount = Math.ceil((duration * 1000) / frameIntervalMs);
+        setTotalFrames(frameCount);
+
+        const videoMeta: VideoMeta = {
+          name: file.name,
+          duration,
+          fps: frameCount / duration,
+          width: videoWidth,
+          height: videoHeight,
+        };
+
+        const frames: PoseFrame[] = [];
+        const id = `attempt-${Date.now()}`;
+
+        for (let i = 0; i < frameCount; i++) {
+          if (abortRef.current) break;
+
+          const seekTime = (i * frameIntervalMs) / 1000;
+
+          // Seek and wait for the frame to be ready.
+          await new Promise<void>((resolve, reject) => {
+            video.onseeked = () => resolve();
+            video.onerror = () => reject(new Error(`Seek failed at ${seekTime}s`));
+            video.currentTime = Math.min(seekTime, duration);
+          });
+
+          ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+          const frame = await estimateFrame(detector, canvas, video.currentTime);
+          if (frame) frames.push(frame);
+
+          setCurrentFrame(i + 1);
+        }
+
+        saveAttempt({ id, videoMeta, frames });
+        setAttemptId(id);
+        setStatus("done");
+
+        console.info(
+          `[useVideoProcessor] Done. attempt=${id} totalFrames=${frames.length}`,
+          frames[0] ?? "no frames detected",
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[useVideoProcessor] Error:", err);
+        setStatus("error");
+        setErrorMessage(msg);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+    },
+    [frameIntervalMs],
+  );
+
+  return { process, status, currentFrame, totalFrames, attemptId, errorMessage };
+}
