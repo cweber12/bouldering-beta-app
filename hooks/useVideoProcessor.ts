@@ -2,17 +2,23 @@
 
 import { useCallback, useRef, useState } from "react";
 import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
-import { saveAttempt, type VideoMeta } from "@/storage/sessionStore";
+import { extractFeatures } from "@/pipeline/orbDetector";
+import { saveAttempt, type VideoMeta, type OrbFeatures } from "@/storage/sessionStore";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CV = any;
 
 export type ProcessingStatus = "idle" | "processing" | "done" | "error";
+export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 
 export interface VideoProcessorResult {
   /** Start processing the supplied video File. */
-  process: (file: File, detector: PoseDetector) => Promise<void>;
+  process: (file: File, detector: PoseDetector, cv: CV) => Promise<void>;
   status: ProcessingStatus;
+  /** Tracks background ORB extraction after the seek loop completes. */
+  orbStatus: OrbStatus;
   /** Frame index currently being processed (0-based). */
   currentFrame: number;
   /** Total frames to process (known after video metadata loads). */
@@ -33,6 +39,7 @@ export interface VideoProcessorResult {
  */
 export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [status, setStatus] = useState<ProcessingStatus>("idle");
+  const [orbStatus, setOrbStatus] = useState<OrbStatus>("idle");
   const [currentFrame, setCurrentFrame] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
   const [attemptId, setAttemptId] = useState<string | null>(null);
@@ -40,9 +47,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const abortRef = useRef(false);
 
   const process = useCallback(
-    async (file: File, detector: PoseDetector) => {
+    async (file: File, detector: PoseDetector, cv: CV) => {
       abortRef.current = false;
       setStatus("processing");
+      setOrbStatus("idle");
       setCurrentFrame(0);
       setTotalFrames(0);
       setAttemptId(null);
@@ -91,6 +99,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
         const frames: PoseFrame[] = [];
         const id = `attempt-${Date.now()}`;
+        let referenceImageData: ImageData | null = null;
 
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
@@ -105,13 +114,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           });
 
           ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+          // Save the first frame as the ORB reference — extracted after the loop
+          // so the seek loop is never blocked waiting for the WASM worker.
+          if (i === 0) {
+            referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+
           const frame = await estimateFrame(detector, canvas, video.currentTime);
           if (frame) frames.push(frame);
 
           setCurrentFrame(i + 1);
         }
 
-        saveAttempt({ id, videoMeta, frames });
+        // Save the attempt and unblock the UI immediately — don't wait for ORB.
+        saveAttempt({ id, videoMeta, frames, orbFeatures: null, matchesPerFrame: null });
         setAttemptId(id);
         setStatus("done");
 
@@ -119,6 +136,25 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           `[useVideoProcessor] Done. attempt=${id} totalFrames=${frames.length}`,
           frames[0] ?? "no frames detected",
         );
+
+        // Extract ORB features from the reference frame on the main thread.
+        // OpenCV is already initialised here, so this is synchronous and reliable.
+        if (referenceImageData) {
+          setOrbStatus("extracting");
+          try {
+            const orbFeatures = extractFeatures(cv, referenceImageData);
+            saveAttempt({ id, videoMeta, frames, orbFeatures, matchesPerFrame: null });
+            setOrbStatus("ready");
+            console.info(
+              `[useVideoProcessor] ORB reference ready. keypoints=${orbFeatures.keypoints.length}`,
+            );
+          } catch (orbErr) {
+            setOrbStatus("failed");
+            console.warn("[useVideoProcessor] ORB reference extraction failed:", orbErr);
+          }
+        } else {
+          setOrbStatus("failed");
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("[useVideoProcessor] Error:", err);
@@ -131,5 +167,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     [frameIntervalMs],
   );
 
-  return { process, status, currentFrame, totalFrames, attemptId, errorMessage };
+  return { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage };
 }

@@ -23,6 +23,8 @@ function makeAttempt(id: string, frameCount = 0): RouteAttempt {
       timestamp: i * 0.1,
       keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }],
     })),
+    orbFeatures: null,
+    matchesPerFrame: null,
   };
 }
 
@@ -96,5 +98,88 @@ describe("sessionStore — clearStore", () => {
     saveAttempt(makeAttempt("c2"));
     clearStore();
     expect(listAttemptIds()).toHaveLength(0);
+  });
+});
+
+describe("sessionStore — matchesPerFrame", () => {
+  it("stores null matchesPerFrame when not provided", () => {
+    saveAttempt(makeAttempt("mpf-none"));
+    expect(getAttempt("mpf-none")?.matchesPerFrame).toBeNull();
+  });
+
+  it("stores and retrieves populated matchesPerFrame", () => {
+    const matchesPerFrame = [
+      [], // frame 0 — reference
+      [{ queryIdx: 0, trainIdx: 1, distance: 30 }],
+      [{ queryIdx: 1, trainIdx: 0, distance: 20 }, { queryIdx: 2, trainIdx: 3, distance: 55 }],
+    ];
+    const a: RouteAttempt = { ...makeAttempt("mpf-full", 3), matchesPerFrame };
+    saveAttempt(a);
+
+    const retrieved = getAttempt("mpf-full")!;
+    expect(retrieved.matchesPerFrame).toHaveLength(3);
+    expect(retrieved.matchesPerFrame![0]).toEqual([]);
+    expect(retrieved.matchesPerFrame![1]).toHaveLength(1);
+    expect(retrieved.matchesPerFrame![1][0]).toMatchObject({ queryIdx: 0, trainIdx: 1, distance: 30 });
+    expect(retrieved.matchesPerFrame![2]).toHaveLength(2);
+  });
+
+  it("matchesPerFrame is replaced when an attempt is overwritten", () => {
+    const initial: RouteAttempt = {
+      ...makeAttempt("mpf-overwrite"),
+      matchesPerFrame: [[{ queryIdx: 0, trainIdx: 0, distance: 10 }]],
+    };
+    saveAttempt(initial);
+
+    const updated: RouteAttempt = { ...makeAttempt("mpf-overwrite"), matchesPerFrame: null };
+    saveAttempt(updated);
+
+    expect(getAttempt("mpf-overwrite")?.matchesPerFrame).toBeNull();
+  });
+});
+
+describe("sessionStore — orbFeatures", () => {
+  it("stores null orbFeatures when none were extracted", () => {
+    const a = makeAttempt("orb-none");
+    saveAttempt(a);
+    expect(getAttempt("orb-none")?.orbFeatures).toBeNull();
+  });
+
+  it("stores and retrieves orbFeatures with keypoints and descriptors", () => {
+    const descriptors = new Uint8Array([0xde, 0xad, 0xbe, 0xef]);
+    const a: RouteAttempt = {
+      ...makeAttempt("orb-full"),
+      orbFeatures: {
+        keypoints: [
+          { pt: { x: 10, y: 20 }, size: 3, angle: 90, response: 0.8, octave: 0 },
+        ],
+        descriptors,
+      },
+    };
+    saveAttempt(a);
+
+    const retrieved = getAttempt("orb-full")!;
+    expect(retrieved.orbFeatures).not.toBeNull();
+    expect(retrieved.orbFeatures!.keypoints).toHaveLength(1);
+    expect(retrieved.orbFeatures!.keypoints[0].pt).toEqual({ x: 10, y: 20 });
+    expect(retrieved.orbFeatures!.descriptors).toBe(descriptors);
+  });
+
+  it("orbFeatures is preserved when an attempt is overwritten", () => {
+    const descriptors = new Uint8Array([1, 2]);
+    const initial: RouteAttempt = {
+      ...makeAttempt("orb-overwrite"),
+      orbFeatures: {
+        keypoints: [{ pt: { x: 1, y: 1 }, size: 1, angle: 0, response: 0.5, octave: 0 }],
+        descriptors,
+      },
+    };
+    saveAttempt(initial);
+
+    const updated: RouteAttempt = { ...makeAttempt("orb-overwrite", 2), orbFeatures: null };
+    saveAttempt(updated);
+
+    expect(getAttempt("orb-overwrite")?.orbFeatures).toBeNull();
+    expect(getAttempt("orb-overwrite")?.frames).toHaveLength(2);
   });
 });

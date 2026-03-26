@@ -7,6 +7,8 @@
  */
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+export type { OrbKeypoint, OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
 
 export interface VideoMeta {
   /** Original filename. */
@@ -26,6 +28,17 @@ export interface RouteAttempt {
   videoMeta: VideoMeta;
   /** Processed pose frames in chronological order. */
   frames: PoseFrame[];
+  /**
+   * ORB features extracted from the reference frame (frame 0 by default).
+   * Null when ORB extraction was skipped or failed.
+   */
+  orbFeatures: OrbFeatures | null;
+  /**
+   * Per-frame ORB match results against the reference frame.
+   * Index aligns with the `frames` array. Frame 0 (reference) is always [].
+   * Null when matching was not run.
+   */
+  matchesPerFrame: OrbMatch[][] | null;
 }
 
 // Module-level store — shared across all hook/component instances.

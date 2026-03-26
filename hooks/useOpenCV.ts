@@ -43,19 +43,47 @@ export function useOpenCV(): { ready: boolean; cv: Window["cv"] | null } {
     const onLoaded = () => setReady(true);
     listeners.push(onLoaded);
 
+    // If cv is already fully available, resolve immediately.
+    if (window.cv?.Mat) {
+      notifyLoaded();
+      return () => {
+        const idx = listeners.indexOf(onLoaded);
+        if (idx !== -1) listeners.splice(idx, 1);
+      };
+    }
+
+    const cleanupListener = () => {
+      const idx = listeners.indexOf(onLoaded);
+      if (idx !== -1) listeners.splice(idx, 1);
+    };
+
     if (!loadStarted) {
       loadStarted = true;
 
-      // Set up the Emscripten module callback BEFORE the script runs.
-      window.Module = {
-        onRuntimeInitialized() {
-          notifyLoaded();
-        },
+      // Ensure Module exists before loading opencv.js.
+      window.Module = window.Module ?? {};
+      const prevModuleInit = window.Module.onRuntimeInitialized;
+      window.Module.onRuntimeInitialized = () => {
+        prevModuleInit?.();
+        notifyLoaded();
       };
 
       const script = document.createElement("script");
+      script.id = "opencv-js";
       script.src = "/opencv.js";
       script.async = true;
+      script.onload = () => {
+        // Some builds expose cv.onRuntimeInitialized rather than Module callback.
+        if (window.cv && !window.cv.Mat) {
+          const prevCvInit = window.cv.onRuntimeInitialized;
+          window.cv.onRuntimeInitialized = () => {
+            prevCvInit?.();
+            notifyLoaded();
+          };
+        }
+        // If runtime is already initialized by onload time, unblock immediately.
+        if (window.cv?.Mat) notifyLoaded();
+      };
       script.onerror = () => {
         console.error(
           "[useOpenCV] Failed to load /opencv.js. " +
@@ -64,13 +92,20 @@ export function useOpenCV(): { ready: boolean; cv: Window["cv"] | null } {
         loadStarted = false; // allow retry on hot-reload
       };
       document.body.appendChild(script);
+    } else {
+      // If another hook already started loading, attach to existing script events.
+      const existing = document.getElementById("opencv-js") as HTMLScriptElement | null;
+      if (existing && window.cv && !window.cv.Mat) {
+        const prevCvInit = window.cv.onRuntimeInitialized;
+        window.cv.onRuntimeInitialized = () => {
+          prevCvInit?.();
+          notifyLoaded();
+        };
+      }
+      if (window.cv?.Mat) notifyLoaded();
     }
 
-    return () => {
-      // Clean up this listener if the component unmounts before load finishes.
-      const idx = listeners.indexOf(onLoaded);
-      if (idx !== -1) listeners.splice(idx, 1);
-    };
+    return cleanupListener;
   }, [ready]);
 
   return { ready, cv: ready ? window.cv : null };
