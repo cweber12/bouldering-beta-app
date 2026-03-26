@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures } from "@/pipeline/orbDetector";
-import { saveAttempt, type VideoMeta, type OrbFeatures } from "@/storage/sessionStore";
+import { saveAttempt, type VideoMeta } from "@/storage/sessionStore";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;

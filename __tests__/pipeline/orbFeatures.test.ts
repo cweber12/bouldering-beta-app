@@ -16,6 +16,7 @@ class FakeOrbWorker {
 
   constructor(_url: unknown) {
     workerConstructions++;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     latestWorker = this;
     // Emit 'ready' asynchronously — mirrors the real WASM initialisation delay.
     queueMicrotask(() => this._emit({ type: "ready" }));

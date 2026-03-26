@@ -55,6 +55,7 @@ export function usePoseVideo(
       prevUrlRef.current = null;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- batched by React 19; legitimate render-cycle start
     setStatus("rendering");
     setVideoUrl(null);
     setErrorMessage(null);

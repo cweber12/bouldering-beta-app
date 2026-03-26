@@ -70,7 +70,6 @@ function stubLoadImageSuccess(width = 100, height = 80) {
   });
 
   // Make Image fire onload synchronously when src is set.
-  const OrigImage = globalThis.Image;
   const MockImage = class {
     naturalWidth = width;
     naturalHeight = height;

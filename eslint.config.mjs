@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored WASM bundle — not our code.
+    "public/opencv.js",
+    // Generated coverage report files.
+    "coverage/**",
   ]),
   {
     rules: {
@@ -21,7 +25,7 @@ const eslintConfig = defineConfig([
       "no-unused-vars": "off", // base rule off; TS rule handles it
       "@typescript-eslint/no-unused-vars": [
         "error",
-        { vars: "all", args: "after-used", ignoreRestSiblings: true },
+        { vars: "all", args: "after-used", argsIgnorePattern: "^_", ignoreRestSiblings: true },
       ],
     },
   },

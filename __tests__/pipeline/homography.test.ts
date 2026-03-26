@@ -1,6 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { applyHomographyMatrix } from "@/pipeline/homography";
-import { buildTransformedKeypoints } from "@/pipeline/skeletonOverlay";
+import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { PoseFrame } from "@/pipeline/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -118,5 +118,72 @@ describe("buildTransformedKeypoints", () => {
       expect.arrayContaining(["left_wrist", "right_wrist"]),
     );
     expect(Object.keys(result)).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// drawSkeleton
+// ---------------------------------------------------------------------------
+
+function makeFakeCtx() {
+  return {
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    arc: vi.fn(),
+    fill: vi.fn(),
+    lineWidth: 0,
+    strokeStyle: "",
+    fillStyle: "",
+    lineCap: "",
+  } as unknown as CanvasRenderingContext2D;
+}
+
+describe("drawSkeleton", () => {
+  it("draws limbs for connected keypoint pairs", () => {
+    const ctx = makeFakeCtx();
+    const keypoints = {
+      nose: { x: 50, y: 50 },
+      left_eye: { x: 40, y: 40 },
+      right_eye: { x: 60, y: 40 },
+    };
+
+    drawSkeleton(ctx, keypoints);
+
+    // stroke() should be called at least once for a limb connected to nose.
+    expect(ctx.stroke).toHaveBeenCalled();
+    // fill() is called once per keypoint for the joint circles.
+    expect(ctx.fill).toHaveBeenCalledTimes(3);
+  });
+
+  it("skips edges where a keypoint is missing", () => {
+    const ctx = makeFakeCtx();
+    // Provide only two keypoints — most edges will have missing endpoints.
+    const keypoints = {
+      nose: { x: 100, y: 100 },
+      left_eye: { x: 90, y: 90 },
+    };
+
+    // Should not throw even with many missing edge endpoints.
+    expect(() => drawSkeleton(ctx, keypoints)).not.toThrow();
+    // Only 2 joint circles drawn.
+    expect(ctx.fill).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls save and restore to isolate canvas state", () => {
+    const ctx = makeFakeCtx();
+    drawSkeleton(ctx, {});
+    expect(ctx.save).toHaveBeenCalledOnce();
+    expect(ctx.restore).toHaveBeenCalledOnce();
+  });
+
+  it("draws nothing for an empty keypoints map", () => {
+    const ctx = makeFakeCtx();
+    drawSkeleton(ctx, {});
+    expect(ctx.stroke).not.toHaveBeenCalled();
+    expect(ctx.fill).not.toHaveBeenCalled();
   });
 });

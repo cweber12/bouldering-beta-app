@@ -17,6 +17,7 @@ class FakeOrbWorker {
 
   constructor(_url: unknown) {
     workerConstructions++;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     latestWorker = this;
     queueMicrotask(() => this._emit({ type: "ready" }));
   }
