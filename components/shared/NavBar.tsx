@@ -7,6 +7,7 @@ const TABS = [
   { href: "/", label: "Home" },
   { href: "/upload", label: "Upload" },
   { href: "/match", label: "Match" },
+  { href: "/compare", label: "Compare" },
   { href: "/docs", label: "Docs" },
 ] as const;
 
@@ -20,7 +21,7 @@ export default function NavBar() {
     >
       <div className="mx-auto flex max-w-4xl items-center gap-1 px-6">
         <span className="mr-6 py-3 text-sm font-semibold text-zinc-200 tracking-tight">
-          Bouldering Beta
+          Route Renderer
         </span>
         {TABS.map(tab => {
           const active =

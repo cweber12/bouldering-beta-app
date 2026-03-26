@@ -65,6 +65,21 @@ export function useTFModel(
         }
 
         if (!cancelled) {
+          // Warm up the model with a blank canvas so WebGL shaders are compiled
+          // before the first real inference. The first pose estimation is then
+          // as fast as subsequent ones.
+          try {
+            const warmup = document.createElement("canvas");
+            warmup.width = 192;
+            warmup.height = 192;
+            await detector.estimatePoses(warmup, { flipHorizontal: false });
+          } catch {
+            // Warm-up is best-effort — a failure only means the first real
+            // inference will compile shaders on the fly.
+          }
+        }
+
+        if (!cancelled) {
           detectorRef.current = detector;
           setReady(true);
           console.info(`[useTFModel] ${modelName} loaded on backend: ${tf.getBackend()}`);

@@ -53,15 +53,19 @@ export function buildTransformedKeypoints(
  *
  * @param ctx       - Canvas 2D context to draw onto.
  * @param keypoints - Map of keypoint name → {x, y} in image pixel space.
+ * @param options   - Optional color overrides for multi-attempt overlays.
  */
 export function drawSkeleton(
   ctx: CanvasRenderingContext2D,
   keypoints: Record<string, { x: number; y: number }>,
+  options?: { limbColor?: string; jointColor?: string },
 ): void {
+  const limbColor = options?.limbColor ?? LIMB_COLOR;
+  const jointColor = options?.jointColor ?? JOINT_COLOR;
   // Draw limb lines first so joints render on top.
   ctx.save();
   ctx.lineWidth = LIMB_WIDTH;
-  ctx.strokeStyle = LIMB_COLOR;
+  ctx.strokeStyle = limbColor;
   ctx.lineCap = "round";
 
   for (const [fromIdx, toIdx] of SKELETON_EDGES) {
@@ -76,7 +80,7 @@ export function drawSkeleton(
   }
 
   // Draw joint circles.
-  ctx.fillStyle = JOINT_COLOR;
+  ctx.fillStyle = jointColor;
   for (const pt of Object.values(keypoints)) {
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, JOINT_RADIUS, 0, Math.PI * 2);

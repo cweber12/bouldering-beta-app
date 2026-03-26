@@ -16,6 +16,13 @@ export interface PoseVideoResult {
   errorMessage: string | null;
   /** Revoke the current video URL and reset to idle. */
   clearVideo: () => void;
+  /** Render progress 0–100. Resets to 0 when a new render starts. */
+  renderProgress: number;
+  /**
+   * JPEG data-URL snapshot of the latest rendered frame, emitted every
+   * 25 frames. Null before the first preview arrives.
+   */
+  previewFrame: string | null;
 }
 
 /**
@@ -41,6 +48,8 @@ export function usePoseVideo(
   const [status, setStatus] = useState<PoseVideoStatus>("idle");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [renderProgress, setRenderProgress] = useState(0);
+  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const prevUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -59,6 +68,8 @@ export function usePoseVideo(
     setStatus("rendering");
     setVideoUrl(null);
     setErrorMessage(null);
+    setRenderProgress(0);
+    setPreviewFrame(null);
 
     let cancelled = false;
 
@@ -70,6 +81,12 @@ export function usePoseVideo(
       orbFeatures: attempt.orbFeatures,
       queryOrb: matchResult.queryOrb,
       matches: matchResult.matches,
+      onProgress: (rendered, total) => {
+        if (!cancelled) setRenderProgress(Math.round((rendered / total) * 100));
+      },
+      onFramePreview: (_idx, dataUrl) => {
+        if (!cancelled) setPreviewFrame(dataUrl);
+      },
     })
       .then((url) => {
         if (cancelled) {
@@ -102,7 +119,9 @@ export function usePoseVideo(
     setVideoUrl(null);
     setStatus("idle");
     setErrorMessage(null);
+    setRenderProgress(0);
+    setPreviewFrame(null);
   }, []);
 
-  return { videoUrl, status, errorMessage, clearVideo };
+  return { videoUrl, status, errorMessage, clearVideo, renderProgress, previewFrame };
 }

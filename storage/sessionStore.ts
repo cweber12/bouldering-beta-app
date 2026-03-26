@@ -58,6 +58,10 @@ export interface RouteAttempt {
    * Null when matching was not run.
    */
   matchesPerFrame: OrbMatch[][] | null;
+  /** User-supplied location metadata used for device folder organisation. */
+  state: string;
+  area: string;
+  route: string;
   /**
    * For outdoor mode: one FrameCapture per frame on which pose detection was
    * actually executed (every N-th sampled frame). Null for indoor mode.

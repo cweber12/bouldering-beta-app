@@ -43,7 +43,7 @@ importScripts("/opencv.js");
 
 // eslint-disable-next-line no-undef
 self.onmessage = function (event) {
-  const { type, id } = event.data;
+  const { type } = event.data;
 
   if (type === "detectAndCompute") {
     handleDetectAndCompute(event.data);

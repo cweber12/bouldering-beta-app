@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import NavBar from "@/components/shared/NavBar";
+import Preloader from "@/components/shared/Preloader";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -14,9 +15,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bouldering Beta",
+  title: "Route Renderer",
   description:
-    "Analyse climbing videos with pose detection and ORB feature matching — all processing runs locally in your browser.",
+    "Record climbing attempts, extract pose data with MoveNet, then overlay your skeleton onto a route photo — all locally in your browser.",
 };
 
 export default function RootLayout({
@@ -30,6 +31,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-zinc-950 text-zinc-100">
+        <Preloader />
         <NavBar />
         {children}
       </body>

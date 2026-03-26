@@ -42,6 +42,19 @@ export interface PoseVideoParams {
    * Defaults to 100 ms (10 fps).
    */
   frameIntervalMs?: number;
+  /**
+   * Called after each frame is drawn.
+   * `framesRendered` is 1-based; `totalFrames` is the full count.
+   */
+  onProgress?: (framesRendered: number, totalFrames: number) => void;
+  /**
+   * Called with a JPEG data-URL snapshot of the canvas every
+   * `framePreviewInterval` frames (default 25).
+   * Use this to show a live preview during rendering.
+   */
+  onFramePreview?: (frameIndex: number, dataUrl: string) => void;
+  /** How often to emit a frame preview. Default 25. */
+  framePreviewInterval?: number;
 }
 
 /** Preferred MIME type order; first supported type wins. */
@@ -79,6 +92,9 @@ export async function renderPoseVideo({
   queryOrb,
   matches,
   frameIntervalMs = 100,
+  onProgress,
+  onFramePreview,
+  framePreviewInterval = 25,
 }: PoseVideoParams): Promise<string> {
   if (typeof MediaRecorder === "undefined") {
     throw new Error("MediaRecorder is not supported in this browser.");
@@ -131,7 +147,8 @@ export async function renderPoseVideo({
     recorder.start();
 
     (async () => {
-      for (const frame of sortedFrames) {
+      for (let i = 0; i < sortedFrames.length; i++) {
+        const frame = sortedFrames[i];
         ctx.drawImage(imageBitmap, 0, 0);
 
         if (frame.keypoints.length > 0) {
@@ -142,6 +159,11 @@ export async function renderPoseVideo({
             videoMeta.height,
           );
           drawSkeleton(ctx, kp);
+        }
+
+        onProgress?.(i + 1, sortedFrames.length);
+        if (onFramePreview && i % framePreviewInterval === 0) {
+          onFramePreview(i, canvas.toDataURL("image/jpeg", 0.7));
         }
 
         await new Promise<void>((r) => setTimeout(r, frameDelay));

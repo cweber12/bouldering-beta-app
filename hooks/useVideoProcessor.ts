@@ -33,6 +33,7 @@ export interface VideoProcessorResult {
    * @param frameStep - (outdoor only) Pose detection runs every N-th sampled
    *                    frame. Gaps are filled by linear interpolation.
    *                    Default: 5.
+   * @param meta      - Optional location metadata (state, area, route).
    */
   process: (
     file: File,
@@ -40,6 +41,7 @@ export interface VideoProcessorResult {
     cv: CV,
     mode?: ClimbingMode,
     frameStep?: number,
+    meta?: { state: string; area: string; route: string },
   ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
@@ -89,6 +91,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       mode: ClimbingMode = "indoor",
       frameStep: number = DEFAULT_FRAME_STEP,
+      meta: { state: string; area: string; route: string } = { state: "", area: "", route: "" },
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -234,6 +237,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           orbFeatures: null,
           matchesPerFrame: null,
           frameCaptures: mode === "outdoor" ? frameCaptures : null,
+          state: meta.state,
+          area: meta.area,
+          route: meta.route,
         });
         setAttemptId(id);
         setStatus("done");
@@ -255,6 +261,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               orbFeatures,
               matchesPerFrame: null,
               frameCaptures: mode === "outdoor" ? frameCaptures : null,
+              state: meta.state,
+              area: meta.area,
+              route: meta.route,
             });
             setOrbStatus("ready");
             console.info(
