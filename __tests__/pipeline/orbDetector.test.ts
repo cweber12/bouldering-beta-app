@@ -97,7 +97,6 @@ function makeMockCv(
     cvtColor: vi.fn(),
     findHomography: vi.fn().mockReturnValue(null),
     // Constructors — MUST use `function` keyword.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     Mat: vi.fn().mockImplementation(function (..._args: unknown[]) {
       const m = makeMockMat();
       matInstances.push(m);

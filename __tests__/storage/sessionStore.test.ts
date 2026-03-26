@@ -25,6 +25,7 @@ function makeAttempt(id: string, frameCount = 0): RouteAttempt {
     })),
     orbFeatures: null,
     matchesPerFrame: null,
+    frameCaptures: null,
   };
 }
 

@@ -18,6 +18,10 @@ const eslintConfig = defineConfig([
     "public/opencv.js",
     // Generated coverage report files.
     "coverage/**",
+    // Legacy Web Worker files (kept for reference, not actively maintained).
+    "workers/**",
+    // Legacy Web Worker files (kept for reference, not actively maintained).
+    "workers/**",
   ]),
   {
     rules: {

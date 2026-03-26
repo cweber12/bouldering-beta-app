@@ -1,21 +1,46 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useRef, useState } from "react";
 import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures } from "@/pipeline/orbDetector";
-import { saveAttempt, type VideoMeta } from "@/storage/sessionStore";
+import {
+  extractHipCenter,
+  computeCropBox,
+  mapKeypointsToFullFrame,
+  type HipCenter,
+} from "@/pipeline/cropDetector";
+import { interpolatePoseFrames } from "@/pipeline/poseInterpolator";
+import { saveAttempt, type VideoMeta, type FrameCapture } from "@/storage/sessionStore";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
+export type ClimbingMode = "indoor" | "outdoor";
 export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 
 export interface VideoProcessorResult {
-  /** Start processing the supplied video File. */
-  process: (file: File, detector: PoseDetector, cv: CV) => Promise<void>;
+  /**
+   * Start processing the supplied video File.
+   *
+   * @param file      - The video to process.
+   * @param detector  - Loaded TF.js PoseDetector.
+   * @param cv        - Initialised OpenCV runtime.
+   * @param mode      - "indoor": pose on every frame.
+   *                    "outdoor": pose every `frameStep` frames with hip-crop.
+   * @param frameStep - (outdoor only) Pose detection runs every N-th sampled
+   *                    frame. Gaps are filled by linear interpolation.
+   *                    Default: 5.
+   */
+  process: (
+    file: File,
+    detector: PoseDetector,
+    cv: CV,
+    mode?: ClimbingMode,
+    frameStep?: number,
+  ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
   orbStatus: OrbStatus;
@@ -28,14 +53,25 @@ export interface VideoProcessorResult {
   errorMessage: string | null;
 }
 
+const DEFAULT_FRAME_STEP = 5;
+
 /**
- * Seeks through a video file frame-by-frame, runs pose estimation on each
- * frame, and writes the result to the session store.
+ * Seeks through a video file frame-by-frame, runs pose estimation, and writes
+ * the result to the session store. Supports two modes:
  *
- * Processing happens entirely in the browser — no network calls.
+ * Indoor  — pose detection on every sampled frame (original behaviour).
  *
- * @param frameIntervalMs - How far apart sampled frames are (default 100 ms).
- *                          Lower = more frames = slower and more data.
+ * Outdoor — pose detection every N frames with hip-centred cropping:
+ *   1. First outdoor frame: full frame, establishes initial hip position.
+ *   2. Subsequent N-th frames: crop centered on previous hips before detection.
+ *   3. Keypoints mapped back to full-frame coordinates after detection.
+ *   4. Gaps between detected frames filled by linear interpolation.
+ *   5. FrameCapture metadata (crop box per detected frame) saved to the store.
+ *
+ * ORB extraction is unchanged in both modes — always runs on the first full
+ * frame after the seek loop completes.
+ *
+ * @param frameIntervalMs - Seek step in milliseconds (default 100 ms).
  */
 export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [status, setStatus] = useState<ProcessingStatus>("idle");
@@ -47,7 +83,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const abortRef = useRef(false);
 
   const process = useCallback(
-    async (file: File, detector: PoseDetector, cv: CV) => {
+    async (
+      file: File,
+      detector: PoseDetector,
+      cv: CV,
+      mode: ClimbingMode = "indoor",
+      frameStep: number = DEFAULT_FRAME_STEP,
+    ) => {
       abortRef.current = false;
       setStatus("processing");
       setOrbStatus("idle");
@@ -56,16 +98,17 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setAttemptId(null);
       setErrorMessage(null);
 
-      // Create an offscreen video element — never attached to the DOM.
       const video = document.createElement("video");
       video.muted = true;
       video.playsInline = true;
       const objectUrl = URL.createObjectURL(file);
       video.src = objectUrl;
 
-      // Create a canvas for drawing individual frames.
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
+
+      // Separate canvas for cropped outdoor frames.
+      const cropCanvas = document.createElement("canvas");
 
       if (!ctx) {
         setStatus("error");
@@ -75,7 +118,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       }
 
       try {
-        // Wait for the browser to read the video dimensions and duration.
         await new Promise<void>((resolve, reject) => {
           video.onloadedmetadata = () => resolve();
           video.onerror = () => reject(new Error("Failed to load video metadata."));
@@ -85,7 +127,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         canvas.width = videoWidth;
         canvas.height = videoHeight;
 
-        // Calculate how many frames we'll sample.
         const frameCount = Math.ceil((duration * 1000) / frameIntervalMs);
         setTotalFrames(frameCount);
 
@@ -97,16 +138,23 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           height: videoHeight,
         };
 
-        const frames: PoseFrame[] = [];
         const id = `attempt-${Date.now()}`;
         let referenceImageData: ImageData | null = null;
+
+        // Indoor: dense frames (one per seek step).
+        const indoorFrames: PoseFrame[] = [];
+
+        // Outdoor: sparse detected frames + all timestamps for interpolation.
+        const outdoorDetected: PoseFrame[] = [];
+        const allTimestamps: number[] = [];
+        const frameCaptures: FrameCapture[] = [];
+        let lastHipCenter: HipCenter | null = null;
 
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
 
           const seekTime = (i * frameIntervalMs) / 1000;
 
-          // Seek and wait for the frame to be ready.
           await new Promise<void>((resolve, reject) => {
             video.onseeked = () => resolve();
             video.onerror = () => reject(new Error(`Seek failed at ${seekTime}s`));
@@ -115,35 +163,99 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-          // Save the first frame as the ORB reference — extracted after the loop
-          // so the seek loop is never blocked waiting for the WASM worker.
+          // Always use the first full frame as the ORB reference.
           if (i === 0) {
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
           }
 
-          const frame = await estimateFrame(detector, canvas, video.currentTime);
-          if (frame) frames.push(frame);
+          if (mode === "indoor") {
+            const frame = await estimateFrame(detector, canvas, video.currentTime);
+            if (frame) indoorFrames.push(frame);
+          } else {
+            // Collect every timestamp so the interpolator can produce a dense output.
+            allTimestamps.push(video.currentTime);
+
+            if (i % frameStep === 0) {
+              let poseCanvas: HTMLCanvasElement = canvas;
+              let cropBox = null;
+
+              // Frame 0: no prior hip position — use the full canvas.
+              // Frame N+: crop around the last known hip center.
+              if (lastHipCenter !== null) {
+                cropBox = computeCropBox(lastHipCenter, videoWidth, videoHeight);
+                cropCanvas.width = cropBox.width;
+                cropCanvas.height = cropBox.height;
+                const cropCtx = cropCanvas.getContext("2d");
+                if (cropCtx) {
+                  cropCtx.drawImage(
+                    canvas,
+                    cropBox.x, cropBox.y, cropBox.width, cropBox.height,
+                    0, 0, cropBox.width, cropBox.height,
+                  );
+                  poseCanvas = cropCanvas;
+                }
+              }
+
+              const frame = await estimateFrame(detector, poseCanvas, video.currentTime);
+              if (frame) {
+                const poseFrame: PoseFrame = cropBox
+                  ? {
+                      ...frame,
+                      keypoints: mapKeypointsToFullFrame(
+                        frame.keypoints,
+                        cropBox,
+                        videoWidth,
+                        videoHeight,
+                      ),
+                    }
+                  : frame;
+
+                outdoorDetected.push(poseFrame);
+                lastHipCenter = extractHipCenter(poseFrame.keypoints) ?? lastHipCenter;
+              }
+
+              frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox });
+            }
+          }
 
           setCurrentFrame(i + 1);
         }
 
-        // Save the attempt and unblock the UI immediately — don't wait for ORB.
-        saveAttempt({ id, videoMeta, frames, orbFeatures: null, matchesPerFrame: null });
+        // Produce the final dense frame array.
+        const frames =
+          mode === "indoor"
+            ? indoorFrames
+            : interpolatePoseFrames(outdoorDetected, allTimestamps);
+
+        saveAttempt({
+          id,
+          videoMeta,
+          frames,
+          orbFeatures: null,
+          matchesPerFrame: null,
+          frameCaptures: mode === "outdoor" ? frameCaptures : null,
+        });
         setAttemptId(id);
         setStatus("done");
 
         console.info(
-          `[useVideoProcessor] Done. attempt=${id} totalFrames=${frames.length}`,
+          `[useVideoProcessor] Done. mode=${mode} attempt=${id} frames=${frames.length}`,
           frames[0] ?? "no frames detected",
         );
 
-        // Extract ORB features from the reference frame on the main thread.
-        // OpenCV is already initialised here, so this is synchronous and reliable.
+        // ORB extraction: unchanged — always runs on the first full frame.
         if (referenceImageData) {
           setOrbStatus("extracting");
           try {
             const orbFeatures = extractFeatures(cv, referenceImageData);
-            saveAttempt({ id, videoMeta, frames, orbFeatures, matchesPerFrame: null });
+            saveAttempt({
+              id,
+              videoMeta,
+              frames,
+              orbFeatures,
+              matchesPerFrame: null,
+              frameCaptures: mode === "outdoor" ? frameCaptures : null,
+            });
             setOrbStatus("ready");
             console.info(
               `[useVideoProcessor] ORB reference ready. keypoints=${orbFeatures.keypoints.length}`,

@@ -8,7 +8,9 @@
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+import type { CropBox } from "@/pipeline/cropDetector";
 export type { OrbKeypoint, OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+export type { CropBox } from "@/pipeline/cropDetector";
 
 export interface VideoMeta {
   /** Original filename. */
@@ -21,6 +23,23 @@ export interface VideoMeta {
   width: number;
   /** Frame height in pixels. */
   height: number;
+}
+
+/**
+ * Metadata about a single frame that had pose detection executed on it.
+ * Stored for outdoor mode to record which frames were sampled and what
+ * crop was applied.
+ */
+export interface FrameCapture {
+  /** 0-based index into the sampled frame sequence. */
+  frameIndex: number;
+  /** Video timestamp in seconds for this frame. */
+  timestamp: number;
+  /**
+   * Crop applied before pose detection.
+   * Null for the first outdoor frame (full frame was used) or in indoor mode.
+   */
+  cropBox: CropBox | null;
 }
 
 export interface RouteAttempt {
@@ -39,6 +58,11 @@ export interface RouteAttempt {
    * Null when matching was not run.
    */
   matchesPerFrame: OrbMatch[][] | null;
+  /**
+   * For outdoor mode: one FrameCapture per frame on which pose detection was
+   * actually executed (every N-th sampled frame). Null for indoor mode.
+   */
+  frameCaptures: FrameCapture[] | null;
 }
 
 // Module-level store — shared across all hook/component instances.
