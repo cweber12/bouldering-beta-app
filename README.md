@@ -1,33 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bouldering Beta
 
-## Getting Started
+Analyse a climbing attempt entirely in-browser — no account, no server, no uploads.
 
-First, run the development server:
+The app records skeleton poses frame-by-frame from a video using **MoveNet Lightning**
+(TF.js WebGL), extracts **ORB reference features** (OpenCV.js WASM) from the first
+frame, then overlays the movement onto a static route photo via a perspective
+(homography) transform. The output is a downloadable **WebM** video.
 
-```bash
+## Pages
+
+| Route | Purpose |
+|---|---|
+| `/` | Choose Indoor or Outdoor mode |
+| `/upload` | Upload & process a climbing video |
+| `/match` | Match a route photo and download the pose overlay |
+| `/docs` | Full documentation |
+
+## Stack
+
+| Concern | Library |
+|---|---|
+| Framework | Next.js 16 App Router |
+| Language | TypeScript (strict) |
+| Styling | Tailwind CSS v4 |
+| Pose detection | TF.js 4.22 + MoveNet Lightning (WebGL) |
+| Computer vision | OpenCV.js 4.12 (WASM, main thread) |
+| Video encoding | MediaRecorder API (WebM) |
+| Testing | Vitest + jsdom + Testing Library |
+
+## Development
+
+```powershell
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open <http://localhost:3000>.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Code quality
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```powershell
+npx tsc --noEmit        # type-check
+npx vitest run          # unit tests
+npx vitest run --coverage
+npx eslint .
+```
 
-## Learn More
+## Project structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+pipeline/   Framework-agnostic processing modules (no React)
+hooks/      React hooks wiring pipeline modules to UI state
+storage/    In-memory session store (swappable backend)
+components/ Shared UI components
+app/        Next.js App Router pages and layout
+workers/    Legacy Web Worker files (kept for reference)
+utils/      Shared constants and helpers
+__tests__/  Unit tests (mirror source tree)
+public/     Static assets (opencv.js WASM bundle)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See [docs](/docs) inside the running app for a full usage guide.
 
 ## Deploy on Vercel
 
