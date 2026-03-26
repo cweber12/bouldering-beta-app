@@ -2,17 +2,25 @@
 
 ## opencv.js
 
-`opencv.js` is **not committed** to this repository — it is large (~8 MB) and must be downloaded separately.
+`opencv.js` is **not committed** to this repository — it is large (~10 MB) and must be generated locally from the npm package.
 
-### How to obtain it
+### How to set it up (one-time, after cloning)
 
-Download the pre-built WASM/JS build from the official OpenCV.js releases:
-
+```powershell
+npm install          # installs @techstark/opencv-js and all other deps
+npm run setup:opencv # copies opencv.js from node_modules into this folder
 ```
-https://docs.opencv.org/4.x/d5/d10/tutorial_js_root.html
-```
 
-Place `opencv.js` in this directory so it is served at `/opencv.js`.
-The app loads it at runtime via a `<script>` tag (not bundled through Next.js/webpack).
+### Why this approach?
+
+OpenCV.js uses an Emscripten WASM runtime that cannot be bundled through Next.js/webpack. It must be loaded via a plain `<script>` tag at runtime. Placing the file here serves it at `/opencv.js` as a static asset.
+
+The `@techstark/opencv-js` npm package provides the official prebuilt binary. The version is pinned in `package.json`, which keeps everyone on the same build without committing a large binary to git.
 
 `opencv.js` is listed in `.gitignore` — do not force-commit it.
+
+### Upgrading OpenCV.js
+
+1. Update `@techstark/opencv-js` in `package.json`.
+2. Delete `public/opencv.js`.
+3. Run `npm install ; npm run setup:opencv`.
