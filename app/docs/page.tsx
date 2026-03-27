@@ -149,7 +149,21 @@ export default function DocsPage() {
 
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-4">
               <p className="text-sm font-semibold text-zinc-200">
-                4. Match a route photo and export
+                4. Adjust skeleton style (optional)
+              </p>
+              <p className="mt-1.5 text-sm text-zinc-400 leading-relaxed">
+                On the Match page a <strong className="text-zinc-300">Skeleton style</strong>{" "}
+                panel appears once matching completes. Use the colour pickers to change limb and
+                joint colours. Use the sliders to adjust line width and joint radius. Changes
+                take effect on the next render — click{" "}
+                <strong className="text-zinc-300">Apply &amp; Match</strong> again to re-export
+                with updated styles.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-4">
+              <p className="text-sm font-semibold text-zinc-200">
+                5. Match a route photo and export
               </p>
               <p className="mt-1.5 text-sm text-zinc-400 leading-relaxed">
                 On the{" "}
@@ -188,7 +202,9 @@ export default function DocsPage() {
               <p className="text-sm font-semibold text-zinc-200">Outdoor</p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-zinc-400">
                 <li>
-                  Crops a ±25% window around the previous hip position before each inference.
+                  Crops a window around the detected hip position before each inference. The
+                  window size and starting position are set by the <strong className="text-zinc-200">Climber crop</strong>{" "}
+                  box on the Upload page — it is re-centred on the hip each frame.
                 </li>
                 <li>Pose runs every N-th sampled frame (configurable 1–30).</li>
                 <li>
@@ -205,6 +221,13 @@ export default function DocsPage() {
             accurate, slowest). A step of 10 runs it every 10th frame and interpolates the rest,
             which is faster but smoother rather than precisely tracked. For a first look at an
             attempt, 5–10 is a good starting point.
+          </p>
+          <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+            <strong className="text-zinc-300">Smoothing</strong> — after interpolation both
+            modes apply an exponential moving average (α = 0.3) over every keypoint track.
+            Brief dropouts (frames where a joint was not detected) are filled in before
+            smoothing. This reduces skeletal jitter in the final overlay video without
+            introducing noticeable lag.
           </p>
         </section>
 

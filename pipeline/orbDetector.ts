@@ -16,7 +16,10 @@ type CV = any;
 
 import { cropImageData } from "@/utils/cvHelpers";
 
-const ORB_FEATURES = 500;
+// Higher feature count improves homography quality when only a single
+// reference frame is available — the increased descriptor pool gives more
+// candidate matches, which helps RANSAC find an accurate transform.
+const ORB_FEATURES = 3000;
 const ORB_DESCRIPTOR_BYTES = 32;
 const LOWE_RATIO = 0.75;
 

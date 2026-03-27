@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
+import { type AttemptEntry, loadAttemptFromJson, listDirectories, listAttemptFiles } from "@/utils/fsHelpers";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { usePoseVideo } from "@/hooks/usePoseVideo";
@@ -26,62 +27,6 @@ const SLOT_COLORS: Array<{ limb: string; joint: string; label: string }> = [
   { limb: "rgba(192,132,252,0.82)", joint: "rgba(255,255,255,0.9)", label: "Attempt 4" },
 ];
 
-interface AttemptEntry {
-  name: string;
-  label: string;
-}
-
-// ---------------------------------------------------------------------------
-// FSAPI helpers (shared with match page)
-// ---------------------------------------------------------------------------
-
-type FSDir = FileSystemDirectoryHandle & {
-  values(): AsyncIterableIterator<FileSystemHandle & { kind: string; name: string }>;
-};
-
-function attemptTimestampLabel(fileName: string): string {
-  const m = fileName.match(/attempt-(\d+)\.json/);
-  if (!m) return fileName;
-  return new Date(parseInt(m[1], 10)).toLocaleString(undefined, {
-    year: "numeric", month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
-async function listDirectories(dir: FileSystemDirectoryHandle): Promise<string[]> {
-  const names: string[] = [];
-  for await (const entry of (dir as FSDir).values()) {
-    if (entry.kind === "directory") names.push(entry.name);
-  }
-  return names.sort((a, b) => a.localeCompare(b));
-}
-
-async function listAttemptFiles(dir: FileSystemDirectoryHandle): Promise<AttemptEntry[]> {
-  const entries: AttemptEntry[] = [];
-  for await (const entry of (dir as FSDir).values()) {
-    if (entry.kind === "file" && entry.name.endsWith(".json")) {
-      entries.push({ name: entry.name, label: attemptTimestampLabel(entry.name) });
-    }
-  }
-  return entries.sort((a, b) => {
-    const ta = parseInt(a.name.match(/(\d+)/)?.[1] ?? "0", 10);
-    const tb = parseInt(b.name.match(/(\d+)/)?.[1] ?? "0", 10);
-    return tb - ta;
-  });
-}
-
-function loadAttemptFromJson(raw: unknown): RouteAttempt {
-  if (!raw || typeof raw !== "object") throw new Error("Invalid attempt data.");
-  const obj = raw as Record<string, unknown>;
-  if (obj.orbFeatures && typeof obj.orbFeatures === "object") {
-    const orb = obj.orbFeatures as Record<string, unknown>;
-    if (Array.isArray(orb.descriptors)) {
-      orb.descriptors = new Uint8Array(orb.descriptors as number[]);
-    }
-  }
-  return { state: "", area: "", route: "", ...obj } as unknown as RouteAttempt;
-}
-
 // ---------------------------------------------------------------------------
 // Per-attempt render slot (owns its own hooks)
 // ---------------------------------------------------------------------------
@@ -103,7 +48,7 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
   const colors = SLOT_COLORS[slotIndex];
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
-  const { videoUrl, status: videoStatus, renderProgress, previewFrame } =
+  const { videoUrl, status: videoStatus, renderProgress } =
     usePoseVideo(cv, imageFile, attempt?.id ?? null, matchResult);
 
   // Notify parent when match result changes
@@ -160,14 +105,6 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
               style={{ width: `${renderProgress}%`, backgroundColor: colors.limb }}
             />
           </div>
-          {previewFrame && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewFrame}
-              alt="Render preview"
-              className="w-full rounded-lg border border-zinc-700 object-contain opacity-70 mt-1"
-            />
-          )}
         </div>
       )}
 
@@ -486,8 +423,7 @@ function ComparePageInner() {
   );
 
   // Crop box for ORB detection on the shared route photo.
-  const DEFAULT_CROP: CropFraction = { x: 0, y: 0, w: 1, h: 1 };
-  const [imageCrop, setImageCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   // Incremented each time the user clicks "Apply & Match".
   const [matchTrigger, setMatchTrigger] = useState(0);
   const [cropConfirmed, setCropConfirmed] = useState(false);
@@ -522,7 +458,7 @@ function ComparePageInner() {
     imagePreviewRef.current = url;
     setImagePreviewUrl(url);
     setImageFile(file);
-    setImageCrop(DEFAULT_CROP);
+    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
     setCropConfirmed(false);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
   }

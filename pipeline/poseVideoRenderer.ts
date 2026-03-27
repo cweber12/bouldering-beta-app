@@ -24,7 +24,9 @@ type CV = any;
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
 import { computeHomography } from "@/pipeline/homography";
-import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
+import { buildTransformedKeypoints, drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+
+export type { SkeletonStyle };
 
 export interface PoseVideoParams {
   cv: CV;
@@ -47,14 +49,8 @@ export interface PoseVideoParams {
    * `framesRendered` is 1-based; `totalFrames` is the full count.
    */
   onProgress?: (framesRendered: number, totalFrames: number) => void;
-  /**
-   * Called with a JPEG data-URL snapshot of the canvas every
-   * `framePreviewInterval` frames (default 25).
-   * Use this to show a live preview during rendering.
-   */
-  onFramePreview?: (frameIndex: number, dataUrl: string) => void;
-  /** How often to emit a frame preview. Default 25. */
-  framePreviewInterval?: number;
+  /** Visual style for the skeleton overlay. Falls back to built-in defaults. */
+  skeletonStyle?: SkeletonStyle;
 }
 
 /** Preferred MIME type order; first supported type wins. */
@@ -93,8 +89,7 @@ export async function renderPoseVideo({
   matches,
   frameIntervalMs = 100,
   onProgress,
-  onFramePreview,
-  framePreviewInterval = 25,
+  skeletonStyle,
 }: PoseVideoParams): Promise<string> {
   if (typeof MediaRecorder === "undefined") {
     throw new Error("MediaRecorder is not supported in this browser.");
@@ -158,13 +153,10 @@ export async function renderPoseVideo({
             videoMeta.width,
             videoMeta.height,
           );
-          drawSkeleton(ctx, kp);
+          drawSkeleton(ctx, kp, skeletonStyle);
         }
 
         onProgress?.(i + 1, sortedFrames.length);
-        if (onFramePreview && i % framePreviewInterval === 0) {
-          onFramePreview(i, canvas.toDataURL("image/jpeg", 0.7));
-        }
 
         await new Promise<void>((r) => setTimeout(r, frameDelay));
       }

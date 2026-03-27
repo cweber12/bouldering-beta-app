@@ -104,3 +104,96 @@ export function interpolatePoseFrames(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Landmark smoothing
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply an exponential moving average (EMA) across a dense PoseFrame sequence
+ * to reduce jitter and fill brief dropouts where a keypoint is absent in one
+ * or two frames.
+ *
+ * Two-pass approach:
+ *  1. Forward-fill: for each keypoint track, carry the last known position
+ *     forward into frames where the keypoint is missing.
+ *  2. Backward-fill: seed the leading edge of any track that starts with
+ *     missing values from the first detected occurrence.
+ *  3. EMA smoothing on x/y independently.
+ *
+ * @param frames - Dense PoseFrame array (e.g. output of interpolatePoseFrames).
+ * @param alpha  - EMA weight in (0, 1]. Lower = smoother, higher = more reactive.
+ *                 Defaults to 0.3.
+ */
+export function smoothPoseFrames(frames: PoseFrame[], alpha = 0.3): PoseFrame[] {
+  if (frames.length === 0) return frames;
+
+  // Collect all keypoint names that appear in any frame.
+  const names = new Set<string>();
+  for (const f of frames) {
+    for (const kp of f.keypoints) names.add(kp.name);
+  }
+
+  // Build a per-keypoint mutable track so we can fill gaps and smooth.
+  // Track[i] may be null when the keypoint was absent in frame i.
+  const tracks = new Map<string, (Keypoint | null)[]>();
+  for (const name of names) {
+    const track: (Keypoint | null)[] = new Array(frames.length).fill(null);
+    for (let i = 0; i < frames.length; i++) {
+      const kp = frames[i].keypoints.find(k => k.name === name) ?? null;
+      track[i] = kp;
+    }
+    tracks.set(name, track);
+  }
+
+  // Pass 1: forward-fill.
+  for (const [, track] of tracks) {
+    let last: Keypoint | null = null;
+    for (let i = 0; i < track.length; i++) {
+      if (track[i] !== null) {
+        last = track[i];
+      } else if (last !== null) {
+        track[i] = { ...last };
+      }
+    }
+  }
+
+  // Pass 2: backward-fill leading gaps.
+  for (const [, track] of tracks) {
+    let first: Keypoint | null = null;
+    for (let i = 0; i < track.length; i++) {
+      if (track[i] !== null) { first = track[i]; break; }
+    }
+    if (first === null) continue;
+    for (let i = 0; i < track.length; i++) {
+      if (track[i] === null) track[i] = { ...first };
+      else break;
+    }
+  }
+
+  // Pass 3: EMA smoothing.
+  for (const [, track] of tracks) {
+    let ex: number | null = null;
+    let ey: number | null = null;
+    for (let i = 0; i < track.length; i++) {
+      const kp = track[i];
+      if (kp === null) { ex = null; ey = null; continue; }
+      if (ex === null) { ex = kp.x; ey = kp.y!; }
+      else {
+        ex = alpha * kp.x + (1 - alpha) * ex;
+        ey = alpha * kp.y + (1 - alpha) * ey!;
+      }
+      track[i] = { ...kp, x: ex, y: ey };
+    }
+  }
+
+  // Rebuild PoseFrame array using smoothed tracks.
+  return frames.map((frame, i) => {
+    const keypoints: Keypoint[] = [];
+    for (const [name, track] of tracks) {
+      const kp = track[i];
+      if (kp !== null && kp.name === name) keypoints.push(kp);
+    }
+    return { timestamp: frame.timestamp, keypoints };
+  });
+}

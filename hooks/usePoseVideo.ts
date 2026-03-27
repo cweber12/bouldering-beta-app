@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
+import { renderPoseVideo, type SkeletonStyle } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
+export type { SkeletonStyle };
 export type PoseVideoStatus = "idle" | "rendering" | "ready" | "error";
 
 export interface PoseVideoResult {
@@ -18,11 +19,6 @@ export interface PoseVideoResult {
   clearVideo: () => void;
   /** Render progress 0–100. Resets to 0 when a new render starts. */
   renderProgress: number;
-  /**
-   * JPEG data-URL snapshot of the latest rendered frame, emitted every
-   * 25 frames. Null before the first preview arrives.
-   */
-  previewFrame: string | null;
 }
 
 /**
@@ -44,13 +40,18 @@ export function usePoseVideo(
   imageFile: File | null,
   attemptId: string | null,
   matchResult: ImageMatchResult | null,
+  skeletonStyle?: SkeletonStyle,
 ): PoseVideoResult {
   const [status, setStatus] = useState<PoseVideoStatus>("idle");
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [renderProgress, setRenderProgress] = useState(0);
-  const [previewFrame, setPreviewFrame] = useState<string | null>(null);
   const prevUrlRef = useRef<string | null>(null);
+
+  // Stable ref for skeletonStyle — avoids re-triggering the render effect on
+  // every slider change while still reading the latest value when a render starts.
+  const styleRef = useRef<SkeletonStyle | undefined>(skeletonStyle);
+  useEffect(() => { styleRef.current = skeletonStyle; }, [skeletonStyle]);
 
   useEffect(() => {
     if (!cv || !imageFile || !attemptId || !matchResult) return;
@@ -64,12 +65,11 @@ export function usePoseVideo(
       prevUrlRef.current = null;
     }
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- batched by React 19; legitimate render-cycle start
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- batched by React 19; initiates render cycle
     setStatus("rendering");
     setVideoUrl(null);
     setErrorMessage(null);
     setRenderProgress(0);
-    setPreviewFrame(null);
 
     let cancelled = false;
 
@@ -81,11 +81,9 @@ export function usePoseVideo(
       orbFeatures: attempt.orbFeatures,
       queryOrb: matchResult.queryOrb,
       matches: matchResult.matches,
+      skeletonStyle: styleRef.current,
       onProgress: (rendered, total) => {
         if (!cancelled) setRenderProgress(Math.round((rendered / total) * 100));
-      },
-      onFramePreview: (_idx, dataUrl) => {
-        if (!cancelled) setPreviewFrame(dataUrl);
       },
     })
       .then((url) => {
@@ -120,8 +118,7 @@ export function usePoseVideo(
     setStatus("idle");
     setErrorMessage(null);
     setRenderProgress(0);
-    setPreviewFrame(null);
   }, []);
 
-  return { videoUrl, status, errorMessage, clearVideo, renderProgress, previewFrame };
+  return { videoUrl, status, errorMessage, clearVideo, renderProgress };
 }

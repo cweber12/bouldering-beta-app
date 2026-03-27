@@ -6,74 +6,12 @@ import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
+import { type AttemptEntry, loadAttemptFromJson, listDirectories, listAttemptFiles } from "@/utils/fsHelpers";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
-import { usePoseVideo } from "@/hooks/usePoseVideo";
+import { usePoseVideo, type SkeletonStyle } from "@/hooks/usePoseVideo";
 import { getAttempt, saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface AttemptEntry {
-  name: string;   // filename: "attempt-<ts>.json"
-  label: string;  // formatted date/time
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function loadAttemptFromJson(raw: unknown): RouteAttempt {
-  if (!raw || typeof raw !== "object") throw new Error("Invalid attempt data.");
-  const obj = raw as Record<string, unknown>;
-  if (obj.orbFeatures && typeof obj.orbFeatures === "object") {
-    const orb = obj.orbFeatures as Record<string, unknown>;
-    if (Array.isArray(orb.descriptors)) {
-      orb.descriptors = new Uint8Array(orb.descriptors as number[]);
-    }
-  }
-  return { state: "", area: "", route: "", ...obj } as unknown as RouteAttempt;
-}
-
-function attemptTimestampLabel(fileName: string): string {
-  const m = fileName.match(/attempt-(\d+)\.json/);
-  if (!m) return fileName;
-  const ts = parseInt(m[1], 10);
-  const d = new Date(ts);
-  return d.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-type FSDir = FileSystemDirectoryHandle & { values(): AsyncIterableIterator<FileSystemHandle & { kind: string; name: string }> };
-
-async function listDirectories(dir: FileSystemDirectoryHandle): Promise<string[]> {
-  const names: string[] = [];
-  for await (const entry of (dir as FSDir).values()) {
-    if (entry.kind === "directory") names.push(entry.name);
-  }
-  return names.sort((a, b) => a.localeCompare(b));
-}
-
-async function listAttemptFiles(dir: FileSystemDirectoryHandle): Promise<AttemptEntry[]> {
-  const entries: AttemptEntry[] = [];
-  for await (const entry of (dir as FSDir).values()) {
-    if (entry.kind === "file" && entry.name.endsWith(".json")) {
-      entries.push({ name: entry.name, label: attemptTimestampLabel(entry.name) });
-    }
-  }
-  return entries.sort((a, b) => {
-    const tsA = parseInt(a.name.match(/(\d+)/)?.[1] ?? "0", 10);
-    const tsB = parseInt(b.name.match(/(\d+)/)?.[1] ?? "0", 10);
-    return tsB - tsA;
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams)
@@ -116,13 +54,20 @@ function MatchPageInner() {
   const imagePreviewUrlRef = useRef<string | null>(null);
 
   // Crop box for ORB detection on the route photo.
-  const DEFAULT_CROP: CropFraction = { x: 0, y: 0, w: 1, h: 1 };
-  const [imageCrop, setImageCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   // Track whether the user has confirmed the crop and triggered matching.
   const [matchTriggered, setMatchTriggered] = useState(false);
 
-  const { videoUrl, status: videoStatus, errorMessage: videoError, renderProgress, previewFrame } =
-    usePoseVideo(cv, imageFile, attemptId || null, matchResult);
+  // Skeleton overlay style — set before matching; locked for the render.
+  const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({
+    limbColor: "rgba(0,220,120,0.85)",
+    jointColor: "rgba(255,220,0,0.92)",
+    lineWidth: 2.5,
+    pointRadius: 5,
+  });
+
+  const { videoUrl, status: videoStatus, errorMessage: videoError, renderProgress } =
+    usePoseVideo(cv, imageFile, attemptId || null, matchResult, skeletonStyle);
 
   useEffect(() => {
     if (urlAttemptId) {
@@ -271,7 +216,7 @@ function MatchPageInner() {
     imagePreviewUrlRef.current = url;
     setImagePreviewUrl(url);
     setImageFile(file);
-    setImageCrop(DEFAULT_CROP);
+    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
     setMatchTriggered(false);
   }
 
@@ -545,32 +490,75 @@ function MatchPageInner() {
         </div>
       )}
 
-      {/* Render progress + frame preview */}
-      {isRenderingVideo && (
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-xs text-zinc-400">
-              <span>Rendering pose overlay...</span>
-              <span>{renderProgress}%</span>
+      {/* Skeleton style controls — shown while matching/rendering or after done */}
+      {(isMatchDone || isRenderingVideo || isVideoReady) && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
+          <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-zinc-400">Limb color</label>
+              <input
+                type="color"
+                value={skeletonStyle.limbColor?.replace(/rgba?\([^)]+\)/, "#00dc78") ?? "#00dc78"}
+                onChange={e => setSkeletonStyle(s => ({ ...s, limbColor: e.target.value }))}
+                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
+              />
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-              <div
-                className="h-full rounded-full bg-zinc-200 transition-all duration-150"
-                style={{ width: `${renderProgress}%` }}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-zinc-400">Joint color</label>
+              <input
+                type="color"
+                value={skeletonStyle.jointColor?.replace(/rgba?\([^)]+\)/, "#ffdc00") ?? "#ffdc00"}
+                onChange={e => setSkeletonStyle(s => ({ ...s, jointColor: e.target.value }))}
+                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="flex justify-between text-xs text-zinc-400">
+                <span>Line width</span>
+                <span className="font-mono text-zinc-300">{skeletonStyle.lineWidth ?? 2.5}px</span>
+              </label>
+              <input
+                type="range" min={0.5} max={8} step={0.5}
+                value={skeletonStyle.lineWidth ?? 2.5}
+                onChange={e => setSkeletonStyle(s => ({ ...s, lineWidth: Number(e.target.value) }))}
+                className="accent-zinc-200"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="flex justify-between text-xs text-zinc-400">
+                <span>Point radius</span>
+                <span className="font-mono text-zinc-300">{skeletonStyle.pointRadius ?? 5}px</span>
+              </label>
+              <input
+                type="range" min={1} max={12} step={1}
+                value={skeletonStyle.pointRadius ?? 5}
+                onChange={e => setSkeletonStyle(s => ({ ...s, pointRadius: Number(e.target.value) }))}
+                className="accent-zinc-200"
               />
             </div>
           </div>
-          {previewFrame && (
-            <div className="flex flex-col gap-1.5">
-              <p className="text-xs text-zinc-500">Preview (updated every 25 frames)</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={previewFrame}
-                alt="Render preview"
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain opacity-80"
-              />
-            </div>
+          {isVideoReady && (
+            <p className="text-xs text-zinc-500">
+              Re-upload the route photo and click &ldquo;Apply &amp; Match&rdquo; to render with new style.
+            </p>
           )}
+        </div>
+      )}
+
+      {/* Render progress */}
+      {isRenderingVideo && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <span>Rendering pose overlay...</span>
+            <span>{renderProgress}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-zinc-200 transition-all duration-150"
+              style={{ width: `${renderProgress}%` }}
+            />
+          </div>
         </div>
       )}
 

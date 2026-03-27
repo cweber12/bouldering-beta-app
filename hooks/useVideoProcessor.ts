@@ -8,7 +8,7 @@ import {
   mapKeypointsToFullFrame,
   type HipCenter,
 } from "@/pipeline/cropDetector";
-import { interpolatePoseFrames } from "@/pipeline/poseInterpolator";
+import { interpolatePoseFrames, smoothPoseFrames } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture } from "@/storage/sessionStore";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 
@@ -179,20 +179,67 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           }
 
           if (mode === "indoor") {
-            const frame = await estimateFrame(detector, canvas, video.currentTime);
-            if (frame) indoorFrames.push(frame);
+            // Apply the climber crop to focus detection on the relevant region,
+            // then remap detected keypoints back to full-frame normalised coords
+            // so every stored PoseFrame uses the same [0,1] coordinate space.
+            let poseCanvas: HTMLCanvasElement = canvas;
+            let appliedCropBox: { x: number; y: number; width: number; height: number } | null = null;
+
+            if (cropOptions.climberCrop) {
+              const cf = cropOptions.climberCrop;
+              const cropBox = {
+                x: Math.round(cf.x * videoWidth),
+                y: Math.round(cf.y * videoHeight),
+                width: Math.round(cf.w * videoWidth),
+                height: Math.round(cf.h * videoHeight),
+              };
+              cropCanvas.width = cropBox.width;
+              cropCanvas.height = cropBox.height;
+              const cropCtx = cropCanvas.getContext("2d");
+              if (cropCtx) {
+                cropCtx.drawImage(
+                  canvas,
+                  cropBox.x, cropBox.y, cropBox.width, cropBox.height,
+                  0, 0, cropBox.width, cropBox.height,
+                );
+                poseCanvas = cropCanvas;
+                appliedCropBox = cropBox; // track that the crop was actually drawn
+              }
+            }
+
+            const frame = await estimateFrame(detector, poseCanvas, video.currentTime);
+            if (frame) {
+              // Transform from crop-relative [0,1] → full-frame [0,1] before saving.
+              const poseFrame: PoseFrame = appliedCropBox
+                ? {
+                    ...frame,
+                    keypoints: mapKeypointsToFullFrame(
+                      frame.keypoints,
+                      appliedCropBox,
+                      videoWidth,
+                      videoHeight,
+                    ),
+                  }
+                : frame;
+              indoorFrames.push(poseFrame);
+            }
           } else {
             // Collect every timestamp so the interpolator can produce a dense output.
             allTimestamps.push(video.currentTime);
 
             if (i % frameStep === 0) {
               let poseCanvas: HTMLCanvasElement = canvas;
-              let cropBox = null;
+              // appliedCropBox tracks whether crop drawing actually succeeded.
+              // It is intentionally separate from the planned cropBox so that
+              // mapKeypointsToFullFrame is only called when pose detection ran
+              // on the crop canvas, not on the full canvas.
+              let appliedCropBox: { x: number; y: number; width: number; height: number } | null = null;
 
               // Only apply a climber crop when the user specified one AND we
               // have a previous hip position to center it on. The first
               // outdoor frame always uses the full canvas (or the user crop
               // box at its original position), establishing the initial hip.
+              let plannedCropBox: { x: number; y: number; width: number; height: number } | null = null;
               if (cropOptions.climberCrop && lastHipCenter !== null) {
                 const cf = cropOptions.climberCrop;
                 const boxW = Math.round(cf.w * videoWidth);
@@ -201,12 +248,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 const hipY = lastHipCenter.y * videoHeight;
                 const bx = Math.max(0, Math.min(videoWidth - boxW, Math.round(hipX - boxW / 2)));
                 const by = Math.max(0, Math.min(videoHeight - boxH, Math.round(hipY - boxH / 2)));
-                cropBox = { x: bx, y: by, width: boxW, height: boxH };
+                plannedCropBox = { x: bx, y: by, width: boxW, height: boxH };
               } else if (cropOptions.climberCrop && lastHipCenter === null) {
                 // First outdoor frame with a user crop: use the crop at its
                 // original position as drawn on the video preview.
                 const cf = cropOptions.climberCrop;
-                cropBox = {
+                plannedCropBox = {
                   x: Math.round(cf.x * videoWidth),
                   y: Math.round(cf.y * videoHeight),
                   width: Math.round(cf.w * videoWidth),
@@ -214,28 +261,30 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 };
               }
 
-              if (cropBox) {
-                cropCanvas.width = cropBox.width;
-                cropCanvas.height = cropBox.height;
+              if (plannedCropBox) {
+                cropCanvas.width = plannedCropBox.width;
+                cropCanvas.height = plannedCropBox.height;
                 const cropCtx = cropCanvas.getContext("2d");
                 if (cropCtx) {
                   cropCtx.drawImage(
                     canvas,
-                    cropBox.x, cropBox.y, cropBox.width, cropBox.height,
-                    0, 0, cropBox.width, cropBox.height,
+                    plannedCropBox.x, plannedCropBox.y, plannedCropBox.width, plannedCropBox.height,
+                    0, 0, plannedCropBox.width, plannedCropBox.height,
                   );
                   poseCanvas = cropCanvas;
+                  appliedCropBox = plannedCropBox; // crop was drawn; remap after detection
                 }
               }
 
               const frame = await estimateFrame(detector, poseCanvas, video.currentTime);
               if (frame) {
-                const poseFrame: PoseFrame = cropBox
+                // Transform from crop-relative [0,1] → full-frame [0,1] before saving.
+                const poseFrame: PoseFrame = appliedCropBox
                   ? {
                       ...frame,
                       keypoints: mapKeypointsToFullFrame(
                         frame.keypoints,
-                        cropBox,
+                        appliedCropBox,
                         videoWidth,
                         videoHeight,
                       ),
@@ -246,18 +295,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 lastHipCenter = extractHipCenter(poseFrame.keypoints) ?? lastHipCenter;
               }
 
-              frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox });
+              frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: plannedCropBox });
             }
           }
 
           setCurrentFrame(i + 1);
         }
 
-        // Produce the final dense frame array.
-        const frames =
+        // Produce the final dense frame array, then smooth to fill dropouts
+        // and reduce jitter.  Indoor mode benefits from the EMA pass too
+        // (smooths detection noise on every sampled frame).
+        const rawFrames =
           mode === "indoor"
             ? indoorFrames
             : interpolatePoseFrames(outdoorDetected, allTimestamps);
+        const frames = smoothPoseFrames(rawFrames);
 
         saveAttempt({
           id,
@@ -277,6 +329,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           `[useVideoProcessor] Done. mode=${mode} attempt=${id} frames=${frames.length}`,
           frames[0] ?? "no frames detected",
         );
+
+        // Yield to the React render cycle so the "done" status is painted
+        // before we block the main thread with WASM ORB extraction.
+        await new Promise<void>(r => setTimeout(r, 0));
 
         // ORB extraction: use user-defined orbCrop when provided, otherwise
         // extract from the full first frame.
@@ -308,6 +364,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               area: meta.area,
               route: meta.route,
             });
+            referenceImageData = null; // allow GC — no longer needed
             setOrbStatus("ready");
             console.info(
               `[useVideoProcessor] ORB reference ready. keypoints=${orbFeatures.keypoints.length}`,

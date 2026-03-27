@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
-import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
+import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useTFModel } from "@/hooks/useTFModel";
 import { useVideoProcessor, type ClimbingMode } from "@/hooks/useVideoProcessor";
@@ -119,7 +119,6 @@ function UploadPageInner() {
   const previewUrlRef = useRef<string | null>(null);
 
   // Crop box state — fractional [0, 1] coordinates.
-  const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");

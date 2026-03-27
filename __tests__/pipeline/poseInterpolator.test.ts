@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { interpolatePoseFrames } from "@/pipeline/poseInterpolator";
+import { interpolatePoseFrames, smoothPoseFrames } from "@/pipeline/poseInterpolator";
 import type { PoseFrame } from "@/pipeline/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -89,5 +89,80 @@ describe("interpolatePoseFrames", () => {
     const result = interpolatePoseFrames(processed, timestamps);
     expect(result).toHaveLength(timestamps.length);
     result.forEach((f, i) => expect(f.timestamp).toBe(timestamps[i]));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// smoothPoseFrames
+// ---------------------------------------------------------------------------
+
+describe("smoothPoseFrames", () => {
+  it("returns an empty array when given an empty array", () => {
+    expect(smoothPoseFrames([])).toEqual([]);
+  });
+
+  it("preserves timestamps unchanged", () => {
+    const frames = [frame(0.0, [["nose", 0.5, 0.5]]), frame(0.5, [["nose", 0.6, 0.6]])];
+    const result = smoothPoseFrames(frames);
+    expect(result.map(f => f.timestamp)).toEqual([0.0, 0.5]);
+  });
+
+  it("forward-fills missing keypoints from the previous frame", () => {
+    // Frame 0 has 'nose'; frame 1 is missing 'nose'; frame 2 has 'nose'.
+    const frames: PoseFrame[] = [
+      frame(0, [["nose", 0.5, 0.5]]),
+      { timestamp: 1, keypoints: [] },         // dropout
+      frame(2, [["nose", 0.7, 0.7]]),
+    ];
+    const result = smoothPoseFrames(frames);
+    // After forward-fill, frame 1 should have a nose keypoint.
+    const midNose = result[1].keypoints.find(k => k.name === "nose");
+    expect(midNose).toBeDefined();
+  });
+
+  it("backward-fills leading missing keypoints from the first known occurrence", () => {
+    // Frames 0–1 have no 'nose'; frame 2 first detects it.
+    const frames: PoseFrame[] = [
+      { timestamp: 0, keypoints: [] },
+      { timestamp: 1, keypoints: [] },
+      frame(2, [["nose", 0.5, 0.5]]),
+    ];
+    const result = smoothPoseFrames(frames);
+    expect(result[0].keypoints.find(k => k.name === "nose")).toBeDefined();
+    expect(result[1].keypoints.find(k => k.name === "nose")).toBeDefined();
+  });
+
+  it("with alpha=1 leaves values exactly as-is (no smoothing)", () => {
+    const frames = [
+      frame(0, [["left_hip", 0.3, 0.4]]),
+      frame(1, [["left_hip", 0.7, 0.8]]),
+    ];
+    const result = smoothPoseFrames(frames, 1.0);
+    expect(result[0].keypoints[0]).toMatchObject({ x: 0.3, y: 0.4 });
+    expect(result[1].keypoints[0]).toMatchObject({ x: 0.7, y: 0.8 });
+  });
+
+  it("with alpha<1 the second frame is smoothed toward the first", () => {
+    // alpha=0.5 → second value = 0.5*x1 + 0.5*x0
+    const frames = [
+      frame(0, [["nose", 0.0, 0.0]]),
+      frame(1, [["nose", 1.0, 1.0]]),
+    ];
+    const result = smoothPoseFrames(frames, 0.5);
+    const kp = result[1].keypoints.find(k => k.name === "nose")!;
+    expect(kp.x).toBeCloseTo(0.5);
+    expect(kp.y).toBeCloseTo(0.5);
+  });
+
+  it("processes multiple keypoints independently", () => {
+    const frames = [
+      frame(0, [["nose", 0.0, 0.0], ["left_hip", 1.0, 1.0]]),
+      frame(1, [["nose", 1.0, 1.0], ["left_hip", 0.0, 0.0]]),
+    ];
+    const result = smoothPoseFrames(frames, 1.0); // alpha=1 → no smoothing
+    const nose1 = result[1].keypoints.find(k => k.name === "nose")!;
+    const hip1  = result[1].keypoints.find(k => k.name === "left_hip")!;
+    expect(nose1.x).toBeCloseTo(1.0);
+    expect(hip1.x).toBeCloseTo(0.0);
   });
 });

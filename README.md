@@ -7,6 +7,19 @@ The app records skeleton poses frame-by-frame from a video using **MoveNet Light
 frame, then overlays the movement onto a static route photo via a perspective
 (homography) transform. The output is a downloadable **WebM** video.
 
+## Pipeline
+
+### Pose estimation
+
+MoveNet Lightning runs on every sampled frame (indoor: every frame; outdoor: configurable stride). After estimation, two post-processing passes are applied:
+
+1. **Interpolation** — for outdoor mode, `interpolatePoseFrames` fills the dense frame timeline from sparse keyframe detections using linear interpolation.
+2. **Smoothing** — `smoothPoseFrames` runs on every mode: forward-fill and backward-fill eliminate brief keypoint dropouts, then an exponential moving average (α = 0.3) reduces jitter.
+
+### Skeleton overlay
+
+`drawSkeleton` accepts a `SkeletonStyle` object `{ limbColor, jointColor, lineWidth, pointRadius }` to customise the look of each rendered frame. The match page exposes a style panel (colour pickers + sliders) that feeds into the WebM render.
+
 ## Pages
 
 | Route | Purpose |
@@ -77,7 +90,7 @@ storage/    In-memory session store (swappable backend)
 components/ Shared UI components (CropBoxOverlay, LoadingGate, …)
 app/        Next.js App Router pages and layout
 workers/    Legacy Web Worker files (kept for reference)
-utils/      Shared constants and helpers
+utils/      Shared constants and helpers (poseConstants, cvHelpers, fsHelpers)
 __tests__/  Unit tests (mirror source tree)
 public/     Static assets (opencv.js WASM bundle)
 ```

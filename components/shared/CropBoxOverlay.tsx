@@ -48,7 +48,10 @@ const CURSOR_MAP: Record<HandleId, string> = {
 /** Minimum size of the crop box as a fraction of the container. */
 const MIN_SIZE = 0.05;
 
-const HANDLE_PX = 10;
+const HANDLE_PX = 9;
+
+/** Default crop box: slight inset from edges. */
+export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
 
 interface DragState {
   handle: HandleId;
@@ -179,22 +182,22 @@ export default function CropBoxOverlay({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* Semi-transparent dark overlay: 4 strips outside the crop window */}
+      {/* Dark overlay: 4 strips outside the crop window */}
       {/* Top strip */}
       <div
         className="absolute left-0 right-0 top-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.5)", height: pct(y) }}
+        style={{ background: "rgba(0,0,0,0.62)", height: pct(y) }}
       />
       {/* Bottom strip */}
       <div
         className="absolute left-0 right-0 bottom-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.5)", top: pct(y + h) }}
+        style={{ background: "rgba(0,0,0,0.62)", top: pct(y + h) }}
       />
       {/* Left strip */}
       <div
         className="absolute pointer-events-none"
         style={{
-          background: "rgba(0,0,0,0.5)",
+          background: "rgba(0,0,0,0.62)",
           top: pct(y),
           left: 0,
           width: pct(x),
@@ -205,7 +208,7 @@ export default function CropBoxOverlay({
       <div
         className="absolute pointer-events-none"
         style={{
-          background: "rgba(0,0,0,0.5)",
+          background: "rgba(0,0,0,0.62)",
           top: pct(y),
           left: pct(x + w),
           right: 0,
@@ -221,7 +224,8 @@ export default function CropBoxOverlay({
           top: pct(y),
           width: pct(w),
           height: pct(h),
-          border: "1.5px solid rgba(255,255,255,0.75)",
+          border: "1.5px solid rgba(0,0,0,0.9)",
+          boxShadow: "0 0 0 0.5px rgba(255,255,255,0.35) inset, 0 0 0 0.5px rgba(255,255,255,0.35)",
           cursor: disabled ? "default" : CURSOR_MAP["move"],
         }}
         onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}
@@ -232,15 +236,16 @@ export default function CropBoxOverlay({
         handles.map(([id, lx, ly]) => (
           <div
             key={id}
-            className="absolute rounded-sm"
+            className="absolute"
             style={{
               left: pct(lx),
               top: pct(ly),
               width: HANDLE_PX,
               height: HANDLE_PX,
               transform: "translate(-50%, -50%)",
-              background: "white",
-              border: "1px solid rgba(100,100,100,0.8)",
+              background: "#000",
+              border: "1.5px solid rgba(255,255,255,0.7)",
+              borderRadius: 2,
               cursor: CURSOR_MAP[id],
             }}
             onPointerDown={(e) => startDrag(e, id)}

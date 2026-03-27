@@ -18,6 +18,19 @@ const LIMB_COLOR = "rgba(0, 220, 120, 0.85)";
 const LIMB_WIDTH = 2.5;
 
 /**
+ * Style options for the skeleton overlay.
+ * All fields are optional; unset values fall back to built-in defaults.
+ */
+export interface SkeletonStyle {
+  limbColor?: string;
+  jointColor?: string;
+  /** Line width in CSS pixels (1–10). Default 2.5. */
+  lineWidth?: number;
+  /** Joint circle radius in CSS pixels (1–15). Default 5. */
+  pointRadius?: number;
+}
+
+/**
  * Convert a PoseFrame's normalized keypoints to image-space pixel coordinates
  * by multiplying out the video dimensions and applying the homography.
  *
@@ -53,18 +66,20 @@ export function buildTransformedKeypoints(
  *
  * @param ctx       - Canvas 2D context to draw onto.
  * @param keypoints - Map of keypoint name → {x, y} in image pixel space.
- * @param options   - Optional color overrides for multi-attempt overlays.
+ * @param options   - Optional style overrides (colors, line width, point radius).
  */
 export function drawSkeleton(
   ctx: CanvasRenderingContext2D,
   keypoints: Record<string, { x: number; y: number }>,
-  options?: { limbColor?: string; jointColor?: string },
+  options?: SkeletonStyle,
 ): void {
   const limbColor = options?.limbColor ?? LIMB_COLOR;
   const jointColor = options?.jointColor ?? JOINT_COLOR;
+  const lineWidth = options?.lineWidth ?? LIMB_WIDTH;
+  const pointRadius = options?.pointRadius ?? JOINT_RADIUS;
   // Draw limb lines first so joints render on top.
   ctx.save();
-  ctx.lineWidth = LIMB_WIDTH;
+  ctx.lineWidth = lineWidth;
   ctx.strokeStyle = limbColor;
   ctx.lineCap = "round";
 
@@ -83,7 +98,7 @@ export function drawSkeleton(
   ctx.fillStyle = jointColor;
   for (const pt of Object.values(keypoints)) {
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, JOINT_RADIUS, 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, pointRadius, 0, Math.PI * 2);
     ctx.fill();
   }
 
