@@ -3,6 +3,7 @@ import {
   interpolatePoseFrames,
   smoothPoseFrames,
   filterLandmarks,
+  estimateMissingLandmarks,
   applyLandmarkEstimator,
   type LandmarkEstimator,
 } from "@/pipeline/poseInterpolator";
@@ -114,62 +115,59 @@ describe("smoothPoseFrames", () => {
   });
 
   it("does not fill missing keypoints — absent keypoints remain absent", () => {
-    // EMA-only: frame 0 has 'nose'; frame 1 has no 'nose' — it stays absent.
     const frames: PoseFrame[] = [
       frame(0, [["nose", 0.5, 0.5]]),
       { timestamp: 1, keypoints: [] },
       frame(2, [["nose", 0.7, 0.7]]),
     ];
     const result = smoothPoseFrames(frames);
-    // EMA never fills gaps — frame 1 has no nose keypoint.
     expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
-    // The EMA state carries into frames where the keypoint reappears.
+    // The filter state carries into frames where the keypoint reappears.
     const reappeared = result[2].keypoints.find(k => k.name === "nose")!;
     expect(reappeared).toBeDefined();
-    // With default alpha=0.3 the value should be smoothed toward the prior EMA
-    // (which was seeded at 0.5), so x must be between 0.5 and 0.7.
+    // One-Euro smooths the reappeared value toward the prior state.
     expect(reappeared.x).toBeGreaterThan(0.5);
     expect(reappeared.x).toBeLessThan(0.7);
   });
 
   it("seeds a freshly appearing keypoint as its first value (no backward fill)", () => {
-    // Frames 0–1 have no 'nose'; frame 2 first detects it.
     const frames: PoseFrame[] = [
       { timestamp: 0, keypoints: [] },
       { timestamp: 1, keypoints: [] },
       frame(2, [["nose", 0.5, 0.5]]),
     ];
     const result = smoothPoseFrames(frames);
-    // No backward fill — frames 0 and 1 remain empty.
     expect(result[0].keypoints.find(k => k.name === "nose")).toBeUndefined();
     expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
-    // Frame 2 seeds the EMA so its value is returned exactly (no prior state).
     const seeded = result[2].keypoints.find(k => k.name === "nose")!;
     expect(seeded).toBeDefined();
     expect(seeded.x).toBeCloseTo(0.5);
     expect(seeded.y).toBeCloseTo(0.5);
   });
 
-  it("with alpha=1 leaves values exactly as-is (no smoothing)", () => {
+  it("with very high minCutoff leaves values nearly unchanged", () => {
     const frames = [
       frame(0, [["left_hip", 0.3, 0.4]]),
       frame(1, [["left_hip", 0.7, 0.8]]),
     ];
-    const result = smoothPoseFrames(frames, 1.0);
-    expect(result[0].keypoints[0]).toMatchObject({ x: 0.3, y: 0.4 });
-    expect(result[1].keypoints[0]).toMatchObject({ x: 0.7, y: 0.8 });
+    // minCutoff=10000 → alpha ≈ 1 → near pass-through
+    const result = smoothPoseFrames(frames, 10000, 0);
+    expect(result[0].keypoints[0].x).toBeCloseTo(0.3, 2);
+    expect(result[0].keypoints[0].y).toBeCloseTo(0.4, 2);
+    expect(result[1].keypoints[0].x).toBeCloseTo(0.7, 2);
+    expect(result[1].keypoints[0].y).toBeCloseTo(0.8, 2);
   });
 
-  it("with alpha<1 the second frame is smoothed toward the first", () => {
-    // alpha=0.5 → second value = 0.5*x1 + 0.5*x0
+  it("with default parameters the second frame is smoothed toward the first", () => {
     const frames = [
       frame(0, [["nose", 0.0, 0.0]]),
       frame(1, [["nose", 1.0, 1.0]]),
     ];
-    const result = smoothPoseFrames(frames, 0.5);
+    const result = smoothPoseFrames(frames);
     const kp = result[1].keypoints.find(k => k.name === "nose")!;
-    expect(kp.x).toBeCloseTo(0.5);
-    expect(kp.y).toBeCloseTo(0.5);
+    // The One-Euro filter smooths the jump — value should be between 0 and 1.
+    expect(kp.x).toBeGreaterThan(0.0);
+    expect(kp.x).toBeLessThan(1.0);
   });
 
   it("processes multiple keypoints independently", () => {
@@ -177,11 +175,12 @@ describe("smoothPoseFrames", () => {
       frame(0, [["nose", 0.0, 0.0], ["left_hip", 1.0, 1.0]]),
       frame(1, [["nose", 1.0, 1.0], ["left_hip", 0.0, 0.0]]),
     ];
-    const result = smoothPoseFrames(frames, 1.0); // alpha=1 → no smoothing
+    // Very high minCutoff → near pass-through
+    const result = smoothPoseFrames(frames, 10000, 0);
     const nose1 = result[1].keypoints.find(k => k.name === "nose")!;
     const hip1  = result[1].keypoints.find(k => k.name === "left_hip")!;
-    expect(nose1.x).toBeCloseTo(1.0);
-    expect(hip1.x).toBeCloseTo(0.0);
+    expect(nose1.x).toBeCloseTo(1.0, 2);
+    expect(hip1.x).toBeCloseTo(0.0, 2);
   });
 });
 
@@ -323,5 +322,74 @@ describe("applyLandmarkEstimator", () => {
     const estimator = vi.fn<LandmarkEstimator>((f) => f);
     expect(applyLandmarkEstimator([], estimator)).toEqual([]);
     expect(estimator).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// estimateMissingLandmarks
+// ---------------------------------------------------------------------------
+
+describe("estimateMissingLandmarks", () => {
+  it("returns an empty array when given an empty array", () => {
+    expect(estimateMissingLandmarks([])).toEqual([]);
+  });
+
+  it("returns frames unchanged when all 17 keypoints are present", () => {
+    const frames = [goodFrame(0), goodFrame(1)];
+    const result = estimateMissingLandmarks(frames);
+    expect(result[0].keypoints).toHaveLength(17);
+    expect(result[1].keypoints).toHaveLength(17);
+  });
+
+  it("fills a missing keypoint via temporal interpolation from prev and next", () => {
+    // Frame 0 and 2 have left_wrist; frame 1 is missing it.
+    const f0 = frame(0, [["left_wrist", 0.2, 0.4, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
+    const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
+    const f2 = frame(2, [["left_wrist", 0.4, 0.6, 0.9], ["left_elbow", 0.4, 0.4, 0.9]]);
+    const result = estimateMissingLandmarks([f0, f1, f2], 10, 17);
+    const estimated = result[1].keypoints.find(k => k.name === "left_wrist");
+    expect(estimated).toBeDefined();
+    // Temporal lerp: midpoint between (0.2, 0.4) and (0.4, 0.6).
+    expect(estimated!.x).toBeCloseTo(0.3);
+    expect(estimated!.y).toBeCloseTo(0.5);
+    // Score is discounted.
+    expect(estimated!.score).toBeLessThan(0.9);
+  });
+
+  it("uses structural estimation when only one temporal side is available", () => {
+    // Frame 0 has both left_wrist and left_elbow.
+    // Frame 1 has left_elbow but not left_wrist → structural can estimate.
+    const f0 = frame(0, [["left_wrist", 0.2, 0.5, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
+    const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
+    // No frame 2 with left_wrist → no temporal lerp, so structural kicks in.
+    const result = estimateMissingLandmarks([f0, f1], 10, 17);
+    const est = result[1].keypoints.find(k => k.name === "left_wrist");
+    expect(est).toBeDefined();
+    // Bone vector from frame 0: wrist(0.2, 0.5) - elbow(0.3, 0.3) = (-0.1, 0.2)
+    // Applied to current elbow (0.35, 0.35) → (0.25, 0.55)
+    expect(est!.x).toBeCloseTo(0.25);
+    expect(est!.y).toBeCloseTo(0.55);
+    // Structural confidence is discounted.
+    expect(est!.score).toBeLessThan(0.9);
+  });
+
+  it("skips estimation when too many keypoints are missing (> maxEstimatable)", () => {
+    // One frame with only 2 keypoints — 15 missing > default maxEstimatable(5).
+    const f = frame(0, [["nose", 0.5, 0.5, 0.9], ["left_eye", 0.4, 0.4, 0.9]]);
+    const result = estimateMissingLandmarks([f]);
+    // Frame returned unchanged.
+    expect(result[0].keypoints).toHaveLength(2);
+  });
+
+  it("uses single-neighbour extrapolation within 2 frames distance", () => {
+    // Frame 0 has nose; frame 1 does not. No next frame with nose.
+    // prev is 1 frame away (≤ 2), so extrapolation should apply.
+    const f0 = frame(0, [["nose", 0.5, 0.5, 0.9]]);
+    const f1: PoseFrame = { timestamp: 1, keypoints: [] };
+    const result = estimateMissingLandmarks([f0, f1], 10, 17);
+    const est = result[1].keypoints.find(k => k.name === "nose");
+    expect(est).toBeDefined();
+    expect(est!.x).toBeCloseTo(0.5);
+    expect(est!.score).toBeCloseTo(0.45); // 0.9 * 0.5
   });
 });

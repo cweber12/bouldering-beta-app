@@ -1,22 +1,17 @@
 /**
- * Pose-frame filtering, interpolation, and smoothing utilities.
+ * Pose-frame filtering, interpolation, landmark estimation, and smoothing.
  *
  * Processing order:
  *  1. filterLandmarks — drop frames with too many missing / low-confidence keypoints.
  *  2. interpolatePoseFrames — densify sparse detected frames onto a full timestamp list.
- *  3. smoothPoseFrames — EMA to reduce jitter on the dense sequence.
- *
- * Landmark estimation — injecting estimated keypoints into gap frames — is not
- * implemented here. When it is ready, pass a LandmarkEstimator to the future
- * `estimateLandmarks()` helper that will sit between steps 2 and 3.
+ *  3. estimateMissingLandmarks — fill gaps using temporal + skeletal-geometry cues.
+ *  4. smoothPoseFrames — One-Euro adaptive filter to reduce jitter.
  *
  * This module is framework-agnostic — no React imports.
  */
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
-
-/** Expected number of COCO keypoints that MoveNet Lightning outputs. */
-const MOVENET_KEYPOINT_COUNT = 17;
+import { MOVENET_KEYPOINT_COUNT, KP_NAMES, SKELETON_EDGES } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Landmark estimation hook (pluggable — not yet implemented)
@@ -62,6 +57,66 @@ export function applyLandmarkEstimator(
   });
 }
 
+// ---------------------------------------------------------------------------
+// One-Euro filter internals
+// ---------------------------------------------------------------------------
+
+interface OneEuroState {
+  x: number;
+  dx: number;
+  lastTime: number;
+}
+
+const ONE_EURO_MIN_CUTOFF = 1.7;
+const ONE_EURO_BETA = 0.3;
+const ONE_EURO_D_CUTOFF = 1.0;
+
+function smoothingAlpha(dt: number, cutoff: number): number {
+  const tau = 1 / (2 * Math.PI * cutoff);
+  return 1 / (1 + tau / dt);
+}
+
+function oneEuroStep(
+  x: number,
+  t: number,
+  prev: OneEuroState | null,
+  minCutoff: number,
+  beta: number,
+  dCutoff: number,
+): { value: number; state: OneEuroState } {
+  if (!prev) {
+    return { value: x, state: { x, dx: 0, lastTime: t } };
+  }
+  const dt = Math.max(t - prev.lastTime, 1e-6);
+  const rawDx = (x - prev.x) / dt;
+  const alphaD = smoothingAlpha(dt, dCutoff);
+  const dx = alphaD * rawDx + (1 - alphaD) * prev.dx;
+  const cutoff = minCutoff + beta * Math.abs(dx);
+  const alpha = smoothingAlpha(dt, cutoff);
+  const filtered = alpha * x + (1 - alpha) * prev.x;
+  return { value: filtered, state: { x: filtered, dx, lastTime: t } };
+}
+
+// ---------------------------------------------------------------------------
+// Precomputed skeleton adjacency + full keypoint name set
+// ---------------------------------------------------------------------------
+
+const ADJACENCY: ReadonlyMap<string, readonly string[]> = (() => {
+  const adj = new Map<string, string[]>();
+  for (const [fromIdx, toIdx] of SKELETON_EDGES) {
+    const from = KP_NAMES[fromIdx];
+    const to = KP_NAMES[toIdx];
+    if (!adj.has(from)) adj.set(from, []);
+    if (!adj.has(to)) adj.set(to, []);
+    adj.get(from)!.push(to);
+    adj.get(to)!.push(from);
+  }
+  return adj;
+})();
+
+const ALL_KP_NAMES: ReadonlySet<string> = new Set(
+  Object.values(KP_NAMES) as string[],
+);
 
 // ---------------------------------------------------------------------------
 // Filtering
@@ -103,6 +158,17 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+/** Binary search: index of first element with timestamp >= target. */
+function lowerBound(frames: PoseFrame[], target: number): number {
+  let lo = 0, hi = frames.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (frames[mid].timestamp < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 /**
  * Linearly interpolate keypoints between two anchor frames.
  *
@@ -135,6 +201,8 @@ function interpolateKeypoints(from: Keypoint[], to: Keypoint[], t: number): Keyp
 /**
  * Produce a dense PoseFrame array from a sparse set of detected frames.
  *
+ * Uses binary search O(log n) per timestamp instead of linear scan.
+ *
  * @param processedFrames - Pose frames returned by the detector (one per
  *                          N-th sampled video frame). Must be sorted by
  *                          ascending timestamp.
@@ -151,27 +219,22 @@ export function interpolatePoseFrames(
   }
 
   return allTimestamps.map(timestamp => {
-    // Find the first detected frame at or after this timestamp.
-    const nextIdx = processedFrames.findIndex(f => f.timestamp >= timestamp);
+    const nextIdx = lowerBound(processedFrames, timestamp);
 
-    if (nextIdx === -1) {
-      // Past the last detected frame — hold the last known pose.
+    if (nextIdx >= processedFrames.length) {
       return { timestamp, keypoints: processedFrames[processedFrames.length - 1].keypoints };
     }
 
     if (nextIdx === 0) {
-      // Before the first detected frame — use the first known pose.
       return { timestamp, keypoints: processedFrames[0].keypoints };
     }
 
     const next = processedFrames[nextIdx];
 
-    // Exact match — no interpolation needed.
     if (next.timestamp === timestamp) {
       return { timestamp, keypoints: next.keypoints };
     }
 
-    // Interpolate between the surrounding anchor frames.
     const prev = processedFrames[nextIdx - 1];
     const t = (timestamp - prev.timestamp) / (next.timestamp - prev.timestamp);
 
@@ -183,43 +246,151 @@ export function interpolatePoseFrames(
 }
 
 // ---------------------------------------------------------------------------
-// Landmark smoothing
+// Landmark estimation
 // ---------------------------------------------------------------------------
 
 /**
- * Apply an exponential moving average (EMA) across a dense PoseFrame sequence
- * to reduce jitter.
+ * Estimate missing landmarks for each frame using temporal interpolation
+ * and skeletal geometry.
  *
- * Only keypoints already present in each frame are smoothed. No gap-filling is
- * performed here — missing keypoints are left absent. Use
- * {@link filterLandmarks} before calling this and {@link interpolatePoseFrames}
- * to supply good anchor positions, so gaps are already bridged by interpolation
- * rather than by positional carry-over.
+ * For each frame:
+ *  1. Identify which of the 17 MoveNet keypoints are absent.
+ *  2. Temporal: if both a previous and next frame contain the keypoint
+ *     within `maxTemporalGap`, linearly interpolate.
+ *  3. Structural: if a skeleton neighbour exists in the current frame and
+ *     a nearby reference frame has both joints, apply the bone-vector offset.
+ *  4. Single-neighbour extrapolation: use a close temporal neighbour with
+ *     reduced confidence (limited to 2 frames distance).
  *
- * @param frames - Dense PoseFrame array (e.g. output of interpolatePoseFrames).
- * @param alpha  - EMA weight in (0, 1]. Lower = smoother, higher = more reactive.
- *                 Defaults to 0.3.
+ * Frames with more than `maxEstimatable` missing keypoints are returned
+ * unchanged — the pose is too degraded for reliable estimation.
+ *
+ * @param frames          - Dense PoseFrame array (e.g. after interpolatePoseFrames).
+ * @param maxTemporalGap  - How many frames to search in each direction. Default: 10.
+ * @param maxEstimatable  - Skip estimation when more keypoints are missing. Default: 5.
  */
-export function smoothPoseFrames(frames: PoseFrame[], alpha = 0.3): PoseFrame[] {
+export function estimateMissingLandmarks(
+  frames: PoseFrame[],
+  maxTemporalGap = 10,
+  maxEstimatable = 5,
+): PoseFrame[] {
   if (frames.length === 0) return frames;
 
-  // Build a per-name EMA state from the first frame each track appears in.
-  const emaX = new Map<string, number>();
-  const emaY = new Map<string, number>();
+  return frames.map((frame, i) => {
+    const existing = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+    const missing: string[] = [];
+    for (const name of ALL_KP_NAMES) {
+      if (!existing.has(name)) missing.push(name);
+    }
+    if (missing.length === 0 || missing.length > maxEstimatable) return frame;
+
+    const estimated: Keypoint[] = [...frame.keypoints];
+
+    for (const name of missing) {
+      // 1. Temporal: nearest prev/next frames that contain the keypoint.
+      let prevKp: Keypoint | null = null;
+      let prevDist = 0;
+      for (let j = i - 1; j >= Math.max(0, i - maxTemporalGap); j--) {
+        const kp = frames[j].keypoints.find(k => k.name === name);
+        if (kp) { prevKp = kp; prevDist = i - j; break; }
+      }
+
+      let nextKp: Keypoint | null = null;
+      let nextDist = 0;
+      for (let j = i + 1; j <= Math.min(frames.length - 1, i + maxTemporalGap); j++) {
+        const kp = frames[j].keypoints.find(k => k.name === name);
+        if (kp) { nextKp = kp; nextDist = j - i; break; }
+      }
+
+      if (prevKp && nextKp) {
+        const t = prevDist / (prevDist + nextDist);
+        estimated.push({
+          name,
+          x: lerp(prevKp.x, nextKp.x, t),
+          y: lerp(prevKp.y, nextKp.y, t),
+          score: Math.min(prevKp.score, nextKp.score) * 0.8,
+        });
+        continue;
+      }
+
+      // 2. Structural: bone-vector from a connected joint in a nearby frame.
+      const neighbors = ADJACENCY.get(name);
+      if (neighbors) {
+        let found = false;
+        for (const neighborName of neighbors) {
+          const currentNeighbor = existing.get(neighborName);
+          if (!currentNeighbor) continue;
+          for (let j = Math.max(0, i - maxTemporalGap); j <= Math.min(frames.length - 1, i + maxTemporalGap); j++) {
+            if (j === i) continue;
+            const refTarget = frames[j].keypoints.find(k => k.name === name);
+            const refNeighbor = frames[j].keypoints.find(k => k.name === neighborName);
+            if (refTarget && refNeighbor) {
+              estimated.push({
+                name,
+                x: currentNeighbor.x + (refTarget.x - refNeighbor.x),
+                y: currentNeighbor.y + (refTarget.y - refNeighbor.y),
+                score: currentNeighbor.score * 0.6,
+              });
+              found = true;
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) continue;
+      }
+
+      // 3. Single temporal neighbour — limited extrapolation (max 2 frames).
+      if (prevKp && prevDist <= 2) {
+        estimated.push({ ...prevKp, name, score: prevKp.score * 0.5 });
+      } else if (nextKp && nextDist <= 2) {
+        estimated.push({ ...nextKp, name, score: nextKp.score * 0.5 });
+      }
+    }
+
+    return { ...frame, keypoints: estimated };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Adaptive smoothing (One-Euro filter)
+// ---------------------------------------------------------------------------
+
+/**
+ * Apply a One-Euro adaptive low-pass filter across a dense PoseFrame sequence.
+ *
+ * The One-Euro filter adapts its effective cutoff frequency based on the speed
+ * of each keypoint: when still, smoothing is heavy (removes jitter); when
+ * moving fast, smoothing is light (preserves responsiveness). This is the
+ * standard approach used in production pose-estimation pipelines (MediaPipe,
+ * OpenPose).
+ *
+ * Only keypoints already present in each frame are smoothed — missing keypoints
+ * remain absent.
+ *
+ * @param frames    - Dense PoseFrame array (e.g. output of estimateMissingLandmarks).
+ * @param minCutoff - Minimum cutoff frequency (Hz). Lower = smoother when still.
+ *                    Default: 1.7.
+ * @param beta      - Speed coefficient. Higher = less lag during fast motion.
+ *                    Default: 0.3.
+ */
+export function smoothPoseFrames(
+  frames: PoseFrame[],
+  minCutoff = ONE_EURO_MIN_CUTOFF,
+  beta = ONE_EURO_BETA,
+): PoseFrame[] {
+  if (frames.length === 0) return frames;
+
+  const stateX = new Map<string, OneEuroState>();
+  const stateY = new Map<string, OneEuroState>();
 
   return frames.map(frame => {
     const smoothed: Keypoint[] = frame.keypoints.map(kp => {
-      if (!emaX.has(kp.name)) {
-        // Seed: first time we see this keypoint.
-        emaX.set(kp.name, kp.x);
-        emaY.set(kp.name, kp.y);
-        return kp;
-      }
-      const sx = alpha * kp.x + (1 - alpha) * emaX.get(kp.name)!;
-      const sy = alpha * kp.y + (1 - alpha) * emaY.get(kp.name)!;
-      emaX.set(kp.name, sx);
-      emaY.set(kp.name, sy);
-      return { ...kp, x: sx, y: sy };
+      const rx = oneEuroStep(kp.x, frame.timestamp, stateX.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
+      const ry = oneEuroStep(kp.y, frame.timestamp, stateY.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
+      stateX.set(kp.name, rx.state);
+      stateY.set(kp.name, ry.state);
+      return { ...kp, x: rx.value, y: ry.value };
     });
     return { ...frame, keypoints: smoothed };
   });

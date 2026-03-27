@@ -71,10 +71,15 @@ export interface RouteAttempt {
 
 // Module-level store — shared across all hook/component instances.
 const store = new Map<string, RouteAttempt>();
+const MAX_ENTRIES = 10;
 
-/** Save (or overwrite) a route attempt. */
+/** Save (or overwrite) a route attempt. Evicts the oldest entry when full. */
 export function saveAttempt(attempt: RouteAttempt): void {
   store.set(attempt.id, attempt);
+  if (store.size > MAX_ENTRIES) {
+    const oldest = store.keys().next().value;
+    if (oldest !== undefined) store.delete(oldest);
+  }
 }
 
 /** Retrieve a route attempt by ID. Returns undefined if not found. */

@@ -28,6 +28,15 @@ export interface AttemptEntry {
 // ---------------------------------------------------------------------------
 
 /**
+ * Sanitise a string for use as a directory or file path segment.
+ * Strips characters invalid in Windows/macOS/Linux paths and returns
+ * "Unknown" when the result would be empty.
+ */
+export function sanitizeDirName(name: string): string {
+  return name.trim().replace(/[<>:"/\\|?*]/g, "_") || "Unknown";
+}
+
+/**
  * Format an attempt filename as a human-readable date/time string.
  * Falls back to the raw filename when no timestamp can be parsed.
  */

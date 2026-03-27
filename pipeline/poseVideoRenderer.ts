@@ -141,18 +141,6 @@ export async function renderPoseVideo({
   const duration = Math.max(lastTs - firstTs, 1 / fps);
   const totalOutputFrames = Math.ceil(duration * fps) + 1;
 
-  // For each output frame find the pose frame nearest to its timestamp.
-  function nearestFrame(t: number): typeof sortedFrames[0] {
-    let best = sortedFrames[0];
-    let bestDist = Math.abs(sortedFrames[0].timestamp - t);
-    for (let j = 1; j < sortedFrames.length; j++) {
-      const d = Math.abs(sortedFrames[j].timestamp - t);
-      if (d < bestDist) { bestDist = d; best = sortedFrames[j]; }
-      else break; // sorted, so distance only increases from here
-    }
-    return best;
-  }
-
   return new Promise<string>((resolve, reject) => {
     recorder.onstop = () => {
       imageBitmap.close();
@@ -168,9 +156,15 @@ export async function renderPoseVideo({
     recorder.start();
 
     (async () => {
+      // Two-pointer: advance cursor as output timestamps increase.
+      let cursor = 0;
       for (let i = 0; i < totalOutputFrames; i++) {
         const t = firstTs + (i / fps);
-        const frame = nearestFrame(t);
+        while (cursor < sortedFrames.length - 1 &&
+               Math.abs(sortedFrames[cursor + 1].timestamp - t) <= Math.abs(sortedFrames[cursor].timestamp - t)) {
+          cursor++;
+        }
+        const frame = sortedFrames[cursor];
         ctx.drawImage(imageBitmap, 0, 0);
 
         if (frame.keypoints.length > 0) {

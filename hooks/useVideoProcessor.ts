@@ -11,6 +11,7 @@ import {
 import {
   filterLandmarks,
   interpolatePoseFrames,
+  estimateMissingLandmarks,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture } from "@/storage/sessionStore";
@@ -239,10 +240,11 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           setCurrentFrame(i + 1);
         }
 
-        // Pipeline: filter low-confidence anchors → interpolate gaps → smooth.
-        const goodFrames  = filterLandmarks(detected);
-        const rawFrames   = interpolatePoseFrames(goodFrames, allTimestamps);
-        const frames      = smoothPoseFrames(rawFrames);
+        // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
+        const goodFrames   = filterLandmarks(detected);
+        const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
+        const estimated    = estimateMissingLandmarks(interpolated);
+        const frames       = smoothPoseFrames(estimated);
 
         saveAttempt({
           id,

@@ -11,6 +11,7 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
+import { sanitizeDirName } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // RouteData folder name
@@ -19,10 +20,6 @@ const BETA_FOLDER = "RouteData";
 const SESSION_KEY = "bouldering_last_attempt_id";
 
 let cachedRootHandle: FileSystemDirectoryHandle | null = null;
-
-function sanitizeDirName(name: string): string {
-  return name.trim().replace(/[<>:"/\\|?*]/g, "_") || "Unknown";
-}
 
 async function acquireRootHandle(): Promise<FileSystemDirectoryHandle> {
   if (cachedRootHandle) {

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { RouteAttempt } from "@/storage/sessionStore";
+import { sanitizeDirName } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,14 +38,10 @@ export interface S3StorageResult {
 
 const KEY_PREFIX = "RouteData";
 
-function sanitize(name: string): string {
-  return name.trim().replace(/[<>:"/\\|?*]/g, "_") || "Unknown";
-}
-
 function deriveS3Key(attempt: RouteAttempt): string {
-  const state = sanitize(attempt.state || "Unknown State");
-  const area  = sanitize(attempt.area  || "Unknown Area");
-  const route = sanitize(attempt.route || "Unknown Route");
+  const state = sanitizeDirName(attempt.state || "Unknown State");
+  const area  = sanitizeDirName(attempt.area  || "Unknown Area");
+  const route = sanitizeDirName(attempt.route || "Unknown Route");
   return `${KEY_PREFIX}/${state}/${area}/${route}/${attempt.id}.json`;
 }
 
