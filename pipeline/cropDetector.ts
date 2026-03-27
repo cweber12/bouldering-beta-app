@@ -1,15 +1,8 @@
 /**
- * Crop-box computation for outdoor climbing video processing.
+ * Crop-box utilities for climbing video processing.
  *
- * Outdoor footage is full-screen; the climber is cropped to reduce the area
- * that pose estimation must scan each frame, improving accuracy on smaller
- * figures captured by wide-angle lenses.
- *
- * Crop strategy:
- *   - Center the box on the climber's hips (midpoint of left_hip + right_hip).
- *   - Extend ±0.25 × videoWidth  horizontally.
- *   - Extend ±0.25 × videoHeight vertically.
- *   - Clamp to frame boundaries so the box never exceeds the frame.
+ * Provides coordinate helpers for projecting keypoints detected in a cropped
+ * sub-region back to full-frame normalized space.
  *
  * This module is framework-agnostic — no React imports.
  */
@@ -38,10 +31,6 @@ export interface CropBox {
   height: number;
 }
 
-// Half-extent ratios relative to frame dimensions.
-const HALF_W_RATIO = 0.25;
-const HALF_H_RATIO = 0.25;
-
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -60,28 +49,6 @@ export function extractHipCenter(keypoints: Keypoint[]): HipCenter | null {
   if (lh && rh) return { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
   const hip = (lh ?? rh)!;
   return { x: hip.x, y: hip.y };
-}
-
-/**
- * Compute a crop box centered on `hipCenter`.
- *
- * The box extends HALF_W_RATIO × videoWidth on each side and
- * HALF_H_RATIO × videoHeight above and below. Pixel-aligned and clamped.
- */
-export function computeCropBox(
-  hipCenter: HipCenter,
-  videoWidth: number,
-  videoHeight: number,
-): CropBox {
-  const cx = hipCenter.x * videoWidth;
-  const cy = hipCenter.y * videoHeight;
-
-  const x = Math.max(0, Math.round(cx - HALF_W_RATIO * videoWidth));
-  const y = Math.max(0, Math.round(cy - HALF_H_RATIO * videoHeight));
-  const right = Math.min(videoWidth, Math.round(cx + HALF_W_RATIO * videoWidth));
-  const bottom = Math.min(videoHeight, Math.round(cy + HALF_H_RATIO * videoHeight));
-
-  return { x, y, width: right - x, height: bottom - y };
 }
 
 /**

@@ -14,6 +14,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
+import { cropImageData } from "@/utils/cvHelpers";
+
 const ORB_FEATURES = 500;
 const ORB_DESCRIPTOR_BYTES = 32;
 const LOWE_RATIO = 0.75;
@@ -26,10 +28,36 @@ export interface OrbKeypoint {
   octave: number;
 }
 
+/**
+ * Axis-aligned bounding box (in full-frame pixel coordinates) that was used
+ * when cropping a reference frame before ORB extraction. Stored alongside the
+ * features so the matcher can apply a corresponding crop to the query image
+ * when attempting a re-anchor pass.
+ */
+export interface OrbCropBox {
+  /** Left edge in full-frame pixels. */
+  x: number;
+  /** Top edge in full-frame pixels. */
+  y: number;
+  /** Width of the crop in pixels. */
+  width: number;
+  /** Height of the crop in pixels. */
+  height: number;
+  /** Original frame width — used to re-map coordinates. */
+  srcWidth: number;
+  /** Original frame height — used to re-map coordinates. */
+  srcHeight: number;
+}
+
 export interface OrbFeatures {
   keypoints: OrbKeypoint[];
   /** Binary ORB descriptors. Shape: (nKeypoints × 32) bytes, flattened row-major. */
   descriptors: Uint8Array;
+  /**
+   * Crop applied before extraction, if any. Keypoints are always stored in
+   * full-frame pixel coordinates regardless of whether a crop was applied.
+   */
+  cropBox?: OrbCropBox;
 }
 
 export interface OrbMatch {
@@ -92,6 +120,30 @@ export function extractFeatures(cv: CV, imageData: ImageData): OrbFeatures {
     gray?.delete();
     src?.delete();
   }
+}
+
+/**
+ * Extract ORB features from a sub-region of an ImageData.
+ *
+ * Crops `imageData` to `cropBox`, runs ORB detection inside that region, then
+ * offsets all returned keypoints by (+cropBox.x, +cropBox.y) so they are
+ * expressed in full-frame pixel coordinates. This means the returned OrbFeatures
+ * can be used directly with computeHomography without any coordinate adjustment.
+ *
+ * The crop box is stored on the returned OrbFeatures as `cropBox`.
+ */
+export function extractFeaturesFromCrop(
+  cv: CV,
+  imageData: ImageData,
+  cropBox: OrbCropBox,
+): OrbFeatures {
+  const cropped = cropImageData(imageData, cropBox);
+  const features = extractFeatures(cv, cropped);
+  const adjustedKp = features.keypoints.map(kp => ({
+    ...kp,
+    pt: { x: kp.pt.x + cropBox.x, y: kp.pt.y + cropBox.y },
+  }));
+  return { ...features, keypoints: adjustedKp, cropBox };
 }
 
 /**

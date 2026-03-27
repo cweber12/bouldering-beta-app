@@ -5,16 +5,25 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
+import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useTFModel } from "@/hooks/useTFModel";
 import { useVideoProcessor, type ClimbingMode } from "@/hooks/useVideoProcessor";
+import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
-// BoulderingBeta folder name -- all attempts live under this folder
+// RouteData folder name -- all attempts live under this folder
 // ---------------------------------------------------------------------------
-const BETA_FOLDER = "BoulderingBeta";
+const BETA_FOLDER = "RouteData";
+
+/**
+ * Module-level cache for the root FileSystemDirectoryHandle.
+ * Persists across saves within the same page session so subsequent saves
+ * do not re-open the directory picker when the handle is still valid.
+ */
+let cachedRootHandle: FileSystemDirectoryHandle | null = null;
 
 // ---------------------------------------------------------------------------
 // Save attempt to device -- FSAPI with fallback to <a download>
@@ -24,7 +33,30 @@ function sanitizeDirName(name: string): string {
   return name.trim().replace(/[<>:"/\\|?*]/g, "_") || "Unknown";
 }
 
-async function saveAttemptToDevice(attempt: RouteAttempt): Promise<void> {
+async function acquireRootHandle(): Promise<FileSystemDirectoryHandle> {
+  if (cachedRootHandle) {
+    try {
+      // queryPermission is available on FileSystemHandle in FSAPI-capable browsers.
+      const perm = await (
+        cachedRootHandle as unknown as {
+          queryPermission: (desc: object) => Promise<string>;
+        }
+      ).queryPermission({ mode: "readwrite" });
+      if (perm === "granted") return cachedRootHandle;
+    } catch {
+      // Permission check not supported or handle stale — fall through to picker.
+    }
+  }
+  const handle = await (
+    window as unknown as { showDirectoryPicker: (opts?: object) => Promise<FileSystemDirectoryHandle> }
+  ).showDirectoryPicker({ mode: "readwrite" });
+  cachedRootHandle = handle;
+  return handle;
+}
+
+async function saveAttemptToDevice(
+  attempt: RouteAttempt,
+): Promise<FileSystemDirectoryHandle | null> {
   const serializable = {
     ...attempt,
     orbFeatures: attempt.orbFeatures
@@ -37,27 +69,27 @@ async function saveAttemptToDevice(attempt: RouteAttempt): Promise<void> {
   const json = JSON.stringify(serializable, null, 2);
 
   if ("showDirectoryPicker" in window) {
-    const root = await (
-      window as unknown as { showDirectoryPicker: (opts?: object) => Promise<FileSystemDirectoryHandle> }
-    ).showDirectoryPicker({ mode: "readwrite" });
-    const betaDir = await root.getDirectoryHandle(BETA_FOLDER, { create: true });
+    const root = await acquireRootHandle();
+    const betaDir  = await root.getDirectoryHandle(BETA_FOLDER, { create: true });
     const stateDir = await betaDir.getDirectoryHandle(sanitizeDirName(attempt.state || "Unknown State"), { create: true });
-    const areaDir = await stateDir.getDirectoryHandle(sanitizeDirName(attempt.area || "Unknown Area"), { create: true });
-    const routeDir = await areaDir.getDirectoryHandle(sanitizeDirName(attempt.route || "Unknown Route"), { create: true });
+    const areaDir  = await stateDir.getDirectoryHandle(sanitizeDirName(attempt.area  || "Unknown Area"),  { create: true });
+    const routeDir = await areaDir.getDirectoryHandle(sanitizeDirName(attempt.route  || "Unknown Route"), { create: true });
     const fileHandle = await routeDir.getFileHandle(`${attempt.id}.json`, { create: true });
-    const writable = await fileHandle.createWritable();
+    const writable   = await fileHandle.createWritable();
     await writable.write(json);
     await writable.close();
+    return routeDir;
   } else {
     const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
     a.download = `${attempt.id}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    return null;
   }
 }
 
@@ -73,14 +105,24 @@ function UploadPageInner() {
   const { model } = useTFModel();
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
+  const { uploadAttempt, deleteAttempt: deleteS3Attempt, status: s3Status } = useS3Storage();
 
   const [state, setState] = useState("");
   const [area, setArea] = useState("");
   const [route, setRoute] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [frameStep, setFrameStep] = useState(5);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedS3Key, setSavedS3Key] = useState<string | null>(null);
+  const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+
+  // Crop box state — fractional [0, 1] coordinates.
+  const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+  const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
 
   const progressPct = totalFrames > 0 ? Math.round((currentFrame / totalFrames) * 100) : 0;
   const isProcessing = status === "processing";
@@ -109,7 +151,19 @@ function UploadPageInner() {
     const url = URL.createObjectURL(file);
     previewUrlRef.current = url;
     setVideoPreviewUrl(url);
-    if (model && cv) process(file, model, cv, mode, frameStep, { state, area, route });
+    setPendingFile(file);
+    // Reset crop boxes to default when a new file is selected.
+    setClimberCrop(DEFAULT_CROP);
+    setOrbCrop(DEFAULT_CROP);
+    setActiveCropMode("climber");
+  }
+
+  function handleProcess() {
+    if (!pendingFile || !model || !cv) return;
+    process(pendingFile, model, cv, mode, frameStep, { state, area, route }, {
+      climberCrop,
+      orbCrop,
+    });
   }
 
   async function handleSaveToDevice() {
@@ -118,10 +172,46 @@ function UploadPageInner() {
     if (!attempt) return;
     setSaveError(null);
     try {
-      await saveAttemptToDevice(attempt);
+      const routeDir = await saveAttemptToDevice(attempt);
+      setSavedRouteDirHandle(routeDir);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setSaveError(err instanceof Error ? err.message : "Save failed.");
+    }
+  }
+
+  async function handleDeleteFromDevice() {
+    if (!savedRouteDirHandle || !attemptId) return;
+    setSaveError(null);
+    try {
+      await savedRouteDirHandle.removeEntry(`${attemptId}.json`);
+      setSavedRouteDirHandle(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Delete failed.");
+    }
+  }
+
+  async function handleSaveToS3() {
+    if (!attemptId) return;
+    const attempt = getAttempt(attemptId);
+    if (!attempt) return;
+    setSaveError(null);
+    try {
+      const key = await uploadAttempt(attempt);
+      setSavedS3Key(key);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
+    }
+  }
+
+  async function handleDeleteFromS3() {
+    if (!savedS3Key) return;
+    setSaveError(null);
+    try {
+      await deleteS3Attempt(savedS3Key);
+      setSavedS3Key(null);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "S3 delete failed.");
     }
   }
 
@@ -158,7 +248,6 @@ function UploadPageInner() {
             ].join(" ")}
             aria-pressed={mode === "indoor"}
           >
-            <span aria-hidden="true">&#127947;</span>
             Indoor
           </button>
           <button
@@ -171,7 +260,6 @@ function UploadPageInner() {
             ].join(" ")}
             aria-pressed={mode === "outdoor"}
           >
-            <span aria-hidden="true">&#129495;</span>
             Outdoor
           </button>
         </div>
@@ -302,7 +390,84 @@ function UploadPageInner() {
             onChange={handleFileChange}
           />
         </label>
-        {videoPreviewUrl && (
+
+        {/* Crop UI — shown after file selected, before processing starts */}
+        {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
+          <div className="flex flex-col gap-3">
+            {/* Crop mode toggle */}
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-medium text-zinc-400">
+                Set crop regions — drag handles to resize, drag interior to move
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveCropMode("climber")}
+                  className={[
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                    activeCropMode === "climber"
+                      ? "border-sky-500 bg-sky-950 text-sky-300"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
+                  ].join(" ")}
+                >
+                  Climber crop
+                </button>
+                <button
+                  onClick={() => setActiveCropMode("route")}
+                  className={[
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                    activeCropMode === "route"
+                      ? "border-amber-500 bg-amber-950 text-amber-300"
+                      : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
+                  ].join(" ")}
+                >
+                  Route (ORB) crop
+                </button>
+              </div>
+              <p className="text-xs text-zinc-600">
+                {activeCropMode === "climber"
+                  ? "Climber crop — used for pose detection. Tracks hip position each frame (outdoor mode only)."
+                  : "Route crop — used for ORB feature extraction from the first frame."}
+              </p>
+            </div>
+
+            {/* Video with crop overlay */}
+            <div className="relative w-full">
+              <video
+                src={videoPreviewUrl}
+                controls
+                muted
+                playsInline
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+              />
+              <CropBoxOverlay
+                box={activeCropMode === "climber" ? climberCrop : orbCrop}
+                onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
+              />
+            </div>
+
+            {/* Process button */}
+            <button
+              onClick={handleProcess}
+              disabled={!model || !cv}
+              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+              </svg>
+              Process video
+            </button>
+          </div>
+        )}
+
+        {/* Video preview while processing or after done */}
+        {videoPreviewUrl && (isProcessing || isDone) && (
           <video
             src={videoPreviewUrl}
             controls
@@ -394,12 +559,20 @@ function UploadPageInner() {
             </svg>
             Save to {BETA_FOLDER} folder
           </button>
-          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+
+          {savedRouteDirHandle && (
+            <button
+              onClick={handleDeleteFromDevice}
+              className="flex items-center justify-center gap-2 rounded-xl border border-red-900/50 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition hover:border-red-700 hover:text-red-300"
+            >
+              Delete from device
+            </button>
+          )}
 
           <button
-            disabled
-            title="Cloud upload coming soon"
-            className="flex cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-zinc-800 px-6 py-3 text-sm text-zinc-600"
+            onClick={handleSaveToS3}
+            disabled={s3Status === "loading"}
+            className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg
               className="h-4 w-4"
@@ -415,8 +588,20 @@ function UploadPageInner() {
                 d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
               />
             </svg>
-            Upload to cloud (coming soon)
+            {s3Status === "loading" ? "Uploading…" : "Save to S3"}
           </button>
+
+          {savedS3Key && (
+            <button
+              onClick={handleDeleteFromS3}
+              disabled={s3Status === "loading"}
+              className="flex items-center justify-center gap-2 rounded-xl border border-red-900/50 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition hover:border-red-700 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Delete from S3
+            </button>
+          )}
+
+          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
         </div>
       )}
 

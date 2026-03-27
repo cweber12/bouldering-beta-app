@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import LoadingGate from "@/components/shared/LoadingGate";
+import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { usePoseVideo } from "@/hooks/usePoseVideo";
@@ -92,11 +93,13 @@ interface SlotProps {
   slotIndex: number;
   attempt: RouteAttempt | null;
   imageFile: File | null;
+  imageCrop: CropFraction;
+  matchTrigger: number;
   cv: CV;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
 }
 
-function CompareSlot({ slotIndex, attempt, imageFile, cv, onMatchResult }: SlotProps) {
+function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, cv, onMatchResult }: SlotProps) {
   const colors = SLOT_COLORS[slotIndex];
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
@@ -108,12 +111,12 @@ function CompareSlot({ slotIndex, attempt, imageFile, cv, onMatchResult }: SlotP
     onMatchResult(slotIndex, matchResult);
   }, [matchResult, slotIndex, onMatchResult]);
 
-  // Re-run matching when attempt or imageFile changes
+  // Re-run matching when the user triggers a match (via "Apply & Match" button).
   useEffect(() => {
-    if (!attempt || !imageFile || !cv) return;
-    matchImage(imageFile, attempt.id, cv);
+    if (!attempt || !imageFile || !cv || matchTrigger === 0) return;
+    matchImage(imageFile, attempt.id, cv, imageCrop);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt?.id, imageFile, cv]);
+  }, [matchTrigger, attempt?.id, imageFile, cv]);
 
   const isRendering = videoStatus === "rendering";
   const isReady = videoStatus === "ready";
@@ -482,6 +485,13 @@ function ComparePageInner() {
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
 
+  // Crop box for ORB detection on the shared route photo.
+  const DEFAULT_CROP: CropFraction = { x: 0, y: 0, w: 1, h: 1 };
+  const [imageCrop, setImageCrop] = useState<CropFraction>(DEFAULT_CROP);
+  // Incremented each time the user clicks "Apply & Match".
+  const [matchTrigger, setMatchTrigger] = useState(0);
+  const [cropConfirmed, setCropConfirmed] = useState(false);
+
   useEffect(() => {
     return () => {
       if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
@@ -512,6 +522,14 @@ function ComparePageInner() {
     imagePreviewRef.current = url;
     setImagePreviewUrl(url);
     setImageFile(file);
+    setImageCrop(DEFAULT_CROP);
+    setCropConfirmed(false);
+    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+  }
+
+  function handleApplyAndMatch() {
+    setCropConfirmed(true);
+    setMatchTrigger(t => t + 1);
   }
 
   const anyLoaded = attempts.slice(0, slotCount).some(Boolean);
@@ -544,7 +562,37 @@ function ComparePageInner() {
           <span className="text-xs text-zinc-600">JPG, PNG, WebP</span>
           <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
         </label>
-        {imagePreviewUrl && (
+
+        {/* Crop UI — shown after image selected, before match triggered */}
+        {imagePreviewUrl && imageFile && !cropConfirmed && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-400">
+              Adjust the crop region to focus ORB matching on the relevant wall area.
+            </p>
+            <div className="relative w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreviewUrl}
+                alt="Route photo"
+                className="max-h-48 w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
+              />
+              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
+            </div>
+            <button
+              onClick={handleApplyAndMatch}
+              disabled={!anyLoaded}
+              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Apply &amp; Match
+            </button>
+            {!anyLoaded && (
+              <p className="text-xs text-zinc-500">Load at least one attempt below to enable matching.</p>
+            )}
+          </div>
+        )}
+
+        {/* Static preview after match triggered */}
+        {imagePreviewUrl && cropConfirmed && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imagePreviewUrl}
@@ -599,6 +647,8 @@ function ComparePageInner() {
                 slotIndex={i}
                 attempt={attempts[i]}
                 imageFile={imageFile}
+                imageCrop={imageCrop}
+                matchTrigger={matchTrigger}
                 cv={cv}
                 onMatchResult={handleMatchResult}
               />
@@ -638,7 +688,7 @@ function ComparePageInner() {
 
 export default function ComparePage() {
   return (
-    <LoadingGate>
+    <LoadingGate requiresTF={false}>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">

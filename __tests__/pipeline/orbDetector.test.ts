@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, matchOrbFeatures } from "@/pipeline/orbDetector";
-import type { OrbFeatures } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures } from "@/pipeline/orbDetector";
+import type { OrbFeatures, OrbCropBox } from "@/pipeline/orbDetector";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -261,5 +261,51 @@ describe("matchOrbFeatures", () => {
     for (const m of cv._matInstances) {
       expect(m.delete).toHaveBeenCalled();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractFeaturesFromCrop
+// ---------------------------------------------------------------------------
+
+describe("extractFeaturesFromCrop", () => {
+  it("offsets returned keypoints by the crop box origin", () => {
+    const kps = [
+      { x: 10, y: 20 },
+      { x: 30, y: 40 },
+    ];
+    const cv = makeMockCv({ keypoints: kps, descriptorData: new Uint8Array(kps.length * 32).fill(0xab) });
+
+    const cropBox: OrbCropBox = {
+      x: 100,
+      y: 50,
+      width: 200,
+      height: 300,
+      srcWidth: 640,
+      srcHeight: 480,
+    };
+
+    const src = fakeImageData(640, 480);
+    const result = extractFeaturesFromCrop(cv, src, cropBox);
+
+    // Keypoints from extractFeatures are relative to the crop; they must be
+    // shifted by (cropBox.x, cropBox.y) back to full-frame space.
+    expect(result.keypoints[0].pt).toEqual({ x: kps[0].x + cropBox.x, y: kps[0].y + cropBox.y });
+    expect(result.keypoints[1].pt).toEqual({ x: kps[1].x + cropBox.x, y: kps[1].y + cropBox.y });
+  });
+
+  it("stores the cropBox on the returned OrbFeatures", () => {
+    const cv = makeMockCv({ keypoints: [{ x: 5, y: 5 }] });
+    const cropBox: OrbCropBox = { x: 20, y: 10, width: 100, height: 80, srcWidth: 320, srcHeight: 240 };
+    const result = extractFeaturesFromCrop(cv, fakeImageData(), cropBox);
+    expect(result.cropBox).toEqual(cropBox);
+  });
+
+  it("preserves the descriptor bytes from the underlying extractFeatures call", () => {
+    const descData = new Uint8Array(32).fill(0xcc);
+    const cv = makeMockCv({ keypoints: [{ x: 0, y: 0 }], descriptorData: descData });
+    const cropBox: OrbCropBox = { x: 0, y: 0, width: 4, height: 4, srcWidth: 4, srcHeight: 4 };
+    const result = extractFeaturesFromCrop(cv, fakeImageData(), cropBox);
+    expect(result.descriptors).toEqual(descData);
   });
 });

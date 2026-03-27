@@ -8,14 +8,25 @@ import { useImageMatcher } from "@/hooks/useImageMatcher";
 
 vi.mock("@/pipeline/orbDetector", () => ({
   extractFeatures: vi.fn(),
+  extractFeaturesFromCrop: vi.fn(),
   matchOrbFeatures: vi.fn(),
+}));
+
+vi.mock("@/pipeline/homography", () => ({
+  computeHomography: vi.fn(),
+  applyHomographyMatrix: vi.fn(),
+}));
+
+vi.mock("@/utils/cvHelpers", () => ({
+  cropImageData: vi.fn().mockImplementation((src: ImageData) => src),
 }));
 
 vi.mock("@/storage/sessionStore", () => ({
   getAttempt: vi.fn(),
 }));
 
-import { extractFeatures, matchOrbFeatures } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures } from "@/pipeline/orbDetector";
+import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
 import { getAttempt } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
@@ -120,7 +131,7 @@ function stubLoadImageError() {
 // ---------------------------------------------------------------------------
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 afterEach(() => {
@@ -285,5 +296,160 @@ describe("useImageMatcher — repeated calls", () => {
     expect(result.current.status).toBe("error");
     // Previous result cleared on new call.
     expect(result.current.result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useImageMatcher — reanchorApplied flag
+// ---------------------------------------------------------------------------
+
+describe("useImageMatcher — reanchorApplied", () => {
+  it("is false when initial matches are sufficient (≥ 10)", async () => {
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const attempt = fakeAttempt(15);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.result?.reanchorApplied).toBe(false);
+  });
+
+  it("is false when re-anchor improves nothing (fewer or equal matches)", async () => {
+    const fewMatches = Array.from({ length: 5 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const cropBox = { x: 100, y: 50, width: 300, height: 400, srcWidth: 640, srcHeight: 480 };
+    const attempt = { ...fakeAttempt(15), orbFeatures: { ...orbResult(15), cropBox } };
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(8));
+    // First call = initial match; second call (inside re-anchor) = fewer matches.
+    (matchOrbFeatures as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(fewMatches)
+      .mockReturnValueOnce([{ queryIdx: 0, trainIdx: 0, distance: 5 }]); // fewer
+    (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(new Float64Array(9).fill(1));
+    // Return 4 distinct corners so the crop bounding box is non-zero.
+    (applyHomographyMatrix as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce({ x: 100, y: 80 })
+      .mockReturnValueOnce({ x: 400, y: 80 })
+      .mockReturnValueOnce({ x: 400, y: 350 })
+      .mockReturnValueOnce({ x: 100, y: 350 });
+    stubLoadImageSuccess(640, 480);
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.result?.reanchorApplied).toBe(false);
+    expect(result.current.result?.matches).toHaveLength(5); // original kept
+  });
+
+  it("is true and uses re-anchor result when re-anchor finds more matches", async () => {
+    const fewMatches = Array.from({ length: 5 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const moreMatches = Array.from({ length: 12 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 8 }));
+    const cropBox = { x: 100, y: 50, width: 300, height: 400, srcWidth: 640, srcHeight: 480 };
+    const attempt = { ...fakeAttempt(15), orbFeatures: { ...orbResult(15), cropBox } };
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(8));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(fewMatches)
+      .mockReturnValueOnce(moreMatches); // re-anchor gives more
+    (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(new Float64Array(9).fill(1));
+    // Return 4 distinct corners so the crop bounding box is non-zero.
+    (applyHomographyMatrix as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce({ x: 100, y: 80 })
+      .mockReturnValueOnce({ x: 400, y: 80 })
+      .mockReturnValueOnce({ x: 400, y: 350 })
+      .mockReturnValueOnce({ x: 100, y: 350 });
+    stubLoadImageSuccess(640, 480);
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.result?.reanchorApplied).toBe(true);
+    expect(result.current.result?.matches).toHaveLength(12);
+  });
+
+  it("does not attempt re-anchor when match count < 4", async () => {
+    const threeMatches = [
+      { queryIdx: 0, trainIdx: 0, distance: 5 },
+      { queryIdx: 1, trainIdx: 1, distance: 5 },
+      { queryIdx: 2, trainIdx: 2, distance: 5 },
+    ];
+    const cropBox = { x: 0, y: 0, width: 100, height: 100, srcWidth: 640, srcHeight: 480 };
+    const attempt = { ...fakeAttempt(15), orbFeatures: { ...orbResult(15), cropBox } };
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(5));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(threeMatches);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.result?.reanchorApplied).toBe(false);
+    // computeHomography must not have been called.
+    expect(computeHomography).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// useImageMatcher — userCrop
+// ---------------------------------------------------------------------------
+
+describe("useImageMatcher — userCrop", () => {
+  it("calls extractFeaturesFromCrop when userCrop is provided", async () => {
+    const attempt = fakeAttempt(10);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    const cropResult = orbResult(6);
+    (extractFeaturesFromCrop as ReturnType<typeof vi.fn>).mockReturnValue(cropResult);
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+    const fakeImageData = stubLoadImageSuccess(200, 150);
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv, {
+        x: 0.1,
+        y: 0.2,
+        w: 0.6,
+        h: 0.5,
+      });
+    });
+
+    expect(extractFeaturesFromCrop).toHaveBeenCalledWith(mockCv, fakeImageData, {
+      x: Math.round(0.1 * 200),
+      y: Math.round(0.2 * 150),
+      width: Math.round(0.6 * 200),
+      height: Math.round(0.5 * 150),
+      srcWidth: 200,
+      srcHeight: 150,
+    });
+    // extractFeatures should NOT be called when userCrop is set.
+    expect(extractFeatures).not.toHaveBeenCalled();
+    expect(result.current.status).toBe("done");
+  });
+
+  it("calls extractFeatures (no crop) when userCrop is not provided", async () => {
+    const attempt = fakeAttempt(10);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(10));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(extractFeatures).toHaveBeenCalled();
+    expect(extractFeaturesFromCrop).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
+import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { usePoseVideo } from "@/hooks/usePoseVideo";
@@ -113,6 +114,12 @@ function MatchPageInner() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const imagePreviewUrlRef = useRef<string | null>(null);
+
+  // Crop box for ORB detection on the route photo.
+  const DEFAULT_CROP: CropFraction = { x: 0, y: 0, w: 1, h: 1 };
+  const [imageCrop, setImageCrop] = useState<CropFraction>(DEFAULT_CROP);
+  // Track whether the user has confirmed the crop and triggered matching.
+  const [matchTriggered, setMatchTriggered] = useState(false);
 
   const { videoUrl, status: videoStatus, errorMessage: videoError, renderProgress, previewFrame } =
     usePoseVideo(cv, imageFile, attemptId || null, matchResult);
@@ -264,7 +271,14 @@ function MatchPageInner() {
     imagePreviewUrlRef.current = url;
     setImagePreviewUrl(url);
     setImageFile(file);
-    if (cv && attemptId) matchImage(file, attemptId, cv);
+    setImageCrop(DEFAULT_CROP);
+    setMatchTriggered(false);
+  }
+
+  function handleApplyAndMatch() {
+    if (!imageFile || !cv || !attemptId) return;
+    setMatchTriggered(true);
+    matchImage(imageFile, attemptId, cv, imageCrop);
   }
 
   const isMatching = matchStatus === "matching";
@@ -463,7 +477,39 @@ function MatchPageInner() {
             onChange={handleImageChange}
           />
         </label>
-        {imagePreviewUrl && (
+
+        {/* Crop UI — shown after image selected, before match is triggered */}
+        {imagePreviewUrl && imageFile && !matchTriggered && !isMatching && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-400">
+              Adjust the crop region to focus ORB matching on the relevant wall area, then click
+              &ldquo;Apply &amp; Match&rdquo;.
+            </p>
+            <div className="relative w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreviewUrl}
+                alt="Route photo preview"
+                className="max-h-80 w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
+              />
+              <CropBoxOverlay
+                box={imageCrop}
+                onChange={setImageCrop}
+                disabled={!hasAttempt}
+              />
+            </div>
+            <button
+              onClick={handleApplyAndMatch}
+              disabled={!hasAttempt}
+              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Apply &amp; Match
+            </button>
+          </div>
+        )}
+
+        {/* Static preview after match triggered */}
+        {imagePreviewUrl && (matchTriggered || isMatching || isMatchDone) && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imagePreviewUrl}
@@ -563,7 +609,7 @@ function MatchPageInner() {
 
 export default function MatchPage() {
   return (
-    <LoadingGate>
+    <LoadingGate requiresTF={false}>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-zinc-500">

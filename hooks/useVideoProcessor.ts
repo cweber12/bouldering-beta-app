@@ -2,15 +2,15 @@
 
 import { useCallback, useRef, useState } from "react";
 import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
-import { extractFeatures } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
 import {
   extractHipCenter,
-  computeCropBox,
   mapKeypointsToFullFrame,
   type HipCenter,
 } from "@/pipeline/cropDetector";
 import { interpolatePoseFrames } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture } from "@/storage/sessionStore";
+import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
@@ -34,6 +34,11 @@ export interface VideoProcessorResult {
    *                    frame. Gaps are filled by linear interpolation.
    *                    Default: 5.
    * @param meta      - Optional location metadata (state, area, route).
+   * @param cropOptions - Optional user-defined crop boxes.
+   *                    `climberCrop`: used for pose detection in outdoor mode;
+   *                    the box dimensions are preserved and re-centered on the
+   *                    hip each frame. `orbCrop`: used to extract ORB features
+   *                    from a sub-region of the first frame only.
    */
   process: (
     file: File,
@@ -42,6 +47,7 @@ export interface VideoProcessorResult {
     mode?: ClimbingMode,
     frameStep?: number,
     meta?: { state: string; area: string; route: string },
+    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction },
   ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
@@ -92,6 +98,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       mode: ClimbingMode = "indoor",
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string } = { state: "", area: "", route: "" },
+      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction } = {},
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -182,10 +189,32 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               let poseCanvas: HTMLCanvasElement = canvas;
               let cropBox = null;
 
-              // Frame 0: no prior hip position — use the full canvas.
-              // Frame N+: crop around the last known hip center.
-              if (lastHipCenter !== null) {
-                cropBox = computeCropBox(lastHipCenter, videoWidth, videoHeight);
+              // Only apply a climber crop when the user specified one AND we
+              // have a previous hip position to center it on. The first
+              // outdoor frame always uses the full canvas (or the user crop
+              // box at its original position), establishing the initial hip.
+              if (cropOptions.climberCrop && lastHipCenter !== null) {
+                const cf = cropOptions.climberCrop;
+                const boxW = Math.round(cf.w * videoWidth);
+                const boxH = Math.round(cf.h * videoHeight);
+                const hipX = lastHipCenter.x * videoWidth;
+                const hipY = lastHipCenter.y * videoHeight;
+                const bx = Math.max(0, Math.min(videoWidth - boxW, Math.round(hipX - boxW / 2)));
+                const by = Math.max(0, Math.min(videoHeight - boxH, Math.round(hipY - boxH / 2)));
+                cropBox = { x: bx, y: by, width: boxW, height: boxH };
+              } else if (cropOptions.climberCrop && lastHipCenter === null) {
+                // First outdoor frame with a user crop: use the crop at its
+                // original position as drawn on the video preview.
+                const cf = cropOptions.climberCrop;
+                cropBox = {
+                  x: Math.round(cf.x * videoWidth),
+                  y: Math.round(cf.y * videoHeight),
+                  width: Math.round(cf.w * videoWidth),
+                  height: Math.round(cf.h * videoHeight),
+                };
+              }
+
+              if (cropBox) {
                 cropCanvas.width = cropBox.width;
                 cropCanvas.height = cropBox.height;
                 const cropCtx = cropCanvas.getContext("2d");
@@ -249,11 +278,25 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           frames[0] ?? "no frames detected",
         );
 
-        // ORB extraction: unchanged — always runs on the first full frame.
+        // ORB extraction: use user-defined orbCrop when provided, otherwise
+        // extract from the full first frame.
         if (referenceImageData) {
           setOrbStatus("extracting");
           try {
-            const orbFeatures = extractFeatures(cv, referenceImageData);
+            let orbFeatures;
+            if (cropOptions.orbCrop) {
+              const oc = cropOptions.orbCrop;
+              orbFeatures = extractFeaturesFromCrop(cv, referenceImageData, {
+                x: Math.round(oc.x * videoWidth),
+                y: Math.round(oc.y * videoHeight),
+                width: Math.round(oc.w * videoWidth),
+                height: Math.round(oc.h * videoHeight),
+                srcWidth: videoWidth,
+                srcHeight: videoHeight,
+              });
+            } else {
+              orbFeatures = extractFeatures(cv, referenceImageData);
+            }
             saveAttempt({
               id,
               videoMeta,

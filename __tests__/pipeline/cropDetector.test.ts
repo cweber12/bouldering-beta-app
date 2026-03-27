@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   extractHipCenter,
-  computeCropBox,
   mapKeypointsToFullFrame,
 } from "@/pipeline/cropDetector";
 import type { Keypoint } from "@/pipeline/poseDetection";
@@ -38,43 +37,6 @@ describe("extractHipCenter", () => {
   it("returns null when no hip keypoints exist", () => {
     expect(extractHipCenter([kp("nose", 0.5, 0.1)])).toBeNull();
     expect(extractHipCenter([])).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// computeCropBox
-// ---------------------------------------------------------------------------
-
-describe("computeCropBox", () => {
-  it("produces a box extending ±0.25 × dimensions around the center", () => {
-    // Hip exactly in the middle of a 1000×800 frame.
-    const box = computeCropBox({ x: 0.5, y: 0.5 }, 1000, 800);
-    // Expected: cx=500, cy=400, halfW=250, halfH=200
-    expect(box).toEqual({ x: 250, y: 200, width: 500, height: 400 });
-  });
-
-  it("clamps to the left/top boundary when hip is near the top-left", () => {
-    const box = computeCropBox({ x: 0, y: 0 }, 1000, 800);
-    expect(box.x).toBe(0);
-    expect(box.y).toBe(0);
-    // right = 0 + 250 = 250, bottom = 0 + 200 = 200
-    expect(box.width).toBe(250);
-    expect(box.height).toBe(200);
-  });
-
-  it("clamps to the right/bottom boundary when hip is near the bottom-right", () => {
-    const box = computeCropBox({ x: 1, y: 1 }, 1000, 800);
-    // left = max(0, 1000-250) = 750, top = max(0, 800-200) = 600
-    expect(box.x).toBe(750);
-    expect(box.y).toBe(600);
-    expect(box.width).toBe(250);   // 1000 - 750
-    expect(box.height).toBe(200);  // 800 - 600
-  });
-
-  it("returns zero-area box when video dimensions are 0 (degenerate guard)", () => {
-    const box = computeCropBox({ x: 0.5, y: 0.5 }, 0, 0);
-    expect(box.width).toBe(0);
-    expect(box.height).toBe(0);
   });
 });
 
