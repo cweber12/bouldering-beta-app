@@ -251,20 +251,20 @@ function MatchPageInner() {
       {/* Info dropdowns */}
       <div className="flex flex-col gap-3">
         <InfoDropdown title="How does route matching work?">
-          <p>
-            ORB features are extracted from your uploaded photo and matched against the reference
-            frame features using a Brute-Force Hamming matcher with a Lowe ratio test (0.7). The
-            surviving correspondences are used to compute a perspective transform (homography) via
-            RANSAC, which maps skeleton keypoints from the video onto the route photo.
-          </p>
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>The app extracts <strong className="text-zinc-300">ORB visual features</strong> (corner points) from your route photo and matches them against the reference features recorded from the video.</li>
+            <li>Matching finds pairs of features that appear the same in both images. The best pairs are used to compute a <strong className="text-zinc-300">perspective transform</strong> that maps the video&apos;s coordinate space onto the photo.</li>
+            <li>Each recorded skeleton keypoint is then projected into the photo using that transform, producing the overlay video.</li>
+            <li>Match quality depends on <strong className="text-zinc-300">shared wall texture</strong>. Photos taken from a very different angle or distance will reduce accuracy.</li>
+          </ul>
         </InfoDropdown>
-        <InfoDropdown title="What does the pose overlay video show?">
-          <p>
-            Each recorded frame is drawn as a skeleton on top of your route photo. The skeleton uses
-            17 MoveNet COCO keypoints connected by 16 limb edges. The video is encoded as a{" "}
-            <strong className="text-zinc-300">WebM</strong> file using the browser&apos;s{" "}
-            <code className="text-zinc-300">MediaRecorder</code> API no server needed.
-          </p>
+        <InfoDropdown title="How to crop the route photo">
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>Drag the crop handles to focus on the <strong className="text-zinc-300">wall surface</strong> — rock texture, holds, and chalk marks are ideal features for matching.</li>
+            <li>Exclude sky, trees, gear, people, and the floor — these change between sessions and spoil the match.</li>
+            <li>The crop should roughly correspond to the background (ORB) crop you set on the upload page.</li>
+            <li>If matching fails or produces few good matches, try re-cropping to include more distinctive wall texture.</li>
+          </ul>
         </InfoDropdown>
       </div>
 
@@ -399,6 +399,62 @@ function MatchPageInner() {
         {folderError && <p className="text-xs text-red-400">{folderError}</p>}
       </div>
 
+      {/* Skeleton style controls — shown BEFORE matching starts; locked once processing begins */}
+      {!isMatching && !isRenderingVideo && !isVideoReady && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
+            <p className="text-xs text-zinc-500">
+              Choose colours and sizes before processing — style cannot be changed once rendering begins.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-zinc-400">Limb color</label>
+              <input
+                type="color"
+                value={skeletonStyle.limbColor?.replace(/rgba?\([^)]+\)/, "#00dc78") ?? "#00dc78"}
+                onChange={e => setSkeletonStyle(s => ({ ...s, limbColor: e.target.value }))}
+                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-zinc-400">Joint color</label>
+              <input
+                type="color"
+                value={skeletonStyle.jointColor?.replace(/rgba?\([^)]+\)/, "#ffdc00") ?? "#ffdc00"}
+                onChange={e => setSkeletonStyle(s => ({ ...s, jointColor: e.target.value }))}
+                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="flex justify-between text-xs text-zinc-400">
+                <span>Line width</span>
+                <span className="font-mono text-zinc-300">{skeletonStyle.lineWidth ?? 2.5}px</span>
+              </label>
+              <input
+                type="range" min={0.5} max={8} step={0.5}
+                value={skeletonStyle.lineWidth ?? 2.5}
+                onChange={e => setSkeletonStyle(s => ({ ...s, lineWidth: Number(e.target.value) }))}
+                className="accent-zinc-200"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="flex justify-between text-xs text-zinc-400">
+                <span>Point radius</span>
+                <span className="font-mono text-zinc-300">{skeletonStyle.pointRadius ?? 5}px</span>
+              </label>
+              <input
+                type="range" min={1} max={12} step={1}
+                value={skeletonStyle.pointRadius ?? 5}
+                onChange={e => setSkeletonStyle(s => ({ ...s, pointRadius: Number(e.target.value) }))}
+                className="accent-zinc-200"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Route image upload */}
       <div className="flex flex-col gap-4">
         <label
@@ -485,62 +541,6 @@ function MatchPageInner() {
           {matchResult.matches.length < 10 && (
             <p className="mt-3 text-xs text-amber-400">
               Fewer than 10 matches the homography may be unstable. Try a closer or better-lit photo of the same wall section.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Skeleton style controls — shown while matching/rendering or after done */}
-      {(isMatchDone || isRenderingVideo || isVideoReady) && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
-          <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-zinc-400">Limb color</label>
-              <input
-                type="color"
-                value={skeletonStyle.limbColor?.replace(/rgba?\([^)]+\)/, "#00dc78") ?? "#00dc78"}
-                onChange={e => setSkeletonStyle(s => ({ ...s, limbColor: e.target.value }))}
-                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-zinc-400">Joint color</label>
-              <input
-                type="color"
-                value={skeletonStyle.jointColor?.replace(/rgba?\([^)]+\)/, "#ffdc00") ?? "#ffdc00"}
-                onChange={e => setSkeletonStyle(s => ({ ...s, jointColor: e.target.value }))}
-                className="h-8 w-full cursor-pointer rounded border border-zinc-700 bg-zinc-950 p-0.5"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="flex justify-between text-xs text-zinc-400">
-                <span>Line width</span>
-                <span className="font-mono text-zinc-300">{skeletonStyle.lineWidth ?? 2.5}px</span>
-              </label>
-              <input
-                type="range" min={0.5} max={8} step={0.5}
-                value={skeletonStyle.lineWidth ?? 2.5}
-                onChange={e => setSkeletonStyle(s => ({ ...s, lineWidth: Number(e.target.value) }))}
-                className="accent-zinc-200"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="flex justify-between text-xs text-zinc-400">
-                <span>Point radius</span>
-                <span className="font-mono text-zinc-300">{skeletonStyle.pointRadius ?? 5}px</span>
-              </label>
-              <input
-                type="range" min={1} max={12} step={1}
-                value={skeletonStyle.pointRadius ?? 5}
-                onChange={e => setSkeletonStyle(s => ({ ...s, pointRadius: Number(e.target.value) }))}
-                className="accent-zinc-200"
-              />
-            </div>
-          </div>
-          {isVideoReady && (
-            <p className="text-xs text-zinc-500">
-              Re-upload the route photo and click &ldquo;Apply &amp; Match&rdquo; to render with new style.
             </p>
           )}
         </div>

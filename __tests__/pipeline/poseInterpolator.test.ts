@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { interpolatePoseFrames, smoothPoseFrames } from "@/pipeline/poseInterpolator";
+import { describe, it, expect, vi } from "vitest";
+import {
+  interpolatePoseFrames,
+  smoothPoseFrames,
+  filterLandmarks,
+  applyLandmarkEstimator,
+  type LandmarkEstimator,
+} from "@/pipeline/poseInterpolator";
 import type { PoseFrame } from "@/pipeline/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -107,20 +113,26 @@ describe("smoothPoseFrames", () => {
     expect(result.map(f => f.timestamp)).toEqual([0.0, 0.5]);
   });
 
-  it("forward-fills missing keypoints from the previous frame", () => {
-    // Frame 0 has 'nose'; frame 1 is missing 'nose'; frame 2 has 'nose'.
+  it("does not fill missing keypoints — absent keypoints remain absent", () => {
+    // EMA-only: frame 0 has 'nose'; frame 1 has no 'nose' — it stays absent.
     const frames: PoseFrame[] = [
       frame(0, [["nose", 0.5, 0.5]]),
-      { timestamp: 1, keypoints: [] },         // dropout
+      { timestamp: 1, keypoints: [] },
       frame(2, [["nose", 0.7, 0.7]]),
     ];
     const result = smoothPoseFrames(frames);
-    // After forward-fill, frame 1 should have a nose keypoint.
-    const midNose = result[1].keypoints.find(k => k.name === "nose");
-    expect(midNose).toBeDefined();
+    // EMA never fills gaps — frame 1 has no nose keypoint.
+    expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    // The EMA state carries into frames where the keypoint reappears.
+    const reappeared = result[2].keypoints.find(k => k.name === "nose")!;
+    expect(reappeared).toBeDefined();
+    // With default alpha=0.3 the value should be smoothed toward the prior EMA
+    // (which was seeded at 0.5), so x must be between 0.5 and 0.7.
+    expect(reappeared.x).toBeGreaterThan(0.5);
+    expect(reappeared.x).toBeLessThan(0.7);
   });
 
-  it("backward-fills leading missing keypoints from the first known occurrence", () => {
+  it("seeds a freshly appearing keypoint as its first value (no backward fill)", () => {
     // Frames 0–1 have no 'nose'; frame 2 first detects it.
     const frames: PoseFrame[] = [
       { timestamp: 0, keypoints: [] },
@@ -128,8 +140,14 @@ describe("smoothPoseFrames", () => {
       frame(2, [["nose", 0.5, 0.5]]),
     ];
     const result = smoothPoseFrames(frames);
-    expect(result[0].keypoints.find(k => k.name === "nose")).toBeDefined();
-    expect(result[1].keypoints.find(k => k.name === "nose")).toBeDefined();
+    // No backward fill — frames 0 and 1 remain empty.
+    expect(result[0].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    // Frame 2 seeds the EMA so its value is returned exactly (no prior state).
+    const seeded = result[2].keypoints.find(k => k.name === "nose")!;
+    expect(seeded).toBeDefined();
+    expect(seeded.x).toBeCloseTo(0.5);
+    expect(seeded.y).toBeCloseTo(0.5);
   });
 
   it("with alpha=1 leaves values exactly as-is (no smoothing)", () => {
@@ -164,5 +182,146 @@ describe("smoothPoseFrames", () => {
     const hip1  = result[1].keypoints.find(k => k.name === "left_hip")!;
     expect(nose1.x).toBeCloseTo(1.0);
     expect(hip1.x).toBeCloseTo(0.0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// filterLandmarks
+// ---------------------------------------------------------------------------
+
+// Build a frame where every keypoint has a score above threshold.
+function goodFrame(ts: number): PoseFrame {
+  return frame(ts, [
+    ["nose", 0.5, 0.5, 0.9],
+    ["left_eye", 0.4, 0.4, 0.9],
+    ["right_eye", 0.6, 0.4, 0.9],
+    ["left_ear", 0.3, 0.5, 0.9],
+    ["right_ear", 0.7, 0.5, 0.9],
+    ["left_shoulder", 0.3, 0.6, 0.9],
+    ["right_shoulder", 0.7, 0.6, 0.9],
+    ["left_elbow", 0.3, 0.7, 0.9],
+    ["right_elbow", 0.7, 0.7, 0.9],
+    ["left_wrist", 0.3, 0.8, 0.9],
+    ["right_wrist", 0.7, 0.8, 0.9],
+    ["left_hip", 0.4, 0.85, 0.9],
+    ["right_hip", 0.6, 0.85, 0.9],
+    ["left_knee", 0.4, 0.9, 0.9],
+    ["right_knee", 0.6, 0.9, 0.9],
+    ["left_ankle", 0.4, 0.95, 0.9],
+    ["right_ankle", 0.6, 0.95, 0.9],
+  ]);
+}
+
+describe("filterLandmarks", () => {
+  it("returns an empty array when given an empty array", () => {
+    expect(filterLandmarks([])).toEqual([]);
+  });
+
+  it("keeps frames with all 17 high-confidence keypoints", () => {
+    const frames = [goodFrame(0), goodFrame(1)];
+    expect(filterLandmarks(frames)).toHaveLength(2);
+  });
+
+  it("keeps frames with exactly maxMissingAllowed low-confidence keypoints", () => {
+    const f = goodFrame(0);
+    // Drop score on 2 keypoints to below threshold but keep them present.
+    f.keypoints[0].score = 0.1;
+    f.keypoints[1].score = 0.1;
+    // 2 low-confidence == maxMissingAllowed(2), so frame is kept.
+    expect(filterLandmarks([f])).toHaveLength(1);
+  });
+
+  it("drops frames with more than maxMissingAllowed low-confidence keypoints", () => {
+    const f = goodFrame(0);
+    // 3 keypoints with score below threshold.
+    f.keypoints[0].score = 0.1;
+    f.keypoints[1].score = 0.1;
+    f.keypoints[2].score = 0.1;
+    expect(filterLandmarks([f])).toHaveLength(0);
+  });
+
+  it("counts completely absent keypoints toward the missing tally", () => {
+    // A frame with only 14 keypoints — 3 are absent (counted as missing).
+    const f = frame(0, [
+      ["nose", 0.5, 0.5, 0.9],
+      ["left_eye", 0.4, 0.4, 0.9],
+      ["right_eye", 0.6, 0.4, 0.9],
+      ["left_ear", 0.3, 0.5, 0.9],
+      ["right_ear", 0.7, 0.5, 0.9],
+      ["left_shoulder", 0.3, 0.6, 0.9],
+      ["right_shoulder", 0.7, 0.6, 0.9],
+      ["left_elbow", 0.3, 0.7, 0.9],
+      ["right_elbow", 0.7, 0.7, 0.9],
+      ["left_wrist", 0.3, 0.8, 0.9],
+      ["right_wrist", 0.7, 0.8, 0.9],
+      ["left_hip", 0.4, 0.85, 0.9],
+      ["right_hip", 0.6, 0.85, 0.9],
+      ["left_knee", 0.4, 0.9, 0.9],
+      // right_knee, left_ankle, right_ankle absent — 3 missing
+    ]);
+    // 3 missing > 2 allowed, so it should be dropped.
+    expect(filterLandmarks([f])).toHaveLength(0);
+  });
+
+  it("respects a custom maxMissingAllowed threshold", () => {
+    const f = goodFrame(0);
+    // 1 low-confidence keypoint.
+    f.keypoints[0].score = 0.1;
+    // maxMissingAllowed=0 → drop even 1 bad keypoint.
+    expect(filterLandmarks([f], 0.3, 0)).toHaveLength(0);
+    // maxMissingAllowed=1 → keep it.
+    expect(filterLandmarks([f], 0.3, 1)).toHaveLength(1);
+  });
+
+  it("respects a custom minScore threshold", () => {
+    const f = goodFrame(0);
+    // All scores are 0.9 — raising the threshold above that drops all.
+    f.keypoints.forEach(kp => { kp.score = 0.5; });
+    // minScore=0.6 makes all keypoints "low confidence".
+    expect(filterLandmarks([f], 0.6, 0)).toHaveLength(0);
+    // minScore=0.4 keeps all keypoints — frame is good.
+    expect(filterLandmarks([f], 0.4, 0)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// applyLandmarkEstimator
+// ---------------------------------------------------------------------------
+
+describe("applyLandmarkEstimator", () => {
+  it("passes each frame and its neighbours to the estimator", () => {
+    const frames = [goodFrame(0), goodFrame(1), goodFrame(2)];
+    const estimator = vi.fn<LandmarkEstimator>((f) => f);
+    applyLandmarkEstimator(frames, estimator);
+    expect(estimator).toHaveBeenCalledTimes(3);
+    // frame index 1 receives prev=frames[0] and next=frames[2].
+    const [, ctx] = estimator.mock.calls[1];
+    expect(ctx.prev).toBe(frames[0]);
+    expect(ctx.next).toBe(frames[2]);
+  });
+
+  it("passes null for prev on the first frame and null for next on the last", () => {
+    const frames = [goodFrame(0), goodFrame(1)];
+    const estimator = vi.fn<LandmarkEstimator>((f) => f);
+    applyLandmarkEstimator(frames, estimator);
+    // First frame: prev is null.
+    expect(estimator.mock.calls[0][1].prev).toBeNull();
+    // Last frame: next is null.
+    expect(estimator.mock.calls[1][1].next).toBeNull();
+  });
+
+  it("returns the results of the estimator in order", () => {
+    const frames = [goodFrame(0), goodFrame(1)];
+    const modified: PoseFrame = { ...frames[0], timestamp: 99 };
+    const estimator = vi.fn<LandmarkEstimator>().mockReturnValue(modified);
+    const result = applyLandmarkEstimator(frames, estimator);
+    expect(result).toHaveLength(2);
+    result.forEach(f => expect(f.timestamp).toBe(99));
+  });
+
+  it("returns an empty array when given an empty array", () => {
+    const estimator = vi.fn<LandmarkEstimator>((f) => f);
+    expect(applyLandmarkEstimator([], estimator)).toEqual([]);
+    expect(estimator).not.toHaveBeenCalled();
   });
 });

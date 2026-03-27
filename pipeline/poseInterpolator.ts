@@ -1,22 +1,99 @@
 /**
- * Linear interpolation of pose frames between sparsely sampled keyframes.
+ * Pose-frame filtering, interpolation, and smoothing utilities.
  *
- * Outdoor mode runs pose estimation every N frames to save time. This module
- * fills the gaps by linearly interpolating each keypoint's (x, y) between
- * the two nearest detected frames, producing a dense frame array that can be
- * stored and rendered like indoor frames.
+ * Processing order:
+ *  1. filterLandmarks — drop frames with too many missing / low-confidence keypoints.
+ *  2. interpolatePoseFrames — densify sparse detected frames onto a full timestamp list.
+ *  3. smoothPoseFrames — EMA to reduce jitter on the dense sequence.
  *
- * Confidence score treatment:
- *   - Interpolated frames inherit the minimum score of both endpoints.
- *     This is conservative: an interpolated keypoint is only as reliable as
- *     its least-confident anchor.
- *   - Frames before the first detected pose reuse the first pose.
- *   - Frames after the last detected pose reuse the last pose.
+ * Landmark estimation — injecting estimated keypoints into gap frames — is not
+ * implemented here. When it is ready, pass a LandmarkEstimator to the future
+ * `estimateLandmarks()` helper that will sit between steps 2 and 3.
  *
  * This module is framework-agnostic — no React imports.
  */
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+
+/** Expected number of COCO keypoints that MoveNet Lightning outputs. */
+const MOVENET_KEYPOINT_COUNT = 17;
+
+// ---------------------------------------------------------------------------
+// Landmark estimation hook (pluggable — not yet implemented)
+// ---------------------------------------------------------------------------
+
+/**
+ * A function that attempts to fill or correct individual keypoints in a frame
+ * using contextual information from neighbouring frames.
+ *
+ * - Return the input `frame` unchanged (or a clone) when no estimation is
+ *   possible.
+ * - `context.prev` and `context.next` are the nearest frames on either side
+ *   that passed the {@link filterLandmarks} quality threshold.
+ *
+ * @see {@link applyLandmarkEstimator} — wraps this function over a dense array.
+ *
+ * @future Implementation should use relative joint geometry and neighbour
+ *         positions rather than simple position carry-over.
+ */
+export type LandmarkEstimator = (
+  frame: PoseFrame,
+  context: { prev: PoseFrame | null; next: PoseFrame | null },
+) => PoseFrame;
+
+/**
+ * Apply a LandmarkEstimator across every frame in a dense array.
+ *
+ * Pass the output of {@link interpolatePoseFrames} here, before
+ * {@link smoothPoseFrames}, when a concrete estimator is available.
+ *
+ * @param frames    - Dense pose-frame array (each frame has a `timestamp`).
+ * @param estimator - Estimation function to apply.
+ * @returns New array of frames with keypoints enhanced by the estimator.
+ */
+export function applyLandmarkEstimator(
+  frames: PoseFrame[],
+  estimator: LandmarkEstimator,
+): PoseFrame[] {
+  return frames.map((frame, i) => {
+    const prev = i > 0 ? frames[i - 1] : null;
+    const next = i < frames.length - 1 ? frames[i + 1] : null;
+    return estimator(frame, { prev, next });
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// Filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Drop frames that have too many missing or low-confidence keypoints.
+ *
+ * A keypoint counts as "bad" if its confidence score is below `minScore`,
+ * and as "missing" if it is absent from the frame entirely.
+ *
+ * Use this to obtain clean anchor frames before calling
+ * {@link interpolatePoseFrames}, preventing poor detections from polluting
+ * the interpolated timeline.
+ *
+ * @param frames           - Input pose frames (may be sparse or dense).
+ * @param minScore         - Confidence threshold; keypoints below this are
+ *                           counted as bad. Default: 0.3.
+ * @param maxMissingAllowed - Maximum number of bad/missing keypoints before
+ *                           the frame is discarded. Default: 2.
+ */
+export function filterLandmarks(
+  frames: PoseFrame[],
+  minScore = 0.3,
+  maxMissingAllowed = 2,
+): PoseFrame[] {
+  return frames.filter(f => {
+    const lowConf = f.keypoints.filter(kp => kp.score < minScore).length;
+    const missing = Math.max(0, MOVENET_KEYPOINT_COUNT - f.keypoints.length);
+    return (lowConf + missing) <= maxMissingAllowed;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -111,15 +188,13 @@ export function interpolatePoseFrames(
 
 /**
  * Apply an exponential moving average (EMA) across a dense PoseFrame sequence
- * to reduce jitter and fill brief dropouts where a keypoint is absent in one
- * or two frames.
+ * to reduce jitter.
  *
- * Two-pass approach:
- *  1. Forward-fill: for each keypoint track, carry the last known position
- *     forward into frames where the keypoint is missing.
- *  2. Backward-fill: seed the leading edge of any track that starts with
- *     missing values from the first detected occurrence.
- *  3. EMA smoothing on x/y independently.
+ * Only keypoints already present in each frame are smoothed. No gap-filling is
+ * performed here — missing keypoints are left absent. Use
+ * {@link filterLandmarks} before calling this and {@link interpolatePoseFrames}
+ * to supply good anchor positions, so gaps are already bridged by interpolation
+ * rather than by positional carry-over.
  *
  * @param frames - Dense PoseFrame array (e.g. output of interpolatePoseFrames).
  * @param alpha  - EMA weight in (0, 1]. Lower = smoother, higher = more reactive.
@@ -128,72 +203,24 @@ export function interpolatePoseFrames(
 export function smoothPoseFrames(frames: PoseFrame[], alpha = 0.3): PoseFrame[] {
   if (frames.length === 0) return frames;
 
-  // Collect all keypoint names that appear in any frame.
-  const names = new Set<string>();
-  for (const f of frames) {
-    for (const kp of f.keypoints) names.add(kp.name);
-  }
+  // Build a per-name EMA state from the first frame each track appears in.
+  const emaX = new Map<string, number>();
+  const emaY = new Map<string, number>();
 
-  // Build a per-keypoint mutable track so we can fill gaps and smooth.
-  // Track[i] may be null when the keypoint was absent in frame i.
-  const tracks = new Map<string, (Keypoint | null)[]>();
-  for (const name of names) {
-    const track: (Keypoint | null)[] = new Array(frames.length).fill(null);
-    for (let i = 0; i < frames.length; i++) {
-      const kp = frames[i].keypoints.find(k => k.name === name) ?? null;
-      track[i] = kp;
-    }
-    tracks.set(name, track);
-  }
-
-  // Pass 1: forward-fill.
-  for (const [, track] of tracks) {
-    let last: Keypoint | null = null;
-    for (let i = 0; i < track.length; i++) {
-      if (track[i] !== null) {
-        last = track[i];
-      } else if (last !== null) {
-        track[i] = { ...last };
+  return frames.map(frame => {
+    const smoothed: Keypoint[] = frame.keypoints.map(kp => {
+      if (!emaX.has(kp.name)) {
+        // Seed: first time we see this keypoint.
+        emaX.set(kp.name, kp.x);
+        emaY.set(kp.name, kp.y);
+        return kp;
       }
-    }
-  }
-
-  // Pass 2: backward-fill leading gaps.
-  for (const [, track] of tracks) {
-    let first: Keypoint | null = null;
-    for (let i = 0; i < track.length; i++) {
-      if (track[i] !== null) { first = track[i]; break; }
-    }
-    if (first === null) continue;
-    for (let i = 0; i < track.length; i++) {
-      if (track[i] === null) track[i] = { ...first };
-      else break;
-    }
-  }
-
-  // Pass 3: EMA smoothing.
-  for (const [, track] of tracks) {
-    let ex: number | null = null;
-    let ey: number | null = null;
-    for (let i = 0; i < track.length; i++) {
-      const kp = track[i];
-      if (kp === null) { ex = null; ey = null; continue; }
-      if (ex === null) { ex = kp.x; ey = kp.y!; }
-      else {
-        ex = alpha * kp.x + (1 - alpha) * ex;
-        ey = alpha * kp.y + (1 - alpha) * ey!;
-      }
-      track[i] = { ...kp, x: ex, y: ey };
-    }
-  }
-
-  // Rebuild PoseFrame array using smoothed tracks.
-  return frames.map((frame, i) => {
-    const keypoints: Keypoint[] = [];
-    for (const [name, track] of tracks) {
-      const kp = track[i];
-      if (kp !== null && kp.name === name) keypoints.push(kp);
-    }
-    return { timestamp: frame.timestamp, keypoints };
+      const sx = alpha * kp.x + (1 - alpha) * emaX.get(kp.name)!;
+      const sy = alpha * kp.y + (1 - alpha) * emaY.get(kp.name)!;
+      emaX.set(kp.name, sx);
+      emaY.set(kp.name, sy);
+      return { ...kp, x: sx, y: sy };
+    });
+    return { ...frame, keypoints: smoothed };
   });
 }

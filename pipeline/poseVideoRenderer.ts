@@ -39,11 +39,18 @@ export interface PoseVideoParams {
   queryOrb: OrbFeatures;
   matches: OrbMatch[];
   /**
-   * Milliseconds between sampled video frames.
-   * Controls both playback speed and the MediaRecorder frame rate.
-   * Defaults to 100 ms (10 fps).
+   * Milliseconds between sampled video frames (the original sampling interval).
+   * Used to compute the original sampling rate for informational purposes.
+   * Defaults to 100 ms (10 fps sampling).
    */
   frameIntervalMs?: number;
+  /**
+   * Target output frame rate of the WebM video. Defaults to 30 fps.
+   * Each output frame is filled with the nearest pose frame by timestamp,
+   * so smoother values produce proportionally more output frames.
+   * Common values: 24, 25, 30 (standard video), 60.
+   */
+  targetFps?: number;
   /**
    * Called after each frame is drawn.
    * `framesRendered` is 1-based; `totalFrames` is the full count.
@@ -87,7 +94,8 @@ export async function renderPoseVideo({
   orbFeatures,
   queryOrb,
   matches,
-  frameIntervalMs = 100,
+  frameIntervalMs: _frameIntervalMs = 100,
+  targetFps = 30,
   onProgress,
   skeletonStyle,
 }: PoseVideoParams): Promise<string> {
@@ -114,7 +122,7 @@ export async function renderPoseVideo({
     throw new Error("Could not acquire 2D canvas context for video rendering.");
   }
 
-  const fps = Math.max(1, Math.round(1000 / frameIntervalMs));
+  const fps = targetFps;
   const frameDelay = Math.round(1000 / fps);
   const stream = canvas.captureStream(fps);
   const mimeType = chooseMimeType();
@@ -126,6 +134,24 @@ export async function renderPoseVideo({
   };
 
   const sortedFrames = [...frames].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Derive total output duration from start- to end-timestamp of pose data.
+  const firstTs = sortedFrames.length > 0 ? sortedFrames[0].timestamp : 0;
+  const lastTs  = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].timestamp : 0;
+  const duration = Math.max(lastTs - firstTs, 1 / fps);
+  const totalOutputFrames = Math.ceil(duration * fps) + 1;
+
+  // For each output frame find the pose frame nearest to its timestamp.
+  function nearestFrame(t: number): typeof sortedFrames[0] {
+    let best = sortedFrames[0];
+    let bestDist = Math.abs(sortedFrames[0].timestamp - t);
+    for (let j = 1; j < sortedFrames.length; j++) {
+      const d = Math.abs(sortedFrames[j].timestamp - t);
+      if (d < bestDist) { bestDist = d; best = sortedFrames[j]; }
+      else break; // sorted, so distance only increases from here
+    }
+    return best;
+  }
 
   return new Promise<string>((resolve, reject) => {
     recorder.onstop = () => {
@@ -142,8 +168,9 @@ export async function renderPoseVideo({
     recorder.start();
 
     (async () => {
-      for (let i = 0; i < sortedFrames.length; i++) {
-        const frame = sortedFrames[i];
+      for (let i = 0; i < totalOutputFrames; i++) {
+        const t = firstTs + (i / fps);
+        const frame = nearestFrame(t);
         ctx.drawImage(imageBitmap, 0, 0);
 
         if (frame.keypoints.length > 0) {
@@ -156,7 +183,7 @@ export async function renderPoseVideo({
           drawSkeleton(ctx, kp, skeletonStyle);
         }
 
-        onProgress?.(i + 1, sortedFrames.length);
+        onProgress?.(i + 1, totalOutputFrames);
 
         await new Promise<void>((r) => setTimeout(r, frameDelay));
       }

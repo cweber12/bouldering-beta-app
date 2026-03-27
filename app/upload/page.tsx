@@ -1,33 +1,24 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useTFModel } from "@/hooks/useTFModel";
-import { useVideoProcessor, type ClimbingMode } from "@/hooks/useVideoProcessor";
+import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
-// RouteData folder name -- all attempts live under this folder
+// RouteData folder name
 // ---------------------------------------------------------------------------
 const BETA_FOLDER = "RouteData";
+const SESSION_KEY = "bouldering_last_attempt_id";
 
-/**
- * Module-level cache for the root FileSystemDirectoryHandle.
- * Persists across saves within the same page session so subsequent saves
- * do not re-open the directory picker when the handle is still valid.
- */
 let cachedRootHandle: FileSystemDirectoryHandle | null = null;
-
-// ---------------------------------------------------------------------------
-// Save attempt to device -- FSAPI with fallback to <a download>
-// ---------------------------------------------------------------------------
 
 function sanitizeDirName(name: string): string {
   return name.trim().replace(/[<>:"/\\|?*]/g, "_") || "Unknown";
@@ -36,16 +27,13 @@ function sanitizeDirName(name: string): string {
 async function acquireRootHandle(): Promise<FileSystemDirectoryHandle> {
   if (cachedRootHandle) {
     try {
-      // queryPermission is available on FileSystemHandle in FSAPI-capable browsers.
       const perm = await (
         cachedRootHandle as unknown as {
           queryPermission: (desc: object) => Promise<string>;
         }
       ).queryPermission({ mode: "readwrite" });
       if (perm === "granted") return cachedRootHandle;
-    } catch {
-      // Permission check not supported or handle stale — fall through to picker.
-    }
+    } catch { /* fall through */ }
   }
   const handle = await (
     window as unknown as { showDirectoryPicker: (opts?: object) => Promise<FileSystemDirectoryHandle> }
@@ -60,22 +48,19 @@ async function saveAttemptToDevice(
   const serializable = {
     ...attempt,
     orbFeatures: attempt.orbFeatures
-      ? {
-          ...attempt.orbFeatures,
-          descriptors: Array.from(attempt.orbFeatures.descriptors),
-        }
+      ? { ...attempt.orbFeatures, descriptors: Array.from(attempt.orbFeatures.descriptors) }
       : null,
   };
   const json = JSON.stringify(serializable, null, 2);
 
   if ("showDirectoryPicker" in window) {
-    const root = await acquireRootHandle();
+    const root     = await acquireRootHandle();
     const betaDir  = await root.getDirectoryHandle(BETA_FOLDER, { create: true });
     const stateDir = await betaDir.getDirectoryHandle(sanitizeDirName(attempt.state || "Unknown State"), { create: true });
     const areaDir  = await stateDir.getDirectoryHandle(sanitizeDirName(attempt.area  || "Unknown Area"),  { create: true });
     const routeDir = await areaDir.getDirectoryHandle(sanitizeDirName(attempt.route  || "Unknown Route"), { create: true });
-    const fileHandle = await routeDir.getFileHandle(`${attempt.id}.json`, { create: true });
-    const writable   = await fileHandle.createWritable();
+    const fh       = await routeDir.getFileHandle(`${attempt.id}.json`, { create: true });
+    const writable  = await fh.createWritable();
     await writable.write(json);
     await writable.close();
     return routeDir;
@@ -83,42 +68,62 @@ async function saveAttemptToDevice(
     const blob = new Blob([json], { type: "application/json" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `${attempt.id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    a.href = url; a.download = `${attempt.id}.json`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
     return null;
   }
 }
 
 // ---------------------------------------------------------------------------
-// Upload page inner (needs useSearchParams -- wrapped in Suspense below)
+// Frame adjustment condition options
+// ---------------------------------------------------------------------------
+
+interface FrameCondition {
+  id: string;
+  label: string;
+  description: string;
+}
+
+const FRAME_CONDITIONS: FrameCondition[] = [
+  { id: "washed_out",  label: "Washed out",        description: "Bright sun or strong artificial light overexposes the frame." },
+  { id: "backlit",     label: "Backlit",             description: "Light source is behind the climber, darkening the subject." },
+  { id: "shadows",     label: "Deep shadows",        description: "Sections of the wall are heavily shadowed." },
+  { id: "blends",      label: "Low contrast",        description: "Climber's clothing or skin blends with the wall colour." },
+  { id: "indoor_gym",  label: "Gym lighting",        description: "Indoor gym with uneven or fluorescent overhead lighting." },
+  { id: "dusty",       label: "Dusty / hazy lens",   description: "Lens fog, chalk dust, or condensation reduces sharpness." },
+];
+
+// ---------------------------------------------------------------------------
+// Upload page inner
 // ---------------------------------------------------------------------------
 
 function UploadPageInner() {
-  const searchParams = useSearchParams();
-  const mode = (searchParams.get("mode") ?? "indoor") as ClimbingMode;
-
   const { cv } = useOpenCV();
   const { model } = useTFModel();
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, deleteAttempt: deleteS3Attempt, status: s3Status } = useS3Storage();
 
-  const [state, setState] = useState("");
-  const [area, setArea] = useState("");
-  const [route, setRoute] = useState("");
+  // Restore prior attempt from session so users can return from the match page.
+  const [restoredAttempt] = useState<RouteAttempt | null>(() => {
+    if (typeof window === "undefined") return null;
+    const id = window.sessionStorage.getItem(SESSION_KEY);
+    return id ? (getAttempt(id) ?? null) : null;
+  });
+
+  const [state, setState] = useState(() => restoredAttempt?.state ?? "");
+  const [area,  setArea]  = useState(() => restoredAttempt?.area  ?? "");
+  const [route, setRoute] = useState(() => restoredAttempt?.route ?? "");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [frameStep, setFrameStep] = useState(5);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedS3Key, setSavedS3Key] = useState<string | null>(null);
   const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [conditions, setConditions] = useState<Set<string>>(new Set());
   const previewUrlRef = useRef<string | null>(null);
 
-  // Crop box state — fractional [0, 1] coordinates.
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
@@ -128,12 +133,14 @@ function UploadPageInner() {
   const isDone = status === "done";
   const orbReady = orbStatus === "ready";
 
+  // Persist the attempt id into session so user can return from match page.
+  const activeAttemptId = isDone ? attemptId : restoredAttempt?.id ?? null;
+  const activeAttempt   = activeAttemptId ? getAttempt(activeAttemptId) : null;
+  const showResults     = (isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing);
+
   useEffect(() => {
     if (isDone && attemptId) {
-      const attempt = getAttempt(attemptId);
-      console.info(
-        `[Upload] Done. frames=${attempt?.frames.length ?? 0} orbKP=${attempt?.orbFeatures?.keypoints.length ?? 0}`,
-      );
+      try { window.sessionStorage.setItem(SESSION_KEY, attemptId); } catch { /* quota */ }
     }
   }, [isDone, attemptId]);
 
@@ -143,6 +150,14 @@ function UploadPageInner() {
     };
   }, []);
 
+  function toggleCondition(id: string) {
+    setConditions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      return next;
+    });
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -151,7 +166,6 @@ function UploadPageInner() {
     previewUrlRef.current = url;
     setVideoPreviewUrl(url);
     setPendingFile(file);
-    // Reset crop boxes to default when a new file is selected.
     setClimberCrop(DEFAULT_CROP);
     setOrbCrop(DEFAULT_CROP);
     setActiveCropMode("climber");
@@ -159,15 +173,15 @@ function UploadPageInner() {
 
   function handleProcess() {
     if (!pendingFile || !model || !cv) return;
-    process(pendingFile, model, cv, mode, frameStep, { state, area, route }, {
+    process(pendingFile, model, cv, frameStep, { state, area, route }, {
       climberCrop,
       orbCrop,
     });
   }
 
   async function handleSaveToDevice() {
-    if (!attemptId) return;
-    const attempt = getAttempt(attemptId);
+    if (!activeAttemptId) return;
+    const attempt = getAttempt(activeAttemptId);
     if (!attempt) return;
     setSaveError(null);
     try {
@@ -180,10 +194,10 @@ function UploadPageInner() {
   }
 
   async function handleDeleteFromDevice() {
-    if (!savedRouteDirHandle || !attemptId) return;
+    if (!savedRouteDirHandle || !activeAttemptId) return;
     setSaveError(null);
     try {
-      await savedRouteDirHandle.removeEntry(`${attemptId}.json`);
+      await savedRouteDirHandle.removeEntry(`${activeAttemptId}.json`);
       setSavedRouteDirHandle(null);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Delete failed.");
@@ -191,8 +205,8 @@ function UploadPageInner() {
   }
 
   async function handleSaveToS3() {
-    if (!attemptId) return;
-    const attempt = getAttempt(attemptId);
+    if (!activeAttemptId) return;
+    const attempt = getAttempt(activeAttemptId);
     if (!attempt) return;
     setSaveError(null);
     try {
@@ -214,69 +228,145 @@ function UploadPageInner() {
     }
   }
 
-  function switchMode(newMode: ClimbingMode) {
-    if (newMode === mode) return;
-    window.location.href = `/upload?mode=${newMode}`;
-  }
+  const videoAndCropSection = (
+    <div className="flex-1 min-w-0 flex flex-col gap-4">
+      {/* Video upload */}
+      <label
+        className={[
+          "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-8 py-6 text-sm transition",
+          isProcessing
+            ? "cursor-not-allowed border-zinc-800 text-zinc-600"
+            : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+        ].join(" ")}
+      >
+        <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+        </svg>
+        <span>{isProcessing ? "Processing\u2026" : "Select a climbing video"}</span>
+        <span className="text-xs text-zinc-600">MP4, MOV, WebM accepted</span>
+        <input
+          type="file"
+          accept="video/*"
+          className="hidden"
+          disabled={isProcessing}
+          onChange={handleFileChange}
+        />
+      </label>
 
-  return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-10 flex flex-col gap-8">
-      {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Video Analysis</h1>
-            <p className="text-sm text-zinc-400">
-              Upload a climbing video to extract skeleton poses and ORB reference features.
+      {/* Crop UI � shown after file selected, before processing */}
+      {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
+        <div className="flex flex-col gap-3">
+          {/* Crop mode toggle */}
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-zinc-400">
+              Set crop regions � drag handles to resize, drag interior to move
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveCropMode("climber")}
+                className={[
+                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                  activeCropMode === "climber"
+                    ? "border-sky-500 bg-sky-950 text-sky-300"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
+                ].join(" ")}
+              >
+                Climber crop
+              </button>
+              <button
+                onClick={() => setActiveCropMode("route")}
+                className={[
+                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                  activeCropMode === "route"
+                    ? "border-amber-500 bg-amber-950 text-amber-300"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
+                ].join(" ")}
+              >
+                Background (ORB) crop
+              </button>
+            </div>
+            <p className="text-xs text-zinc-600">
+              {activeCropMode === "climber"
+                ? "Climber crop � box is re-centred on the detected hip every pose frame."
+                : "Background crop � used to extract wall texture features from the first frame."}
             </p>
           </div>
-          <Link href="/" className="shrink-0 text-xs text-zinc-500 transition hover:text-zinc-300">
-            &#8592; Home
-          </Link>
-        </div>
 
-        {/* Indoor / Outdoor mode toggle */}
-        <div className="flex gap-2">
+          <div className="relative w-full">
+            <video
+              src={videoPreviewUrl}
+              controls
+              muted
+              playsInline
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+            />
+            <CropBoxOverlay
+              box={activeCropMode === "climber" ? climberCrop : orbCrop}
+              onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
+            />
+          </div>
+
+          {/* Frame step slider */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 flex flex-col gap-2">
+            <label className="flex items-center justify-between text-xs">
+              <span className="text-zinc-400 font-medium">Pose detection frequency</span>
+              <span className="font-mono text-zinc-200">every {frameStep} frames</span>
+            </label>
+            <input
+              type="range"
+              min={1} max={30}
+              value={frameStep}
+              onChange={e => setFrameStep(Number(e.target.value))}
+              className="w-full accent-zinc-200"
+              aria-label="Frame step"
+            />
+            <p className="text-xs text-zinc-600">
+              1 = every frame (slowest, most accurate) � 30 = every 30th frame (fastest, more interpolation between detections)
+            </p>
+          </div>
+
+          {/* Process button */}
           <button
-            onClick={() => switchMode("indoor")}
-            className={[
-              "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition",
-              mode === "indoor"
-                ? "border-zinc-400 bg-zinc-800 text-zinc-100"
-                : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
-            ].join(" ")}
-            aria-pressed={mode === "indoor"}
+            onClick={handleProcess}
+            disabled={!model || !cv}
+            className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Indoor
-          </button>
-          <button
-            onClick={() => switchMode("outdoor")}
-            className={[
-              "flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition",
-              mode === "outdoor"
-                ? "border-zinc-400 bg-zinc-800 text-zinc-100"
-                : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
-            ].join(" ")}
-            aria-pressed={mode === "outdoor"}
-          >
-            Outdoor
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+            </svg>
+            Process video
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Location metadata inputs */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
-        <p className="text-sm font-medium text-zinc-300">Location metadata</p>
+      {/* Video preview while processing or after done */}
+      {videoPreviewUrl && (isProcessing || isDone) && (
+        <video
+          src={videoPreviewUrl}
+          controls
+          muted
+          playsInline
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+        />
+      )}
+    </div>
+  );
+
+  const sidebarSection = pendingFile || showResults ? (
+    <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-4">
+      {/* Location metadata */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-4">
+        <p className="text-sm font-medium text-zinc-300">Location</p>
         <p className="text-xs text-zinc-500 -mt-2">
           Used to organise saved attempts in the{" "}
-          <span className="font-mono text-zinc-400">{BETA_FOLDER}/</span> folder on your device.
+          <span className="font-mono text-zinc-400">{BETA_FOLDER}/</span> folder.
         </p>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="flex flex-col gap-3">
           {(
             [
               { label: "State / Region", value: state, set: setState, placeholder: "e.g. Colorado" },
-              { label: "Area", value: area, set: setArea, placeholder: "e.g. Red Rocks" },
-              { label: "Route", value: route, set: setRoute, placeholder: "e.g. The Classic" },
+              { label: "Area",          value: area,  set: setArea,  placeholder: "e.g. Red Rocks" },
+              { label: "Route",         value: route, set: setRoute, placeholder: "e.g. The Classic" },
             ] as const
           ).map(({ label, value, set, placeholder }) => (
             <div key={label} className="flex flex-col gap-1.5">
@@ -294,187 +384,90 @@ function UploadPageInner() {
         </div>
       </div>
 
-      {/* Info dropdowns */}
-      <div className="flex flex-col gap-3">
-        <InfoDropdown title="How does video analysis work?">
-          <p>
-            The app steps through your video frame-by-frame (every 100&#8239;ms by default). For each
-            sampled frame it runs <strong className="text-zinc-300">MoveNet Lightning</strong> to
-            detect 17 body keypoints. After the seek loop finishes, ORB feature descriptors are
-            extracted from the first frame. All processing happens locally &#8212; no data is sent
-            to a server.
-          </p>
-        </InfoDropdown>
-        <InfoDropdown title="What is pose detection?">
-          <p>
-            <strong className="text-zinc-300">MoveNet Lightning</strong> detects 17 COCO-topology
-            keypoints (nose, shoulders, elbows, wrists, hips, knees, ankles) in under 10&#8239;ms
-            per frame on most devices. Keypoints below a 0.3 confidence threshold are discarded.
-          </p>
-        </InfoDropdown>
-        <InfoDropdown title="What are ORB features?">
-          <p>
-            <strong className="text-zinc-300">ORB</strong> encodes the wall&apos;s texture from the
-            first frame as compact binary descriptors. On the Match page these are compared against
-            a route photo to compute the perspective transform that maps skeleton keypoints onto the
-            photo.
-          </p>
-        </InfoDropdown>
-        {mode === "outdoor" && (
-          <InfoDropdown title="Outdoor mode &#8212; hip crop &amp; interpolation" defaultOpen>
-            <p>
-              Outdoor mode crops a &#177;25% window around the estimated hip position before each
-              pose inference, improving detection of small-in-frame climbers. Pose runs every{" "}
-              <strong className="text-zinc-300">N</strong> sampled frames; gaps are filled by linear
-              interpolation.
-            </p>
-          </InfoDropdown>
-        )}
-      </div>
-
-      {/* Outdoor frame-step slider */}
-      {mode === "outdoor" && !isProcessing && !isDone && (
-        <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-3">
-          <label className="flex items-center justify-between text-sm">
-            <span className="text-zinc-300 font-medium">Pose detection frequency</span>
-            <span className="font-mono text-zinc-100">every {frameStep} frames</span>
-          </label>
-          <input
-            type="range"
-            min={1}
-            max={30}
-            value={frameStep}
-            onChange={e => setFrameStep(Number(e.target.value))}
-            className="w-full accent-zinc-200"
-            aria-label="Frame step"
-          />
-          <p className="text-xs text-zinc-500">
-            1 = every frame (slowest, most accurate) &#183; 30 = every 30th frame (fastest, more
-            interpolation)
-          </p>
+      {/* Frame adjustment conditions � visible before processing */}
+      {!isDone && !isProcessing && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm font-medium text-zinc-300">Shooting conditions</p>
+            <p className="text-xs text-zinc-500">Select any that apply to help us improve future processing.</p>
+          </div>
+          <div className="flex flex-col gap-2">
+            {FRAME_CONDITIONS.map(c => (
+              <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={conditions.has(c.id)}
+                  onChange={() => toggleCondition(c.id)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-zinc-400 cursor-pointer"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-xs font-medium text-zinc-300 group-hover:text-zinc-100 transition">{c.label}</span>
+                  <span className="text-xs text-zinc-600">{c.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </div>
       )}
+    </aside>
+  ) : null;
 
-      {/* Video upload */}
-      <div className="flex flex-col gap-4">
-        <label
-          className={[
-            "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-8 py-6 text-sm transition",
-            isProcessing
-              ? "cursor-not-allowed border-zinc-800 text-zinc-600"
-              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
-          ].join(" ")}
-        >
-          <svg
-            className="h-6 w-6 text-zinc-500"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-            />
-          </svg>
-          <span>{isProcessing ? "Processing\u2026" : "Select a climbing video"}</span>
-          <span className="text-xs text-zinc-600">MP4, MOV, WebM accepted</span>
-          <input
-            type="file"
-            accept="video/*"
-            className="hidden"
-            disabled={isProcessing}
-            onChange={handleFileChange}
-          />
-        </label>
+  return (
+    <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Video Analysis</h1>
+          <p className="text-sm text-zinc-400">
+            Upload a climbing video to extract skeleton poses and wall reference features.
+          </p>
+        </div>
+        <Link href="/" className="shrink-0 text-xs text-zinc-500 transition hover:text-zinc-300">
+          &#8592; Home
+        </Link>
+      </div>
 
-        {/* Crop UI — shown after file selected, before processing starts */}
-        {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
-          <div className="flex flex-col gap-3">
-            {/* Crop mode toggle */}
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-medium text-zinc-400">
-                Set crop regions — drag handles to resize, drag interior to move
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveCropMode("climber")}
-                  className={[
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                    activeCropMode === "climber"
-                      ? "border-sky-500 bg-sky-950 text-sky-300"
-                      : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
-                  ].join(" ")}
-                >
-                  Climber crop
-                </button>
-                <button
-                  onClick={() => setActiveCropMode("route")}
-                  className={[
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                    activeCropMode === "route"
-                      ? "border-amber-500 bg-amber-950 text-amber-300"
-                      : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
-                  ].join(" ")}
-                >
-                  Route (ORB) crop
-                </button>
-              </div>
-              <p className="text-xs text-zinc-600">
-                {activeCropMode === "climber"
-                  ? "Climber crop — used for pose detection. Tracks hip position each frame (outdoor mode only)."
-                  : "Route crop — used for ORB feature extraction from the first frame."}
-              </p>
-            </div>
+      {/* Info dropdowns */}
+      <div className="flex flex-col gap-3">
+        <InfoDropdown title="How to film your climb">
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>Mount the camera on a <strong className="text-zinc-300">tripod or fixed surface</strong> � a moving camera makes the homography fail.</li>
+            <li>Ensure the <strong className="text-zinc-300">entire route and climber are visible</strong> throughout the clip.</li>
+            <li>No one should pass between the camera and the climber while filming.</li>
+            <li>Film in the <strong className="text-zinc-300">best light available</strong> � direct harsh sun or deep shade both reduce pose accuracy.</li>
+            <li>Keep the clip short: only the section with the climbing attempt is needed.</li>
+          </ul>
+        </InfoDropdown>
+        <InfoDropdown title="How to crop the climber">
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>The <strong className="text-zinc-300">Climber crop</strong> tells the detector which part of the frame to analyse.</li>
+            <li>Make the box <strong className="text-zinc-300">wide enough to contain every move</strong> including the next hold the climber will reach.</li>
+            <li>The box is automatically re-centred on the climber&apos;s hips each frame, so it will follow the movement.</li>
+            <li>A too-tight crop risks losing the climber between frames; a full-frame crop reduces pose accuracy on small-in-frame subjects.</li>
+          </ul>
+        </InfoDropdown>
+        <InfoDropdown title="How to crop the background">
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>The <strong className="text-zinc-300">Background (ORB) crop</strong> defines the wall region used to recognise the route in your photo.</li>
+            <li>Include the <strong className="text-zinc-300">wall texture, holds, and surrounding rock</strong> � these unique features are what the matcher looks for.</li>
+            <li>Omit sky, trees, cables, people, or anything that may <strong className="text-zinc-300">change between shoots</strong>.</li>
+            <li>For gym climbs, exclude the floor, other coloured holds from different routes, and temporary tape.</li>
+          </ul>
+        </InfoDropdown>
+        <InfoDropdown title="How to save and test">
+          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+            <li>After processing finishes, click <strong className="text-zinc-300">Match against a route photo</strong> to test the overlay immediately.</li>
+            <li>You can come back here at any time to <strong className="text-zinc-300">download the data</strong> or re-process with different settings.</li>
+            <li>Save the <code className="text-zinc-300">.json</code> file to your device to reload the attempt without re-processing the video in a future session.</li>
+          </ul>
+        </InfoDropdown>
+      </div>
 
-            {/* Video with crop overlay */}
-            <div className="relative w-full">
-              <video
-                src={videoPreviewUrl}
-                controls
-                muted
-                playsInline
-                className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
-              />
-              <CropBoxOverlay
-                box={activeCropMode === "climber" ? climberCrop : orbCrop}
-                onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
-              />
-            </div>
-
-            {/* Process button */}
-            <button
-              onClick={handleProcess}
-              disabled={!model || !cv}
-              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
-              </svg>
-              Process video
-            </button>
-          </div>
-        )}
-
-        {/* Video preview while processing or after done */}
-        {videoPreviewUrl && (isProcessing || isDone) && (
-          <video
-            src={videoPreviewUrl}
-            controls
-            muted
-            playsInline
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
-          />
-        )}
+      {/* Main content � sidebar + video/crop */}
+      {/* On large screens: sidebar left, video right. On small: video top, sidebar bottom. */}
+      <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-start">
+        {sidebarSection}
+        {videoAndCropSection}
       </div>
 
       {/* Progress bar */}
@@ -488,53 +481,41 @@ function UploadPageInner() {
           </div>
           <p className="text-center text-xs text-zinc-400">
             Analysing frame {currentFrame} of {totalFrames} ({progressPct}%)
-            {mode === "outdoor" && (
-              <span className="ml-1.5 text-zinc-600">&#183; pose every {frameStep} frames</span>
-            )}
+            <span className="ml-1.5 text-zinc-600">� pose every {frameStep} frames</span>
           </p>
         </div>
       )}
 
       {isDone && orbStatus === "extracting" && (
-        <p className="text-center text-sm text-zinc-400">
-          Extracting ORB reference features&#8230;
-        </p>
+        <p className="text-center text-sm text-zinc-400">Extracting reference features&#8230;</p>
       )}
       {isDone && orbStatus === "failed" && (
         <p className="text-center text-sm text-amber-400">
-          ORB extraction failed &#8212; image matching will be unavailable.
+          Feature extraction failed � image matching will be unavailable.
         </p>
       )}
 
       {/* Result actions */}
-      {isDone && orbReady && attemptId && (
+      {showResults && activeAttemptId && activeAttempt && (
         <div className="flex flex-col gap-3">
           <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-5 py-4">
             <p className="text-sm font-medium text-emerald-300">Analysis complete</p>
             <p className="mt-0.5 text-xs text-emerald-500">
-              {getAttempt(attemptId)?.frames.length ?? 0} pose frames &#183;{" "}
-              {getAttempt(attemptId)?.orbFeatures?.keypoints.length ?? 0} ORB keypoints extracted
+              {activeAttempt.frames.length} pose frames �{" "}
+              {activeAttempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints extracted
+              {activeAttempt.state && ` � ${activeAttempt.state}`}
+              {activeAttempt.area  && ` � ${activeAttempt.area}`}
+              {activeAttempt.route && ` � ${activeAttempt.route}`}
             </p>
           </div>
 
           <Link
-            href={`/match?id=${attemptId}`}
+            href={`/match?id=${activeAttemptId}`}
             className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200"
           >
             Match against a route photo
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-              />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
           </Link>
 
@@ -542,19 +523,8 @@ function UploadPageInner() {
             onClick={handleSaveToDevice}
             className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-              />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
             Save to {BETA_FOLDER} folder
           </button>
@@ -573,21 +543,10 @@ function UploadPageInner() {
             disabled={s3Status === "loading"}
             className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
-              />
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploading…" : "Save to S3"}
+            {s3Status === "loading" ? "Uploading�" : "Save to S3"}
           </button>
 
           {savedS3Key && (
