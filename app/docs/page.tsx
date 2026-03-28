@@ -221,28 +221,28 @@ export default function DocsPage() {
               <tbody className="divide-y divide-zinc-800">
                 <tr>
                   <td className="px-4 py-3">Washed out</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=8)</td>
-                  <td className="px-4 py-3">Restores local contrast in overexposed regions</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">equalizeHist blend (40 %)</td>
+                  <td className="px-4 py-3">Restores global contrast in overexposed regions</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Backlit</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE + gamma γ=1.4</td>
-                  <td className="px-4 py-3">Equalises local contrast then lifts midtones to reduce silhouette effect</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">equalizeHist blend + gamma γ=1.4</td>
+                  <td className="px-4 py-3">Improves contrast then lifts midtones to reduce silhouette effect</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Deep shadows</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=3, tile=8)</td>
-                  <td className="px-4 py-3">Stronger local enhancement for heavily shadowed regions</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">equalizeHist blend (60 %)</td>
+                  <td className="px-4 py-3">Stronger enhancement for heavily shadowed regions</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Low contrast</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=8)</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">equalizeHist blend (40 %)</td>
                   <td className="px-4 py-3">Improves edge separation when climber blends into wall</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Gym lighting</td>
-                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=16)</td>
-                  <td className="px-4 py-3">Wider tiles even out large fluorescent hot-spots</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">pre-blur (σ=3) + equalizeHist blend (40 %)</td>
+                  <td className="px-4 py-3">Evens out large fluorescent hot-spots before boosting contrast</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Dusty / hazy lens</td>
@@ -254,8 +254,8 @@ export default function DocsPage() {
           </div>
 
           <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
-            Multiple conditions can be combined. When both a CLAHE condition and{" "}
-            <em>Dusty lens</em> are selected, sharpening is applied to the CLAHE-enhanced image.
+            Multiple conditions can be combined. When both a contrast-enhancement condition and{" "}
+            <em>Dusty lens</em> are selected, sharpening is applied to the contrast-enhanced image.
           </p>
         </section>
 

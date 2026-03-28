@@ -17,14 +17,14 @@ Supported conditions and their effect:
 
 | `conditions` value | Processing | Purpose |
 |---|---|---|
-| `washed_out` | CLAHE clipLimit=2, tile=8 | Restores local contrast in overexposed regions |
-| `backlit` | CLAHE + gamma γ=1.4 | Equalises then lifts midtones to reduce silhouette effect |
-| `shadows` | CLAHE clipLimit=3, tile=8 | Stronger enhancement for dark regions |
-| `blends` | CLAHE clipLimit=2, tile=8 | Improves climber/wall edge separation |
-| `indoor_gym` | CLAHE clipLimit=2, tile=16 | Wider tiles for fluorescent hot-spots |
+| `washed_out` | equalizeHist blend (40 %) | Restores global contrast in overexposed regions |
+| `backlit` | equalizeHist blend (40 %) + gamma γ=1.4 | Improves contrast then lifts midtones to reduce silhouette effect |
+| `shadows` | equalizeHist blend (60 %) | Stronger enhancement for dark regions |
+| `blends` | equalizeHist blend (40 %) | Improves climber/wall edge separation |
+| `indoor_gym` | pre-blur (σ=3) + equalizeHist blend (40 %) | Evens fluorescent hot-spots then boosts contrast |
 | `dusty` | Unsharp mask σ=1.5 | Restores edge clarity from lens fog or chalk |
 
-Multiple conditions combine: all CLAHE variants are merged into a single pass; unsharp masking is applied after CLAHE when both are selected.
+Multiple conditions combine: contrast enhancement and unsharp masking are applied in sequence when both are selected.
 
 ### `orbDetector.ts`
 

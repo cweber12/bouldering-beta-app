@@ -33,8 +33,6 @@ function makeCv() {
     delete: vi.fn(),
   };
 
-  const claheInst = { apply: vi.fn(), delete: vi.fn() };
-
   const cv = {
     COLOR_RGBA2GRAY: 7,
     CV_8UC1: 0,
@@ -49,12 +47,9 @@ function makeCv() {
     Size: vi.fn().mockImplementation(function (w: number, h: number) {
       return { width: w, height: h };
     }),
-    createCLAHE: vi.fn().mockReturnValue(claheInst),
     LUT: vi.fn(),
     GaussianBlur: vi.fn(),
     addWeighted: vi.fn(),
-    // Exposed for assertions
-    _clahe: claheInst,
   };
 
   return cv;
@@ -85,62 +80,67 @@ describe("applyFramePreprocessing — no-op cases", () => {
 });
 
 // ---------------------------------------------------------------------------
-// CLAHE conditions
+// Contrast enhancement conditions (equalizeHist + blend)
 // ---------------------------------------------------------------------------
 
-describe("applyFramePreprocessing — CLAHE conditions", () => {
-  it("creates CLAHE for washed_out", () => {
+describe("applyFramePreprocessing — contrast enhancement", () => {
+  it("calls equalizeHist + addWeighted for washed_out", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["washed_out"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
-    expect(cv._clahe.apply).toHaveBeenCalledOnce();
-    expect(cv._clahe.delete).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
+    expect(cv.addWeighted).toHaveBeenCalledOnce();
   });
 
-  it("creates CLAHE for backlit", () => {
+  it("calls equalizeHist for backlit", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["backlit"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
   });
 
-  it("creates CLAHE for shadows", () => {
+  it("calls equalizeHist for shadows", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["shadows"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
   });
 
-  it("creates CLAHE for blends", () => {
+  it("calls equalizeHist for blends", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["blends"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
   });
 
-  it("creates CLAHE for indoor_gym", () => {
+  it("calls equalizeHist for indoor_gym", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["indoor_gym"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
   });
 
-  it("uses clipLimit=3 for shadows, 2 for other CLAHE conditions", () => {
+  it("uses blend alpha=0.6 for shadows, 0.4 for other conditions", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["shadows"]));
-    // First arg to createCLAHE is clipLimit.
-    expect(cv.createCLAHE).toHaveBeenCalledWith(3.0, expect.anything());
+    // addWeighted(eqOut, alpha, original, 1-alpha, 0, blendOut)
+    const [, alpha] = cv.addWeighted.mock.calls[0] as number[];
+    expect(alpha).toBeCloseTo(0.6);
 
-    cv.createCLAHE.mockClear();
+    cv.addWeighted.mockClear();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["washed_out"]));
-    expect(cv.createCLAHE).toHaveBeenCalledWith(2.0, expect.anything());
+    const [, alpha2] = cv.addWeighted.mock.calls[0] as number[];
+    expect(alpha2).toBeCloseTo(0.4);
   });
 
-  it("uses tileSize=16 for indoor_gym, 8 for other CLAHE conditions", () => {
+  it("applies pre-blur for indoor_gym before equalisation", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["indoor_gym"]));
-    // Second arg is a Size instance — check it was created with 16, 16.
-    expect(cv.Size).toHaveBeenCalledWith(16, 16);
+    // GaussianBlur is called for the pre-blur pass
+    expect(cv.GaussianBlur).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
+  });
 
-    cv.Size.mockClear();
+  it("does NOT pre-blur for non-indoor_gym conditions", () => {
+    const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["washed_out"]));
-    expect(cv.Size).toHaveBeenCalledWith(8, 8);
+    // GaussianBlur should NOT be called (no pre-blur, no dusty)
+    expect(cv.GaussianBlur).not.toHaveBeenCalled();
   });
 });
 
@@ -195,17 +195,19 @@ describe("applyFramePreprocessing — unsharp masking", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyFramePreprocessing — combined conditions", () => {
-  it("applies both CLAHE and unsharp masking when dusty + washed_out", () => {
+  it("applies both equalization and unsharp masking when dusty + washed_out", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["dusty", "washed_out"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
+    // addWeighted called twice: once for blend, once for unsharp
+    expect(cv.addWeighted).toHaveBeenCalledTimes(2);
     expect(cv.GaussianBlur).toHaveBeenCalledOnce();
   });
 
-  it("applies CLAHE, gamma, and unsharp for backlit + dusty", () => {
+  it("applies equalization, gamma, and unsharp for backlit + dusty", () => {
     const cv = makeCv();
     applyFramePreprocessing(cv, makeCanvas(), new Set(["backlit", "dusty"]));
-    expect(cv.createCLAHE).toHaveBeenCalledOnce();
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
     expect(cv.LUT).toHaveBeenCalledOnce();
     expect(cv.GaussianBlur).toHaveBeenCalledOnce();
   });

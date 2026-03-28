@@ -6,6 +6,11 @@
  * and any other surfaces are left untouched.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
+ *
+ * NOTE: The `@techstark/opencv-js` WASM build does NOT expose `cv.createCLAHE`.
+ * All local contrast enhancement is therefore done via `cv.equalizeHist` +
+ * `cv.addWeighted` blending — a lighter-weight approximation that uses only
+ * functions available in the prebuilt WASM bundle.
  */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,21 +21,21 @@ type CV = any;
  * conditions. If no relevant conditions are selected the function is a no-op.
  *
  * Conditions and their effect:
- *   washed_out  — CLAHE (clipLimit=2, tile=8px): restores local contrast in
+ *   washed_out  — equalizeHist blended at 40 %: restores global contrast in
  *                 overexposed regions.
- *   backlit     — CLAHE + gamma boost (γ=1.4): equalises local contrast then
- *                 lifts midtones to reduce silhouette effect.
- *   shadows     — CLAHE (clipLimit=3, tile=8px): stronger local enhancement
- *                 for heavily shadowed regions.
- *   blends      — CLAHE (clipLimit=2, tile=8px): improves edge separation
+ *   backlit     — equalizeHist blend (40 %) + gamma boost (γ=1.4): improves
+ *                 contrast then lifts midtones to reduce silhouette effect.
+ *   shadows     — equalizeHist blended at 60 %: stronger enhancement for
+ *                 heavily shadowed regions.
+ *   blends      — equalizeHist blended at 40 %: improves edge separation
  *                 between climber and wall.
- *   indoor_gym  — CLAHE (clipLimit=2, tile=16px): wider tiles even out large
- *                 fluorescent hot-spots.
+ *   indoor_gym  — GaussianBlur (σ=3) + equalizeHist blended at 40 %: evens
+ *                 out large fluorescent hot-spots before boosting contrast.
  *   dusty       — Unsharp masking (Gaussian σ=1.5, weight 1.5/−0.5): restores
  *                 edge clarity lost to lens fog, chalk dust, or condensation.
  *
- * When both CLAHE and dusty are selected, sharpening is applied to the
- * CLAHE-enhanced image.
+ * When both an equalize condition and dusty are selected, sharpening is
+ * applied to the contrast-enhanced image.
  */
 export function applyFramePreprocessing(
   cv: CV,
@@ -39,7 +44,7 @@ export function applyFramePreprocessing(
 ): void {
   if (conditions.size === 0) return;
 
-  const useClahe =
+  const useEqualize =
     conditions.has("washed_out") ||
     conditions.has("backlit") ||
     conditions.has("shadows") ||
@@ -48,19 +53,21 @@ export function applyFramePreprocessing(
   const useGamma = conditions.has("backlit");
   const useDusty = conditions.has("dusty");
 
-  if (!useClahe && !useDusty) return;
+  if (!useEqualize && !useDusty) return;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  let src: CV | null       = null;
-  let gray: CV | null      = null;
-  let claheOut: CV | null  = null;
-  let gammaOut: CV | null  = null;
-  let blurred: CV | null   = null;
-  let sharpened: CV | null = null;
+  let src: CV | null        = null;
+  let gray: CV | null       = null;
+  let eqOut: CV | null      = null;
+  let blendOut: CV | null   = null;
+  let preBlur: CV | null    = null;
+  let gammaOut: CV | null   = null;
+  let blurred: CV | null    = null;
+  let sharpened: CV | null  = null;
 
   try {
     src  = cv.matFromImageData(imageData);
@@ -71,18 +78,23 @@ export function applyFramePreprocessing(
     // We never free `gray` via this alias — it is freed in the finally block.
     let current: CV = gray;
 
-    // --- CLAHE ---------------------------------------------------------------
-    if (useClahe) {
-      const clipLimit = conditions.has("shadows") ? 3.0 : 2.0;
-      const tileSize  = conditions.has("indoor_gym") ? 16 : 8;
-      const clahe     = cv.createCLAHE(clipLimit, new cv.Size(tileSize, tileSize));
-      claheOut = new cv.Mat();
-      try {
-        clahe.apply(current, claheOut);
-      } finally {
-        clahe.delete();
+    // --- Contrast enhancement (equalizeHist + blend) -------------------------
+    if (useEqualize) {
+      // For indoor_gym, pre-blur to even out large hotspots before equalising.
+      if (conditions.has("indoor_gym")) {
+        preBlur = new cv.Mat();
+        cv.GaussianBlur(current, preBlur, new cv.Size(0, 0), 3);
+        current = preBlur;
       }
-      current = claheOut;
+
+      eqOut = new cv.Mat();
+      cv.equalizeHist(current, eqOut);
+
+      // Blend ratio: shadows → stronger (60 %), others → moderate (40 %).
+      const alpha = conditions.has("shadows") ? 0.6 : 0.4;
+      blendOut = new cv.Mat();
+      cv.addWeighted(eqOut, alpha, current, 1 - alpha, 0, blendOut);
+      current = blendOut;
     }
 
     // --- Gamma boost (backlit only) ------------------------------------------
@@ -112,7 +124,9 @@ export function applyFramePreprocessing(
     sharpened?.delete();
     blurred?.delete();
     gammaOut?.delete();
-    claheOut?.delete();
+    blendOut?.delete();
+    eqOut?.delete();
+    preBlur?.delete();
     gray?.delete();
     src?.delete();
   }
