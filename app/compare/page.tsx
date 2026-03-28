@@ -4,7 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
-import FramePlayer, { type FramePlayerLayer } from "@/components/shared/FramePlayer";
+import FramePlayer, { type FramePlayerLayer, type FramePlayerHandle } from "@/components/shared/FramePlayer";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -45,6 +45,12 @@ interface SlotProps {
   limbColor: string;
   lineWidth: number;
   pointRadius: number;
+  /** When true, the FramePlayer + download are hidden (overlay mode). */
+  hidePlayer?: boolean;
+  /** When true, the FramePlayer's built-in play button is hidden. */
+  hidePlayButton?: boolean;
+  /** Ref forwarded to the inner FramePlayer for external play control. */
+  playerRef?: React.Ref<FramePlayerHandle>;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
 }
 
@@ -58,6 +64,9 @@ function CompareSlot({
   limbColor,
   lineWidth,
   pointRadius,
+  hidePlayer = false,
+  hidePlayButton = false,
+  playerRef,
   onMatchResult,
 }: SlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
@@ -131,7 +140,7 @@ function CompareSlot({
           className="h-2 w-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: limbColor }}
         />
-        <span className="text-xs font-medium text-zinc-300">Attempt {slotIndex + 1}</span>
+        <span className="text-xs font-medium text-zinc-300">Run {slotIndex + 1}</span>
         {attempt && (
           <span className="ml-auto text-xs text-zinc-600">
             {attempt.frames.length} frames
@@ -140,22 +149,24 @@ function CompareSlot({
       </div>
 
       {!attempt && (
-        <p className="text-xs text-zinc-600 italic">No attempt loaded</p>
+        <p className="text-xs text-zinc-600 italic">No run loaded</p>
       )}
 
       {attempt && matchStatus === "matching" && (
         <p className="text-xs text-zinc-400 animate-pulse">Matching&#8230;</p>
       )}
 
-      {isReady && imageFile && (
+      {isReady && imageFile && !hidePlayer && (
         <div className="flex flex-col gap-2">
           <FramePlayer
+            ref={playerRef}
             imageFile={imageFile}
             layers={[{
               frames: skeletonData.frames,
               style: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
             }]}
             duration={skeletonData.duration}
+            hidePlayButton={hidePlayButton}
           />
           {exportStatus === "rendering" ? (
             <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -291,7 +302,7 @@ function OverlayPlayer({
   if (playerLayers.length === 0 || !multiData) {
     return (
       <p className="text-xs text-zinc-500 italic">
-        Overlay will appear here once at least one attempt has been matched.
+        Overlay will appear here once at least one run has been matched.
       </p>
     );
   }
@@ -350,12 +361,24 @@ function ComparePageInner() {
   // Shared skeleton style applied to all slots simultaneously.
   const [skeletonLineWidth, setSkeletonLineWidth] = useState(2.5);
   const [skeletonPointRadius, setSkeletonPointRadius] = useState(2);
+  const [styleOpen, setStyleOpen] = useState(false);
 
   // Crop box for ORB detection on the shared route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   // Incremented each time the user clicks "Apply & Match".
   const [matchTrigger, setMatchTrigger] = useState(0);
   const [cropConfirmed, setCropConfirmed] = useState(false);
+
+  // Auto-populate state/area/route from the first loaded run.
+  const [defaultState, setDefaultState] = useState<string | undefined>();
+  const [defaultArea, setDefaultArea] = useState<string | undefined>();
+  const [defaultRoute, setDefaultRoute] = useState<string | undefined>();
+
+  // FramePlayer refs for master play control (side-by-side).
+  const playerRefs = useRef<(FramePlayerHandle | null)[]>(
+    Array.from({ length: MAX_SLOTS }, () => null),
+  );
+  const [masterPlaying, setMasterPlaying] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -375,6 +398,13 @@ function ComparePageInner() {
     setAttempts(prev => {
       const next = [...prev];
       next[idx] = attempt;
+      // Auto-populate defaults from the first loaded run.
+      const isFirstRun = prev.every(a => a === null);
+      if (isFirstRun) {
+        setDefaultState(attempt.state || undefined);
+        setDefaultArea(attempt.area || undefined);
+        setDefaultRoute(attempt.route || undefined);
+      }
       return next;
     });
   }
@@ -411,9 +441,9 @@ function ComparePageInner() {
     <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Compare Attempts</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Compare Runs</h1>
         <p className="text-sm text-zinc-400">
-          Load multiple attempts and overlay or compare them side by side on the same route photo.
+          Load multiple runs and overlay or compare them side by side on the same route photo.
         </p>
       </div>
 
@@ -459,55 +489,16 @@ function ComparePageInner() {
               Apply &amp; Match
             </button>
             {!anyLoaded && (
-              <p className="text-xs text-zinc-500">Load at least one attempt below to enable matching.</p>
+              <p className="text-xs text-zinc-500">Load at least one run below to enable matching.</p>
             )}
           </div>
         )}
 
       </div>
 
-      {/* Skeleton style controls — shown once matching has been triggered */}
-      {cropConfirmed && (
-        <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
-          <div className="flex flex-col gap-3">
-            <label className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Line width</span>
-                <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="8"
-                step="0.5"
-                value={skeletonLineWidth}
-                onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
-                className="w-full accent-zinc-400"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs text-zinc-400">
-                <span>Point radius</span>
-                <span className="tabular-nums">{skeletonPointRadius} px</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                step="1"
-                value={skeletonPointRadius}
-                onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
-                className="w-full accent-zinc-400"
-              />
-            </label>
-          </div>
-        </div>
-      )}
-
-      {/* View mode */}
+      {/* View mode + skeleton style dropdown + master play */}
       {anyLoaded && imageFile && (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {(["sidebyside", "overlay"] as ViewMode[]).map(mode => (
             <button
               key={mode}
@@ -522,19 +513,96 @@ function ComparePageInner() {
               {mode === "sidebyside" ? "Side by side" : "Overlay"}
             </button>
           ))}
+
+          {/* Skeleton style dropdown */}
+          {cropConfirmed && (
+            <div className="relative">
+              <button
+                onClick={() => setStyleOpen(o => !o)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-500 transition hover:border-zinc-600 hover:text-zinc-300"
+              >
+                Style ▾
+              </button>
+              {styleOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3 shadow-xl">
+                  <label className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span>Line width</span>
+                      <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      step="0.5"
+                      value={skeletonLineWidth}
+                      onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
+                      className="w-full accent-zinc-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-zinc-400">
+                      <span>Point radius</span>
+                      <span className="tabular-nums">{skeletonPointRadius} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={skeletonPointRadius}
+                      onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
+                      className="w-full accent-zinc-400"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Master play button — side-by-side only */}
+          {viewMode === "sidebyside" && cropConfirmed && (
+            <button
+              onClick={() => {
+                const next = !masterPlaying;
+                setMasterPlaying(next);
+                for (let i = 0; i < slotCount; i++) {
+                  const ref = playerRefs.current[i];
+                  if (ref) {
+                    if (next) ref.play();
+                    else ref.pause();
+                  }
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-500 transition hover:border-zinc-600 hover:text-zinc-300"
+              aria-label={masterPlaying ? "Pause all" : "Play all"}
+            >
+              {masterPlaying ? (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>
+                  Pause all
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  Play all
+                </>
+              )}
+            </button>
+          )}
         </div>
       )}
 
-      {/* Attempt slots */}
+      {/* Run slots */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-zinc-300">Attempts</p>
+          <p className="text-sm font-medium text-zinc-300">Runs</p>
           {slotCount < MAX_SLOTS && (
             <button
               onClick={() => setSlotCount(c => c + 1)}
               className="text-xs text-zinc-500 hover:text-zinc-300 transition"
             >
-              + Add attempt
+              + Add run
             </button>
           )}
         </div>
@@ -557,18 +625,21 @@ function ComparePageInner() {
                   value={slotColors[i]}
                   onChange={(e) => handleColorChange(i, e.target.value)}
                   className="h-7 w-7 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
-                  title={`Attempt ${i + 1} skeleton color`}
-                  aria-label={`Attempt ${i + 1} skeleton color`}
+                  title={`Run ${i + 1} skeleton color`}
+                  aria-label={`Run ${i + 1} skeleton color`}
                 />
                 <div className="min-w-0 flex-1">
                   <S3RoutePicker
                     label={
                       attempts[i]
-                        ? `Change Attempt ${i + 1}`
-                        : `Load Attempt ${i + 1}`
+                        ? `Change Run ${i + 1}`
+                        : `Load Run ${i + 1}`
                     }
                     onLoad={(att) => handleLoadAttempt(i, att)}
                     compact
+                    defaultState={defaultState}
+                    defaultArea={defaultArea}
+                    defaultRoute={defaultRoute}
                   />
                 </div>
               </div>
@@ -584,6 +655,9 @@ function ComparePageInner() {
                   lineWidth={skeletonLineWidth}
                   pointRadius={skeletonPointRadius}
                   onMatchResult={handleMatchResult}
+                  hidePlayer={viewMode === "overlay"}
+                  hidePlayButton={viewMode === "sidebyside"}
+                  playerRef={(el) => { playerRefs.current[i] = el; }}
                 />
               )}
             </div>
@@ -606,7 +680,7 @@ function ComparePageInner() {
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: slotColors[i] }}
                   />
-                  Attempt {i + 1}: {att.route || att.id}
+                  Run {i + 1}: {att.route || att.id}
                 </span>
               ) : null,
             )}

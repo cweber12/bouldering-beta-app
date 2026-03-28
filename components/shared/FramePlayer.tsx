@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 
@@ -8,6 +8,12 @@ import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 export interface FramePlayerLayer {
   frames: RenderedSkeletonFrame[];
   style?: SkeletonStyle;
+}
+
+/** Imperative methods exposed via ref for external playback control. */
+export interface FramePlayerHandle {
+  play: () => void;
+  pause: () => void;
 }
 
 interface FramePlayerProps {
@@ -19,6 +25,8 @@ interface FramePlayerProps {
   duration: number;
   /** Restart automatically when the end is reached. Default true. */
   loop?: boolean;
+  /** When true the built-in play/pause button is hidden (for master-play UIs). */
+  hidePlayButton?: boolean;
   className?: string;
 }
 
@@ -75,13 +83,14 @@ function formatTime(s: number): string {
  * The canvas draws at the image's native resolution and is CSS-scaled to
  * fill the container width, preserving aspect ratio.
  */
-export default function FramePlayer({
+const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer({
   imageFile,
   layers,
   duration,
   loop = true,
+  hidePlayButton = false,
   className,
-}: FramePlayerProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const layersRef = useRef(layers);
@@ -206,6 +215,12 @@ export default function FramePlayer({
     if (ready && !playing) drawFrame(timeRef.current);
   }, [layers, ready, playing, drawFrame]);
 
+  // Expose imperative play/pause to parent via ref.
+  useImperativeHandle(ref, () => ({
+    play: () => setPlaying(true),
+    pause: () => setPlaying(false),
+  }), []);
+
   function togglePlay() {
     setPlaying((p) => !p);
   }
@@ -244,21 +259,23 @@ export default function FramePlayer({
       <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
 
       <div className="flex items-center gap-3 bg-zinc-950/80 px-3 py-2">
-        <button
-          onClick={togglePlay}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-300 transition hover:text-zinc-100"
-          aria-label={playing ? "Pause" : "Play"}
-        >
-          {playing ? (
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-            </svg>
-          ) : (
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          )}
-        </button>
+        {!hidePlayButton && (
+          <button
+            onClick={togglePlay}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-300 transition hover:text-zinc-100"
+            aria-label={playing ? "Pause" : "Play"}
+          >
+            {playing ? (
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </button>
+        )}
 
         <input
           type="range"
@@ -277,4 +294,6 @@ export default function FramePlayer({
       </div>
     </div>
   );
-}
+});
+
+export default FramePlayer;

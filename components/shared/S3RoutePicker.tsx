@@ -20,6 +20,12 @@ interface S3RoutePickerProps {
   label?: string;
   /** When true shows a compact inline layout. */
   compact?: boolean;
+  /** Pre-fill State / Region when the picker opens. */
+  defaultState?: string;
+  /** Pre-fill Area when the picker opens. */
+  defaultArea?: string;
+  /** Pre-fill Route when the picker opens. */
+  defaultRoute?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +39,14 @@ interface S3RoutePickerProps {
  * state / area / route names from the S3 bucket using delimiter-based
  * listing, then shows attempt files under the selected route.
  */
-export default function S3RoutePicker({ onLoad, label = "Load from S3", compact = false }: S3RoutePickerProps) {
+export default function S3RoutePicker({
+  onLoad,
+  label = "Load from S3",
+  compact = false,
+  defaultState,
+  defaultArea,
+  defaultRoute,
+}: S3RoutePickerProps) {
   const { listPrefixes, listAttempts, downloadAttempt, status } = useS3Storage();
 
   const [open, setOpen] = useState(false);
@@ -51,20 +64,41 @@ export default function S3RoutePicker({ onLoad, label = "Load from S3", compact 
   const [attemptEntries, setAttemptEntries] = useState<S3AttemptEntry[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch states on open
+  // Fetch states on open — then auto-select defaults if provided.
   const handleOpen = useCallback(async () => {
     setOpen(true);
     setError(null);
     setLoading(true);
     try {
       const names = await listPrefixes(`${KEY_PREFIX}/`);
-      setStateNames(names.sort((a, b) => a.localeCompare(b)));
+      const sorted = names.sort((a, b) => a.localeCompare(b));
+      setStateNames(sorted);
+
+      // Auto-cascade through defaults.
+      if (defaultState && sorted.includes(defaultState)) {
+        setSelectedState(defaultState);
+        const areas = (await listPrefixes(`${KEY_PREFIX}/${defaultState}/`)).sort((a, b) => a.localeCompare(b));
+        setAreaNames(areas);
+
+        if (defaultArea && areas.includes(defaultArea)) {
+          setSelectedArea(defaultArea);
+          const routes = (await listPrefixes(`${KEY_PREFIX}/${defaultState}/${defaultArea}/`)).sort((a, b) => a.localeCompare(b));
+          setRouteNames(routes);
+
+          if (defaultRoute && routes.includes(defaultRoute)) {
+            setSelectedRoute(defaultRoute);
+            const prefix = `${KEY_PREFIX}/${defaultState}/${defaultArea}/${defaultRoute}/`;
+            const entries = await listAttempts(prefix);
+            setAttemptEntries(entries.filter(e => e.key.endsWith(".json")));
+          }
+        }
+      }
     } catch {
       setError("Could not list routes from S3.");
     } finally {
       setLoading(false);
     }
-  }, [listPrefixes]);
+  }, [listPrefixes, listAttempts, defaultState, defaultArea, defaultRoute]);
 
   async function handleStateChange(state: string) {
     setSelectedState(state);
