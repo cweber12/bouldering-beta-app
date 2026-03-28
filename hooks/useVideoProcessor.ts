@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
+import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
 import {
   extractHipCenter,
   mapKeypointsToFullFrame,
@@ -39,11 +40,14 @@ export interface VideoProcessorResult {
    *                    Gaps are filled by filtering + linear interpolation.
    *                    Default: 5.
    * @param meta      - Optional location metadata (state, area, route).
-   * @param cropOptions - Optional user-defined crop boxes.
+   * @param cropOptions - Optional user-defined crop boxes and lighting hints.
    *                    `climberCrop`: box dimensions are preserved and
    *                    re-centered on the detected hip each frame.
    *                    `orbCrop`: ORB features extracted from this sub-region
    *                    of the first frame only.
+   *                    `conditions`: user-selected frame conditions (e.g.
+   *                    "backlit", "shadows") that trigger per-frame
+   *                    preprocessing on the pose-detection canvas.
    */
   process: (
     file: File,
@@ -51,7 +55,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string },
-    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction },
+    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> },
   ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
@@ -92,7 +96,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction } = {},
+      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -214,6 +218,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 poseCanvas   = cropCanvas;
                 appliedCropBox = plannedCropBox;
               }
+            }
+
+            // Apply lighting-condition preprocessing to the pose canvas before
+            // running the model. ORB canvas is left untouched.
+            if (cropOptions.conditions && cropOptions.conditions.size > 0) {
+              applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
             }
 
             const frame = await estimateFrame(detector, poseCanvas, video.currentTime);

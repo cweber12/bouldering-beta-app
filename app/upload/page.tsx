@@ -232,6 +232,7 @@ function UploadPageInner() {
     process(pendingFile, model, cv, frameStep, { state, area, route }, {
       climberCrop,
       orbCrop,
+      conditions,
     });
   }
 

@@ -77,10 +77,17 @@ export interface OrbMatch {
  * Requires the OpenCV `cv` object (from useOpenCV) to already be initialised.
  *
  * All intermediate WASM allocations are freed before returning.
+ *
+ * @param normalizePixels - When true (default), applies histogram equalisation
+ *   to the grayscale image before detection. This equalises the descriptor
+ *   intensity scale between the video reference frame and an uploaded photo,
+ *   improving match count across different lighting conditions. Set to false
+ *   only when the caller has already normalised the input.
  */
-export function extractFeatures(cv: CV, imageData: ImageData): OrbFeatures {
+export function extractFeatures(cv: CV, imageData: ImageData, normalizePixels = true): OrbFeatures {
   let src = null,
     gray = null,
+    normalized = null,
     mask = null,
     keypoints = null,
     descriptors = null,
@@ -92,12 +99,22 @@ export function extractFeatures(cv: CV, imageData: ImageData): OrbFeatures {
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
+    // Histogram equalisation aligns intensity distributions between the video
+    // reference frame and the uploaded photo so ORB descriptors are comparable
+    // regardless of whether the two images were captured under different light.
+    if (normalizePixels) {
+      normalized = new cv.Mat();
+      cv.equalizeHist(gray, normalized);
+    }
+
     keypoints = new cv.KeyPointVector();
     descriptors = new cv.Mat();
     mask = new cv.Mat(); // empty Mat = no spatial mask
     orb = new cv.ORB(ORB_FEATURES);
 
-    orb.detectAndCompute(gray, mask, keypoints, descriptors);
+    // Use the normalised image when available; fall back to raw grayscale.
+    const detect = normalized ?? gray;
+    orb.detectAndCompute(detect, mask, keypoints, descriptors);
 
     const kpArray: OrbKeypoint[] = [];
     for (let i = 0; i < keypoints.size(); i++) {
@@ -120,6 +137,7 @@ export function extractFeatures(cv: CV, imageData: ImageData): OrbFeatures {
     descriptors?.delete();
     keypoints?.delete();
     mask?.delete();
+    normalized?.delete();
     gray?.delete();
     src?.delete();
   }

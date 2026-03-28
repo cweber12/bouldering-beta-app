@@ -39,6 +39,8 @@ interface SlotProps {
   matchTrigger: number;
   cv: CV;
   limbColor: string;
+  lineWidth: number;
+  pointRadius: number;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
 }
 
@@ -50,6 +52,8 @@ function CompareSlot({
   matchTrigger,
   cv,
   limbColor,
+  lineWidth,
+  pointRadius,
   onMatchResult,
 }: SlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
@@ -59,7 +63,7 @@ function CompareSlot({
     imageFile,
     attempt?.id ?? null,
     matchResult,
-    { limbColor, jointColor: JOINT_COLOR },
+    { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
   );
 
   // Notify parent when match result changes
@@ -156,6 +160,8 @@ interface OverlayVideoProps {
   attempts: (RouteAttempt | null)[];
   matchResults: (ImageMatchResult | null)[];
   slotColors: string[];
+  lineWidth: number;
+  pointRadius: number;
 }
 
 function OverlayVideo({
@@ -164,6 +170,8 @@ function OverlayVideo({
   attempts,
   matchResults,
   slotColors,
+  lineWidth,
+  pointRadius,
 }: OverlayVideoProps) {
   const inputs = useMemo<MultiPoseInput[]>(
     () =>
@@ -173,12 +181,12 @@ function OverlayVideo({
             ? {
                 attempt: att,
                 matchResult: matchResults[i]!,
-                skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR },
+                skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
               }
             : null,
         )
         .filter((x): x is MultiPoseInput => x !== null),
-    [attempts, matchResults, slotColors],
+    [attempts, matchResults, slotColors, lineWidth, pointRadius],
   );
 
   const { videoUrl, status, errorMessage, renderProgress } = useMultiPoseVideo(
@@ -268,6 +276,10 @@ function ComparePageInner() {
   const [slotColors, setSlotColors] = useState<string[]>(
     () => [...DEFAULT_LIMB_COLORS],
   );
+
+  // Shared skeleton style applied to all slots simultaneously.
+  const [skeletonLineWidth, setSkeletonLineWidth] = useState(2.5);
+  const [skeletonPointRadius, setSkeletonPointRadius] = useState(2);
 
   // Crop box for ORB detection on the shared route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
@@ -382,16 +394,46 @@ function ComparePageInner() {
           </div>
         )}
 
-        {/* Static preview after match triggered */}
-        {imagePreviewUrl && cropConfirmed && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imagePreviewUrl}
-            alt="Route photo"
-            className="max-h-[32rem] w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
-          />
-        )}
       </div>
+
+      {/* Skeleton style controls — shown once matching has been triggered */}
+      {cropConfirmed && (
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Line width</span>
+                <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="8"
+                step="0.5"
+                value={skeletonLineWidth}
+                onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
+                className="w-full accent-zinc-400"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Point radius</span>
+                <span className="tabular-nums">{skeletonPointRadius} px</span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="1"
+                value={skeletonPointRadius}
+                onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
+                className="w-full accent-zinc-400"
+              />
+            </label>
+          </div>
+        </div>
+      )}
 
       {/* View mode */}
       {anyLoaded && imageFile && (
@@ -469,6 +511,8 @@ function ComparePageInner() {
                   matchTrigger={matchTrigger}
                   cv={cv}
                   limbColor={slotColors[i]}
+                  lineWidth={skeletonLineWidth}
+                  pointRadius={skeletonPointRadius}
                   onMatchResult={handleMatchResult}
                 />
               )}
@@ -503,6 +547,8 @@ function ComparePageInner() {
             attempts={attempts.slice(0, slotCount)}
             cv={cv}
             slotColors={slotColors.slice(0, slotCount)}
+            lineWidth={skeletonLineWidth}
+            pointRadius={skeletonPointRadius}
           />
         </div>
       )}

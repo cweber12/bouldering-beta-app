@@ -4,13 +4,35 @@ Framework-agnostic processing modules. **Zero React imports.** All functions are
 
 ## Modules
 
+### `framePreprocessor.ts`
+
+Lighting-condition-specific preprocessing applied to the pose-detection canvas before each
+MoveNet inference. The ORB background canvas is never touched.
+
+| Export | Signature | Description |
+|---|---|---|
+| `applyFramePreprocessing` | `(cv, canvas, conditions) → void` | Modifies the canvas in-place based on the selected condition flags. No-op when `conditions` is empty or contains no recognized keys. |
+
+Supported conditions and their effect:
+
+| `conditions` value | Processing | Purpose |
+|---|---|---|
+| `washed_out` | CLAHE clipLimit=2, tile=8 | Restores local contrast in overexposed regions |
+| `backlit` | CLAHE + gamma γ=1.4 | Equalises then lifts midtones to reduce silhouette effect |
+| `shadows` | CLAHE clipLimit=3, tile=8 | Stronger enhancement for dark regions |
+| `blends` | CLAHE clipLimit=2, tile=8 | Improves climber/wall edge separation |
+| `indoor_gym` | CLAHE clipLimit=2, tile=16 | Wider tiles for fluorescent hot-spots |
+| `dusty` | Unsharp mask σ=1.5 | Restores edge clarity from lens fog or chalk |
+
+Multiple conditions combine: all CLAHE variants are merged into a single pass; unsharp masking is applied after CLAHE when both are selected.
+
 ### `orbDetector.ts`
 
 ORB feature detection and matching via OpenCV.js.
 
 | Export | Signature | Description |
 |---|---|---|
-| `extractFeatures` | `(cv, imageData) → OrbFeatures` | Detect ORB keypoints and compute descriptors from a frame. |
+| `extractFeatures` | `(cv, imageData, normalizePixels?) → OrbFeatures` | Detect ORB keypoints and compute descriptors. When `normalizePixels` is `true` (default), applies histogram equalisation before detection to align intensity distributions between the video reference frame and an uploaded photo. |
 | `matchOrbFeatures` | `(cv, ref, query) → OrbMatch[]` | BFMatcher + Lowe ratio test (0.7). Returns passing matches. |
 
 Types exported: `OrbKeypoint`, `OrbFeatures`, `OrbMatch`.

@@ -148,6 +148,15 @@ export default function DocsPage() {
                 features are ready.
               </p>
               <p className="mt-2 text-sm text-zinc-400">
+                If lighting conditions are challenging, expand the{" "}
+                <strong className="text-zinc-300">Frame adjustments</strong> panel and select
+                the conditions that apply — see{" "}
+                <a href="#lighting" className="text-zinc-300 hover:underline">
+                  Lighting &amp; preprocessing
+                </a>{" "}
+                below.
+              </p>
+              <p className="mt-2 text-sm text-zinc-400">
                 You can optionally save the processed data to your device as a{" "}
                 <code className="text-zinc-300">.json</code> file so you can reload it in a
                 later session without reprocessing the video.
@@ -184,6 +193,70 @@ export default function DocsPage() {
               </p>
             </div>
           </div>
+        </section>
+
+        {/* ---------------------------------------------------------------- */}
+        {/* Lighting & preprocessing                                         */}
+        {/* ---------------------------------------------------------------- */}
+        <section className="mt-10" id="lighting">
+          <h2 className="text-xl font-semibold text-zinc-200">Lighting &amp; preprocessing</h2>
+          <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+            Pose detection is sensitive to contrast and sharpness. When lighting conditions
+            are poor, selecting the matching conditions on the Upload page causes each frame
+            to be preprocessed before being sent to MoveNet. This does{" "}
+            <strong className="text-zinc-300">not</strong> affect the ORB background crop —
+            ORB feature matching uses pixel normalisation (histogram equalisation) independently
+            to keep descriptor gradients consistent between the video and the uploaded photo.
+          </p>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-zinc-800">
+            <table className="w-full text-sm text-left text-zinc-400">
+              <thead className="border-b border-zinc-800 bg-zinc-900">
+                <tr>
+                  <th className="px-4 py-3 font-medium text-zinc-300">Condition</th>
+                  <th className="px-4 py-3 font-medium text-zinc-300">Processing applied</th>
+                  <th className="px-4 py-3 font-medium text-zinc-300">Why</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800">
+                <tr>
+                  <td className="px-4 py-3">Washed out</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=8)</td>
+                  <td className="px-4 py-3">Restores local contrast in overexposed regions</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Backlit</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE + gamma γ=1.4</td>
+                  <td className="px-4 py-3">Equalises local contrast then lifts midtones to reduce silhouette effect</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Deep shadows</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=3, tile=8)</td>
+                  <td className="px-4 py-3">Stronger local enhancement for heavily shadowed regions</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Low contrast</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=8)</td>
+                  <td className="px-4 py-3">Improves edge separation when climber blends into wall</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Gym lighting</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">CLAHE (clip=2, tile=16)</td>
+                  <td className="px-4 py-3">Wider tiles even out large fluorescent hot-spots</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Dusty / hazy lens</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-300">Unsharp mask (σ=1.5)</td>
+                  <td className="px-4 py-3">Restores edge clarity lost to lens fog or chalk dust</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
+            Multiple conditions can be combined. When both a CLAHE condition and{" "}
+            <em>Dusty lens</em> are selected, sharpening is applied to the CLAHE-enhanced image.
+          </p>
         </section>
 
         {/* ---------------------------------------------------------------- */}

@@ -95,6 +95,7 @@ function makeMockCv(
     matFromImageData: vi.fn().mockImplementation(() => makeMockMat()),
     matFromArray: vi.fn().mockImplementation(() => makeMockMat()),
     cvtColor: vi.fn(),
+    equalizeHist: vi.fn(),
     findHomography: vi.fn().mockReturnValue(null),
     // Constructors — MUST use `function` keyword.
     Mat: vi.fn().mockImplementation(function (..._args: unknown[]) {
@@ -182,6 +183,18 @@ describe("extractFeatures", () => {
     const cv = makeMockCv();
     extractFeatures(cv, fakeImageData());
     expect(cv.cvtColor).toHaveBeenCalledOnce();
+  });
+
+  it("calls equalizeHist when normalizePixels=true (default)", () => {
+    const cv = makeMockCv();
+    extractFeatures(cv, fakeImageData());
+    expect(cv.equalizeHist).toHaveBeenCalledOnce();
+  });
+
+  it("skips equalizeHist when normalizePixels=false", () => {
+    const cv = makeMockCv();
+    extractFeatures(cv, fakeImageData(), false);
+    expect(cv.equalizeHist).not.toHaveBeenCalled();
   });
 
   it("frees all OpenCV objects in the finally block", () => {
