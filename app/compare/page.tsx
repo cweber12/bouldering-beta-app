@@ -4,10 +4,14 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
+import FramePlayer, { type FramePlayerLayer } from "@/components/shared/FramePlayer";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
-import { usePoseVideo } from "@/hooks/usePoseVideo";
-import { useMultiPoseVideo, type MultiPoseInput } from "@/hooks/useMultiPoseVideo";
+import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
+import { buildMultiSkeletonFrames } from "@/pipeline/skeletonRenderer";
+import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
+import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
+import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 
@@ -58,12 +62,11 @@ function CompareSlot({
 }: SlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
-  const { videoUrl, status: videoStatus, renderProgress } = usePoseVideo(
+
+  const { data: skeletonData, status: skeletonStatus } = useSkeletonFrames(
     cv,
-    imageFile,
     attempt?.id ?? null,
     matchResult,
-    { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
   );
 
   // Notify parent when match result changes
@@ -78,9 +81,45 @@ function CompareSlot({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchTrigger, attempt?.id, imageFile, cv]);
 
-  const isRendering = videoStatus === "rendering";
-  const isReady = videoStatus === "ready";
-  const isError = videoStatus === "error" || matchStatus === "error";
+  // On-demand video export for download.
+  const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
+  const [exportProgress, setExportProgress] = useState(0);
+
+  async function handleDownload() {
+    if (!cv || !imageFile || !attempt || !matchResult) return;
+    const att = getAttempt(attempt.id);
+    if (!att?.orbFeatures) return;
+
+    setExportStatus("rendering");
+    setExportProgress(0);
+    try {
+      const url = await renderPoseVideo({
+        cv,
+        imageFile,
+        frames: att.frames,
+        videoMeta: att.videoMeta,
+        orbFeatures: att.orbFeatures,
+        queryOrb: matchResult.queryOrb,
+        matches: matchResult.matches,
+        skeletonStyle: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
+        targetFps: 30,
+        onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
+      });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${attempt.id}-overlay.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch {
+      setExportStatus("idle");
+    }
+  }
+
+  const isReady = skeletonStatus === "ready" && !!skeletonData;
+  const isError = skeletonStatus === "error" || matchStatus === "error";
 
   return (
     <div
@@ -108,38 +147,29 @@ function CompareSlot({
         <p className="text-xs text-zinc-400 animate-pulse">Matching&#8230;</p>
       )}
 
-      {isRendering && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span>Rendering&#8230;</span>
-            <span>{renderProgress}%</span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-full transition-all duration-150"
-              style={{ width: `${renderProgress}%`, backgroundColor: limbColor }}
-            />
-          </div>
-        </div>
-      )}
-
-      {isReady && videoUrl && (
+      {isReady && imageFile && (
         <div className="flex flex-col gap-2">
-          <video
-            src={videoUrl}
-            controls
-            loop
-            playsInline
-            muted
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-950"
+          <FramePlayer
+            imageFile={imageFile}
+            layers={[{
+              frames: skeletonData.frames,
+              style: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
+            }]}
+            duration={skeletonData.duration}
           />
-          <a
-            href={videoUrl}
-            download={`${attempt?.id ?? "attempt"}-overlay.webm`}
-            className="text-center text-xs text-zinc-500 hover:text-zinc-300 transition"
-          >
-            Download .webm
-          </a>
+          {exportStatus === "rendering" ? (
+            <div className="flex items-center justify-between text-xs text-zinc-500">
+              <span>Exporting&#8230;</span>
+              <span>{exportProgress}%</span>
+            </div>
+          ) : (
+            <button
+              onClick={handleDownload}
+              className="text-center text-xs text-zinc-500 hover:text-zinc-300 transition"
+            >
+              Download .webm
+            </button>
+          )}
         </div>
       )}
 
@@ -151,10 +181,10 @@ function CompareSlot({
 }
 
 // ---------------------------------------------------------------------------
-// Overlay video: composite animation of all matched attempts simultaneously
+// Overlay: composite animation of all matched attempts simultaneously
 // ---------------------------------------------------------------------------
 
-interface OverlayVideoProps {
+interface OverlayProps {
   cv: CV;
   imageFile: File;
   attempts: (RouteAttempt | null)[];
@@ -164,7 +194,7 @@ interface OverlayVideoProps {
   pointRadius: number;
 }
 
-function OverlayVideo({
+function OverlayPlayer({
   cv,
   imageFile,
   attempts,
@@ -172,30 +202,93 @@ function OverlayVideo({
   slotColors,
   lineWidth,
   pointRadius,
-}: OverlayVideoProps) {
-  const inputs = useMemo<MultiPoseInput[]>(
-    () =>
-      attempts
-        .map((att, i): MultiPoseInput | null =>
-          att && matchResults[i]
-            ? {
-                attempt: att,
-                matchResult: matchResults[i]!,
-                skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
-              }
-            : null,
-        )
-        .filter((x): x is MultiPoseInput => x !== null),
-    [attempts, matchResults, slotColors, lineWidth, pointRadius],
-  );
+}: OverlayProps) {
+  // Pre-compute multi-layer skeleton frames (sync, instant).
+  const multiData = useMemo(() => {
+    if (!cv) return null;
+    const layerInputs = [];
+    for (let i = 0; i < attempts.length; i++) {
+      const att = attempts[i];
+      const mr = matchResults[i];
+      if (!att?.orbFeatures || !mr) continue;
+      layerInputs.push({
+        frames: att.frames,
+        videoMeta: att.videoMeta,
+        orbFeatures: att.orbFeatures,
+        queryOrb: mr.queryOrb,
+        matches: mr.matches,
+      });
+    }
+    if (layerInputs.length === 0) return null;
+    try {
+      return buildMultiSkeletonFrames({ cv, layers: layerInputs });
+    } catch {
+      return null;
+    }
+  }, [cv, attempts, matchResults]);
 
-  const { videoUrl, status, errorMessage, renderProgress } = useMultiPoseVideo(
-    cv,
-    imageFile,
-    inputs,
-  );
+  // Assemble layers with styles (lightweight — just attaches references).
+  const playerLayers = useMemo<FramePlayerLayer[]>(() => {
+    if (!multiData) return [];
+    const layers: FramePlayerLayer[] = [];
+    let layerIdx = 0;
+    for (let i = 0; i < attempts.length; i++) {
+      if (attempts[i] && matchResults[i]) {
+        layers.push({
+          frames: multiData.layers[layerIdx].frames,
+          style: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
+        });
+        layerIdx++;
+      }
+    }
+    return layers;
+  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius]);
 
-  if (status === "idle") {
+  // On-demand video export.
+  const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
+  const [exportProgress, setExportProgress] = useState(0);
+
+  async function handleDownload() {
+    if (!cv || !imageFile) return;
+    const layerInputs = [];
+    for (let i = 0; i < attempts.length; i++) {
+      const att = attempts[i];
+      const mr = matchResults[i];
+      if (!att?.orbFeatures || !mr) continue;
+      layerInputs.push({
+        frames: att.frames,
+        videoMeta: att.videoMeta,
+        orbFeatures: att.orbFeatures,
+        queryOrb: mr.queryOrb,
+        matches: mr.matches,
+        skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
+      });
+    }
+    if (layerInputs.length === 0) return;
+    setExportStatus("rendering");
+    setExportProgress(0);
+    try {
+      const url = await renderMultiPoseVideo({
+        cv,
+        imageFile,
+        layers: layerInputs,
+        targetFps: 30,
+        onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
+      });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "overlay-composite.webm";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch {
+      setExportStatus("idle");
+    }
+  }
+
+  if (playerLayers.length === 0 || !multiData) {
     return (
       <p className="text-xs text-zinc-500 italic">
         Overlay will appear here once at least one attempt has been matched.
@@ -203,51 +296,28 @@ function OverlayVideo({
     );
   }
 
-  if (status === "rendering") {
-    return (
-      <div className="flex flex-col gap-1.5">
+  return (
+    <div className="flex flex-col gap-2">
+      <FramePlayer
+        imageFile={imageFile}
+        layers={playerLayers}
+        duration={multiData.duration}
+      />
+      {exportStatus === "rendering" ? (
         <div className="flex items-center justify-between text-xs text-zinc-500">
-          <span>Rendering overlay&#8230;</span>
-          <span>{renderProgress}%</span>
+          <span>Exporting overlay&#8230;</span>
+          <span>{exportProgress}%</span>
         </div>
-        <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className="h-full rounded-full bg-zinc-400 transition-all duration-150"
-            style={{ width: `${renderProgress}%` }}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "error") {
-    return <p className="text-sm text-red-400">{errorMessage}</p>;
-  }
-
-  if (status === "ready" && videoUrl) {
-    return (
-      <div className="flex flex-col gap-2">
-        <video
-          src={videoUrl}
-          controls
-          loop
-          playsInline
-          muted
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-950"
-          aria-label="Skeleton overlay composite video"
-        />
-        <a
-          href={videoUrl}
-          download="overlay-composite.webm"
+      ) : (
+        <button
+          onClick={handleDownload}
           className="text-center text-xs text-zinc-500 hover:text-zinc-300 transition"
         >
           Download .webm
-        </a>
-      </div>
-    );
-  }
-
-  return null;
+        </button>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -541,7 +611,7 @@ function ComparePageInner() {
               ) : null,
             )}
           </div>
-          <OverlayVideo
+          <OverlayPlayer
             imageFile={imageFile}
             matchResults={matchResults.slice(0, slotCount)}
             attempts={attempts.slice(0, slotCount)}

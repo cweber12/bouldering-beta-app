@@ -7,11 +7,14 @@ import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
+import FramePlayer from "@/components/shared/FramePlayer";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
-import { usePoseVideo, type SkeletonStyle } from "@/hooks/usePoseVideo";
+import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
+import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
+import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 
 // ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams)
@@ -38,7 +41,7 @@ function MatchPageInner() {
   // Track whether the user has confirmed the crop and triggered matching.
   const [matchTriggered, setMatchTriggered] = useState(false);
 
-  // Skeleton overlay style — set before matching; locked for the render.
+  // Skeleton overlay style — adjustable in real time; FramePlayer reads latest.
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({
     limbColor: "rgba(0,220,120,0.85)",
     jointColor: "rgba(255,220,0,0.92)",
@@ -46,8 +49,15 @@ function MatchPageInner() {
     pointRadius: 5,
   });
 
-  const { videoUrl, status: videoStatus, errorMessage: videoError, renderProgress } =
-    usePoseVideo(cv, imageFile, attemptId || null, matchResult, skeletonStyle);
+  // Pre-compute skeleton frames (instant — pure math, no video encoding).
+  const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
+    useSkeletonFrames(cv, attemptId || null, matchResult);
+
+  // On-demand video export state (renders WebM in background when user downloads).
+  const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
+  const [exportProgress, setExportProgress] = useState(0);
+  const styleRef = useRef(skeletonStyle);
+  useEffect(() => { styleRef.current = skeletonStyle; }, [skeletonStyle]);
 
   // Sync URL param changes via derived state in handlers rather than an effect.
   // The initial values are already set in useState() initialisers above.
@@ -87,9 +97,44 @@ function MatchPageInner() {
 
   const isMatching = matchStatus === "matching";
   const isMatchDone = matchStatus === "done";
-  const isRenderingVideo = videoStatus === "rendering";
-  const isVideoReady = videoStatus === "ready";
+  const isFrameReady = frameStatus === "ready" && !!skeletonData;
   const hasAttempt = !!attempt;
+
+  async function handleExportVideo() {
+    if (!cv || !imageFile || !attemptId || !matchResult) return;
+    const att = getAttempt(attemptId);
+    if (!att?.orbFeatures) return;
+
+    setExportStatus("rendering");
+    setExportProgress(0);
+
+    try {
+      const url = await renderPoseVideo({
+        cv,
+        imageFile,
+        frames: att.frames,
+        videoMeta: att.videoMeta,
+        orbFeatures: att.orbFeatures,
+        queryOrb: matchResult.queryOrb,
+        matches: matchResult.matches,
+        skeletonStyle: styleRef.current,
+        targetFps: 30,
+        onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
+      });
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${attemptId}-pose-overlay.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch (err) {
+      console.error("[MatchPage] Video export failed:", err);
+      setExportStatus("idle");
+    }
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-10 flex flex-col gap-8">
@@ -153,13 +198,13 @@ function MatchPageInner() {
         />
       </div>
 
-      {/* Skeleton style controls — shown BEFORE matching starts; locked once processing begins */}
-      {!isMatching && !isRenderingVideo && !isVideoReady && (
+      {/* Skeleton style controls — always visible once an attempt is loaded */}
+      {hasAttempt && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
           <div className="flex flex-col gap-0.5">
             <p className="text-sm font-medium text-zinc-300">Skeleton style</p>
             <p className="text-xs text-zinc-500">
-              Choose colours and sizes before processing — style cannot be changed once rendering begins.
+              Adjust colours and sizes — changes apply to the player in real time.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -300,49 +345,47 @@ function MatchPageInner() {
         </div>
       )}
 
-      {/* Render progress */}
-      {isRenderingVideo && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <span>Rendering pose overlay...</span>
-            <span>{renderProgress}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-zinc-200 transition-all duration-150"
-              style={{ width: `${renderProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Pose video */}
-      {isVideoReady && videoUrl && (
+      {/* Pose overlay — instant frame-by-frame player (no video encoding) */}
+      {isFrameReady && imageFile && (
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium text-zinc-300">Pose overlay</p>
-          <video
-            src={videoUrl}
-            controls
-            loop
-            playsInline
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+          <FramePlayer
+            imageFile={imageFile}
+            layers={[{ frames: skeletonData.frames, style: skeletonStyle }]}
+            duration={skeletonData.duration}
           />
-          <a
-            href={videoUrl}
-            download={`${attemptId}-pose-overlay.webm`}
-            className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            Download pose overlay video (.webm)
-          </a>
+
+          {/* Video export / download */}
+          {exportStatus === "rendering" ? (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Encoding video for download&#8230;</span>
+                <span>{exportProgress}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full rounded-full bg-zinc-200 transition-all duration-150"
+                  style={{ width: `${exportProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={handleExportVideo}
+              className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              {exportStatus === "done" ? "Download again (.webm)" : "Download pose overlay video (.webm)"}
+            </button>
+          )}
         </div>
       )}
 
-      {(matchStatus === "error" || videoStatus === "error") && (
+      {(matchStatus === "error" || frameStatus === "error") && (
         <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-400">
-          {matchError ?? videoError}
+          {matchError ?? frameError}
         </p>
       )}
     </div>

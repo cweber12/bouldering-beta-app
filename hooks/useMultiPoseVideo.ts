@@ -119,7 +119,7 @@ export function useMultiPoseVideo(
       cv,
       imageFile,
       layers,
-      targetFps: 15,
+      targetFps: 30,
       onProgress: (rendered, total) => {
         if (!cancelled) setRenderProgress(Math.round((rendered / total) * 100));
       },

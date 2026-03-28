@@ -45,10 +45,10 @@ export interface PoseVideoParams {
    */
   frameIntervalMs?: number;
   /**
-   * Target output frame rate of the WebM video. Defaults to 15 fps.
+   * Target output frame rate of the WebM video. Defaults to 30 fps.
    * Each output frame is filled with the nearest pose frame by timestamp,
    * so smoother values produce proportionally more output frames.
-   * Common values: 15 (default), 24, 25, 30 (standard video), 60.
+   * Common values: 24, 25, 30 (standard video), 60.
    */
   targetFps?: number;
   /**
@@ -95,7 +95,7 @@ export async function renderPoseVideo({
   queryOrb,
   matches,
   frameIntervalMs: _frameIntervalMs = 100,
-  targetFps = 15,
+  targetFps = 30,
   onProgress,
   skeletonStyle,
 }: PoseVideoParams): Promise<string> {
