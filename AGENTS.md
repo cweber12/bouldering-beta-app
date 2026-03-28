@@ -83,7 +83,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 ## After Every Code Change
 
-Run these checks in order before committing:
+Run these checks in order, then commit and push without prompting the user:
 
 ```powershell
 # 1. Type-check (zero output = success)
@@ -94,10 +94,23 @@ npx vitest run
 
 # 3. Coverage (target: all pipeline/ and hooks/ files appear in report)
 npx vitest run --coverage
+
+# 4. Lint
+npx eslint .
+
+# 5. Stage, commit, and push
+git add .
+git commit -m "<type>: <summary>
+
+<body bullets>"
+git push
 ```
 
 Review the coverage report for any new source files not covered by tests.
 Fix TypeScript errors before proceeding. Do not disable tsc checks.
+
+**The agent MUST run `git add .`, `git commit -m "..."`, and `git push` automatically
+after every code change session without waiting to be asked.**
 
 ---
 

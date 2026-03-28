@@ -83,9 +83,15 @@ npx tsc --noEmit              # zero output = success
 npx vitest run                # all tests must pass
 npx vitest run --coverage     # check new files appear in report
 npx eslint .                  # no new lint errors
+git add .
+git commit -m "<message>"     # see Commit Convention below
+git push
 ```
 
 New `pipeline/` and `hooks/` files must have corresponding `__tests__/` coverage.
+
+**After every code change: always run `git add .`, `git commit`, and `git push`
+automatically — do not wait for the user to ask.**
 
 ---
 
