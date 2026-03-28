@@ -189,6 +189,13 @@ function UploadPageInner() {
     }
   }, [isDone, attemptId]);
 
+  // Clear session when navigating away so fresh state on return.
+  useEffect(() => {
+    return () => {
+      try { window.sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
@@ -397,13 +404,13 @@ function UploadPageInner() {
                     : "border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
                 ].join(" ")}
               >
-                Background (ORB) crop
+                Wall texture crop
               </button>
             </div>
             <p className="text-xs text-zinc-600">
               {activeCropMode === "climber"
-                ? "Climber crop � box is re-centred on the detected hip every pose frame."
-                : "Background crop � used to extract wall texture features from the first frame."}
+                ? "Climber crop \u2014 follows the climber through each frame."
+                : "Wall texture crop \u2014 used to match this video\u2019s wall to your route photo."}
             </p>
           </div>
 
@@ -530,16 +537,6 @@ function UploadPageInner() {
         </div>
       )}
 
-      {/* Video preview while processing or after done */}
-      {videoPreviewUrl && (isProcessing || isDone) && (
-        <video
-          src={videoPreviewUrl}
-          controls
-          muted
-          playsInline
-          className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
-        />
-      )}
     </div>
   );
 
@@ -549,8 +546,7 @@ function UploadPageInner() {
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-4">
         <p className="text-sm font-medium text-zinc-300">Location</p>
         <p className="text-xs text-zinc-500 -mt-2">
-          Used to organise saved runs in the{" "}
-          <span className="font-mono text-zinc-400">{BETA_FOLDER}/</span> folder.
+          Used to organise your saved climbs.
         </p>
         <div className="flex flex-col gap-3">
           <ComboInput
@@ -582,7 +578,7 @@ function UploadPageInner() {
 
       {/* Run classification */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-3">
-        <p className="text-sm font-medium text-zinc-300">Run classification</p>
+        <p className="text-sm font-medium text-zinc-300">Climb type</p>
         <div className="flex gap-2">
           {(["attempt", "send"] as RunType[]).map(t => (
             <button
@@ -715,11 +711,22 @@ function UploadPageInner() {
       {/* Result actions */}
       {showResults && activeAttemptId && activeAttempt && (
         <div className="flex flex-col gap-3">
+          {/* Video preview — shown above action buttons once processing is done */}
+          {videoPreviewUrl && (
+            <video
+              src={videoPreviewUrl}
+              controls
+              muted
+              playsInline
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+            />
+          )}
+
           <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-5 py-4">
             <p className="text-sm font-medium text-emerald-300">Analysis complete</p>
             <p className="mt-0.5 text-xs text-emerald-500">
               {activeAttempt.frames.length} pose frames �{" "}
-              {activeAttempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints extracted
+              {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points extracted
               {activeAttempt.state && ` � ${activeAttempt.state}`}
               {activeAttempt.area  && ` � ${activeAttempt.area}`}
               {activeAttempt.route && ` � ${activeAttempt.route}`}
@@ -743,7 +750,7 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
-            Save to {BETA_FOLDER} folder
+            Save to device
           </button>
 
           {savedRouteDirHandle && (
@@ -757,7 +764,7 @@ function UploadPageInner() {
 
           {showLocationWarning && (
             <p className="rounded-lg border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
-              Enter State/Region, Area, and Route before saving to S3.
+              Enter State/Region, Area, and Route before uploading.
             </p>
           )}
 
@@ -774,7 +781,7 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploading�" : s3Saved ? "Saved to S3" : "Save to S3"}
+            {s3Status === "loading" ? "Uploading…" : s3Saved ? "Uploaded" : "Upload"}
           </button>
 
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}

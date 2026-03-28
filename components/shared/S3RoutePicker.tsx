@@ -239,7 +239,7 @@ export default function S3RoutePicker({
   pulseButtons = false,
   alwaysOpen = false,
 }: S3RoutePickerProps) {
-  const { listPrefixes, listAttempts, downloadAttempt, userPrefix, status } = useS3Storage();
+  const { listPrefixes, listAttempts, downloadAttempt, deleteAttempt, userPrefix, status } = useS3Storage();
 
   const [open, setOpen] = useState(alwaysOpen);
   const [error, setError] = useState<string | null>(null);
@@ -262,6 +262,7 @@ export default function S3RoutePicker({
   const [attemptEntries, setAttemptEntries] = useState<S3AttemptEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [runMeta, setRunMeta] = useState<Map<string, RunMeta>>(new Map());
+  const [deletePending, setDeletePending] = useState<string | null>(null);
 
   // Fetch metadata for each run entry in the background when entries change.
   useEffect(() => {
@@ -416,6 +417,43 @@ export default function S3RoutePicker({
     }
   }
 
+  async function handleDeleteAttempt(entryKey: string) {
+    setDeletePending(null);
+    setLoading(true);
+    try {
+      await deleteAttempt(entryKey);
+      const remaining = attemptEntries.filter(e => e.key !== entryKey);
+      setAttemptEntries(remaining);
+
+      // Cascade: if the route folder is now empty, re-fetch parent levels.
+      if (remaining.length === 0 && userPrefix && selectedState && selectedArea && selectedRoute) {
+        const routes = await listPrefixes(`${userPrefix}/${selectedState}/${selectedArea}/`);
+        setRouteNames(routes.sort((a, b) => a.localeCompare(b)));
+        if (!routes.includes(selectedRoute)) {
+          setSelectedRoute("");
+          if (routes.length === 0) {
+            const areas = await listPrefixes(`${userPrefix}/${selectedState}/`);
+            setAreaNames(areas.sort((a, b) => a.localeCompare(b)));
+            if (!areas.includes(selectedArea)) {
+              setSelectedArea("");
+              if (areas.length === 0) {
+                const states = await listPrefixes(`${userPrefix}/`);
+                setStateNames(states.sort((a, b) => a.localeCompare(b)));
+                if (!states.includes(selectedState)) {
+                  setSelectedState("");
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   // Also accept a direct JSON file upload for browsers without S3 access
   function handleFileLoad(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -527,19 +565,23 @@ export default function S3RoutePicker({
                   const rType = parseRunType(fileName);
                   const isSend = rType === "send";
                   const meta = runMeta.get(entry.key);
+                  const isPendingDelete = deletePending === entry.key;
                   return (
-                    <button
+                    <div
                       key={entry.key}
-                      onClick={() => handleAttemptSelect(entry)}
-                      disabled={status === "loading"}
                       className={[
-                        "flex items-center justify-between px-4 py-2.5 text-left text-sm transition disabled:opacity-50",
+                        "flex items-center justify-between px-4 py-2.5 text-sm transition",
                         isSend
-                          ? "bg-emerald-950/20 text-emerald-300 hover:bg-emerald-950/40"
-                          : "bg-amber-950/20 text-amber-300 hover:bg-amber-950/40",
+                          ? "bg-emerald-950/20 text-emerald-300"
+                          : "bg-amber-950/20 text-amber-300",
+                        isPendingDelete ? "bg-red-950/30 border-red-800/40" : "",
                       ].join(" ")}
                     >
-                      <span className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => handleAttemptSelect(entry)}
+                        disabled={status === "loading" || isPendingDelete}
+                        className="flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap disabled:opacity-40"
+                      >
                         <span>{attemptTimestampLabel(fileName)}</span>
                         <span className={[
                           "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
@@ -554,16 +596,40 @@ export default function S3RoutePicker({
                             {meta.rating}
                           </span>
                         )}
-                      </span>
-                      <span className="flex items-center gap-3 shrink-0">
                         {meta?.duration != null && (
                           <span className="text-xs text-zinc-500">{formatDuration(meta.duration)}</span>
                         )}
                         {entry.size != null && (
                           <span className="text-xs text-zinc-600">{(entry.size / 1024).toFixed(0)} KB</span>
                         )}
-                      </span>
-                    </button>
+                      </button>
+                      {isPendingDelete ? (
+                        <div className="flex items-center gap-1.5 shrink-0 ml-3">
+                          <button
+                            onClick={() => handleDeleteAttempt(entry.key)}
+                            className="rounded px-2 py-1 text-xs font-medium bg-red-900/50 text-red-300 hover:bg-red-800/60 transition"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setDeletePending(null)}
+                            className="rounded px-2 py-1 text-xs font-medium bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200 transition"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeletePending(entry.key)}
+                          className="shrink-0 ml-3 rounded p-1 text-zinc-600 hover:text-red-400 transition"
+                          aria-label="Delete climb"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>

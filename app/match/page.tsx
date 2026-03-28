@@ -155,7 +155,7 @@ function MatchPageInner() {
 
       {/* Climb data section */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
-        <p className="text-sm font-medium text-zinc-300">Climb data</p>
+        <p className="text-sm font-medium text-zinc-300">Climbs</p>
 
         {hasAttempt && (
           <div className="flex flex-col gap-2">
@@ -329,8 +329,8 @@ function MatchPageInner() {
           </div>
         )}
 
-        {/* Static preview after match triggered */}
-        {imagePreviewUrl && (matchTriggered || isMatching || isMatchDone) && (
+        {/* Static preview after match triggered — hidden once frames are ready or when new image selected */}
+        {imagePreviewUrl && matchTriggered && (isMatching || !isFrameReady) && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={imagePreviewUrl}
