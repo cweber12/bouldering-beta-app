@@ -42,6 +42,9 @@ export interface FrameCapture {
   cropBox: CropBox | null;
 }
 
+/** Whether this run was a climbing attempt or a successful send. */
+export type RunType = "attempt" | "send";
+
 export interface RouteAttempt {
   id: string;
   videoMeta: VideoMeta;
@@ -62,6 +65,12 @@ export interface RouteAttempt {
   state: string;
   area: string;
   route: string;
+  /** Classifies the run as an attempt (did not top) or a send (topped). */
+  runType: RunType;
+  /** Optional difficulty grade (e.g. "V3", "5.10a"). */
+  rating?: string;
+  /** Optional freeform notes about the run. */
+  notes?: string;
   /**
    * For outdoor mode: one FrameCapture per frame on which pose detection was
    * actually executed (every N-th sampled frame). Null for indoor mode.

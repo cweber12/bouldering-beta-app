@@ -12,6 +12,7 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
+import type { RunType } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,7 @@ async function saveAttemptToDevice(
     const stateDir = await betaDir.getDirectoryHandle(sanitizeDirName(attempt.state || "Unknown State"), { create: true });
     const areaDir  = await stateDir.getDirectoryHandle(sanitizeDirName(attempt.area  || "Unknown Area"),  { create: true });
     const routeDir = await areaDir.getDirectoryHandle(sanitizeDirName(attempt.route  || "Unknown Route"), { create: true });
-    const fh       = await routeDir.getFileHandle(`${attempt.id}.json`, { create: true });
+    const fh       = await routeDir.getFileHandle(`${attempt.id}-${attempt.runType ?? "attempt"}.json`, { create: true });
     const writable  = await fh.createWritable();
     await writable.write(json);
     await writable.close();
@@ -61,7 +62,7 @@ async function saveAttemptToDevice(
     const blob = new Blob([json], { type: "application/json" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = `${attempt.id}.json`;
+    a.href = url; a.download = `${attempt.id}-${attempt.runType ?? "attempt"}.json`;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(url);
     return null;
@@ -108,6 +109,9 @@ function UploadPageInner() {
   const [state, setState] = useState(() => restoredAttempt?.state ?? "");
   const [area,  setArea]  = useState(() => restoredAttempt?.area  ?? "");
   const [route, setRoute] = useState(() => restoredAttempt?.route ?? "");
+  const [runType, setRunType] = useState<RunType>(() => restoredAttempt?.runType ?? "attempt");
+  const [rating, setRating] = useState(() => restoredAttempt?.rating ?? "");
+  const [notes, setNotes] = useState(() => restoredAttempt?.notes ?? "");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [frameStep, setFrameStep] = useState(5);
@@ -245,7 +249,7 @@ function UploadPageInner() {
   function startProcessing() {
     if (!pendingFile || !model || !cv) return;
     setShowCropWarning(false);
-    process(pendingFile, model, cv, frameStep, { state, area, route }, {
+    process(pendingFile, model, cv, frameStep, { state, area, route, runType, rating: rating || undefined, notes: notes || undefined }, {
       climberCrop,
       orbCrop,
       conditions,
@@ -270,7 +274,7 @@ function UploadPageInner() {
     if (!savedRouteDirHandle || !activeAttemptId) return;
     setSaveError(null);
     try {
-      await savedRouteDirHandle.removeEntry(`${activeAttemptId}.json`);
+      await savedRouteDirHandle.removeEntry(`${activeAttemptId}-${activeAttempt?.runType ?? "attempt"}.json`);
       setSavedRouteDirHandle(null);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Delete failed.");
@@ -288,7 +292,15 @@ function UploadPageInner() {
     setSaveError(null);
     try {
       // Use current UI values so location entered after processing is respected.
-      const attemptToUpload: RouteAttempt = { ...attempt, state: state.trim(), area: area.trim(), route: route.trim() };
+      const attemptToUpload: RouteAttempt = {
+        ...attempt,
+        state: state.trim(),
+        area: area.trim(),
+        route: route.trim(),
+        runType,
+        rating: rating || undefined,
+        notes: notes || undefined,
+      };
       await uploadAttempt(attemptToUpload);
       setS3Saved(true);
       setLocationWarning(false);
@@ -465,7 +477,7 @@ function UploadPageInner() {
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-4">
         <p className="text-sm font-medium text-zinc-300">Location</p>
         <p className="text-xs text-zinc-500 -mt-2">
-          Used to organise saved attempts in the{" "}
+          Used to organise saved runs in the{" "}
           <span className="font-mono text-zinc-400">{BETA_FOLDER}/</span> folder.
         </p>
         <div className="flex flex-col gap-3">
@@ -492,6 +504,61 @@ function UploadPageInner() {
             suggestions={routeSuggestions}
             placeholder="e.g. The Classic"
             disabled={isProcessing}
+          />
+        </div>
+      </div>
+
+      {/* Run classification */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-3">
+        <p className="text-sm font-medium text-zinc-300">Run classification</p>
+        <div className="flex gap-2">
+          {(["attempt", "send"] as RunType[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setRunType(t)}
+              disabled={isProcessing}
+              className={[
+                "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition capitalize",
+                runType === t
+                  ? t === "send"
+                    ? "border-emerald-500 bg-emerald-950 text-emerald-300"
+                    : "border-amber-500 bg-amber-950 text-amber-300"
+                  : "border-zinc-700 bg-zinc-950 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300",
+                isProcessing ? "cursor-not-allowed opacity-50" : "",
+              ].join(" ")}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-zinc-600">
+          {runType === "send" ? "You topped the route successfully." : "You did not complete the route."}
+        </p>
+      </div>
+
+      {/* Rating & notes (optional) */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-3">
+        <p className="text-sm font-medium text-zinc-300">Details <span className="text-zinc-600 font-normal">(optional)</span></p>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-zinc-400">Grade / Rating</label>
+          <input
+            type="text"
+            value={rating}
+            onChange={e => setRating(e.target.value)}
+            placeholder="e.g. V3, 5.10a, 6a+"
+            disabled={isProcessing}
+            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-zinc-500 disabled:opacity-50"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className="text-xs font-medium text-zinc-400">Notes</label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            placeholder="Anything to remember about this run…"
+            rows={3}
+            disabled={isProcessing}
+            className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-zinc-500 disabled:opacity-50 resize-none"
           />
         </div>
       </div>
@@ -570,7 +637,7 @@ function UploadPageInner() {
           <ul className="flex flex-col gap-1.5 pl-4 list-disc">
             <li>After processing finishes, click <strong className="text-zinc-300">Match against a route photo</strong> to test the overlay immediately.</li>
             <li>You can come back here at any time to <strong className="text-zinc-300">download the data</strong> or re-process with different settings.</li>
-            <li>Save the <code className="text-zinc-300">.json</code> file to your device to reload the attempt without re-processing the video in a future session.</li>
+            <li>Save the <code className="text-zinc-300">.json</code> file to your device to reload the run without re-processing the video in a future session.</li>
           </ul>
         </InfoDropdown>
       </div>

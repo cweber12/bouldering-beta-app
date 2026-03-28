@@ -154,7 +154,7 @@ export default function Home() {
           Route&nbsp;Renderer
         </h1>
         <p className="text-base text-zinc-400 leading-relaxed">
-          Record your bouldering attempts, extract skeleton poses with MoveNet, then
+          Record your bouldering runs, extract skeleton poses with MoveNet, then
           project your movement onto a route photo &#8212; entirely in your browser.
           No uploads, no accounts.
         </p>
@@ -207,7 +207,7 @@ export default function Home() {
             {
               step: "3",
               title: "Export the overlay",
-              body: "Download a WebM video of your skeleton overlaid on the route photo. Compare multiple attempts side by side on the Compare page.",
+              body: "Download a WebM video of your skeleton overlaid on the route photo. Compare multiple runs side by side on the Compare page.",
             },
           ].map(({ step, title, body }) => (
             <div

@@ -36,6 +36,7 @@ hooks/               React hooks — own state transitions, no direct OpenCV all
 
 storage/
   sessionStore.ts      in-memory Map; re-exports all ORB types from orbDetector
+                       exports RunType ("attempt" | "send"), RouteAttempt includes runType, rating?, notes?
 
 utils/
   poseConstants.ts     KP indices, KP_NAMES, SKELETON_EDGES (COCO topology)
@@ -74,6 +75,14 @@ workers/             Legacy — keep, do not delete
 - `ImageData` not in jsdom — cast plain objects: `{ data, width, height, colorSpace } as ImageData`.
 - Mock `pipeline/orbDetector` or `pipeline/homography` at module boundary — never exercise WASM directly.
 
+### Run classification & S3 key format
+- `RouteAttempt.runType` is `"attempt" | "send"` (re-exported as `RunType`).
+- Optional `rating?: string` and `notes?: string` are stored alongside each run.
+- S3 key format: `RouteData/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
+- ID format: `run-{timestamp}` (without the type suffix).
+- Legacy `attempt-{timestamp}.json` files are still loadable — default `runType` to `"attempt"`.
+- UI colours: amber for attempts, emerald for sends.
+
 ---
 
 ## Post-change Checklist (run in order)
@@ -92,6 +101,12 @@ New `pipeline/` and `hooks/` files must have corresponding `__tests__/` coverage
 
 **After every code change: always run `git add .`, `git commit`, and `git push`
 automatically — do not wait for the user to ask.**
+
+### README maintenance
+- When a code change adds, removes, or renames user-visible features, pages,
+  storage formats, or API behaviour, update `README.md` in the same commit.
+- Keep the S3 key format example, Pages table, and feature summary in the README
+  consistent with the actual code.
 
 ---
 

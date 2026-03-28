@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import type { S3AttemptEntry } from "@/hooks/useS3Storage";
-import { attemptTimestampLabel, loadAttemptFromJson } from "@/utils/fsHelpers";
+import { attemptTimestampLabel, loadAttemptFromJson, parseRunType } from "@/utils/fsHelpers";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
@@ -89,7 +89,13 @@ export default function S3RoutePicker({
             setSelectedRoute(defaultRoute);
             const prefix = `${KEY_PREFIX}/${defaultState}/${defaultArea}/${defaultRoute}/`;
             const entries = await listAttempts(prefix);
-            setAttemptEntries(entries.filter(e => e.key.endsWith(".json")));
+            const filtered = entries.filter(e => e.key.endsWith(".json"));
+            filtered.sort((a, b) => {
+              const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+              const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+              return tsB - tsA;
+            });
+            setAttemptEntries(filtered);
           }
         }
       }
@@ -144,9 +150,17 @@ export default function S3RoutePicker({
     try {
       const prefix = `${KEY_PREFIX}/${selectedState}/${selectedArea}/${route}/`;
       const entries = await listAttempts(prefix);
-      setAttemptEntries(entries.filter(e => e.key.endsWith(".json")));
+      const filtered = entries.filter(e => e.key.endsWith(".json"));
+      // Sort by embedded timestamp (newest first) so attempts and sends
+      // are interleaved in chronological order.
+      filtered.sort((a, b) => {
+        const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+        const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+        return tsB - tsA;
+      });
+      setAttemptEntries(filtered);
     } catch {
-      setError(`Could not list attempts for "${route}".`);
+      setError(`Could not list runs for "${route}".`);
     } finally {
       setLoading(false);
     }
@@ -250,14 +264,31 @@ export default function S3RoutePicker({
             <div className="flex flex-col divide-y divide-zinc-800 rounded-lg border border-zinc-800 overflow-hidden">
               {attemptEntries.map(entry => {
                 const fileName = entry.key.split("/").pop() ?? entry.key;
+                const rType = parseRunType(fileName);
+                const isSend = rType === "send";
                 return (
                   <button
                     key={entry.key}
                     onClick={() => handleAttemptSelect(entry)}
                     disabled={status === "loading"}
-                    className="flex items-center justify-between px-4 py-2.5 text-left text-sm text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200 disabled:opacity-50"
+                    className={[
+                      "flex items-center justify-between px-4 py-2.5 text-left text-sm transition disabled:opacity-50",
+                      isSend
+                        ? "bg-emerald-950/20 text-emerald-300 hover:bg-emerald-950/40"
+                        : "bg-amber-950/20 text-amber-300 hover:bg-amber-950/40",
+                    ].join(" ")}
                   >
-                    <span>{attemptTimestampLabel(fileName)}</span>
+                    <span className="flex items-center gap-2">
+                      <span>{attemptTimestampLabel(fileName)}</span>
+                      <span className={[
+                        "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
+                        isSend
+                          ? "bg-emerald-900/40 text-emerald-400"
+                          : "bg-amber-900/40 text-amber-400",
+                      ].join(" ")}>
+                        {rType}
+                      </span>
+                    </span>
                     {entry.size != null && (
                       <span className="text-xs text-zinc-600">{(entry.size / 1024).toFixed(0)} KB</span>
                     )}
@@ -268,7 +299,7 @@ export default function S3RoutePicker({
           )}
 
           {attemptEntries.length === 0 && selectedRoute && !loading && (
-            <p className="text-xs text-zinc-500">No attempt files found for this route.</p>
+            <p className="text-xs text-zinc-500">No run files found for this route.</p>
           )}
         </div>
       )}

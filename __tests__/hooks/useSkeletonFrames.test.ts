@@ -48,6 +48,7 @@ function fakeAttempt() {
     state: "",
     area: "",
     route: "",
+    runType: "attempt" as const,
     frameCaptures: null,
   };
 }

@@ -16,7 +16,7 @@ const { isValidKey, isValidPrefix, awsErrorMessage, S3_PREFIX, getBucket } =
 
 describe("isValidKey", () => {
   it("accepts a well-formed key", () => {
-    expect(isValidKey(`${S3_PREFIX}/CO/RedRocks/Classic/attempt-1.json`)).toBe(true);
+    expect(isValidKey(`${S3_PREFIX}/CO/RedRocks/Classic/run-1-attempt.json`)).toBe(true);
   });
 
   it("rejects keys that don't start with the prefix", () => {

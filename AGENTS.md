@@ -39,7 +39,7 @@ hooks/           React hooks that wire pipeline modules to UI state
   usePoseVideo.ts  auto-renders annotated WebM from match result
 
 storage/
-  sessionStore.ts  in-memory Map; all ORB types re-exported from orbDetector
+  sessionStore.ts  in-memory Map; exports RunType, RouteAttempt (includes runType, rating?, notes?)
 
 utils/
   poseConstants.ts  KP indices, KP_NAMES, SKELETON_EDGES (MoveNet/COCO topology)
@@ -71,6 +71,14 @@ workers/         Legacy Web Worker files (keep, do not delete)
 ### TypeScript
 - `eslint-disable-next-line @typescript-eslint/no-explicit-any` is acceptable **only** for `type CV = any` and `type PoseDetector = any` (WASM bindings have no TS types).
 - Never use `any` elsewhere.
+
+### Run classification & S3 key format
+- `RouteAttempt.runType` is `"attempt" | "send"` (re-exported as `RunType`).
+- Optional `rating?: string` and `notes?: string` are stored alongside each run.
+- S3 key format: `RouteData/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
+- ID format: `run-{timestamp}` (without the type suffix).
+- Legacy `attempt-{timestamp}.json` files are still loadable — default `runType` to `"attempt"`.
+- UI colours: amber for attempts, emerald for sends.
 
 ### Testing
 - Test files mirror the source tree under `__tests__/`.
@@ -111,6 +119,12 @@ Fix TypeScript errors before proceeding. Do not disable tsc checks.
 
 **The agent MUST run `git add .`, `git commit -m "..."`, and `git push` automatically
 after every code change session without waiting to be asked.**
+
+### README maintenance
+- When a code change adds, removes, or renames user-visible features, pages,
+  storage formats, or API behaviour, update `README.md` in the same commit.
+- Keep the S3 key format example, Pages table, and feature summary in the README
+  consistent with the actual code.
 
 ---
 

@@ -15,7 +15,7 @@ import {
   estimateMissingLandmarks,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
-import { saveAttempt, type VideoMeta, type FrameCapture } from "@/storage/sessionStore";
+import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +39,7 @@ export interface VideoProcessorResult {
    * @param frameStep - Pose detection runs every N-th sampled frame.
    *                    Gaps are filled by filtering + linear interpolation.
    *                    Default: 5.
-   * @param meta      - Optional location metadata (state, area, route).
+   * @param meta      - Optional location + classification metadata.
    * @param cropOptions - Optional user-defined crop boxes and lighting hints.
    *                    `climberCrop`: box dimensions are preserved and
    *                    re-centered on the detected hip each frame.
@@ -54,7 +54,7 @@ export interface VideoProcessorResult {
     detector: PoseDetector,
     cv: CV,
     frameStep?: number,
-    meta?: { state: string; area: string; route: string },
+    meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
     cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> },
   ) => Promise<void>;
   status: ProcessingStatus;
@@ -95,7 +95,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       detector: PoseDetector,
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
-      meta: { state: string; area: string; route: string } = { state: "", area: "", route: "" },
+      meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
       cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
     ) => {
       abortRef.current = false;
@@ -146,7 +146,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           height: videoHeight,
         };
 
-        const id = `attempt-${Date.now()}`;
+        const id = `run-${Date.now()}`;
         let referenceImageData: ImageData | null = null;
 
         // Sparse detected frames + all timestamps for interpolation.
@@ -266,6 +266,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           state: meta.state,
           area: meta.area,
           route: meta.route,
+          runType: meta.runType ?? "attempt",
+          rating: meta.rating,
+          notes: meta.notes,
         });
         setAttemptId(id);
         setStatus("done");
@@ -306,6 +309,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               state: meta.state,
               area: meta.area,
               route: meta.route,
+              runType: meta.runType ?? "attempt",
+              rating: meta.rating,
+              notes: meta.notes,
             });
             referenceImageData = null; // allow GC
             setOrbStatus("ready");

@@ -17,7 +17,7 @@ export default function DocsPage() {
         </h1>
         <p className="mt-3 text-zinc-400 leading-relaxed">
           Bouldering Beta analyses a climbing video by extracting skeleton poses frame-by-frame,
-          then overlays the movement onto a route photo using computer vision. Processed attempts
+          then overlays the movement onto a route photo using computer vision. Processed runs
           can be saved to Amazon S3 for access across devices, or exported as local JSON files.
         </p>
 
@@ -96,7 +96,7 @@ export default function DocsPage() {
                   <td className="px-4 py-3">Cloud storage</td>
                   <td className="px-4 py-3 font-mono text-zinc-300">Amazon S3 (AWS SDK v3)</td>
                   <td className="px-4 py-3">
-                    Attempts saved under RouteData/state/area/route/
+                    Runs saved under RouteData/state/area/route/
                   </td>
                 </tr>
               </tbody>
@@ -114,7 +114,7 @@ export default function DocsPage() {
             <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-5 py-4">
               <p className="text-sm font-semibold text-zinc-200">1. Prepare your footage</p>
               <p className="mt-1.5 text-sm text-zinc-400 leading-relaxed">
-                Film your climbing attempt in portrait or landscape — either works. The camera
+                Film your climbing run in portrait or landscape — either works. The camera
                 should be stationary and include the entire wall section. For outdoor climbs,
                 zoom in as much as possible to improve pose accuracy.
               </p>
@@ -327,7 +327,7 @@ export default function DocsPage() {
             When you click <strong className="text-zinc-300">Save to cloud</strong>, only the
             processed JSON data (pose keypoints, ORB descriptors, and metadata) is uploaded to
             Amazon S3. The original video and route photo are never uploaded. You can also
-            save attempts to your local device as <code className="text-zinc-300">.json</code>{" "}
+            save runs to your local device as <code className="text-zinc-300">.json</code>{" "}
             files using the File System Access API.
           </p>
         </section>

@@ -6,7 +6,7 @@
  * or falling back — callers should guard with `"showDirectoryPicker" in window`.
  */
 
-import type { RouteAttempt } from "@/storage/sessionStore";
+import type { RouteAttempt, RunType } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,7 +17,7 @@ type FSDir = FileSystemDirectoryHandle & {
 };
 
 export interface AttemptEntry {
-  /** JSON file name, e.g. "attempt-1234567890.json" */
+  /** JSON file name, e.g. "run-1234567890-attempt.json" */
   name: string;
   /** Human-readable date/time label derived from the embedded timestamp. */
   label: string;
@@ -37,10 +37,23 @@ export function sanitizeDirName(name: string): string {
 }
 
 /**
- * Format an attempt filename as a human-readable date/time string.
+ * Format a run filename as a human-readable date/time string.
+ * Handles both legacy `attempt-{ts}.json` and current `run-{ts}-{type}.json`.
  * Falls back to the raw filename when no timestamp can be parsed.
  */
 export function attemptTimestampLabel(fileName: string): string {
+  // New format: run-{timestamp}-{attempt|send}.json
+  const m2 = fileName.match(/run-(\d+)(?:-\w+)?\.json/);
+  if (m2) {
+    return new Date(parseInt(m2[1], 10)).toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  // Legacy format: attempt-{timestamp}.json
   const m = fileName.match(/attempt-(\d+)\.json/);
   if (!m) return fileName;
   return new Date(parseInt(m[1], 10)).toLocaleString(undefined, {
@@ -50,6 +63,17 @@ export function attemptTimestampLabel(fileName: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Extract the run type ("attempt" or "send") from a filename.
+ * Returns "attempt" as the default for legacy filenames or when the type
+ * segment cannot be parsed.
+ */
+export function parseRunType(fileName: string): RunType {
+  const m = fileName.match(/run-\d+-(\w+)\.json/);
+  if (m && (m[1] === "attempt" || m[1] === "send")) return m[1];
+  return "attempt";
 }
 
 /** List all sub-directory names inside a directory handle, sorted alphabetically. */
@@ -113,5 +137,5 @@ export function loadAttemptFromJson(raw: unknown): RouteAttempt {
       orb.descriptors = new Uint8Array(orb.descriptors as number[]);
     }
   }
-  return { state: "", area: "", route: "", ...obj } as unknown as RouteAttempt;
+  return { state: "", area: "", route: "", runType: "attempt", ...obj } as unknown as RouteAttempt;
 }

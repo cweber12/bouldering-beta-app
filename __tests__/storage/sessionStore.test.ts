@@ -29,6 +29,7 @@ function makeAttempt(id: string, frameCount = 0): RouteAttempt {
     state: "",
     area: "",
     route: "",
+    runType: "attempt",
   };
 }
 

@@ -1,6 +1,6 @@
 # Bouldering Beta
 
-Analyse a climbing attempt in-browser using **MoveNet Lightning** pose estimation
+Analyse a climbing run in-browser using **MoveNet Lightning** pose estimation
 and **OpenCV.js** ORB feature matching — then save results to **Amazon S3** for
 access across devices.
 
@@ -8,6 +8,9 @@ The app records skeleton poses frame-by-frame from a video using MoveNet Lightni
 (TF.js WebGL), extracts **ORB reference features** (OpenCV.js WASM) from the first
 frame, then overlays the movement onto a static route photo via a perspective
 (homography) transform. The output is a downloadable **WebM** video.
+
+Each run is classified as an **attempt** (did not top) or a **send** (topped).
+Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any run.
 
 ## Pipeline
 
@@ -29,7 +32,7 @@ MoveNet Lightning runs on every sampled frame (indoor: every frame; outdoor: con
 | `/` | Choose Indoor or Outdoor mode |
 | `/upload` | Upload & process a climbing video |
 | `/match` | Match a route photo and download the pose overlay |
-| `/compare` | Compare multiple attempts side-by-side or overlaid |
+| `/compare` | Compare multiple runs side-by-side or overlaid |
 
 ## Interactive crop boxes
 
@@ -55,10 +58,12 @@ is unaffected.
 
 ## Cloud storage (S3)
 
-Processed attempts are stored in Amazon S3 under the key prefix
-`RouteData/{state}/{area}/{route}/{attempt-id}.json`. The upload, match, and
-compare pages all feature S3-backed dropdown pickers that list existing
-states → areas → routes → attempts directly from the bucket.
+Processed runs are stored in Amazon S3 under the key prefix
+`RouteData/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`. The
+upload, match, and compare pages all feature S3-backed dropdown pickers that
+list existing states → areas → routes → runs directly from the bucket.
+Attempts are highlighted in amber and sends in emerald throughout the UI.
+Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
 
 ### Environment variables
 
@@ -76,10 +81,10 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 
 | Route | Method | Purpose |
 |---|---|---|
-| `/api/s3/put` | POST | Upload attempt JSON |
-| `/api/s3/get` | GET | Download attempt JSON by key |
+| `/api/s3/put` | POST | Upload run JSON |
+| `/api/s3/get` | GET | Download run JSON by key |
 | `/api/s3/list` | GET | List objects/prefixes (pagination, delimiter) |
-| `/api/s3/delete` | DELETE | Remove an attempt |
+| `/api/s3/delete` | DELETE | Remove a run |
 
 ## Stack
 
@@ -116,7 +121,7 @@ npx eslint .
 ```
 pipeline/   Framework-agnostic processing modules (no React)
 hooks/      React hooks wiring pipeline modules to UI state
-storage/    In-memory session store (swappable backend)
+storage/    In-memory session store (swappable backend); exports RunType
 components/ Shared UI components (CropBoxOverlay, S3RoutePicker, ComboInput, …)
 app/        Next.js App Router pages and layout
 app/api/s3/ S3 route handlers (put, get, list, delete) + shared utilities

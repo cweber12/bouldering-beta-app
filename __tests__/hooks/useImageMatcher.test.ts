@@ -63,6 +63,7 @@ function fakeAttempt(nKp = 10) {
     frames: [],
     orbFeatures: orbResult(nKp),
     matchesPerFrame: null,
+    runType: "attempt" as const,
   };
 }
 

@@ -11,7 +11,7 @@ import { sanitizeDirName, serializeAttemptForJson, loadAttemptFromJson } from "@
 export type S3Status = "idle" | "loading" | "error";
 
 export interface S3AttemptEntry {
-  /** S3 object key, e.g. "RouteData/Colorado/RedRocks/TheClassic/attempt-1234.json" */
+  /** S3 object key, e.g. "RouteData/Colorado/RedRocks/TheClassic/run-1234-attempt.json" */
   key: string;
   /** Last-modified timestamp from S3, ISO string. */
   lastModified?: string;
@@ -44,7 +44,8 @@ function deriveS3Key(attempt: RouteAttempt): string {
   const state = sanitizeDirName(attempt.state || "Unknown State");
   const area  = sanitizeDirName(attempt.area  || "Unknown Area");
   const route = sanitizeDirName(attempt.route || "Unknown Route");
-  return `${KEY_PREFIX}/${state}/${area}/${route}/${attempt.id}.json`;
+  const runType = attempt.runType ?? "attempt";
+  return `${KEY_PREFIX}/${state}/${area}/${route}/${attempt.id}-${runType}.json`;
 }
 
 // ---------------------------------------------------------------------------

@@ -174,12 +174,22 @@ function MatchPageInner() {
 
       {/* Attempt data section */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
-        <p className="text-sm font-medium text-zinc-300">Attempt data</p>
+        <p className="text-sm font-medium text-zinc-300">Run data</p>
 
         {hasAttempt && (
           <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-mono text-zinc-300">{attempt.id}</span>
+              <span className="flex items-center gap-2 text-xs font-mono text-zinc-300">
+                {attempt.id}
+                <span className={[
+                  "rounded px-1.5 py-0.5 text-xs font-medium font-sans capitalize",
+                  attempt.runType === "send"
+                    ? "bg-emerald-900/40 text-emerald-400"
+                    : "bg-amber-900/40 text-amber-400",
+                ].join(" ")}>
+                  {attempt.runType ?? "attempt"}
+                </span>
+              </span>
               <span className="text-xs text-zinc-500">
                 {attempt.frames.length} pose frames &middot;{" "}
                 {attempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints
@@ -193,7 +203,7 @@ function MatchPageInner() {
         )}
 
         <S3RoutePicker
-          label={hasAttempt ? "Change attempt" : "Load attempt"}
+          label={hasAttempt ? "Change run" : "Load run"}
           onLoad={handleLoadAttempt}
         />
       </div>

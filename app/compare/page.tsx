@@ -142,6 +142,16 @@ function CompareSlot({
         />
         <span className="text-xs font-medium text-zinc-300">Run {slotIndex + 1}</span>
         {attempt && (
+          <span className={[
+            "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
+            attempt.runType === "send"
+              ? "bg-emerald-900/40 text-emerald-400"
+              : "bg-amber-900/40 text-amber-400",
+          ].join(" ")}>
+            {attempt.runType ?? "attempt"}
+          </span>
+        )}
+        {attempt && (
           <span className="ml-auto text-xs text-zinc-600">
             {attempt.frames.length} frames
           </span>

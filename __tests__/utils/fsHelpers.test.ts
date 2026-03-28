@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   sanitizeDirName,
   attemptTimestampLabel,
+  parseRunType,
   serializeAttemptForJson,
   loadAttemptFromJson,
 } from "@/utils/fsHelpers";
@@ -38,15 +39,49 @@ describe("sanitizeDirName", () => {
 // ---------------------------------------------------------------------------
 
 describe("attemptTimestampLabel", () => {
-  it("formats a valid attempt filename as a date string", () => {
+  it("formats a valid legacy attempt filename as a date string", () => {
     const label = attemptTimestampLabel("attempt-1700000000000.json");
     // Just check it's not the raw filename and contains a year
     expect(label).not.toBe("attempt-1700000000000.json");
     expect(label).toMatch(/2023/);
   });
 
+  it("formats a new-format run filename as a date string", () => {
+    const label = attemptTimestampLabel("run-1700000000000-attempt.json");
+    expect(label).not.toBe("run-1700000000000-attempt.json");
+    expect(label).toMatch(/2023/);
+  });
+
+  it("formats a send filename as a date string", () => {
+    const label = attemptTimestampLabel("run-1700000000000-send.json");
+    expect(label).not.toBe("run-1700000000000-send.json");
+    expect(label).toMatch(/2023/);
+  });
+
   it("returns the raw filename when no timestamp is found", () => {
     expect(attemptTimestampLabel("notes.txt")).toBe("notes.txt");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseRunType
+// ---------------------------------------------------------------------------
+
+describe("parseRunType", () => {
+  it("parses 'attempt' from new-format filename", () => {
+    expect(parseRunType("run-1234-attempt.json")).toBe("attempt");
+  });
+
+  it("parses 'send' from new-format filename", () => {
+    expect(parseRunType("run-1234-send.json")).toBe("send");
+  });
+
+  it("defaults to 'attempt' for legacy filenames", () => {
+    expect(parseRunType("attempt-1234.json")).toBe("attempt");
+  });
+
+  it("defaults to 'attempt' for unrecognised filenames", () => {
+    expect(parseRunType("notes.txt")).toBe("attempt");
   });
 });
 
@@ -69,6 +104,7 @@ function makeAttempt(overrides?: Partial<RouteAttempt>): RouteAttempt {
     state: "Colorado",
     area: "Red Rocks",
     route: "The Classic",
+    runType: "attempt",
     frameCaptures: null,
     ...overrides,
   } as RouteAttempt;
@@ -130,11 +166,12 @@ describe("loadAttemptFromJson", () => {
     expect(attempt.orbFeatures).toBeNull();
   });
 
-  it("defaults state/area/route to empty strings when missing", () => {
+  it("defaults state/area/route/runType when missing", () => {
     const attempt = loadAttemptFromJson({ id: "a", frames: [] });
     expect(attempt.state).toBe("");
     expect(attempt.area).toBe("");
     expect(attempt.route).toBe("");
+    expect(attempt.runType).toBe("attempt");
   });
 
   it("throws for null input", () => {

@@ -48,6 +48,7 @@ function fakeInput(id = "attempt-1", matchCount = 10): MultiPoseInput {
       state: "CA",
       area: "Yosemite",
       route: "test-route",
+      runType: "attempt" as const,
       frameCaptures: null,
     },
     matchResult: {
