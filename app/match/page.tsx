@@ -177,28 +177,43 @@ function MatchPageInner() {
         <p className="text-sm font-medium text-zinc-300">Run data</p>
 
         {hasAttempt && (
-          <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="flex items-center gap-2 text-xs font-mono text-zinc-300">
-                {attempt.id}
-                <span className={[
-                  "rounded px-1.5 py-0.5 text-xs font-medium font-sans capitalize",
-                  attempt.runType === "send"
-                    ? "bg-emerald-900/40 text-emerald-400"
-                    : "bg-amber-900/40 text-amber-400",
-                ].join(" ")}>
-                  {attempt.runType ?? "attempt"}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between rounded-lg border border-zinc-700 bg-zinc-950 px-4 py-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-2 text-xs font-mono text-zinc-300">
+                  {attempt.id}
+                  <span className={[
+                    "rounded px-1.5 py-0.5 text-xs font-medium font-sans capitalize",
+                    attempt.runType === "send"
+                      ? "bg-emerald-900/40 text-emerald-400"
+                      : "bg-amber-900/40 text-amber-400",
+                  ].join(" ")}>
+                    {attempt.runType ?? "attempt"}
+                  </span>
+                  {attempt.rating && (
+                    <span className="rounded px-1.5 py-0.5 text-xs font-medium font-sans bg-zinc-800 text-zinc-300">
+                      {attempt.rating}
+                    </span>
+                  )}
                 </span>
-              </span>
-              <span className="text-xs text-zinc-500">
-                {attempt.frames.length} pose frames &middot;{" "}
-                {attempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints
-                {attempt.state && ` \u00b7 ${attempt.state}`}
-                {attempt.area && ` \u203a ${attempt.area}`}
-                {attempt.route && ` \u203a ${attempt.route}`}
-              </span>
+                <span className="text-xs text-zinc-500">
+                  {attempt.frames.length} pose frames &middot;{" "}
+                  {attempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints
+                  {attempt.videoMeta?.duration != null && (
+                    <> &middot; {Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</>
+                  )}
+                  {attempt.state && ` \u00b7 ${attempt.state}`}
+                  {attempt.area && ` \u203a ${attempt.area}`}
+                  {attempt.route && ` \u203a ${attempt.route}`}
+                </span>
+              </div>
+              <span className="text-xs font-medium text-emerald-400">Loaded</span>
             </div>
-            <span className="text-xs font-medium text-emerald-400">Loaded</span>
+            {attempt.notes && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-4 py-2.5">
+                <p className="text-xs text-zinc-500">{attempt.notes}</p>
+              </div>
+            )}
           </div>
         )}
 

@@ -151,12 +151,26 @@ function CompareSlot({
             {attempt.runType ?? "attempt"}
           </span>
         )}
+        {attempt?.rating && (
+          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-zinc-800 text-zinc-300">
+            {attempt.rating}
+          </span>
+        )}
         {attempt && (
           <span className="ml-auto text-xs text-zinc-600">
             {attempt.frames.length} frames
+            {attempt.videoMeta?.duration != null && (
+              <> &middot; {Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</>
+            )}
           </span>
         )}
       </div>
+
+      {attempt?.notes && (
+        <div className="rounded border border-zinc-800 bg-zinc-950/50 px-3 py-1.5">
+          <p className="text-xs text-zinc-500">{attempt.notes}</p>
+        </div>
+      )}
 
       {!attempt && (
         <p className="text-xs text-zinc-600 italic">No run loaded</p>

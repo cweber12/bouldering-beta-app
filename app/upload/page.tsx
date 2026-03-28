@@ -120,6 +120,7 @@ function UploadPageInner() {
   const [locationWarning, setLocationWarning] = useState(false);
   const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [conditions, setConditions] = useState<Set<string>>(new Set());
+  const [newFileSelected, setNewFileSelected] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
@@ -179,7 +180,7 @@ function UploadPageInner() {
   // Persist the attempt id into session so user can return from match page.
   const activeAttemptId = isDone ? attemptId : restoredAttempt?.id ?? null;
   const activeAttempt   = activeAttemptId ? getAttempt(activeAttemptId) : null;
-  const showResults     = (isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing);
+  const showResults     = !newFileSelected && ((isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing));
 
   useEffect(() => {
     if (isDone && attemptId) {
@@ -214,6 +215,9 @@ function UploadPageInner() {
     setActiveCropMode("climber");
     setHasCropFrame(false);
     setS3Saved(false);
+    setSaveError(null);
+    setSavedRouteDirHandle(null);
+    setNewFileSelected(true);
   }
 
   function handleCropVideoLoaded() {
@@ -271,6 +275,7 @@ function UploadPageInner() {
   function startProcessing() {
     if (!pendingFile || !model || !cv) return;
     setShowCropWarning(false);
+    setNewFileSelected(false);
     process(pendingFile, model, cv, frameStep, { state, area, route, runType, rating: rating || undefined, notes: notes || undefined }, {
       climberCrop,
       orbCrop,
@@ -528,7 +533,7 @@ function UploadPageInner() {
     </div>
   );
 
-  const sidebarSection = pendingFile || showResults ? (
+  const sidebarSection = pendingFile && !isProcessing && !showResults ? (
     <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-4">
       {/* Location metadata */}
       <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 flex flex-col gap-4">
