@@ -1,14 +1,13 @@
 ﻿"use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { usePoseVideo } from "@/hooks/usePoseVideo";
-import { computeHomography } from "@/pipeline/homography";
-import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
+import { useMultiPoseVideo, type MultiPoseInput } from "@/hooks/useMultiPoseVideo";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 
@@ -18,13 +17,12 @@ import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 
 type ViewMode = "sidebyside" | "overlay";
 
-// Per-attempt accent colors (limb, joint)
-const SLOT_COLORS: Array<{ limb: string; joint: string; label: string }> = [
-  { limb: "rgba(0,210,115,0.82)", joint: "rgba(255,215,0,0.9)", label: "Attempt 1" },
-  { limb: "rgba(56,189,248,0.82)", joint: "rgba(255,255,255,0.9)", label: "Attempt 2" },
-  { limb: "rgba(251,146,60,0.82)", joint: "rgba(255,255,255,0.9)", label: "Attempt 3" },
-  { limb: "rgba(192,132,252,0.82)", joint: "rgba(255,255,255,0.9)", label: "Attempt 4" },
-];
+/**
+ * Default limb colors for new slots (hex, accepted by CSS and SkeletonStyle).
+ * Each slot index gets a visually distinct color from the start.
+ */
+const DEFAULT_LIMB_COLORS = ["#00d273", "#38bdf8", "#fb923c", "#c084fc"];
+const JOINT_COLOR = "rgba(255,255,255,0.9)";
 
 // ---------------------------------------------------------------------------
 // Per-attempt render slot (owns its own hooks)
@@ -40,15 +38,29 @@ interface SlotProps {
   imageCrop: CropFraction;
   matchTrigger: number;
   cv: CV;
+  limbColor: string;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
 }
 
-function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, cv, onMatchResult }: SlotProps) {
-  const colors = SLOT_COLORS[slotIndex];
+function CompareSlot({
+  slotIndex,
+  attempt,
+  imageFile,
+  imageCrop,
+  matchTrigger,
+  cv,
+  limbColor,
+  onMatchResult,
+}: SlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
-  const { videoUrl, status: videoStatus, renderProgress } =
-    usePoseVideo(cv, imageFile, attempt?.id ?? null, matchResult);
+  const { videoUrl, status: videoStatus, renderProgress } = usePoseVideo(
+    cv,
+    imageFile,
+    attempt?.id ?? null,
+    matchResult,
+    { limbColor, jointColor: JOINT_COLOR },
+  );
 
   // Notify parent when match result changes
   useEffect(() => {
@@ -69,14 +81,14 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
   return (
     <div
       className="flex flex-col gap-3 rounded-xl border border-zinc-800 bg-zinc-900 p-4"
-      style={{ borderTopColor: colors.limb, borderTopWidth: 2 }}
+      style={{ borderTopColor: limbColor, borderTopWidth: 2 }}
     >
       <div className="flex items-center gap-2">
         <span
           className="h-2 w-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: colors.limb }}
+          style={{ backgroundColor: limbColor }}
         />
-        <span className="text-xs font-medium text-zinc-300">{colors.label}</span>
+        <span className="text-xs font-medium text-zinc-300">Attempt {slotIndex + 1}</span>
         {attempt && (
           <span className="ml-auto text-xs text-zinc-600">
             {attempt.frames.length} frames
@@ -101,7 +113,7 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
           <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
             <div
               className="h-full rounded-full transition-all duration-150"
-              style={{ width: `${renderProgress}%`, backgroundColor: colors.limb }}
+              style={{ width: `${renderProgress}%`, backgroundColor: limbColor }}
             />
           </div>
         </div>
@@ -135,90 +147,99 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
 }
 
 // ---------------------------------------------------------------------------
-// Overlay canvas: composite static frame from all matched attempts
+// Overlay video: composite animation of all matched attempts simultaneously
 // ---------------------------------------------------------------------------
 
-interface OverlayCanvasProps {
-  imageFile: File | null;
-  matchResults: (ImageMatchResult | null)[];
-  attempts: (RouteAttempt | null)[];
+interface OverlayVideoProps {
   cv: CV;
+  imageFile: File;
+  attempts: (RouteAttempt | null)[];
+  matchResults: (ImageMatchResult | null)[];
+  slotColors: string[];
 }
 
-function OverlayCanvas({ imageFile, matchResults, attempts, cv }: OverlayCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [rendered, setRendered] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+function OverlayVideo({
+  cv,
+  imageFile,
+  attempts,
+  matchResults,
+  slotColors,
+}: OverlayVideoProps) {
+  const inputs = useMemo<MultiPoseInput[]>(
+    () =>
+      attempts
+        .map((att, i): MultiPoseInput | null =>
+          att && matchResults[i]
+            ? {
+                attempt: att,
+                matchResult: matchResults[i]!,
+                skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR },
+              }
+            : null,
+        )
+        .filter((x): x is MultiPoseInput => x !== null),
+    [attempts, matchResults, slotColors],
+  );
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !imageFile || !cv) return;
+  const { videoUrl, status, errorMessage, renderProgress } = useMultiPoseVideo(
+    cv,
+    imageFile,
+    inputs,
+  );
 
-    const readyPairs = attempts
-      .map((att, i) => ({ att, mr: matchResults[i] }))
-      .filter((p): p is { att: RouteAttempt; mr: ImageMatchResult } => !!p.att && !!p.mr);
-
-    if (readyPairs.length === 0) {
-      // Defer state update to avoid calling setState synchronously inside an effect
-      const id = setTimeout(() => setRendered(false), 0);
-      return () => clearTimeout(id);
-    }
-
-    const img = new Image();
-    const url = URL.createObjectURL(imageFile);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      try {
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.drawImage(img, 0, 0);
-
-        for (let i = 0; i < readyPairs.length; i++) {
-          const { att, mr } = readyPairs[i];
-          const colors = SLOT_COLORS[attempts.indexOf(att)] ?? SLOT_COLORS[0];
-          const h = computeHomography(cv, mr.matches, att.orbFeatures!, mr.queryOrb);
-          if (!h) continue;
-
-          // Pick the middle frame of the attempt
-          const frame = att.frames[Math.floor(att.frames.length / 2)];
-          if (!frame) continue;
-
-          const kp = buildTransformedKeypoints(
-            frame, h,
-            att.videoMeta.width, att.videoMeta.height,
-          );
-          drawSkeleton(ctx, kp, { limbColor: colors.limb, jointColor: colors.joint });
-        }
-        setRendered(true);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Overlay failed.");
-      }
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); setError("Could not load route image."); };
-    img.src = url;
-  }, [imageFile, matchResults, attempts, cv]);
-
-  if (error) {
-    return <p className="text-sm text-red-400">{error}</p>;
+  if (status === "idle") {
+    return (
+      <p className="text-xs text-zinc-500 italic">
+        Overlay will appear here once at least one attempt has been matched.
+      </p>
+    );
   }
 
-  return (
-    <div className="flex flex-col gap-2">
-      {!rendered && (
-        <p className="text-xs text-zinc-500 italic">
-          Overlay will appear here once at least one attempt has been matched.
-        </p>
-      )}
-      <canvas
-        ref={canvasRef}
-        className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
-        aria-label="Skeleton overlay composite"
-      />
-    </div>
-  );
+  if (status === "rendering") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between text-xs text-zinc-500">
+          <span>Rendering overlay&#8230;</span>
+          <span>{renderProgress}%</span>
+        </div>
+        <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
+          <div
+            className="h-full rounded-full bg-zinc-400 transition-all duration-150"
+            style={{ width: `${renderProgress}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "error") {
+    return <p className="text-sm text-red-400">{errorMessage}</p>;
+  }
+
+  if (status === "ready" && videoUrl) {
+    return (
+      <div className="flex flex-col gap-2">
+        <video
+          src={videoUrl}
+          controls
+          loop
+          playsInline
+          muted
+          className="w-full rounded-xl border border-zinc-700 bg-zinc-950"
+          aria-label="Skeleton overlay composite video"
+        />
+        <a
+          href={videoUrl}
+          download="overlay-composite.webm"
+          className="text-center text-xs text-zinc-500 hover:text-zinc-300 transition"
+        >
+          Download .webm
+        </a>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +261,12 @@ function ComparePageInner() {
   const [viewMode, setViewMode] = useState<ViewMode>("sidebyside");
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
+  );
+
+  // One hex limb color per slot; pre-populated from defaults so each slot
+  // starts with a distinct color and duplicates are avoided by default.
+  const [slotColors, setSlotColors] = useState<string[]>(
+    () => [...DEFAULT_LIMB_COLORS],
   );
 
   // Crop box for ORB detection on the shared route photo.
@@ -266,6 +293,14 @@ function ComparePageInner() {
     setAttempts(prev => {
       const next = [...prev];
       next[idx] = attempt;
+      return next;
+    });
+  }
+
+  function handleColorChange(idx: number, hex: string) {
+    setSlotColors((prev) => {
+      const next = [...prev];
+      next[idx] = hex;
       return next;
     });
   }
@@ -330,7 +365,7 @@ function ComparePageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo"
-                className="max-h-48 w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
+                className="max-h-[32rem] w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
               />
               <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
             </div>
@@ -353,7 +388,7 @@ function ComparePageInner() {
           <img
             src={imagePreviewUrl}
             alt="Route photo"
-            className="max-h-48 w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
+            className="max-h-[32rem] w-full rounded-xl border border-zinc-700 bg-zinc-900 object-contain"
           />
         )}
       </div>
@@ -392,50 +427,82 @@ function ComparePageInner() {
           )}
         </div>
 
-        {Array.from({ length: slotCount }, (_, i) => (
-          <div key={i} className="flex flex-col gap-2">
-            <S3RoutePicker
-              label={attempts[i] ? `Change ${SLOT_COLORS[i].label}` : `Load ${SLOT_COLORS[i].label}`}
-              onLoad={att => handleLoadAttempt(i, att)}
-              compact
-            />
-            {attempts[i] && (
-              <CompareSlot
-                slotIndex={i}
-                attempt={attempts[i]}
-                imageFile={imageFile}
-                imageCrop={imageCrop}
-                matchTrigger={matchTrigger}
-                cv={cv}
-                onMatchResult={handleMatchResult}
-              />
-            )}
-          </div>
-        ))}
+        {/* In side-by-side mode render slots in a 2-column grid so both are
+            visible simultaneously. In overlay mode keep them stacked. */}
+        <div
+          className={
+            viewMode === "sidebyside"
+              ? "grid grid-cols-1 gap-4 sm:grid-cols-2"
+              : "flex flex-col gap-4"
+          }
+        >
+          {Array.from({ length: slotCount }, (_, i) => (
+            <div key={i} className="flex flex-col gap-2">
+              {/* Color picker + route loader row */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={slotColors[i]}
+                  onChange={(e) => handleColorChange(i, e.target.value)}
+                  className="h-7 w-7 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+                  title={`Attempt ${i + 1} skeleton color`}
+                  aria-label={`Attempt ${i + 1} skeleton color`}
+                />
+                <div className="min-w-0 flex-1">
+                  <S3RoutePicker
+                    label={
+                      attempts[i]
+                        ? `Change Attempt ${i + 1}`
+                        : `Load Attempt ${i + 1}`
+                    }
+                    onLoad={(att) => handleLoadAttempt(i, att)}
+                    compact
+                  />
+                </div>
+              </div>
+              {attempts[i] && (
+                <CompareSlot
+                  slotIndex={i}
+                  attempt={attempts[i]}
+                  imageFile={imageFile}
+                  imageCrop={imageCrop}
+                  matchTrigger={matchTrigger}
+                  cv={cv}
+                  limbColor={slotColors[i]}
+                  onMatchResult={handleMatchResult}
+                />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Overlay mode result */}
       {viewMode === "overlay" && imageFile && anyLoaded && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-zinc-300">Overlay (middle frame per attempt)</p>
+          <p className="text-sm font-medium text-zinc-300">
+            Overlay (all skeletons simultaneously)
+          </p>
+          {/* Color legend */}
           <div className="flex flex-wrap gap-3 text-xs">
             {attempts.slice(0, slotCount).map((att, i) =>
               att ? (
                 <span key={i} className="flex items-center gap-1.5 text-zinc-400">
                   <span
                     className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: SLOT_COLORS[i].limb }}
+                    style={{ backgroundColor: slotColors[i] }}
                   />
-                  {SLOT_COLORS[i].label}: {att.route || att.id}
+                  Attempt {i + 1}: {att.route || att.id}
                 </span>
               ) : null,
             )}
           </div>
-          <OverlayCanvas
+          <OverlayVideo
             imageFile={imageFile}
             matchResults={matchResults.slice(0, slotCount)}
             attempts={attempts.slice(0, slotCount)}
             cv={cv}
+            slotColors={slotColors.slice(0, slotCount)}
           />
         </div>
       )}
