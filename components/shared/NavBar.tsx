@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
+import InfoDropdown from "@/components/shared/InfoDropdown";
 
 const PUBLIC_TABS = [
   { href: "/", label: "Home" },
@@ -224,23 +225,18 @@ export default function NavBar() {
         {/* Help panel dropdown */}
         {helpOpen && helpSections.length > 0 && (
           <div className="absolute left-0 right-0 top-full z-40 border-b border-zinc-800 bg-zinc-950 shadow-xl">
-            <div className="max-h-[60vh] overflow-y-auto px-6 py-5">
-              <div className="grid gap-6 sm:grid-cols-2">
-                {helpSections.map(section => (
-                  <div key={section.title} className="flex flex-col gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-                      {section.title}
-                    </p>
-                    <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-                      {section.bullets.map((bullet, j) => (
-                        <li key={j} className="text-xs text-zinc-500 leading-relaxed">
-                          {bullet}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
+            <div className="px-6 py-5 flex flex-col gap-3">
+              {helpSections.map(section => (
+                <InfoDropdown key={section.title} title={section.title}>
+                  <ul className="flex flex-col gap-1.5 pl-4 list-disc">
+                    {section.bullets.map((bullet, j) => (
+                      <li key={j} className="text-xs text-zinc-500 leading-relaxed">
+                        {bullet}
+                      </li>
+                    ))}
+                  </ul>
+                </InfoDropdown>
+              ))}
             </div>
           </div>
         )}

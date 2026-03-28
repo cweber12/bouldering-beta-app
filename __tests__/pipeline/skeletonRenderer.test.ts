@@ -165,7 +165,7 @@ describe("buildSkeletonFrames", () => {
     expect(computeHomography).toHaveBeenCalledWith(mockCv, matches, orb, queryOrb);
   });
 
-  it("defaults to 30 fps when targetFps is omitted", () => {
+  it("defaults to 60 fps when targetFps is omitted", () => {
     const result = buildSkeletonFrames({
       cv: mockCv,
       frames: [makePoseFrame(0), makePoseFrame(1)],
@@ -175,9 +175,9 @@ describe("buildSkeletonFrames", () => {
       matches: fakeMatches(10),
     });
 
-    expect(result.fps).toBe(30);
-    // 1s at 30fps → ceil(30)+1 = 31 frames
-    expect(result.frames).toHaveLength(31);
+    expect(result.fps).toBe(60);
+    // 1s at 60fps → ceil(60)+1 = 61 frames
+    expect(result.frames).toHaveLength(61);
   });
 });
 

@@ -118,7 +118,7 @@ function MatchPageInner() {
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
         skeletonStyle: styleRef.current,
-        targetFps: 30,
+        targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
 
@@ -199,9 +199,8 @@ function MatchPageInner() {
         )}
 
         <S3RoutePicker
-          label={hasAttempt ? "Change climb" : "Load climb"}
           onLoad={handleLoadAttempt}
-          pulseButtons={!hasAttempt}
+          alwaysOpen
         />
       </div>
 

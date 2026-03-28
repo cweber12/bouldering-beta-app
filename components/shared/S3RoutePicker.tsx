@@ -214,6 +214,8 @@ interface S3RoutePickerProps {
   defaultRoute?: string;
   /** When true, pulse the entry buttons to indicate this is the next required action. */
   pulseButtons?: boolean;
+  /** When true, the S3 panel opens automatically and the S3 load button is hidden. */
+  alwaysOpen?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,11 +237,18 @@ export default function S3RoutePicker({
   defaultArea,
   defaultRoute,
   pulseButtons = false,
+  alwaysOpen = false,
 }: S3RoutePickerProps) {
   const { listPrefixes, listAttempts, downloadAttempt, userPrefix, status } = useS3Storage();
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(alwaysOpen);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-open on mount when alwaysOpen and auth is ready.
+  useEffect(() => {
+    if (alwaysOpen && userPrefix) handleOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alwaysOpen, userPrefix]);
 
   const [stateNames, setStateNames] = useState<string[]>([]);
   const [selectedState, setSelectedState] = useState("");
@@ -417,6 +426,22 @@ export default function S3RoutePicker({
         const attempt = loadAttemptFromJson(JSON.parse(ev.target?.result as string));
         saveAttempt(attempt);
         onLoad(attempt);
+        // Populate dropdowns with the loaded attempt's route data.
+        if (attempt.state) {
+          setSelectedState(attempt.state);
+          if (!stateNames.includes(attempt.state))
+            setStateNames(prev => [...prev, attempt.state!].sort());
+        }
+        if (attempt.area) {
+          setSelectedArea(attempt.area);
+          if (!areaNames.includes(attempt.area))
+            setAreaNames(prev => [...prev, attempt.area!].sort());
+        }
+        if (attempt.route) {
+          setSelectedRoute(attempt.route);
+          if (!routeNames.includes(attempt.route))
+            setRouteNames(prev => [...prev, attempt.route!].sort());
+        }
       } catch {
         setError("Could not parse the attempt JSON file.");
       }
@@ -431,22 +456,24 @@ export default function S3RoutePicker({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-3">
-        <button
-          onClick={handleOpen}
-          className={[
-            "flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200",
-            pulseButtons && !open ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : "",
-          ].join(" ")}
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-          </svg>
-          {label}
-        </button>
+        {!alwaysOpen && (
+          <button
+            onClick={handleOpen}
+            className={[
+              "flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200",
+              pulseButtons && !open ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : "",
+            ].join(" ")}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+            </svg>
+            {label}
+          </button>
+        )}
 
         <label className={[
           "flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200",
-          pulseButtons && !open ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : "",
+          !alwaysOpen && pulseButtons && !open ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : "",
         ].join(" ")}>
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -468,23 +495,23 @@ export default function S3RoutePicker({
 
           {stateNames.length > 0 && (
             <div className={compact ? "grid grid-cols-3 gap-2" : "grid grid-cols-1 gap-3 sm:grid-cols-3"}>
-              <div className={["flex flex-col gap-1.5 rounded-lg", !selectedState ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
+              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-zinc-400">State / Region</label>
-                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={selectClass}>
+                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={[selectClass, !selectedState ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
                   <option value="">— select —</option>
                   {stateNames.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
-              <div className={["flex flex-col gap-1.5 rounded-lg", selectedState && !selectedArea ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
+              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-zinc-400">Area</label>
-                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={selectClass}>
+                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={[selectClass, selectedState && !selectedArea ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
                   <option value="">— select —</option>
                   {areaNames.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
-              <div className={["flex flex-col gap-1.5 rounded-lg", selectedArea && !selectedRoute ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
+              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-zinc-400">Route</label>
-                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={selectClass}>
+                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={[selectClass, selectedArea && !selectedRoute ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
                   <option value="">— select —</option>
                   {routeNames.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>

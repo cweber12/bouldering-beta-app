@@ -55,7 +55,7 @@ export interface BuildSkeletonFramesParams {
   orbFeatures: OrbFeatures;
   queryOrb: OrbFeatures;
   matches: OrbMatch[];
-  /** Output frame rate. Default 30. */
+  /** Output frame rate. Default 60. */
   targetFps?: number;
 }
 
@@ -71,7 +71,7 @@ export function buildSkeletonFrames({
   orbFeatures,
   queryOrb,
   matches,
-  targetFps = 30,
+  targetFps = 60,
 }: BuildSkeletonFramesParams): SkeletonFrameData {
   const h = computeHomography(cv, matches, orbFeatures, queryOrb);
   if (!h) {
@@ -127,7 +127,7 @@ export interface MultiSkeletonLayerInput {
 export interface BuildMultiSkeletonFramesParams {
   cv: CV;
   layers: MultiSkeletonLayerInput[];
-  /** Output frame rate. Default 30. */
+  /** Output frame rate. Default 60. */
   targetFps?: number;
 }
 
@@ -140,7 +140,7 @@ export interface BuildMultiSkeletonFramesParams {
 export function buildMultiSkeletonFrames({
   cv,
   layers,
-  targetFps = 30,
+  targetFps = 60,
 }: BuildMultiSkeletonFramesParams): MultiSkeletonFrameData {
   if (layers.length === 0) {
     throw new Error("buildMultiSkeletonFrames: at least one layer is required.");

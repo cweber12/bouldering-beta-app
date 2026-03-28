@@ -111,7 +111,7 @@ function CompareSlot({
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
         skeletonStyle: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
-        targetFps: 30,
+        targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
       const a = document.createElement("a");
@@ -307,7 +307,7 @@ function OverlayPlayer({
         cv,
         imageFile,
         layers: layerInputs,
-        targetFps: 30,
+        targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
       const a = document.createElement("a");

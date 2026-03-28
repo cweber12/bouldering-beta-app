@@ -33,7 +33,7 @@ export function useSkeletonFrames(
   cv: CV,
   attemptId: string | null,
   matchResult: ImageMatchResult | null,
-  targetFps = 30,
+  targetFps = 60,
 ): SkeletonFrameResult {
   const [data, setData] = useState<SkeletonFrameData | null>(null);
   const [status, setStatus] = useState<SkeletonFrameStatus>("idle");
