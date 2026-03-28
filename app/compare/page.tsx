@@ -656,7 +656,7 @@ function ComparePageInner() {
                   title={`Climb ${i + 1} skeleton color`}
                   aria-label={`Climb ${i + 1} skeleton color`}
                 />
-                <div className={["min-w-0 flex-1", i === 0 && imageFile && !anyLoaded ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse rounded-xl" : ""].join(" ")}>
+                <div className="min-w-0 flex-1">
                   <S3RoutePicker
                     label={
                       attempts[i]
@@ -668,6 +668,7 @@ function ComparePageInner() {
                     defaultState={defaultState}
                     defaultArea={defaultArea}
                     defaultRoute={defaultRoute}
+                    pulseButtons={i === 0 && !!imageFile && !anyLoaded}
                   />
                 </div>
               </div>
