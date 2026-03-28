@@ -126,6 +126,9 @@ function UploadPageInner() {
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
   const [hasCropFrame, setHasCropFrame] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const cropVideoRef = useRef<HTMLVideoElement>(null);
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -223,6 +226,25 @@ function UploadPageInner() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
     setHasCropFrame(true);
+    setVideoDuration(video.duration || 0);
+  }
+
+  function formatVideoTime(secs: number): string {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  }
+
+  function handleVideoPlayPause() {
+    const video = cropVideoRef.current;
+    if (!video) return;
+    if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
+  }
+
+  function handleVideoSeek(e: React.ChangeEvent<HTMLInputElement>) {
+    const video = cropVideoRef.current;
+    if (!video) return;
+    video.currentTime = Number(e.target.value);
   }
 
   function isCropDefault(crop: CropFraction): boolean {
@@ -373,28 +395,63 @@ function UploadPageInner() {
             </p>
           </div>
 
-          {/* Video player — standalone with native controls fully accessible */}
-          <video
-            ref={cropVideoRef}
-            src={videoPreviewUrl}
-            controls
-            muted
-            playsInline
-            onLoadedData={handleCropVideoLoaded}
-            className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
-          />
-
-          {/* Crop editor — overlaid on a static canvas of the first frame so controls are never blocked */}
-          <div className={hasCropFrame ? "relative w-full" : "hidden"}>
-            <canvas
-              ref={cropCanvasRef}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+          {/* Video with crop overlay on top */}
+          <div className="relative w-full rounded-xl overflow-hidden border border-zinc-700 bg-zinc-900">
+            <video
+              ref={cropVideoRef}
+              src={videoPreviewUrl}
+              muted
+              playsInline
+              onLoadedData={handleCropVideoLoaded}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onTimeUpdate={() => setVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0)}
+              onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
+              className="w-full block"
             />
-            <CropBoxOverlay
-              box={activeCropMode === "climber" ? climberCrop : orbCrop}
-              onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
-            />
+            {hasCropFrame && (
+              <CropBoxOverlay
+                box={activeCropMode === "climber" ? climberCrop : orbCrop}
+                onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
+              />
+            )}
+            <canvas ref={cropCanvasRef} className="hidden" />
           </div>
+
+          {/* Video controls — below the overlay so they are never covered */}
+          {hasCropFrame && (
+            <div className="flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2">
+              <button
+                onClick={handleVideoPlayPause}
+                className="shrink-0 rounded p-1 text-zinc-400 transition hover:text-zinc-100"
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={videoDuration || 1}
+                step={0.01}
+                value={videoCurrentTime}
+                onChange={handleVideoSeek}
+                className="flex-1 accent-zinc-400"
+                aria-label="Video progress"
+              />
+              <span className="shrink-0 font-mono text-xs text-zinc-500">
+                {formatVideoTime(videoCurrentTime)} / {formatVideoTime(videoDuration)}
+              </span>
+            </div>
+          )}
 
           {/* Frame step slider */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3 flex flex-col gap-2">
@@ -608,36 +665,37 @@ function UploadPageInner() {
 
       {/* Info dropdowns */}
       <div className="flex flex-col gap-3">
-        <InfoDropdown title="How to film your climb">
+        <InfoDropdown title="What this page does">
           <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>Mount the camera on a <strong className="text-zinc-300">tripod or fixed surface</strong> � a moving camera makes the homography fail.</li>
-            <li>Ensure the <strong className="text-zinc-300">entire route and climber are visible</strong> throughout the clip.</li>
-            <li>No one should pass between the camera and the climber while filming.</li>
-            <li>Film in the <strong className="text-zinc-300">best light available</strong> � direct harsh sun or deep shade both reduce pose accuracy.</li>
-            <li>Keep the clip short: only the section with the climbing attempt is needed.</li>
+            <li>Upload a climbing video and this page <strong className="text-zinc-300">analyses it entirely in your browser</strong> — nothing is sent to a third-party server.</li>
+            <li>A pose-detection AI (<strong className="text-zinc-300">MoveNet Lightning</strong>) tracks your skeleton joint-by-joint on every sampled frame of the video.</li>
+            <li><strong className="text-zinc-300">ORB feature matching</strong> simultaneously memorises the unique texture of the wall from the first video frame.</li>
+            <li>The result is a compact <code className="text-zinc-300">.json</code> file you take to the <strong className="text-zinc-300">Match page</strong> to overlay your movement onto a still route photo.</li>
           </ul>
         </InfoDropdown>
-        <InfoDropdown title="How to crop the climber">
+        <InfoDropdown title="Entering route information">
           <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>The <strong className="text-zinc-300">Climber crop</strong> tells the detector which part of the frame to analyse.</li>
-            <li>Make the box <strong className="text-zinc-300">wide enough to contain every move</strong> including the next hold the climber will reach.</li>
-            <li>The box is automatically re-centred on the climber&apos;s hips each frame, so it will follow the movement.</li>
-            <li>A too-tight crop risks losing the climber between frames; a full-frame crop reduces pose accuracy on small-in-frame subjects.</li>
+            <li><strong className="text-zinc-300">State / Region, Area, and Route</strong> organise saved runs so they group correctly when loaded on the Match and Compare pages.</li>
+            <li>Set <strong className="text-zinc-300">Run type</strong> to <em>Attempt</em> if you did not top the route, or <em>Send</em> if you completed it — shown as a coloured badge throughout the app.</li>
+            <li><strong className="text-zinc-300">Grade / Rating</strong> and <strong className="text-zinc-300">Notes</strong> are optional — add them to help identify and compare runs later.</li>
+            <li>All fields can be filled in or changed before or after processing.</li>
           </ul>
         </InfoDropdown>
-        <InfoDropdown title="How to crop the background">
+        <InfoDropdown title="Filming and lighting">
           <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>The <strong className="text-zinc-300">Background (ORB) crop</strong> defines the wall region used to recognise the route in your photo.</li>
-            <li>Include the <strong className="text-zinc-300">wall texture, holds, and surrounding rock</strong> � these unique features are what the matcher looks for.</li>
-            <li>Omit sky, trees, cables, people, or anything that may <strong className="text-zinc-300">change between shoots</strong>.</li>
-            <li>For gym climbs, exclude the floor, other coloured holds from different routes, and temporary tape.</li>
+            <li>Mount the camera on a <strong className="text-zinc-300">tripod or fixed surface</strong> — any camera movement prevents accurate wall-feature matching.</li>
+            <li>Keep the <strong className="text-zinc-300">entire route and climber visible</strong> throughout the clip; nobody should pass between the camera and the climber.</li>
+            <li>Shoot in <strong className="text-zinc-300">consistent, even light</strong> — harsh backlight, direct sun, deep shade, or mixed indoor/outdoor light all reduce accuracy.</li>
+            <li>Overhead gym fluorescents can cast uneven shadows; chalk dust or a fogged lens reduces sharpness — note any issues in <strong className="text-zinc-300">Shooting conditions</strong> before processing.</li>
+            <li>Keep the clip short — only the section containing the climbing run is needed.</li>
           </ul>
         </InfoDropdown>
-        <InfoDropdown title="How to save and test">
+        <InfoDropdown title="Processing, testing, and saving">
           <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>After processing finishes, click <strong className="text-zinc-300">Match against a route photo</strong> to test the overlay immediately.</li>
-            <li>You can come back here at any time to <strong className="text-zinc-300">download the data</strong> or re-process with different settings.</li>
-            <li>Save the <code className="text-zinc-300">.json</code> file to your device to reload the run without re-processing the video in a future session.</li>
+            <li>After selecting a video, scrub to a representative frame, then drag the <strong className="text-zinc-300">Climber crop</strong> box around the area the climber moves through and the <strong className="text-zinc-300">Background (ORB) crop</strong> over the wall texture.</li>
+            <li>Click <strong className="text-zinc-300">Process video</strong>. A progress bar shows frames analysed. Processing runs entirely in the browser and may take up to a minute for long videos.</li>
+            <li>Once complete, click <strong className="text-zinc-300">Match against a route photo</strong> to test the skeleton overlay immediately on the Match page.</li>
+            <li>Save the <code className="text-zinc-300">.json</code> to your device or to S3 — it can be reloaded on the Match page in any future session without re-processing the video.</li>
           </ul>
         </InfoDropdown>
       </div>
