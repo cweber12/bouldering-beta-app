@@ -16,9 +16,9 @@ export default function DocsPage() {
           Documentation
         </h1>
         <p className="mt-3 text-zinc-400 leading-relaxed">
-          Bouldering Beta runs entirely in your browser — no account, no server, no uploads.
-          It analyses a climbing video by extracting skeleton poses frame-by-frame, then
-          overlays the movement onto a route photo using computer vision.
+          Bouldering Beta analyses a climbing video by extracting skeleton poses frame-by-frame,
+          then overlays the movement onto a route photo using computer vision. Processed attempts
+          can be saved to Amazon S3 for access across devices, or exported as local JSON files.
         </p>
 
         {/* ---------------------------------------------------------------- */}
@@ -90,7 +90,14 @@ export default function DocsPage() {
                 <tr>
                   <td className="px-4 py-3">Framework</td>
                   <td className="px-4 py-3 font-mono text-zinc-300">Next.js 16 App Router</td>
-                  <td className="px-4 py-3">All processing is client-side</td>
+                  <td className="px-4 py-3">Client-side processing, server-side API routes</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3">Cloud storage</td>
+                  <td className="px-4 py-3 font-mono text-zinc-300">Amazon S3 (AWS SDK v3)</td>
+                  <td className="px-4 py-3">
+                    Attempts saved under RouteData/state/area/route/
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -235,18 +242,20 @@ export default function DocsPage() {
         {/* Privacy                                                           */}
         {/* ---------------------------------------------------------------- */}
         <section className="mt-10">
-          <h2 className="text-xl font-semibold text-zinc-200">Privacy</h2>
+          <h2 className="text-xl font-semibold text-zinc-200">Privacy &amp; data storage</h2>
           <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
             All processing — video decoding, pose inference, ORB feature extraction, homography
             computation, and video rendering — happens locally in your browser.{" "}
             <strong className="text-zinc-300">
-              No video frames, images, or skeleton data are sent to any server.
-            </strong>{" "}
-            Saved <code className="text-zinc-300">.json</code> files exist only on your device.
+              No video frames or images are sent to any server.
+            </strong>
           </p>
           <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-            The cloud upload and load buttons visible in the app are placeholders for a future
-            feature that will require an explicit opt-in. Until then they are disabled.
+            When you click <strong className="text-zinc-300">Save to cloud</strong>, only the
+            processed JSON data (pose keypoints, ORB descriptors, and metadata) is uploaded to
+            Amazon S3. The original video and route photo are never uploaded. You can also
+            save attempts to your local device as <code className="text-zinc-300">.json</code>{" "}
+            files using the File System Access API.
           </p>
         </section>
 

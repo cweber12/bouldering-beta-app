@@ -48,7 +48,10 @@ const CURSOR_MAP: Record<HandleId, string> = {
 /** Minimum size of the crop box as a fraction of the container. */
 const MIN_SIZE = 0.05;
 
-const HANDLE_PX = 9;
+const HANDLE_PX = 10;
+
+/** Invisible hit area around each handle for easier touch interaction. */
+const HIT_AREA_PX = 36;
 
 /** Default crop box: slight inset from edges. */
 export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
@@ -231,7 +234,7 @@ export default function CropBoxOverlay({
         onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}
       />
 
-      {/* Resize handles */}
+      {/* Resize handles — large invisible hit area wrapping visible knob */}
       {!disabled &&
         handles.map(([id, lx, ly]) => (
           <div
@@ -240,16 +243,30 @@ export default function CropBoxOverlay({
             style={{
               left: pct(lx),
               top: pct(ly),
-              width: HANDLE_PX,
-              height: HANDLE_PX,
+              width: HIT_AREA_PX,
+              height: HIT_AREA_PX,
               transform: "translate(-50%, -50%)",
-              background: "#000",
-              border: "1.5px solid rgba(255,255,255,0.7)",
-              borderRadius: 2,
               cursor: CURSOR_MAP[id],
+              touchAction: "none",
             }}
             onPointerDown={(e) => startDrag(e, id)}
-          />
+          >
+            {/* Visible handle knob (centred inside the hit area) */}
+            <div
+              className="pointer-events-none"
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                width: HANDLE_PX,
+                height: HANDLE_PX,
+                transform: "translate(-50%, -50%)",
+                background: "#000",
+                border: "1.5px solid rgba(255,255,255,0.7)",
+                borderRadius: 2,
+              }}
+            />
+          </div>
         ))}
     </div>
   );

@@ -3,11 +3,10 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
-import { type AttemptEntry, loadAttemptFromJson, listDirectories, listAttemptFiles } from "@/utils/fsHelpers";
+import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { usePoseVideo } from "@/hooks/usePoseVideo";
-import { saveAttempt } from "@/storage/sessionStore";
 import { computeHomography } from "@/pipeline/homography";
 import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -130,185 +129,6 @@ function CompareSlot({ slotIndex, attempt, imageFile, imageCrop, matchTrigger, c
 
       {isError && (
         <p className="text-xs text-red-400">{matchError ?? "Render failed."}</p>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Folder picker dialog state (for loading attempts)
-// ---------------------------------------------------------------------------
-
-interface FolderPickerProps {
-  onLoad: (attempt: RouteAttempt) => void;
-  label: string;
-}
-
-function FolderAttemptPicker({ onLoad, label }: FolderPickerProps) {
-  const [open, setOpen] = useState(false);
-  const [folderError, setFolderError] = useState<string | null>(null);
-  const [stateNames, setStateNames] = useState<string[]>([]);
-  const [selectedState, setSelectedState] = useState("");
-  const [areaNames, setAreaNames] = useState<string[]>([]);
-  const [selectedArea, setSelectedArea] = useState("");
-  const [routeNames, setRouteNames] = useState<string[]>([]);
-  const [selectedRoute, setSelectedRoute] = useState("");
-  const [attemptFiles, setAttemptFiles] = useState<AttemptEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fsSupported] = useState(() => typeof window !== "undefined" && "showDirectoryPicker" in window);
-
-  const dirHandles = useRef<{
-    root: FileSystemDirectoryHandle | null;
-    state: FileSystemDirectoryHandle | null;
-    area: FileSystemDirectoryHandle | null;
-    route: FileSystemDirectoryHandle | null;
-  }>({ root: null, state: null, area: null, route: null });
-
-  async function pickFolder() {
-    setFolderError(null);
-    try {
-      const root = await (
-        window as unknown as { showDirectoryPicker: () => Promise<FileSystemDirectoryHandle> }
-      ).showDirectoryPicker();
-      dirHandles.current.root = root;
-      setLoading(true);
-      setStateNames(await listDirectories(root));
-      setLoading(false);
-      setOpen(true);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return;
-      setFolderError("Could not read folder.");
-    }
-  }
-
-  async function onStateChange(s: string) {
-    setSelectedState(s); setAreaNames([]); setSelectedArea("");
-    setRouteNames([]); setSelectedRoute(""); setAttemptFiles([]);
-    if (!dirHandles.current.root || !s) return;
-    setLoading(true);
-    try {
-      const d = await dirHandles.current.root.getDirectoryHandle(s);
-      dirHandles.current.state = d;
-      setAreaNames(await listDirectories(d));
-    } finally { setLoading(false); }
-  }
-
-  async function onAreaChange(a: string) {
-    setSelectedArea(a); setRouteNames([]); setSelectedRoute(""); setAttemptFiles([]);
-    if (!dirHandles.current.state || !a) return;
-    setLoading(true);
-    try {
-      const d = await dirHandles.current.state.getDirectoryHandle(a);
-      dirHandles.current.area = d;
-      setRouteNames(await listDirectories(d));
-    } finally { setLoading(false); }
-  }
-
-  async function onRouteChange(r: string) {
-    setSelectedRoute(r); setAttemptFiles([]);
-    if (!dirHandles.current.area || !r) return;
-    setLoading(true);
-    try {
-      const d = await dirHandles.current.area.getDirectoryHandle(r);
-      dirHandles.current.route = d;
-      setAttemptFiles(await listAttemptFiles(d));
-    } finally { setLoading(false); }
-  }
-
-  async function selectFile(name: string) {
-    if (!dirHandles.current.route) return;
-    try {
-      const fh = await dirHandles.current.route.getFileHandle(name);
-      const file = await fh.getFile();
-      const parsed = JSON.parse(await file.text()) as unknown;
-      const attempt = loadAttemptFromJson(parsed);
-      saveAttempt(attempt);
-      onLoad(attempt);
-      setOpen(false);
-    } catch (err) {
-      setFolderError(err instanceof Error ? err.message : "Load failed.");
-    }
-  }
-
-  function loadFromFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const attempt = loadAttemptFromJson(JSON.parse(ev.target?.result as string));
-        saveAttempt(attempt);
-        onLoad(attempt);
-      } catch { setFolderError("Could not parse file."); }
-    };
-    reader.readAsText(file);
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      {fsSupported ? (
-        <button
-          onClick={pickFolder}
-          className="flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 00-1.883 2.542l.857 6a2.25 2.25 0 002.227 1.932H19.05a2.25 2.25 0 002.227-1.932l.857-6a2.25 2.25 0 00-1.883-2.542m-16.5 0V6A2.25 2.25 0 016 3.75h3.879a1.5 1.5 0 011.06.44l2.122 2.12a1.5 1.5 0 001.06.44H18A2.25 2.25 0 0120.25 9v.776" />
-          </svg>
-          {label}
-        </button>
-      ) : (
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200">
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-          </svg>
-          {label}
-          <input type="file" accept=".json" className="hidden" onChange={loadFromFile} />
-        </label>
-      )}
-
-      {folderError && <p className="text-xs text-red-400">{folderError}</p>}
-
-      {open && (
-        <div className="flex flex-col gap-3 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
-          {loading && <p className="text-xs text-zinc-500 animate-pulse">Reading&#8230;</p>}
-
-          {stateNames.length > 0 && (
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: "State", val: selectedState, opts: stateNames, change: onStateChange },
-                { label: "Area", val: selectedArea, opts: areaNames, change: onAreaChange },
-                { label: "Route", val: selectedRoute, opts: routeNames, change: onRouteChange },
-              ].map(({ label: lbl, val, opts, change }) => (
-                <div key={lbl} className="flex flex-col gap-1">
-                  <span className="text-xs text-zinc-500">{lbl}</span>
-                  <select
-                    value={val}
-                    onChange={e => change(e.target.value)}
-                    disabled={!opts.length}
-                    className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-zinc-100 outline-none disabled:opacity-40"
-                  >
-                    <option value="">-- select --</option>
-                    {opts.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {attemptFiles.length > 0 && (
-            <div className="flex flex-col divide-y divide-zinc-800 rounded border border-zinc-800 overflow-hidden">
-              {attemptFiles.map(f => (
-                <button
-                  key={f.name}
-                  onClick={() => selectFile(f.name)}
-                  className="px-3 py-2 text-left text-xs text-zinc-400 transition hover:bg-zinc-800 hover:text-zinc-200"
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       )}
     </div>
   );
@@ -574,9 +394,10 @@ function ComparePageInner() {
 
         {Array.from({ length: slotCount }, (_, i) => (
           <div key={i} className="flex flex-col gap-2">
-            <FolderAttemptPicker
+            <S3RoutePicker
               label={attempts[i] ? `Change ${SLOT_COLORS[i].label}` : `Load ${SLOT_COLORS[i].label}`}
               onLoad={att => handleLoadAttempt(i, att)}
+              compact
             />
             {attempts[i] && (
               <CompareSlot

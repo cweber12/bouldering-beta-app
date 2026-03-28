@@ -1,8 +1,10 @@
 # Bouldering Beta
 
-Analyse a climbing attempt entirely in-browser — no account, no server, no uploads.
+Analyse a climbing attempt in-browser using **MoveNet Lightning** pose estimation
+and **OpenCV.js** ORB feature matching — then save results to **Amazon S3** for
+access across devices.
 
-The app records skeleton poses frame-by-frame from a video using **MoveNet Lightning**
+The app records skeleton poses frame-by-frame from a video using MoveNet Lightning
 (TF.js WebGL), extracts **ORB reference features** (OpenCV.js WASM) from the first
 frame, then overlays the movement onto a static route photo via a perspective
 (homography) transform. The output is a downloadable **WebM** video.
@@ -51,6 +53,34 @@ The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.
 
+## Cloud storage (S3)
+
+Processed attempts are stored in Amazon S3 under the key prefix
+`RouteData/{state}/{area}/{route}/{attempt-id}.json`. The upload, match, and
+compare pages all feature S3-backed dropdown pickers that list existing
+states → areas → routes → attempts directly from the bucket.
+
+### Environment variables
+
+| Variable | Purpose | Example |
+|---|---|---|
+| `AWS_REGION` | S3 bucket region | `us-east-2` |
+| `AWS_ACCESS_KEY_ID` | IAM access key | — |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret key | — |
+| `S3_BUCKET_NAME` | Bucket name | `route-renderer-bucket` |
+| `S3_KEY_PREFIX` | Key prefix (default `RouteData`) | `RouteData` |
+
+Create a `.env.local` file with these values. **Never commit credentials.**
+
+### API routes
+
+| Route | Method | Purpose |
+|---|---|---|
+| `/api/s3/put` | POST | Upload attempt JSON |
+| `/api/s3/get` | GET | Download attempt JSON by key |
+| `/api/s3/list` | GET | List objects/prefixes (pagination, delimiter) |
+| `/api/s3/delete` | DELETE | Remove an attempt |
+
 ## Stack
 
 | Concern | Library |
@@ -87,8 +117,9 @@ npx eslint .
 pipeline/   Framework-agnostic processing modules (no React)
 hooks/      React hooks wiring pipeline modules to UI state
 storage/    In-memory session store (swappable backend)
-components/ Shared UI components (CropBoxOverlay, LoadingGate, …)
+components/ Shared UI components (CropBoxOverlay, S3RoutePicker, ComboInput, …)
 app/        Next.js App Router pages and layout
+app/api/s3/ S3 route handlers (put, get, list, delete) + shared utilities
 workers/    Legacy Web Worker files (kept for reference)
 utils/      Shared constants and helpers (poseConstants, cvHelpers, fsHelpers)
 __tests__/  Unit tests (mirror source tree)

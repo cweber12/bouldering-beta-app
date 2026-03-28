@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import { sanitizeDirName } from "@/utils/fsHelpers";
+import { sanitizeDirName, serializeAttemptForJson, loadAttemptFromJson } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +28,8 @@ export interface S3StorageResult {
   deleteAttempt: (key: string) => Promise<void>;
   /** List attempt objects under an optional prefix (defaults to "RouteData"). */
   listAttempts: (prefix?: string) => Promise<S3AttemptEntry[]>;
+  /** List immediate sub-"folder" names under a prefix (uses S3 delimiter listing). */
+  listPrefixes: (prefix: string) => Promise<string[]>;
   status: S3Status;
   errorMessage: string | null;
 }
@@ -65,12 +67,7 @@ export function useS3Storage(): S3StorageResult {
     setErrorMessage(null);
     const key = deriveS3Key(attempt);
 
-    const serializable = {
-      ...attempt,
-      orbFeatures: attempt.orbFeatures
-        ? { ...attempt.orbFeatures, descriptors: Array.from(attempt.orbFeatures.descriptors) }
-        : null,
-    };
+    const serializable = serializeAttemptForJson(attempt);
 
     try {
       const res = await fetch("/api/s3/put", {
@@ -104,16 +101,10 @@ export function useS3Storage(): S3StorageResult {
         setErr(err);
         throw new Error(err);
       }
-      const raw = await res.json() as Record<string, unknown>;
-      // Re-hydrate descriptors from Array → Uint8Array.
-      if (raw.orbFeatures && typeof raw.orbFeatures === "object") {
-        const orb = raw.orbFeatures as Record<string, unknown>;
-        if (Array.isArray(orb.descriptors)) {
-          orb.descriptors = new Uint8Array(orb.descriptors as number[]);
-        }
-      }
+      const raw = await res.json();
+      const attempt = loadAttemptFromJson(raw);
       setStatus("idle");
-      return raw as unknown as RouteAttempt;
+      return attempt;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setErr(msg);
@@ -170,5 +161,28 @@ export function useS3Storage(): S3StorageResult {
     }
   }, []);
 
-  return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, status, errorMessage };
+  // ---- List prefixes (folder names) ------------------------------------------
+
+  const listPrefixes = useCallback(async (prefix: string): Promise<string[]> => {
+    const qs = `?prefix=${encodeURIComponent(prefix)}&delimiter=%2F`;
+    try {
+      const res = await fetch(`/api/s3/list${qs}`);
+      if (!res.ok) {
+        const err = (await res.json() as { error?: string }).error ?? "List prefixes failed.";
+        throw new Error(err);
+      }
+      const data = await res.json() as { prefixes: string[] };
+      // Strip the prefix and trailing slash to return just the folder name.
+      return data.prefixes.map(p => {
+        const relative = p.startsWith(prefix) ? p.slice(prefix.length) : p;
+        return relative.replace(/\/$/, "");
+      }).filter(Boolean);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[useS3Storage] listPrefixes error:", msg);
+      return [];
+    }
+  }, []);
+
+  return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, listPrefixes, status, errorMessage };
 }

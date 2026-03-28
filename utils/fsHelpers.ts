@@ -80,6 +80,23 @@ export async function listAttemptFiles(dir: FileSystemDirectoryHandle): Promise<
 }
 
 /**
+ * Return a JSON-safe copy of a RouteAttempt.
+ *
+ * Converts `orbFeatures.descriptors` from `Uint8Array` to a plain `number[]`
+ * so `JSON.stringify` can handle it.
+ */
+export function serializeAttemptForJson(
+  attempt: RouteAttempt,
+): Record<string, unknown> {
+  return {
+    ...attempt,
+    orbFeatures: attempt.orbFeatures
+      ? { ...attempt.orbFeatures, descriptors: Array.from(attempt.orbFeatures.descriptors) }
+      : null,
+  };
+}
+
+/**
  * Deserialise a raw JSON value into a RouteAttempt.
  *
  * Re-hydrates the `orbFeatures.descriptors` field from a plain number array

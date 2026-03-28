@@ -5,13 +5,14 @@ import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
+import ComboInput from "@/components/shared/ComboInput";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useTFModel } from "@/hooks/useTFModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import { sanitizeDirName } from "@/utils/fsHelpers";
+import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // RouteData folder name
@@ -42,12 +43,7 @@ async function acquireRootHandle(): Promise<FileSystemDirectoryHandle> {
 async function saveAttemptToDevice(
   attempt: RouteAttempt,
 ): Promise<FileSystemDirectoryHandle | null> {
-  const serializable = {
-    ...attempt,
-    orbFeatures: attempt.orbFeatures
-      ? { ...attempt.orbFeatures, descriptors: Array.from(attempt.orbFeatures.descriptors) }
-      : null,
-  };
+  const serializable = serializeAttemptForJson(attempt);
   const json = JSON.stringify(serializable, null, 2);
 
   if ("showDirectoryPicker" in window) {
@@ -100,7 +96,7 @@ function UploadPageInner() {
   const { model } = useTFModel();
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
-  const { uploadAttempt, deleteAttempt: deleteS3Attempt, status: s3Status } = useS3Storage();
+  const { uploadAttempt, listPrefixes, status: s3Status } = useS3Storage();
 
   // Restore prior attempt from session so users can return from the match page.
   const [restoredAttempt] = useState<RouteAttempt | null>(() => {
@@ -116,7 +112,8 @@ function UploadPageInner() {
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const [frameStep, setFrameStep] = useState(5);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [savedS3Key, setSavedS3Key] = useState<string | null>(null);
+  const [s3Saved, setS3Saved] = useState(false);
+  const [locationWarning, setLocationWarning] = useState(false);
   const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
   const [conditions, setConditions] = useState<Set<string>>(new Set());
   const previewUrlRef = useRef<string | null>(null);
@@ -124,6 +121,45 @@ function UploadPageInner() {
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
+
+  // Crop adjustment confirmation dialog
+  const [showCropWarning, setShowCropWarning] = useState(false);
+
+  // S3-backed suggestions for location fields
+  const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
+  const [areaSuggestions, setAreaSuggestions] = useState<string[]>([]);
+  const [routeSuggestions, setRouteSuggestions] = useState<string[]>([]);
+
+  // Fetch state suggestions from S3 on mount
+  useEffect(() => {
+    listPrefixes(`${BETA_FOLDER}/`).then(setStateSuggestions).catch(() => {});
+  }, [listPrefixes]);
+
+  // Refresh area suggestions when state changes.
+  function handleStateChange(val: string) {
+    setState(val);
+    setAreaSuggestions([]);
+    setRouteSuggestions([]);
+    if (val.trim()) {
+      listPrefixes(`${BETA_FOLDER}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
+    }
+  }
+
+  // Refresh route suggestions when area changes.
+  function handleAreaChange(val: string) {
+    setArea(val);
+    setRouteSuggestions([]);
+    if (state.trim() && val.trim()) {
+      listPrefixes(`${BETA_FOLDER}/${sanitizeDirName(state)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
+    }
+  }
+
+  function handleRouteChange(val: string) {
+    setRoute(val);
+  }
+
+  // Only show the location warning while any required field is still empty.
+  const showLocationWarning = locationWarning && (!state.trim() || !area.trim() || !route.trim());
 
   const progressPct = totalFrames > 0 ? Math.round((currentFrame / totalFrames) * 100) : 0;
   const isProcessing = status === "processing";
@@ -166,10 +202,33 @@ function UploadPageInner() {
     setClimberCrop(DEFAULT_CROP);
     setOrbCrop(DEFAULT_CROP);
     setActiveCropMode("climber");
+    setS3Saved(false);
+  }
+
+  function isCropDefault(crop: CropFraction): boolean {
+    return (
+      Math.abs(crop.x - DEFAULT_CROP.x) < 0.001 &&
+      Math.abs(crop.y - DEFAULT_CROP.y) < 0.001 &&
+      Math.abs(crop.w - DEFAULT_CROP.w) < 0.001 &&
+      Math.abs(crop.h - DEFAULT_CROP.h) < 0.001
+    );
   }
 
   function handleProcess() {
     if (!pendingFile || !model || !cv) return;
+
+    // Warn if either crop hasn't been adjusted.
+    if (isCropDefault(climberCrop) || isCropDefault(orbCrop)) {
+      setShowCropWarning(true);
+      return;
+    }
+
+    startProcessing();
+  }
+
+  function startProcessing() {
+    if (!pendingFile || !model || !cv) return;
+    setShowCropWarning(false);
     process(pendingFile, model, cv, frameStep, { state, area, route }, {
       climberCrop,
       orbCrop,
@@ -203,25 +262,21 @@ function UploadPageInner() {
 
   async function handleSaveToS3() {
     if (!activeAttemptId) return;
+    if (!state.trim() || !area.trim() || !route.trim()) {
+      setLocationWarning(true);
+      return;
+    }
     const attempt = getAttempt(activeAttemptId);
     if (!attempt) return;
     setSaveError(null);
     try {
-      const key = await uploadAttempt(attempt);
-      setSavedS3Key(key);
+      // Use current UI values so location entered after processing is respected.
+      const attemptToUpload: RouteAttempt = { ...attempt, state: state.trim(), area: area.trim(), route: route.trim() };
+      await uploadAttempt(attemptToUpload);
+      setS3Saved(true);
+      setLocationWarning(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
-    }
-  }
-
-  async function handleDeleteFromS3() {
-    if (!savedS3Key) return;
-    setSaveError(null);
-    try {
-      await deleteS3Attempt(savedS3Key);
-      setSavedS3Key(null);
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "S3 delete failed.");
     }
   }
 
@@ -333,6 +388,35 @@ function UploadPageInner() {
             </svg>
             Process video
           </button>
+
+          {/* Crop adjustment warning dialog */}
+          {showCropWarning && (
+            <div className="rounded-lg border border-amber-800/60 bg-amber-950/40 px-5 py-4 flex flex-col gap-3">
+              <p className="text-sm font-medium text-amber-300">Crop regions not adjusted</p>
+              <p className="text-xs text-amber-400/80">
+                {isCropDefault(climberCrop) && isCropDefault(orbCrop)
+                  ? "Neither the climber crop nor the background (ORB) crop has been adjusted from the default."
+                  : isCropDefault(climberCrop)
+                    ? "The climber crop has not been adjusted from the default."
+                    : "The background (ORB) crop has not been adjusted from the default."}
+                {" "}Adjusting these crops improves pose detection accuracy and feature matching quality.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCropWarning(false)}
+                  className="rounded-lg border border-zinc-600 px-4 py-2 text-xs font-medium text-zinc-300 transition hover:border-zinc-400 hover:text-zinc-100"
+                >
+                  Go back
+                </button>
+                <button
+                  onClick={startProcessing}
+                  className="rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50"
+                >
+                  Proceed anyway
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -359,25 +443,30 @@ function UploadPageInner() {
           <span className="font-mono text-zinc-400">{BETA_FOLDER}/</span> folder.
         </p>
         <div className="flex flex-col gap-3">
-          {(
-            [
-              { label: "State / Region", value: state, set: setState, placeholder: "e.g. Colorado" },
-              { label: "Area",          value: area,  set: setArea,  placeholder: "e.g. Red Rocks" },
-              { label: "Route",         value: route, set: setRoute, placeholder: "e.g. The Classic" },
-            ] as const
-          ).map(({ label, value, set, placeholder }) => (
-            <div key={label} className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-zinc-400">{label}</label>
-              <input
-                type="text"
-                value={value}
-                onChange={e => set(e.target.value)}
-                placeholder={placeholder}
-                disabled={isProcessing}
-                className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none transition focus:border-zinc-500 disabled:opacity-50"
-              />
-            </div>
-          ))}
+          <ComboInput
+            label="State / Region"
+            value={state}
+            onChange={handleStateChange}
+            suggestions={stateSuggestions}
+            placeholder="e.g. Colorado"
+            disabled={isProcessing}
+          />
+          <ComboInput
+            label="Area"
+            value={area}
+            onChange={handleAreaChange}
+            suggestions={areaSuggestions}
+            placeholder="e.g. Red Rocks"
+            disabled={isProcessing}
+          />
+          <ComboInput
+            label="Route"
+            value={route}
+            onChange={handleRouteChange}
+            suggestions={routeSuggestions}
+            placeholder="e.g. The Classic"
+            disabled={isProcessing}
+          />
         </div>
       </div>
 
@@ -535,26 +624,27 @@ function UploadPageInner() {
             </button>
           )}
 
+          {showLocationWarning && (
+            <p className="rounded-lg border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
+              Enter State/Region, Area, and Route before saving to S3.
+            </p>
+          )}
+
           <button
             onClick={handleSaveToS3}
             disabled={s3Status === "loading"}
-            className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-6 py-3 text-sm text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className={[
+              "flex items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
+              s3Saved
+                ? "border-emerald-800/50 bg-emerald-950/20 text-emerald-300 hover:border-emerald-700"
+                : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-zinc-500 hover:text-zinc-100",
+            ].join(" ")}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploading�" : "Save to S3"}
+            {s3Status === "loading" ? "Uploading�" : s3Saved ? "Saved to S3" : "Save to S3"}
           </button>
-
-          {savedS3Key && (
-            <button
-              onClick={handleDeleteFromS3}
-              disabled={s3Status === "loading"}
-              className="flex items-center justify-center gap-2 rounded-xl border border-red-900/50 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition hover:border-red-700 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Delete from S3
-            </button>
-          )}
 
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}
         </div>

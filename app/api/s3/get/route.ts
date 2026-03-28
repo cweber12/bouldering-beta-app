@@ -1,20 +1,7 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import type { Readable } from "stream";
-
-const S3_PREFIX = process.env.S3_KEY_PREFIX ?? "RouteData";
-
-function makeClient() {
-  return new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
-}
-
-function isValidKey(key: string): boolean {
-  return (
-    key.endsWith(".json") &&
-    !key.includes("..") &&
-    key.startsWith(S3_PREFIX + "/")
-  );
-}
+import { s3, getBucket, isValidKey, awsErrorMessage } from "../shared";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const key = request.nextUrl.searchParams.get("key") ?? "";
@@ -23,15 +10,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
   }
 
-  const bucket = process.env.S3_BUCKET_NAME;
+  const bucket = getBucket();
   if (!bucket) {
     return NextResponse.json({ error: "S3_BUCKET_NAME is not configured." }, { status: 500 });
   }
 
   try {
-    const client = makeClient();
     const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
-    const res = await client.send(cmd);
+    const res = await s3.send(cmd);
 
     // Stream body to string.
     const chunks: Uint8Array[] = [];
@@ -44,7 +30,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("[s3/get] error:", err);
-    return NextResponse.json({ error: "Failed to get object." }, { status: 502 });
+    const msg = awsErrorMessage(err);
+    console.error("[s3/get] error:", msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }
