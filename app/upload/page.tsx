@@ -351,29 +351,63 @@ function UploadPageInner() {
 
   const videoAndCropSection = (
     <div className="flex-1 min-w-0 flex flex-col gap-4">
-      {/* Video upload */}
-      <label
-        className={[
-          "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-8 py-6 text-sm transition",
-          isProcessing
-            ? "cursor-not-allowed border-zinc-800 text-zinc-600"
-            : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
-          !pendingFile && !isProcessing ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
-        ].join(" ")}
-      >
-        <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-        </svg>
-        <span>{isProcessing ? "Processing\u2026" : "Select a climbing video"}</span>
-        <span className="text-xs text-zinc-600">MP4, MOV, WebM accepted</span>
-        <input
-          type="file"
-          accept="video/*"
-          className="hidden"
-          disabled={isProcessing}
-          onChange={handleFileChange}
-        />
-      </label>
+      {/* Video input — upload file or record with camera */}
+      <div className={[
+        "grid grid-cols-2 gap-3",
+        !pendingFile && !isProcessing ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse rounded-xl" : "",
+      ].join(" ")}>
+        {/* Choose existing file */}
+        <label
+          className={[
+            "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-5 text-sm transition",
+            isProcessing
+              ? "cursor-not-allowed border-zinc-800 text-zinc-600"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+          ].join(" ")}
+        >
+          <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          <span className="text-center leading-snug">
+            {isProcessing ? "Processing\u2026" : "Choose a video"}
+          </span>
+          <span className="text-xs text-zinc-600">MP4, MOV, WebM</span>
+          <input
+            type="file"
+            accept="video/*"
+            className="hidden"
+            disabled={isProcessing}
+            onChange={handleFileChange}
+          />
+        </label>
+
+        {/* Record with camera (opens native camera on iOS / Android) */}
+        <label
+          className={[
+            "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-5 text-sm transition",
+            isProcessing
+              ? "cursor-not-allowed border-zinc-800 text-zinc-600"
+              : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+          ].join(" ")}
+        >
+          <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+          <span className="text-center leading-snug">
+            {isProcessing ? "Processing\u2026" : "Record a video"}
+          </span>
+          <span className="text-xs text-zinc-600">Opens camera</span>
+          {/* capture="environment" opens the rear camera on iOS/Android */}
+          <input
+            type="file"
+            accept="video/*"
+            capture="environment"
+            className="hidden"
+            disabled={isProcessing}
+            onChange={handleFileChange}
+          />
+        </label>
+      </div>
 
       {/* Crop UI � shown after file selected, before processing */}
       {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
@@ -666,7 +700,7 @@ function UploadPageInner() {
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Video Analysis</h1>
           <p className="text-sm text-zinc-400">
-            Upload a climbing video to extract skeleton poses and wall reference features.
+            Upload or record a climbing video to extract skeleton poses and wall reference features.
           </p>
         </div>
         <Link href="/" className="shrink-0 text-xs text-zinc-500 transition hover:text-zinc-300">
