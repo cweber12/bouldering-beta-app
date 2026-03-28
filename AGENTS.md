@@ -75,10 +75,21 @@ workers/         Legacy Web Worker files (keep, do not delete)
 ### Run classification & S3 key format
 - `RouteAttempt.runType` is `"attempt" | "send"` (re-exported as `RunType`).
 - Optional `rating?: string` and `notes?: string` are stored alongside each run.
-- S3 key format: `RouteData/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
+- S3 key format: `RouteData/{userId}/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
 - ID format: `run-{timestamp}` (without the type suffix).
 - Legacy `attempt-{timestamp}.json` files are still loadable — default `runType` to `"attempt"`.
 - UI colours: amber for attempts, emerald for sends.
+
+### Authentication (Supabase)
+- Auth uses `@supabase/ssr` with cookie-based sessions (no localStorage tokens).
+- `utils/supabase/client.ts` — browser client (`createBrowserClient`).
+- `utils/supabase/server.ts` — server client (`createServerClient` with cookie jar from `next/headers`).
+- `middleware.ts` refreshes the session on every request and protects `/upload`, `/match`, `/compare` routes (redirect to `/login`).
+- `hooks/useAuth.tsx` provides `AuthProvider` context + `useAuth()` hook. **File must stay `.tsx`** — it contains JSX.
+- All S3 API routes call `getAuthUserId()` and return 401 when unauthenticated.
+- `isValidKey()` and `isValidPrefix()` enforce that every S3 key is scoped to the authenticated user: `RouteData/{userId}/...`.
+- `hooks/useS3Storage.ts` derives user-scoped keys via `deriveS3Key(userId, attempt)`.
+- `components/shared/NavBar.tsx` shows `PUBLIC_TABS` (Home, Docs) for unauthenticated users and `AUTH_TABS` (all tabs) for authenticated users.
 
 ### Testing
 - Test files mirror the source tree under `__tests__/`.
@@ -86,6 +97,21 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - `ImageData` not available in jsdom — use plain object casts: `{ data, width, height, colorSpace } as ImageData`.
 - OpenCV calls are never tested directly — mock `pipeline/orbDetector` or `pipeline/homography` at the module boundary.
 - `FakeOrbWorker.prototype.postMessage` save/restore prevents prototype pollution between tests.
+
+---
+
+## Security Review Checklist
+
+When adding or changing code, verify the following:
+
+- **Open redirect** — Any `router.push(url)` or `redirect(url)` using user-supplied input must validate the target is a relative path (`startsWith("/")`, not `startsWith("//")`, no `://`).
+- **User-scoped data** — Every S3 key or prefix must include the authenticated user ID. Server-side API routes must call `isValidKey(key, userId)` / `isValidPrefix(prefix, userId)` before any S3 operation.
+- **Input length limits** — User-supplied strings (state, area, route names, notes) must be length-limited before storage. S3 keys must not exceed 1024 bytes.
+- **Error sanitisation** — AWS/infrastructure error details must not be returned to the client in production. Use `awsErrorMessage()` which logs details server-side and returns a generic message.
+- **Auth gating** — Protected routes (`/upload`, `/match`, `/compare`) must be guarded by `middleware.ts`. API routes must call `getAuthUserId()` and return 401 when null.
+- **File extensions** — Any file containing JSX must use `.tsx` (not `.ts`). Verify after renaming or creating hook/component files.
+- **Cookie security** — Supabase cookies use `SameSite` and `Secure` attributes. Never store tokens in `localStorage`.
+- **No secrets in client code** — Only `NEXT_PUBLIC_*` env vars may be referenced in client components. AWS credentials and `SUPABASE_SERVICE_ROLE_KEY` must stay server-side.
 
 ---
 

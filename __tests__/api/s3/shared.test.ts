@@ -6,6 +6,17 @@ vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class MockS3Client {},
 }));
 
+// Mock Supabase SSR + next/headers so getAuthUserId doesn't hit real infra.
+vi.mock("@supabase/ssr", () => ({
+  createServerClient: () => ({}),
+}));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    getAll: () => [],
+    set: () => {},
+  }),
+}));
+
 // Dynamically import *after* the mock is in place so the singleton is safe.
 const { isValidKey, isValidPrefix, awsErrorMessage, S3_PREFIX, getBucket } =
   await import("@/app/api/s3/shared");
@@ -15,24 +26,35 @@ const { isValidKey, isValidPrefix, awsErrorMessage, S3_PREFIX, getBucket } =
 // ---------------------------------------------------------------------------
 
 describe("isValidKey", () => {
+  const uid = "test-user-id";
+
   it("accepts a well-formed key", () => {
-    expect(isValidKey(`${S3_PREFIX}/CO/RedRocks/Classic/run-1-attempt.json`)).toBe(true);
+    expect(isValidKey(`${S3_PREFIX}/${uid}/CO/RedRocks/Classic/run-1-attempt.json`, uid)).toBe(true);
   });
 
   it("rejects keys that don't start with the prefix", () => {
-    expect(isValidKey("Other/foo.json")).toBe(false);
+    expect(isValidKey("Other/foo.json", uid)).toBe(false);
   });
 
   it("rejects keys without .json extension", () => {
-    expect(isValidKey(`${S3_PREFIX}/CO/attempt.txt`)).toBe(false);
+    expect(isValidKey(`${S3_PREFIX}/${uid}/CO/attempt.txt`, uid)).toBe(false);
   });
 
   it("rejects path traversal", () => {
-    expect(isValidKey(`${S3_PREFIX}/../secret.json`)).toBe(false);
+    expect(isValidKey(`${S3_PREFIX}/${uid}/../secret.json`, uid)).toBe(false);
   });
 
   it("rejects empty string", () => {
-    expect(isValidKey("")).toBe(false);
+    expect(isValidKey("", uid)).toBe(false);
+  });
+
+  it("rejects keys scoped to a different user", () => {
+    expect(isValidKey(`${S3_PREFIX}/other-user/CO/run.json`, uid)).toBe(false);
+  });
+
+  it("rejects keys longer than 1024 bytes", () => {
+    const longSegment = "a".repeat(1024);
+    expect(isValidKey(`${S3_PREFIX}/${uid}/${longSegment}.json`, uid)).toBe(false);
   });
 });
 
@@ -41,24 +63,30 @@ describe("isValidKey", () => {
 // ---------------------------------------------------------------------------
 
 describe("isValidPrefix", () => {
-  it("accepts the bare prefix", () => {
-    expect(isValidPrefix(S3_PREFIX)).toBe(true);
+  const uid = "test-user-id";
+
+  it("accepts the user-scoped prefix", () => {
+    expect(isValidPrefix(`${S3_PREFIX}/${uid}`, uid)).toBe(true);
   });
 
-  it("accepts a sub-path of the prefix", () => {
-    expect(isValidPrefix(`${S3_PREFIX}/Colorado/`)).toBe(true);
+  it("accepts a sub-path of the user prefix", () => {
+    expect(isValidPrefix(`${S3_PREFIX}/${uid}/Colorado/`, uid)).toBe(true);
   });
 
-  it("accepts an empty string (root listing)", () => {
-    expect(isValidPrefix("")).toBe(true);
+  it("rejects an empty string (root listing)", () => {
+    expect(isValidPrefix("", uid)).toBe(false);
   });
 
   it("rejects path traversal", () => {
-    expect(isValidPrefix(`${S3_PREFIX}/../../etc`)).toBe(false);
+    expect(isValidPrefix(`${S3_PREFIX}/${uid}/../../etc`, uid)).toBe(false);
   });
 
   it("rejects a prefix outside the scope", () => {
-    expect(isValidPrefix("Other/folder")).toBe(false);
+    expect(isValidPrefix("Other/folder", uid)).toBe(false);
+  });
+
+  it("rejects a prefix scoped to a different user", () => {
+    expect(isValidPrefix(`${S3_PREFIX}/other-user`, uid)).toBe(false);
   });
 });
 

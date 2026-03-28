@@ -97,7 +97,7 @@ function UploadPageInner() {
   const { model } = useTFModel();
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
-  const { uploadAttempt, listPrefixes, status: s3Status } = useS3Storage();
+  const { uploadAttempt, listPrefixes, userPrefix, status: s3Status } = useS3Storage();
 
   // Restore prior attempt from session so users can return from the match page.
   const [restoredAttempt] = useState<RouteAttempt | null>(() => {
@@ -143,16 +143,17 @@ function UploadPageInner() {
 
   // Fetch state suggestions from S3 on mount
   useEffect(() => {
-    listPrefixes(`${BETA_FOLDER}/`).then(setStateSuggestions).catch(() => {});
-  }, [listPrefixes]);
+    if (!userPrefix) return;
+    listPrefixes(`${userPrefix}/`).then(setStateSuggestions).catch(() => {});
+  }, [listPrefixes, userPrefix]);
 
   // Refresh area suggestions when state changes.
   function handleStateChange(val: string) {
     setState(val);
     setAreaSuggestions([]);
     setRouteSuggestions([]);
-    if (val.trim()) {
-      listPrefixes(`${BETA_FOLDER}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
+    if (val.trim() && userPrefix) {
+      listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
     }
   }
 
@@ -160,8 +161,8 @@ function UploadPageInner() {
   function handleAreaChange(val: string) {
     setArea(val);
     setRouteSuggestions([]);
-    if (state.trim() && val.trim()) {
-      listPrefixes(`${BETA_FOLDER}/${sanitizeDirName(state)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
+    if (state.trim() && val.trim() && userPrefix) {
+      listPrefixes(`${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
     }
   }
 
@@ -312,6 +313,11 @@ function UploadPageInner() {
     if (!activeAttemptId) return;
     if (!state.trim() || !area.trim() || !route.trim()) {
       setLocationWarning(true);
+      return;
+    }
+    // Guard against excessively long field values (S3 key max = 1024 bytes).
+    if (state.trim().length > 100 || area.trim().length > 100 || route.trim().length > 100) {
+      setSaveError("State, area, and route names must each be under 100 characters.");
       return;
     }
     const attempt = getAttempt(activeAttemptId);

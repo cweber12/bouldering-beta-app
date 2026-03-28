@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
 
 type KP = [number, number];
 type Pose = Record<string, KP>;
@@ -143,6 +144,7 @@ function DemoPreview() {
 }
 
 export default function Home() {
+  const { user, loading } = useAuth();
   return (
     <main className="flex flex-1 flex-col items-center gap-16 px-6 py-16">
       <div className="flex flex-col items-center gap-4 text-center max-w-lg">
@@ -156,28 +158,51 @@ export default function Home() {
         <p className="text-base text-zinc-400 leading-relaxed">
           Record your bouldering runs, extract skeleton poses with MoveNet, then
           project your movement onto a route photo &#8212; entirely in your browser.
-          No uploads, no accounts.
         </p>
-        <Link
-          href="/upload"
-          className="mt-2 flex items-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 active:scale-95"
-        >
-          Get started
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
+        {!loading && !user && (
+          <Link
+            href="/login"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 active:scale-95"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-            />
-          </svg>
-        </Link>
+            Sign in to get started
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+              />
+            </svg>
+          </Link>
+        )}
+        {!loading && user && (
+          <Link
+            href="/upload"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 active:scale-95"
+          >
+            Get started
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+              />
+            </svg>
+          </Link>
+        )}
       </div>
 
       <div className="flex flex-col items-center gap-3">

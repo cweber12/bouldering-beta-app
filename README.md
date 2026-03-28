@@ -27,12 +27,14 @@ MoveNet Lightning runs on every sampled frame (indoor: every frame; outdoor: con
 
 ## Pages
 
-| Route | Purpose |
-|---|---|
-| `/` | Choose Indoor or Outdoor mode |
-| `/upload` | Upload & process a climbing video |
-| `/match` | Match a route photo and download the pose overlay |
-| `/compare` | Compare multiple runs side-by-side or overlaid |
+| Route | Purpose | Auth required |
+|---|---|---|
+| `/` | Landing page — choose Indoor or Outdoor mode | No |
+| `/login` | Sign in / sign up with email & password | No |
+| `/upload` | Upload & process a climbing video | Yes |
+| `/match` | Match a route photo and download the pose overlay | Yes |
+| `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
+| `/docs` | Usage guide | No |
 
 ## Interactive crop boxes
 
@@ -56,10 +58,21 @@ The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.
 
+## Authentication
+
+User accounts are managed by **Supabase Auth** with cookie-based sessions via
+`@supabase/ssr`. Unauthenticated visitors can view the home page and docs;
+upload, match, and compare pages require sign-in. The middleware
+(`middleware.ts`) refreshes the session on every request and redirects
+unauthenticated users to `/login`.
+
+All stored data is scoped per user — S3 keys include the user ID, and every API
+route validates that the requesting user owns the data they access.
+
 ## Cloud storage (S3)
 
 Processed runs are stored in Amazon S3 under the key prefix
-`RouteData/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`. The
+`RouteData/{userId}/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`. The
 upload, match, and compare pages all feature S3-backed dropdown pickers that
 list existing states → areas → routes → runs directly from the bucket.
 Attempts are highlighted in amber and sends in emerald throughout the UI.
@@ -69,6 +82,8 @@ Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts)
 
 | Variable | Purpose | Example |
 |---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyz.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | — |
 | `AWS_REGION` | S3 bucket region | `us-east-2` |
 | `AWS_ACCESS_KEY_ID` | IAM access key | — |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key | — |

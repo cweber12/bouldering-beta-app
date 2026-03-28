@@ -1,12 +1,17 @@
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { s3, S3_PREFIX, getBucket, isValidPrefix, awsErrorMessage } from "../shared";
+import { s3, S3_PREFIX, getBucket, isValidPrefix, getAuthUserId, awsErrorMessage } from "../shared";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const raw = request.nextUrl.searchParams.get("prefix") ?? S3_PREFIX;
+  const userId = await getAuthUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
+  const raw = request.nextUrl.searchParams.get("prefix") ?? `${S3_PREFIX}/${userId}`;
   const delimiter = request.nextUrl.searchParams.get("delimiter") ?? undefined;
 
-  if (!isValidPrefix(raw)) {
+  if (!isValidPrefix(raw, userId)) {
     return NextResponse.json({ error: "Invalid prefix." }, { status: 400 });
   }
 

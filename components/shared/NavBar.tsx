@@ -1,9 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
-const TABS = [
+const PUBLIC_TABS = [
+  { href: "/", label: "Home" },
+  { href: "/docs", label: "Docs" },
+] as const;
+
+const AUTH_TABS = [
   { href: "/", label: "Home" },
   { href: "/upload", label: "Upload" },
   { href: "/match", label: "Match" },
@@ -13,6 +19,15 @@ const TABS = [
 
 export default function NavBar() {
   const path = usePathname();
+  const router = useRouter();
+  const { user, loading, signOut } = useAuth();
+
+  const tabs = user ? AUTH_TABS : PUBLIC_TABS;
+
+  async function handleSignOut() {
+    await signOut();
+    router.push("/");
+  }
 
   return (
     <nav
@@ -23,7 +38,7 @@ export default function NavBar() {
         <span className="mr-6 py-3 text-sm font-semibold text-zinc-200 tracking-tight">
           Route Renderer
         </span>
-        {TABS.map(tab => {
+        {tabs.map(tab => {
           const active =
             tab.href === "/"
               ? path === "/"
@@ -44,6 +59,30 @@ export default function NavBar() {
             </Link>
           );
         })}
+
+        <div className="ml-auto flex items-center gap-2">
+          {!loading && !user && (
+            <Link
+              href="/login"
+              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+            >
+              Sign in
+            </Link>
+          )}
+          {!loading && user && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-zinc-500 truncate max-w-[160px]">
+                {user.email}
+              </span>
+              <button
+                onClick={handleSignOut}
+                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   );

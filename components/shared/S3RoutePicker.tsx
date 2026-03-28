@@ -11,8 +11,6 @@ import type { RouteAttempt } from "@/storage/sessionStore";
 // Types
 // ---------------------------------------------------------------------------
 
-const KEY_PREFIX = "RouteData";
-
 /** Lightweight metadata extracted from a downloaded run JSON. */
 interface RunMeta {
   rating?: string;
@@ -235,7 +233,7 @@ export default function S3RoutePicker({
   defaultArea,
   defaultRoute,
 }: S3RoutePickerProps) {
-  const { listPrefixes, listAttempts, downloadAttempt, status } = useS3Storage();
+  const { listPrefixes, listAttempts, downloadAttempt, userPrefix, status } = useS3Storage();
 
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -290,28 +288,29 @@ export default function S3RoutePicker({
 
   // Fetch states on open — then auto-select defaults if provided.
   const handleOpen = useCallback(async () => {
+    if (!userPrefix) return;
     setOpen(true);
     setError(null);
     setLoading(true);
     try {
-      const names = await listPrefixes(`${KEY_PREFIX}/`);
+      const names = await listPrefixes(`${userPrefix}/`);
       const sorted = names.sort((a, b) => a.localeCompare(b));
       setStateNames(sorted);
 
       // Auto-cascade through defaults.
       if (defaultState && sorted.includes(defaultState)) {
         setSelectedState(defaultState);
-        const areas = (await listPrefixes(`${KEY_PREFIX}/${defaultState}/`)).sort((a, b) => a.localeCompare(b));
+        const areas = (await listPrefixes(`${userPrefix}/${defaultState}/`)).sort((a, b) => a.localeCompare(b));
         setAreaNames(areas);
 
         if (defaultArea && areas.includes(defaultArea)) {
           setSelectedArea(defaultArea);
-          const routes = (await listPrefixes(`${KEY_PREFIX}/${defaultState}/${defaultArea}/`)).sort((a, b) => a.localeCompare(b));
+          const routes = (await listPrefixes(`${userPrefix}/${defaultState}/${defaultArea}/`)).sort((a, b) => a.localeCompare(b));
           setRouteNames(routes);
 
           if (defaultRoute && routes.includes(defaultRoute)) {
             setSelectedRoute(defaultRoute);
-            const prefix = `${KEY_PREFIX}/${defaultState}/${defaultArea}/${defaultRoute}/`;
+            const prefix = `${userPrefix}/${defaultState}/${defaultArea}/${defaultRoute}/`;
             const entries = await listAttempts(prefix);
             const filtered = entries.filter(e => e.key.endsWith(".json"));
             filtered.sort((a, b) => {
@@ -328,7 +327,7 @@ export default function S3RoutePicker({
     } finally {
       setLoading(false);
     }
-  }, [listPrefixes, listAttempts, defaultState, defaultArea, defaultRoute]);
+  }, [listPrefixes, listAttempts, userPrefix, defaultState, defaultArea, defaultRoute]);
 
   async function handleStateChange(state: string) {
     setSelectedState(state);
@@ -337,10 +336,10 @@ export default function S3RoutePicker({
     setRouteNames([]);
     setSelectedRoute("");
     setAttemptEntries([]);
-    if (!state) return;
+    if (!state || !userPrefix) return;
     setLoading(true);
     try {
-      const names = await listPrefixes(`${KEY_PREFIX}/${state}/`);
+      const names = await listPrefixes(`${userPrefix}/${state}/`);
       setAreaNames(names.sort((a, b) => a.localeCompare(b)));
     } catch {
       setError(`Could not list areas for "${state}".`);
@@ -354,10 +353,10 @@ export default function S3RoutePicker({
     setRouteNames([]);
     setSelectedRoute("");
     setAttemptEntries([]);
-    if (!area) return;
+    if (!area || !userPrefix) return;
     setLoading(true);
     try {
-      const names = await listPrefixes(`${KEY_PREFIX}/${selectedState}/${area}/`);
+      const names = await listPrefixes(`${userPrefix}/${selectedState}/${area}/`);
       setRouteNames(names.sort((a, b) => a.localeCompare(b)));
     } catch {
       setError(`Could not list routes for "${area}".`);
@@ -369,10 +368,10 @@ export default function S3RoutePicker({
   async function handleRouteChange(route: string) {
     setSelectedRoute(route);
     setAttemptEntries([]);
-    if (!route) return;
+    if (!route || !userPrefix) return;
     setLoading(true);
     try {
-      const prefix = `${KEY_PREFIX}/${selectedState}/${selectedArea}/${route}/`;
+      const prefix = `${userPrefix}/${selectedState}/${selectedArea}/${route}/`;
       const entries = await listAttempts(prefix);
       const filtered = entries.filter(e => e.key.endsWith(".json"));
       // Sort by embedded timestamp (newest first) so attempts and sends

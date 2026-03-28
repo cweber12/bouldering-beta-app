@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson, loadAttemptFromJson } from "@/utils/fsHelpers";
+import { useAuth } from "@/hooks/useAuth";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -11,7 +12,7 @@ import { sanitizeDirName, serializeAttemptForJson, loadAttemptFromJson } from "@
 export type S3Status = "idle" | "loading" | "error";
 
 export interface S3AttemptEntry {
-  /** S3 object key, e.g. "RouteData/Colorado/RedRocks/TheClassic/run-1234-attempt.json" */
+  /** S3 object key, e.g. "RouteData/{userId}/Colorado/RedRocks/TheClassic/run-1234-attempt.json" */
   key: string;
   /** Last-modified timestamp from S3, ISO string. */
   lastModified?: string;
@@ -26,10 +27,12 @@ export interface S3StorageResult {
   downloadAttempt: (key: string) => Promise<RouteAttempt>;
   /** Permanently delete an object from S3 by its key. */
   deleteAttempt: (key: string) => Promise<void>;
-  /** List attempt objects under an optional prefix (defaults to "RouteData"). */
+  /** List attempt objects under an optional prefix (defaults to "RouteData/{userId}"). */
   listAttempts: (prefix?: string) => Promise<S3AttemptEntry[]>;
   /** List immediate sub-"folder" names under a prefix (uses S3 delimiter listing). */
   listPrefixes: (prefix: string) => Promise<string[]>;
+  /** User-scoped S3 prefix, e.g. "RouteData/{userId}". */
+  userPrefix: string | null;
   status: S3Status;
   errorMessage: string | null;
 }
@@ -40,12 +43,12 @@ export interface S3StorageResult {
 
 const KEY_PREFIX = "RouteData";
 
-function deriveS3Key(attempt: RouteAttempt): string {
+function deriveS3Key(userId: string, attempt: RouteAttempt): string {
   const state = sanitizeDirName(attempt.state || "Unknown State");
   const area  = sanitizeDirName(attempt.area  || "Unknown Area");
   const route = sanitizeDirName(attempt.route || "Unknown Route");
   const runType = attempt.runType ?? "attempt";
-  return `${KEY_PREFIX}/${state}/${area}/${route}/${attempt.id}-${runType}.json`;
+  return `${KEY_PREFIX}/${userId}/${state}/${area}/${route}/${attempt.id}-${runType}.json`;
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +56,7 @@ function deriveS3Key(attempt: RouteAttempt): string {
 // ---------------------------------------------------------------------------
 
 export function useS3Storage(): S3StorageResult {
+  const { user } = useAuth();
   const [status, setStatus]           = useState<S3Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -64,9 +68,10 @@ export function useS3Storage(): S3StorageResult {
   // ---- Upload ----------------------------------------------------------------
 
   const uploadAttempt = useCallback(async (attempt: RouteAttempt): Promise<string> => {
+    if (!user) throw new Error("Authentication required.");
     setStatus("loading");
     setErrorMessage(null);
-    const key = deriveS3Key(attempt);
+    const key = deriveS3Key(user.id, attempt);
 
     const serializable = serializeAttemptForJson(attempt);
 
@@ -88,7 +93,7 @@ export function useS3Storage(): S3StorageResult {
       setErr(msg);
       throw err;
     }
-  }, []);
+  }, [user]);
 
   // ---- Download --------------------------------------------------------------
 
@@ -185,5 +190,7 @@ export function useS3Storage(): S3StorageResult {
     }
   }, []);
 
-  return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, listPrefixes, status, errorMessage };
+  const userPrefix = user ? `${KEY_PREFIX}/${user.id}` : null;
+
+  return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, listPrefixes, userPrefix, status, errorMessage };
 }

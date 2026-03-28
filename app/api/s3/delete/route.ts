@@ -1,11 +1,16 @@
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { s3, getBucket, isValidKey, awsErrorMessage } from "../shared";
+import { s3, getBucket, isValidKey, getAuthUserId, awsErrorMessage } from "../shared";
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  const userId = await getAuthUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
   const key = request.nextUrl.searchParams.get("key") ?? "";
 
-  if (!isValidKey(key)) {
+  if (!isValidKey(key, userId)) {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
   }
 
