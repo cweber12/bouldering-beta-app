@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
-import InfoDropdown from "@/components/shared/InfoDropdown";
+
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
 import { useOpenCV } from "@/hooks/useOpenCV";
@@ -351,6 +351,7 @@ function UploadPageInner() {
           isProcessing
             ? "cursor-not-allowed border-zinc-800 text-zinc-600"
             : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+          !pendingFile && !isProcessing ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
         ].join(" ")}
       >
         <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -487,7 +488,10 @@ function UploadPageInner() {
           <button
             onClick={handleProcess}
             disabled={!model || !cv}
-            className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className={[
+              "flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50",
+              pendingFile && !isProcessing ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
+            ].join(" ")}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
@@ -674,42 +678,7 @@ function UploadPageInner() {
         </Link>
       </div>
 
-      {/* Info dropdowns */}
-      <div className="flex flex-col gap-3">
-        <InfoDropdown title="What this page does">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>Upload a climbing video and this page <strong className="text-zinc-300">analyses it entirely in your browser</strong> — nothing is sent to a third-party server.</li>
-            <li>A pose-detection AI (<strong className="text-zinc-300">MoveNet Lightning</strong>) tracks your skeleton joint-by-joint on every sampled frame of the video.</li>
-            <li><strong className="text-zinc-300">ORB feature matching</strong> simultaneously memorises the unique texture of the wall from the first video frame.</li>
-            <li>The result is a compact <code className="text-zinc-300">.json</code> file you take to the <strong className="text-zinc-300">Match page</strong> to overlay your movement onto a still route photo.</li>
-          </ul>
-        </InfoDropdown>
-        <InfoDropdown title="Entering route information">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li><strong className="text-zinc-300">State / Region, Area, and Route</strong> organise saved runs so they group correctly when loaded on the Match and Compare pages.</li>
-            <li>Set <strong className="text-zinc-300">Run type</strong> to <em>Attempt</em> if you did not top the route, or <em>Send</em> if you completed it — shown as a coloured badge throughout the app.</li>
-            <li><strong className="text-zinc-300">Grade / Rating</strong> and <strong className="text-zinc-300">Notes</strong> are optional — add them to help identify and compare runs later.</li>
-            <li>All fields can be filled in or changed before or after processing.</li>
-          </ul>
-        </InfoDropdown>
-        <InfoDropdown title="Filming and lighting">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>Mount the camera on a <strong className="text-zinc-300">tripod or fixed surface</strong> — any camera movement prevents accurate wall-feature matching.</li>
-            <li>Keep the <strong className="text-zinc-300">entire route and climber visible</strong> throughout the clip; nobody should pass between the camera and the climber.</li>
-            <li>Shoot in <strong className="text-zinc-300">consistent, even light</strong> — harsh backlight, direct sun, deep shade, or mixed indoor/outdoor light all reduce accuracy.</li>
-            <li>Overhead gym fluorescents can cast uneven shadows; chalk dust or a fogged lens reduces sharpness — note any issues in <strong className="text-zinc-300">Shooting conditions</strong> before processing.</li>
-            <li>Keep the clip short — only the section containing the climbing run is needed.</li>
-          </ul>
-        </InfoDropdown>
-        <InfoDropdown title="Processing, testing, and saving">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>After selecting a video, scrub to a representative frame, then drag the <strong className="text-zinc-300">Climber crop</strong> box around the area the climber moves through and the <strong className="text-zinc-300">Background (ORB) crop</strong> over the wall texture.</li>
-            <li>Click <strong className="text-zinc-300">Process video</strong>. A progress bar shows frames analysed. Processing runs entirely in the browser and may take up to a minute for long videos.</li>
-            <li>Once complete, click <strong className="text-zinc-300">Match against a route photo</strong> to test the skeleton overlay immediately on the Match page.</li>
-            <li>Save the <code className="text-zinc-300">.json</code> to your device or to S3 — it can be reloaded on the Match page in any future session without re-processing the video.</li>
-          </ul>
-        </InfoDropdown>
-      </div>
+
 
       {/* Main content � sidebar + video/crop */}
       {/* On large screens: sidebar left, video right. On small: video top, sidebar bottom. */}
@@ -759,9 +728,9 @@ function UploadPageInner() {
 
           <Link
             href={`/match?id=${activeAttemptId}`}
-            className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200"
+            className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse"
           >
-            Match against a route photo
+            View on route photo
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>

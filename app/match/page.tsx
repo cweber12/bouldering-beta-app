@@ -4,7 +4,6 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
-import InfoDropdown from "@/components/shared/InfoDropdown";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer from "@/components/shared/FramePlayer";
@@ -152,29 +151,10 @@ function MatchPageInner() {
         </Link>
       </div>
 
-      {/* Info dropdowns */}
-      <div className="flex flex-col gap-3">
-        <InfoDropdown title="How does route matching work?">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>The app extracts <strong className="text-zinc-300">ORB visual features</strong> (corner points) from your route photo and matches them against the reference features recorded from the video.</li>
-            <li>Matching finds pairs of features that appear the same in both images. The best pairs are used to compute a <strong className="text-zinc-300">perspective transform</strong> that maps the video&apos;s coordinate space onto the photo.</li>
-            <li>Each recorded skeleton keypoint is then projected into the photo using that transform, producing the overlay video.</li>
-            <li>Match quality depends on <strong className="text-zinc-300">shared wall texture</strong>. Photos taken from a very different angle or distance will reduce accuracy.</li>
-          </ul>
-        </InfoDropdown>
-        <InfoDropdown title="How to crop the route photo">
-          <ul className="flex flex-col gap-1.5 pl-4 list-disc">
-            <li>Drag the crop handles to focus on the <strong className="text-zinc-300">wall surface</strong> — rock texture, holds, and chalk marks are ideal features for matching.</li>
-            <li>Exclude sky, trees, gear, people, and the floor — these change between sessions and spoil the match.</li>
-            <li>The crop should roughly correspond to the background (ORB) crop you set on the upload page.</li>
-            <li>If matching fails or produces few good matches, try re-cropping to include more distinctive wall texture.</li>
-          </ul>
-        </InfoDropdown>
-      </div>
 
-      {/* Attempt data section */}
-      <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4">
-        <p className="text-sm font-medium text-zinc-300">Run data</p>
+      {/* Climb data section */}
+      <div className={["rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-4", !hasAttempt ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : ""].join(" ")}>
+        <p className="text-sm font-medium text-zinc-300">Climb data</p>
 
         {hasAttempt && (
           <div className="flex flex-col gap-2">
@@ -218,7 +198,7 @@ function MatchPageInner() {
         )}
 
         <S3RoutePicker
-          label={hasAttempt ? "Change run" : "Load run"}
+          label={hasAttempt ? "Change climb" : "Load climb"}
           onLoad={handleLoadAttempt}
         />
       </div>
@@ -287,12 +267,13 @@ function MatchPageInner() {
             !hasAttempt || isMatching
               ? "cursor-not-allowed border-zinc-800 text-zinc-600"
               : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+            hasAttempt && !imageFile && !isMatching ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
           ].join(" ")}
         >
           <svg className="h-6 w-6 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
           </svg>
-          <span>{isMatching ? "Matching..." : "Select a route photo"}</span>
+          <span>{isMatching ? "Loading..." : "Select a route photo"}</span>
           <span className="text-xs text-zinc-600">JPG, PNG, WebP accepted</span>
           <input
             type="file"
@@ -326,9 +307,9 @@ function MatchPageInner() {
             <button
               onClick={handleApplyAndMatch}
               disabled={!hasAttempt}
-              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse"
             >
-              Apply &amp; Match
+              Apply &amp; View
             </button>
           </div>
         )}
@@ -347,7 +328,7 @@ function MatchPageInner() {
       {/* Match stats */}
       {isMatchDone && matchResult && (
         <div className="rounded-lg border border-zinc-800 bg-zinc-900 px-5 py-4 flex flex-col gap-1">
-          <p className="text-sm font-medium text-zinc-300">Match statistics</p>
+          <p className="text-sm font-medium text-zinc-300">View statistics</p>
           <div className="mt-2 grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-xl font-bold text-zinc-100">{matchResult.matches.length}</p>

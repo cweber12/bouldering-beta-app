@@ -140,7 +140,7 @@ function CompareSlot({
           className="h-2 w-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: limbColor }}
         />
-        <span className="text-xs font-medium text-zinc-300">Run {slotIndex + 1}</span>
+        <span className="text-xs font-medium text-zinc-300">Climb {slotIndex + 1}</span>
         {attempt && (
           <span className={[
             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
@@ -173,7 +173,7 @@ function CompareSlot({
       )}
 
       {!attempt && (
-        <p className="text-xs text-zinc-600 italic">No run loaded</p>
+        <p className="text-xs text-zinc-600 italic">No climb loaded</p>
       )}
 
       {attempt && matchStatus === "matching" && (
@@ -465,9 +465,9 @@ function ComparePageInner() {
     <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Compare Runs</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Compare Climbs</h1>
         <p className="text-sm text-zinc-400">
-          Load multiple runs and overlay or compare them side by side on the same route photo.
+          Load multiple climbs and overlay or compare them side by side on the same route photo.
         </p>
       </div>
 
@@ -480,6 +480,7 @@ function ComparePageInner() {
             imageFile
               ? "border-zinc-600 bg-zinc-900 text-zinc-400"
               : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200",
+            !imageFile ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
           ].join(" ")}
         >
           <svg className="h-5 w-5 text-zinc-500" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -508,12 +509,15 @@ function ComparePageInner() {
             <button
               onClick={handleApplyAndMatch}
               disabled={!anyLoaded}
-              className="flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className={[
+                "flex items-center justify-center gap-2 rounded-xl bg-zinc-100 px-6 py-3 text-sm font-semibold text-zinc-900 transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-50",
+                anyLoaded ? "ring-2 ring-zinc-400/50 ring-offset-2 ring-offset-zinc-950 animate-pulse" : "",
+              ].join(" ")}
             >
-              Apply &amp; Match
+              Apply &amp; View
             </button>
             {!anyLoaded && (
-              <p className="text-xs text-zinc-500">Load at least one run below to enable matching.</p>
+              <p className="text-xs text-zinc-500">Load at least one climb below to enable matching.</p>
             )}
           </div>
         )}
@@ -620,13 +624,13 @@ function ComparePageInner() {
       {/* Run slots */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-zinc-300">Runs</p>
+          <p className="text-sm font-medium text-zinc-300">Climbs</p>
           {slotCount < MAX_SLOTS && (
             <button
               onClick={() => setSlotCount(c => c + 1)}
               className="text-xs text-zinc-500 hover:text-zinc-300 transition"
             >
-              + Add run
+              + Add climb
             </button>
           )}
         </div>
@@ -649,15 +653,15 @@ function ComparePageInner() {
                   value={slotColors[i]}
                   onChange={(e) => handleColorChange(i, e.target.value)}
                   className="h-7 w-7 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
-                  title={`Run ${i + 1} skeleton color`}
-                  aria-label={`Run ${i + 1} skeleton color`}
+                  title={`Climb ${i + 1} skeleton color`}
+                  aria-label={`Climb ${i + 1} skeleton color`}
                 />
-                <div className="min-w-0 flex-1">
+                <div className={["min-w-0 flex-1", i === 0 && imageFile && !anyLoaded ? "ring-2 ring-zinc-400/50 ring-offset-1 ring-offset-zinc-950 animate-pulse rounded-xl" : ""].join(" ")}>
                   <S3RoutePicker
                     label={
                       attempts[i]
-                        ? `Change Run ${i + 1}`
-                        : `Load Run ${i + 1}`
+                        ? `Change Climb ${i + 1}`
+                        : `Load Climb ${i + 1}`
                     }
                     onLoad={(att) => handleLoadAttempt(i, att)}
                     compact
@@ -704,7 +708,7 @@ function ComparePageInner() {
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: slotColors[i] }}
                   />
-                  Run {i + 1}: {att.route || att.id}
+                  Climb {i + 1}: {att.route || att.id}
                 </span>
               ) : null,
             )}
