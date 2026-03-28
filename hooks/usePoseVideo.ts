@@ -82,7 +82,7 @@ export function usePoseVideo(
       queryOrb: matchResult.queryOrb,
       matches: matchResult.matches,
       skeletonStyle: styleRef.current,
-      targetFps: 30,
+      targetFps: 15,
       onProgress: (rendered, total) => {
         if (!cancelled) setRenderProgress(Math.round((rendered / total) * 100));
       },

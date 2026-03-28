@@ -121,6 +121,9 @@ function UploadPageInner() {
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
+  const [hasCropFrame, setHasCropFrame] = useState(false);
+  const cropVideoRef = useRef<HTMLVideoElement>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Crop adjustment confirmation dialog
   const [showCropWarning, setShowCropWarning] = useState(false);
@@ -202,7 +205,20 @@ function UploadPageInner() {
     setClimberCrop(DEFAULT_CROP);
     setOrbCrop(DEFAULT_CROP);
     setActiveCropMode("climber");
+    setHasCropFrame(false);
     setS3Saved(false);
+  }
+
+  function handleCropVideoLoaded() {
+    const video = cropVideoRef.current;
+    const canvas = cropCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 360;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    setHasCropFrame(true);
   }
 
   function isCropDefault(crop: CropFraction): boolean {
@@ -345,12 +361,21 @@ function UploadPageInner() {
             </p>
           </div>
 
-          <div className="relative w-full">
-            <video
-              src={videoPreviewUrl}
-              controls
-              muted
-              playsInline
+          {/* Video player — standalone with native controls fully accessible */}
+          <video
+            ref={cropVideoRef}
+            src={videoPreviewUrl}
+            controls
+            muted
+            playsInline
+            onLoadedData={handleCropVideoLoaded}
+            className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
+          />
+
+          {/* Crop editor — overlaid on a static canvas of the first frame so controls are never blocked */}
+          <div className={hasCropFrame ? "relative w-full" : "hidden"}>
+            <canvas
+              ref={cropCanvasRef}
               className="w-full rounded-xl border border-zinc-700 bg-zinc-900"
             />
             <CropBoxOverlay

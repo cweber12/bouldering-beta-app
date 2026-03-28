@@ -45,7 +45,7 @@ export interface MultiPoseVideoParams {
   /** One entry per attempt to overlay. Must be non-empty. */
   layers: MultiPoseLayer[];
   /**
-   * Target output frame rate of the WebM video. Defaults to 30 fps.
+   * Target output frame rate of the WebM video. Defaults to 15 fps.
    */
   targetFps?: number;
   /**
@@ -88,7 +88,7 @@ export async function renderMultiPoseVideo({
   cv,
   imageFile,
   layers,
-  targetFps = 30,
+  targetFps = 15,
   onProgress,
 }: MultiPoseVideoParams): Promise<string> {
   if (typeof MediaRecorder === "undefined") {
