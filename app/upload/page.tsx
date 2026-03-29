@@ -368,24 +368,24 @@ function UploadPageInner() {
         <label
           className={[
             "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-sm transition-all",
-            "bg-[#11224E]",
+            "bg-[#143D60]",
             isProcessing
-              ? "cursor-not-allowed border-[#162e6a] opacity-40 text-[#6b80a8]"
+              ? "cursor-not-allowed border-[#0f2d47] opacity-40 text-[#5f96ae]"
               : [
-                  "border-[#1e3875] text-[#8a9bc4]",
-                  "hover:border-[#F87B1B]/60 hover:bg-[#162e6a] hover:text-[#EEEEEE]",
-                  !pendingFile ? "animate-pulse border-[#F87B1B]/30" : "",
+                  "border-[#1c5277] text-[#8dc4d8]",
+                  "hover:border-[#EB5B00]/60 hover:bg-[#0f2d47] hover:text-[#DDEB9D]",
+                  !pendingFile ? "animate-pulse border-[#EB5B00]/30" : "",
                 ].join(" "),
           ].join(" ")}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#162e6a]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f2d47]">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </div>
           <div className="flex flex-col items-center gap-0.5 text-center">
-            <span className="font-medium text-[#c5cfe8]">Choose a video</span>
-            <span className="text-xs text-[#4a5f88]">MP4, MOV, WebM</span>
+            <span className="font-medium text-[#DDEB9D]">Choose a video</span>
+            <span className="text-xs text-[#4d7a90]">MP4, MOV, WebM</span>
           </div>
           <input
             type="file"
@@ -403,24 +403,24 @@ function UploadPageInner() {
           disabled={isProcessing}
           className={[
             "flex flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-sm transition-all",
-            "bg-[#11224E]",
+            "bg-[#143D60]",
             isProcessing
-              ? "cursor-not-allowed border-[#162e6a] opacity-40 text-[#6b80a8]"
+              ? "cursor-not-allowed border-[#0f2d47] opacity-40 text-[#5f96ae]"
               : [
-                  "cursor-pointer border-[#1e3875] text-[#8a9bc4]",
-                  "hover:border-[#F87B1B]/60 hover:bg-[#162e6a] hover:text-[#EEEEEE]",
-                  !pendingFile ? "animate-pulse border-[#F87B1B]/30" : "",
+                  "cursor-pointer border-[#1c5277] text-[#8dc4d8]",
+                  "hover:border-[#EB5B00]/60 hover:bg-[#0f2d47] hover:text-[#DDEB9D]",
+                  !pendingFile ? "animate-pulse border-[#EB5B00]/30" : "",
                 ].join(" "),
           ].join(" ")}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#162e6a]">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f2d47]">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
             </svg>
           </div>
           <div className="flex flex-col items-center gap-0.5 text-center">
-            <span className="font-medium text-[#c5cfe8]">Record a video</span>
-            <span className="text-xs text-[#4a5f88]">Opens camera</span>
+            <span className="font-medium text-[#DDEB9D]">Record a video</span>
+            <span className="text-xs text-[#4d7a90]">Opens camera</span>
           </div>
         </button>
       </div>
@@ -430,7 +430,7 @@ function UploadPageInner() {
         <div className="flex flex-col gap-3">
           {/* Crop mode toggle */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-[#8a9bc4]">
+            <p className="text-xs font-medium text-[#8dc4d8]">
               Set crop regions � drag handles to resize, drag interior to move
             </p>
             <div className="flex gap-2">
@@ -439,8 +439,8 @@ function UploadPageInner() {
                 className={[
                   "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                   activeCropMode === "climber"
-                    ? "border-[#F87B1B]/60 bg-[#F87B1B]/10 text-[#F87B1B]"
-                    : "border-[#1e3875] bg-[#11224E] text-[#6b80a8] hover:border-[#2d5299] hover:text-[#8a9bc4]",
+                    ? "border-[#EB5B00]/60 bg-[#EB5B00]/10 text-[#EB5B00]"
+                    : "border-[#1c5277] bg-[#143D60] text-[#5f96ae] hover:border-[#2a6a94] hover:text-[#8dc4d8]",
                 ].join(" ")}
               >
                 Climber crop
@@ -450,14 +450,14 @@ function UploadPageInner() {
                 className={[
                   "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                   activeCropMode === "route"
-                    ? "border-[#CBD99B]/60 bg-[#CBD99B]/10 text-[#CBD99B]"
-                    : "border-[#1e3875] bg-[#11224E] text-[#6b80a8] hover:border-[#2d5299] hover:text-[#8a9bc4]",
+                    ? "border-[#A0C878]/60 bg-[#A0C878]/10 text-[#A0C878]"
+                    : "border-[#1c5277] bg-[#143D60] text-[#5f96ae] hover:border-[#2a6a94] hover:text-[#8dc4d8]",
                 ].join(" ")}
               >
                 Wall texture crop
               </button>
             </div>
-            <p className="text-xs text-[#4a5f88]">
+            <p className="text-xs text-[#4d7a90]">
               {activeCropMode === "climber"
                 ? "Climber crop \u2014 follows the climber through each frame."
                 : "Wall texture crop \u2014 used to match this video\u2019s wall to your route photo."}
@@ -465,7 +465,7 @@ function UploadPageInner() {
           </div>
 
           {/* Video with crop overlay on top */}
-          <div className="relative w-full overflow-hidden rounded-xl border border-[#1e3875] bg-[#0a1628]">
+          <div className="relative w-full overflow-hidden rounded-xl border border-[#1c5277] bg-[#0b2233]">
             <video
               ref={cropVideoRef}
               src={videoPreviewUrl}
@@ -489,10 +489,10 @@ function UploadPageInner() {
 
           {/* Video controls — below the overlay so they are never covered */}
           {hasCropFrame && (
-            <div className="flex items-center gap-3 rounded-xl border border-[#162e6a] bg-[#11224E] px-3 py-2">
+            <div className="flex items-center gap-3 rounded-xl border border-[#0f2d47] bg-[#143D60] px-3 py-2">
               <button
                 onClick={handleVideoPlayPause}
-                className="shrink-0 rounded p-1 text-[#6b80a8] transition hover:text-[#EEEEEE]"
+                className="shrink-0 rounded p-1 text-[#5f96ae] transition hover:text-[#DDEB9D]"
                 aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
@@ -513,30 +513,30 @@ function UploadPageInner() {
                 step={0.01}
                 value={videoCurrentTime}
                 onChange={handleVideoSeek}
-                className="flex-1 accent-[#F87B1B]"
+                className="flex-1 accent-[#EB5B00]"
                 aria-label="Video progress"
               />
-              <span className="shrink-0 font-mono text-xs text-[#6b80a8]">
+              <span className="shrink-0 font-mono text-xs text-[#5f96ae]">
                 {formatVideoTime(videoCurrentTime)} / {formatVideoTime(videoDuration)}
               </span>
             </div>
           )}
 
           {/* Frame step slider */}
-          <div className="flex flex-col gap-2 rounded-xl border border-[#162e6a] bg-[#11224E] px-4 py-3">
+          <div className="flex flex-col gap-2 rounded-xl border border-[#0f2d47] bg-[#143D60] px-4 py-3">
             <label className="flex items-center justify-between text-xs">
-              <span className="font-medium text-[#8a9bc4]">Pose detection frequency</span>
-              <span className="font-mono text-[#EEEEEE]">every {frameStep} frames</span>
+              <span className="font-medium text-[#8dc4d8]">Pose detection frequency</span>
+              <span className="font-mono text-[#DDEB9D]">every {frameStep} frames</span>
             </label>
             <input
               type="range"
               min={1} max={30}
               value={frameStep}
               onChange={e => setFrameStep(Number(e.target.value))}
-              className="w-full accent-[#F87B1B]"
+              className="w-full accent-[#EB5B00]"
               aria-label="Frame step"
             />
-            <p className="text-xs text-[#4a5f88]">
+            <p className="text-xs text-[#4d7a90]">
               1 = every frame (slowest, most accurate) � 30 = every 30th frame (fastest, more interpolation between detections)
             </p>
           </div>
@@ -545,7 +545,7 @@ function UploadPageInner() {
           <button
             onClick={handleProcess}
             disabled={!model || !cv}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-[#F87B1B] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#e06a0a] disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[#EB5B00] px-6 py-3 text-sm font-semibold text-[#DDEB9D] transition hover:bg-[#d44e00] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
@@ -571,13 +571,13 @@ function UploadPageInner() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowCropWarning(false)}
-                  className="rounded-xl border border-[#1e3875] px-4 py-2 text-xs font-medium text-[#8a9bc4] transition hover:border-[#2d5299] hover:text-[#EEEEEE]"
+                  className="rounded-xl border border-[#1c5277] px-4 py-2 text-xs font-medium text-[#8dc4d8] transition hover:border-[#2a6a94] hover:text-[#DDEB9D]"
                 >
                   Go back
                 </button>
                 <button
                   onClick={startProcessing}
-                  className="rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50"
+                  className="rounded-lg border border-[#EB5B00]/40 bg-[#EB5B00]/10 px-4 py-2 text-xs font-medium text-[#EB5B00] transition hover:bg-[#EB5B00]/20"
                 >
                   Proceed anyway
                 </button>
@@ -591,14 +591,15 @@ function UploadPageInner() {
   );
 
   const sidebarSection = pendingFile && !isProcessing && !showResults ? (
-    <aside className="w-full lg:w-72 shrink-0 flex flex-col gap-4">
-      {/* Location metadata */}
-      <div className="rounded-2xl border border-[#162e6a] bg-[#11224E] px-4 py-4 flex flex-col gap-4">
-        <div>
-          <p className="text-sm font-semibold text-[#EEEEEE]">Location</p>
-          <p className="text-xs text-[#4a5f88] mt-0.5">Used to organise your saved climbs.</p>
-        </div>
-        <div className="flex flex-col gap-3">
+    <aside className="w-full lg:w-72 shrink-0">
+      <div className="rounded-2xl border border-[#1c5277] bg-[#143D60] divide-y divide-[#1c5277]">
+
+        {/* ── Location ─────────────────────────────── */}
+        <div className="px-4 py-4 flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[#DDEB9D]">Location</p>
+            <p className="text-xs text-[#4d7a90] mt-0.5">Used to organise your saved climbs.</p>
+          </div>
           <ComboInput
             label="State / Region"
             value={state}
@@ -624,103 +625,104 @@ function UploadPageInner() {
             disabled={isProcessing}
           />
         </div>
-      </div>
 
-      {/* Run classification */}
-      <div className="rounded-2xl border border-[#162e6a] bg-[#11224E] px-4 py-4 flex flex-col gap-3">
-        <p className="text-sm font-semibold text-[#EEEEEE]">Climb type</p>
-        <div className="flex gap-2">
-          {(["attempt", "send"] as RunType[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setRunType(t)}
-              disabled={isProcessing}
-              className={[
-                "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition capitalize",
-                runType === t
-                  ? t === "send"
-                    ? "border-[#CBD99B]/60 bg-[#CBD99B]/10 text-[#CBD99B]"
-                    : "border-[#F87B1B]/60 bg-[#F87B1B]/10 text-[#F87B1B]"
-                  : "border-[#162e6a] bg-[#0a1628] text-[#6b80a8] hover:border-[#1e3875] hover:text-[#8a9bc4]",
-                isProcessing ? "cursor-not-allowed opacity-50" : "",
-              ].join(" ")}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-        <p className="text-xs text-[#4a5f88]">
-          {runType === "send" ? "You topped the route successfully." : "You did not complete the route."}
-        </p>
-      </div>
-
-      {/* Rating & notes (optional) */}
-      <div className="rounded-2xl border border-[#162e6a] bg-[#11224E] px-4 py-4 flex flex-col gap-3">
-        <p className="text-sm font-semibold text-[#EEEEEE]">Details <span className="text-[#4a5f88] font-normal">(optional)</span></p>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[#8a9bc4]">Grade / Rating</label>
-          <input
-            type="text"
-            value={rating}
-            onChange={e => setRating(e.target.value)}
-            placeholder="e.g. V3, 5.10a, 6a+"
-            disabled={isProcessing}
-            className="rounded-xl border border-[#1e3875] bg-[#0a1628] px-3 py-2 text-sm text-[#EEEEEE] outline-none transition placeholder:text-[#2d5299] focus:border-[#F87B1B]/60 disabled:opacity-50"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-medium text-[#8a9bc4]">Notes</label>
-          <textarea
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            placeholder="Anything to remember about this run…"
-            rows={3}
-            disabled={isProcessing}
-            className="rounded-xl border border-[#1e3875] bg-[#0a1628] px-3 py-2 text-sm text-[#EEEEEE] outline-none transition placeholder:text-[#2d5299] focus:border-[#F87B1B]/60 disabled:opacity-50 resize-none"
-          />
-        </div>
-      </div>
-
-      {/* Frame adjustment conditions � visible before processing */}
-      {!isDone && !isProcessing && (
-        <div className="rounded-2xl border border-[#162e6a] bg-[#11224E] px-4 py-4 flex flex-col gap-3">
-          <div className="flex flex-col gap-0.5">
-            <p className="text-sm font-semibold text-[#EEEEEE]">Shooting conditions</p>
-            <p className="text-xs text-[#4a5f88]">Select any that apply to help us improve future processing.</p>
-          </div>
-          <div className="flex flex-col gap-2">
-            {FRAME_CONDITIONS.map(c => (
-              <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={conditions.has(c.id)}
-                  onChange={() => toggleCondition(c.id)}
-                  className="mt-0.5 h-3.5 w-3.5 accent-[#F87B1B] cursor-pointer"
-                />
-                <span className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium text-[#c5cfe8] group-hover:text-[#EEEEEE] transition">{c.label}</span>
-                  <span className="text-xs text-[#4a5f88]">{c.description}</span>
-                </span>
-              </label>
+        {/* ── Climb type ───────────────────────────── */}
+        <div className="px-4 py-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-[#DDEB9D]">Climb type</p>
+          <div className="flex gap-2">
+            {(["attempt", "send"] as RunType[]).map(t => (
+              <button
+                key={t}
+                onClick={() => setRunType(t)}
+                disabled={isProcessing}
+                className={[
+                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
+                  runType === t
+                    ? t === "send"
+                      ? "border-[#A0C878]/60 bg-[#A0C878]/10 text-[#A0C878]"
+                      : "border-[#EB5B00]/60 bg-[#EB5B00]/10 text-[#EB5B00]"
+                    : "border-[#1c5277] bg-[#0f2d47] text-[#5f96ae] hover:border-[#2a6a94] hover:text-[#8dc4d8]",
+                  isProcessing ? "cursor-not-allowed opacity-50" : "",
+                ].join(" ")}
+              >
+                {t}
+              </button>
             ))}
           </div>
+          <p className="text-xs text-[#4d7a90]">
+            {runType === "send" ? "You topped the route successfully." : "You did not complete the route."}
+          </p>
         </div>
-      )}
+
+        {/* ── Details ──────────────────────────────── */}
+        <div className="px-4 py-4 flex flex-col gap-3">
+          <p className="text-sm font-semibold text-[#DDEB9D]">Details <span className="text-[#4d7a90] font-normal">(optional)</span></p>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[#8dc4d8]">Grade / Rating</label>
+            <input
+              type="text"
+              value={rating}
+              onChange={e => setRating(e.target.value)}
+              placeholder="e.g. V3, 5.10a, 6a+"
+              disabled={isProcessing}
+              className="rounded-xl border border-[#1c5277] bg-[#0f2d47] px-3 py-2 text-sm text-[#DDEB9D] outline-none transition placeholder:text-[#2a6a94] focus:border-[#EB5B00]/60 disabled:opacity-50"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[#8dc4d8]">Notes</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Anything to remember about this run…"
+              rows={3}
+              disabled={isProcessing}
+              className="rounded-xl border border-[#1c5277] bg-[#0f2d47] px-3 py-2 text-sm text-[#DDEB9D] outline-none transition placeholder:text-[#2a6a94] focus:border-[#EB5B00]/60 disabled:opacity-50 resize-none"
+            />
+          </div>
+        </div>
+
+        {/* ── Shooting conditions ───────────────────── */}
+        {!isDone && !isProcessing && (
+          <div className="px-4 py-4 flex flex-col gap-3">
+            <div>
+              <p className="text-sm font-semibold text-[#DDEB9D]">Shooting conditions</p>
+              <p className="text-xs text-[#4d7a90] mt-0.5">Select any that apply.</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {FRAME_CONDITIONS.map(c => (
+                <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={conditions.has(c.id)}
+                    onChange={() => toggleCondition(c.id)}
+                    className="mt-0.5 h-3.5 w-3.5 accent-[#EB5B00] cursor-pointer"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium text-[#DDEB9D] group-hover:text-[#A0C878] transition">{c.label}</span>
+                    <span className="text-xs text-[#4d7a90]">{c.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
     </aside>
   ) : null;
 
   return (
-    <div className="flex-1 bg-[#0a1628]">
+    <div className="flex-1 bg-[#0b2233]">
       <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-[#EEEEEE]">Video Analysis</h1>
-          <p className="text-sm text-[#8a9bc4]">
+          <h1 className="text-2xl font-bold tracking-tight text-[#DDEB9D]">Video Analysis</h1>
+          <p className="text-sm text-[#8dc4d8]">
             Upload or record a climbing video to extract skeleton poses and wall reference features.
           </p>
         </div>
-        <Link href="/" className="shrink-0 text-xs text-[#6b80a8] transition hover:text-[#EEEEEE]">
+        <Link href="/" className="shrink-0 text-xs text-[#5f96ae] transition hover:text-[#DDEB9D]">
           &#8592; Home
         </Link>
       </div>
@@ -737,21 +739,21 @@ function UploadPageInner() {
       {/* Progress bar */}
       {isProcessing && (
         <div className="flex flex-col gap-2">
-          <div className="h-2 overflow-hidden rounded-full bg-[#162e6a]">
+          <div className="h-2 overflow-hidden rounded-full bg-[#0f2d47]">
             <div
-              className="h-full rounded-full bg-[#F87B1B] transition-all duration-300"
+              className="h-full rounded-full bg-[#EB5B00] transition-all duration-300"
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <p className="text-center text-xs text-[#8a9bc4]">
+          <p className="text-center text-xs text-[#8dc4d8]">
             Analysing frame {currentFrame} of {totalFrames} ({progressPct}%)
-            <span className="ml-1.5 text-[#4a5f88]">� pose every {frameStep} frames</span>
+            <span className="ml-1.5 text-[#4d7a90]">� pose every {frameStep} frames</span>
           </p>
         </div>
       )}
 
       {isDone && orbStatus === "extracting" && (
-        <p className="text-center text-sm text-[#8a9bc4]">Extracting reference features&#8230;</p>
+        <p className="text-center text-sm text-[#8dc4d8]">Extracting reference features&#8230;</p>
       )}
       {isDone && orbStatus === "failed" && (
         <p className="text-center text-sm text-amber-400">
@@ -769,13 +771,13 @@ function UploadPageInner() {
               controls
               muted
               playsInline
-              className="w-full rounded-2xl border border-[#162e6a] bg-[#0a1628]"
+              className="w-full rounded-2xl border border-[#1c5277] bg-[#0b2233]"
             />
           )}
 
-          <div className="rounded-2xl border border-[#CBD99B]/25 bg-[#CBD99B]/5 px-5 py-4">
-            <p className="text-sm font-semibold text-[#CBD99B]">Analysis complete</p>
-            <p className="mt-0.5 text-xs text-[#CBD99B]/70">
+          <div className="rounded-2xl border border-[#A0C878]/25 bg-[#A0C878]/5 px-5 py-4">
+            <p className="text-sm font-semibold text-[#A0C878]">Analysis complete</p>
+            <p className="mt-0.5 text-xs text-[#A0C878]/70">
               {activeAttempt.frames.length} pose frames �{" "}
               {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points extracted
               {activeAttempt.state && ` � ${activeAttempt.state}`}
@@ -786,7 +788,7 @@ function UploadPageInner() {
 
           <Link
             href={`/match?id=${activeAttemptId}`}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-[#F87B1B] px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#F87B1B]/20 transition hover:bg-[#e06a0a]"
+            className="flex items-center justify-center gap-2 rounded-2xl bg-[#EB5B00] px-6 py-3.5 text-sm font-semibold text-[#DDEB9D] shadow-lg shadow-[#EB5B00]/20 transition hover:bg-[#d44e00]"
           >
             View on route photo
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -796,7 +798,7 @@ function UploadPageInner() {
 
           <button
             onClick={handleSaveToDevice}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-[#1e3875] bg-[#11224E] px-6 py-3 text-sm text-[#8a9bc4] transition hover:border-[#2d5299] hover:text-[#EEEEEE]"
+            className="flex items-center justify-center gap-2 rounded-2xl border border-[#1c5277] bg-[#143D60] px-6 py-3 text-sm text-[#8dc4d8] transition hover:border-[#2a6a94] hover:text-[#DDEB9D]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -825,8 +827,8 @@ function UploadPageInner() {
             className={[
               "flex items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
               s3Saved
-                ? "border-[#CBD99B]/30 bg-[#CBD99B]/5 text-[#CBD99B] hover:border-[#CBD99B]/50"
-                : "border-[#1e3875] bg-[#11224E] text-[#8a9bc4] hover:border-[#2d5299] hover:text-[#EEEEEE]",
+                ? "border-[#A0C878]/30 bg-[#A0C878]/5 text-[#A0C878] hover:border-[#A0C878]/50"
+                : "border-[#1c5277] bg-[#143D60] text-[#8dc4d8] hover:border-[#2a6a94] hover:text-[#DDEB9D]",
             ].join(" ")}
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -863,7 +865,7 @@ export default function UploadPage() {
     <LoadingGate>
       <Suspense
         fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-[#6b80a8]">
+          <div className="flex flex-1 items-center justify-center text-sm text-[#5f96ae]">
             Loading&#8230;
           </div>
         }

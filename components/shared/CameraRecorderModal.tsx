@@ -84,7 +84,7 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
     >
       <div
         className="relative w-full max-w-lg overflow-hidden rounded-t-2xl shadow-2xl sm:rounded-2xl"
-        style={{ backgroundColor: "#11224E" }}
+        style={{ backgroundColor: "#143D60" }}
         onClick={e => e.stopPropagation()}
       >
         {/* Camera preview */}
@@ -120,8 +120,8 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
             <button
               onClick={startRecording}
               disabled={!ready}
-              className="flex-1 rounded-xl py-3 text-sm font-semibold text-white transition disabled:opacity-40"
-              style={{ backgroundColor: "#F87B1B" }}
+              className="flex-1 rounded-xl py-3 text-sm font-semibold text-[#DDEB9D] transition disabled:opacity-40"
+              style={{ backgroundColor: "#EB5B00" }}
             >
               Start recording
             </button>
@@ -135,8 +135,8 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
           )}
           <button
             onClick={onClose}
-            className="rounded-xl border px-5 py-3 text-sm font-medium transition hover:text-[#EEEEEE]"
-            style={{ borderColor: "#1e3875", color: "#8a9bc4" }}
+            className="rounded-xl border px-5 py-3 text-sm font-medium transition hover:text-[#DDEB9D]"
+            style={{ borderColor: "#1c5277", color: "#8dc4d8" }}
           >
             Cancel
           </button>
