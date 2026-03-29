@@ -56,6 +56,7 @@ export interface VideoProcessorResult {
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
     cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> },
+    startTime?: number,
   ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
@@ -97,6 +98,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
       cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
+      startTime: number = 0,
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -135,7 +137,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         canvas.width = videoWidth;
         canvas.height = videoHeight;
 
-        const frameCount = Math.ceil((duration * 1000) / frameIntervalMs);
+        const totalFrameCount = Math.ceil((duration * 1000) / frameIntervalMs);
+        const startFrame = startTime > 0 ? Math.floor((startTime * 1000) / frameIntervalMs) : 0;
+        const frameCount = totalFrameCount - startFrame;
         setTotalFrames(frameCount);
 
         const videoMeta: VideoMeta = {
@@ -158,7 +162,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
 
-          const seekTime = (i * frameIntervalMs) / 1000;
+          const seekTime = ((startFrame + i) * frameIntervalMs) / 1000;
 
           await new Promise<void>((resolve, reject) => {
             video.onseeked = () => resolve();
