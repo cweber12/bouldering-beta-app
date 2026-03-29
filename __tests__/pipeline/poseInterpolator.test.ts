@@ -281,6 +281,21 @@ describe("filterLandmarks", () => {
     // minScore=0.4 keeps all keypoints — frame is good.
     expect(filterLandmarks([f], 0.4, 0)).toHaveLength(1);
   });
+
+  it("uses custom keypointCount for MediaPipe topology (33 keypoints)", () => {
+    // A frame with 17 MoveNet keypoints: 33 - 17 = 16 missing for MP topology.
+    const f = goodFrame(0);
+    // With default keypointCount(17): 0 missing → kept.
+    expect(filterLandmarks([f])).toHaveLength(1);
+    // With keypointCount=33: 16 missing > maxMissingAllowed(2) → dropped.
+    expect(filterLandmarks([f], 0.3, 2, 33)).toHaveLength(0);
+  });
+
+  it("keeps MediaPipe frames when enough keypoints are present", () => {
+    // Build a frame with 33 high-confidence keypoints.
+    const mp33 = frame(0, Array.from({ length: 33 }, (_, i) => [`kp_${i}`, 0.5, 0.5, 0.9]));
+    expect(filterLandmarks([mp33], 0.3, 2, 33)).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -391,5 +406,44 @@ describe("estimateMissingLandmarks", () => {
     expect(est).toBeDefined();
     expect(est!.x).toBeCloseTo(0.5);
     expect(est!.score).toBeCloseTo(0.45); // 0.9 * 0.5
+  });
+
+  it("accepts 'mediapipe' backend for MediaPipe topology estimation", () => {
+    // MediaPipe topology has 33 keypoints. We need enough present keypoints
+    // so that the missing count (1) is within maxEstimatable.
+    // Build frames with most MediaPipe keypoints, leaving left_elbow missing in f1.
+    const mpKps: Array<[string, number, number, number?]> = [
+      ["nose", 0.5, 0.1], ["left_eye_inner", 0.48, 0.09],
+      ["left_eye", 0.46, 0.09], ["left_eye_outer", 0.44, 0.09],
+      ["right_eye_inner", 0.52, 0.09], ["right_eye", 0.54, 0.09],
+      ["right_eye_outer", 0.56, 0.09], ["left_ear", 0.4, 0.1],
+      ["right_ear", 0.6, 0.1], ["mouth_left", 0.48, 0.12],
+      ["mouth_right", 0.52, 0.12], ["left_shoulder", 0.35, 0.25],
+      ["right_shoulder", 0.65, 0.25], ["left_elbow", 0.3, 0.4],
+      ["right_elbow", 0.7, 0.4], ["left_wrist", 0.28, 0.55],
+      ["right_wrist", 0.72, 0.55], ["left_pinky", 0.27, 0.57],
+      ["right_pinky", 0.73, 0.57], ["left_index", 0.28, 0.58],
+      ["right_index", 0.72, 0.58], ["left_thumb", 0.29, 0.56],
+      ["right_thumb", 0.71, 0.56], ["left_hip", 0.4, 0.6],
+      ["right_hip", 0.6, 0.6], ["left_knee", 0.38, 0.75],
+      ["right_knee", 0.62, 0.75], ["left_ankle", 0.37, 0.9],
+      ["right_ankle", 0.63, 0.9], ["left_heel", 0.36, 0.92],
+      ["right_heel", 0.64, 0.92], ["left_foot_index", 0.38, 0.93],
+      ["right_foot_index", 0.62, 0.93],
+    ];
+    const f0 = frame(0, mpKps);
+    // f1 is missing left_elbow (only 1 missing, within maxEstimatable=5).
+    const f1Kps = mpKps.filter(([name]) => name !== "left_elbow");
+    const f1 = frame(1, f1Kps);
+    const result = estimateMissingLandmarks([f0, f1], 10, 5, "mediapipe");
+    const est = result[1].keypoints.find(k => k.name === "left_elbow");
+    expect(est).toBeDefined();
+  });
+
+  it("returns frames unchanged with mediapipe backend when all keypoints present", () => {
+    const frames = [goodFrame(0), goodFrame(1)];
+    const result = estimateMissingLandmarks(frames, 10, 5, "mediapipe");
+    expect(result[0].keypoints).toHaveLength(17);
+    expect(result[1].keypoints).toHaveLength(17);
   });
 });

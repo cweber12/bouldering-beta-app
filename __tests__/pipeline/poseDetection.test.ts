@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { estimateFrame } from "@/pipeline/poseDetection";
+import { estimateFrame, estimateFrameUnified } from "@/pipeline/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,5 +153,45 @@ describe("estimateFrame — keypoint shape", () => {
     // score defaults to 0, which is below minScore=0.3, so filtered out.
     const result = await estimateFrame(detector, makeCanvas(), 0);
     expect(result!.keypoints).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// estimateFrameUnified — dispatches to MoveNet or MediaPipe
+// ---------------------------------------------------------------------------
+
+describe("estimateFrameUnified — dispatches based on backend", () => {
+  it("dispatches to MoveNet when backend is 'movenet'", async () => {
+    const detector = mockDetector([
+      { keypoints: [rawKp("nose", 320, 240, 0.9)] },
+    ]);
+    const result = await estimateFrameUnified(detector, makeCanvas(), 1.0, "movenet");
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(1.0);
+    // MoveNet normalises pixel coords.
+    expect(result!.keypoints[0].x).toBeCloseTo(0.5);
+  });
+
+  it("dispatches to MediaPipe when backend is 'mediapipe'", async () => {
+    // Mock a MediaPipe PoseLandmarker-style return
+    const landmarker = {
+      detectForVideo: vi.fn().mockReturnValue({
+        landmarks: [[{ x: 0.25, y: 0.75, visibility: 0.9 }]],
+      }),
+    };
+    const result = await estimateFrameUnified(landmarker, makeCanvas(), 2.0, "mediapipe");
+    expect(result).not.toBeNull();
+    expect(result!.timestamp).toBe(2.0);
+    // MediaPipe uses normalised coords directly.
+    expect(result!.keypoints[0].x).toBe(0.25);
+    expect(result!.keypoints[0].y).toBe(0.75);
+  });
+
+  it("returns null for MediaPipe when no landmarks are detected", async () => {
+    const landmarker = {
+      detectForVideo: vi.fn().mockReturnValue({ landmarks: [] }),
+    };
+    const result = await estimateFrameUnified(landmarker, makeCanvas(), 0, "mediapipe");
+    expect(result).toBeNull();
   });
 });

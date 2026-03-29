@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { estimateFrame, type PoseFrame } from "@/pipeline/poseDetection";
+import { estimateFrameUnified, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
 import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
 import {
@@ -17,6 +17,8 @@ import {
 } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import type { PoseBackend } from "@/utils/poseConstants";
+import { getTopology } from "@/utils/poseConstants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
@@ -34,20 +36,16 @@ export interface VideoProcessorResult {
    * followed by landmark filtering, interpolation, and EMA smoothing.
    *
    * @param file      - The video to process.
-   * @param detector  - Loaded TF.js PoseDetector.
+   * @param detector  - Loaded pose detector (TF.js PoseDetector or MediaPipe PoseLandmarker).
    * @param cv        - Initialised OpenCV runtime.
    * @param frameStep - Pose detection runs every N-th sampled frame.
    *                    Gaps are filled by filtering + linear interpolation.
    *                    Default: 5.
    * @param meta      - Optional location + classification metadata.
    * @param cropOptions - Optional user-defined crop boxes and lighting hints.
-   *                    `climberCrop`: box dimensions are preserved and
-   *                    re-centered on the detected hip each frame.
-   *                    `orbCrop`: ORB features extracted from this sub-region
-   *                    of the first frame only.
-   *                    `conditions`: user-selected frame conditions (e.g.
-   *                    "backlit", "shadows") that trigger per-frame
-   *                    preprocessing on the pose-detection canvas.
+   * @param startTime - Optional start time in seconds.
+   * @param backend   - Which pose backend is active ("movenet" | "mediapipe").
+   *                    Default: "movenet".
    */
   process: (
     file: File,
@@ -57,6 +55,7 @@ export interface VideoProcessorResult {
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
     cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> },
     startTime?: number,
+    backend?: PoseBackend,
   ) => Promise<void>;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
@@ -99,6 +98,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
       cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
       startTime: number = 0,
+      backend: PoseBackend = "movenet",
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -230,7 +230,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
             }
 
-            const frame = await estimateFrame(detector, poseCanvas, video.currentTime);
+            const frame = await estimateFrameUnified(detector, poseCanvas, video.currentTime, backend);
             if (frame) {
               const poseFrame: PoseFrame = appliedCropBox
                 ? {
@@ -255,9 +255,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         }
 
         // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
-        const goodFrames   = filterLandmarks(detected);
+        const topo = getTopology(backend);
+        const goodFrames   = filterLandmarks(detected, 0.3, 2, topo.keypointCount);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
-        const estimated    = estimateMissingLandmarks(interpolated);
+        const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
         const frames       = smoothPoseFrames(estimated);
 
         saveAttempt({
@@ -267,6 +268,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           orbFeatures: null,
           matchesPerFrame: null,
           frameCaptures,
+          poseBackend: backend,
           state: meta.state,
           area: meta.area,
           route: meta.route,
@@ -278,7 +280,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         setStatus("done");
 
         console.info(
-          `[useVideoProcessor] Done. attempt=${id} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}`,
+          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}`,
         );
 
         // Yield to the React render cycle so the "done" status is painted
@@ -310,6 +312,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               orbFeatures,
               matchesPerFrame: null,
               frameCaptures,
+              poseBackend: backend,
               state: meta.state,
               area: meta.area,
               route: meta.route,

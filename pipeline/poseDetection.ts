@@ -1,11 +1,16 @@
 /**
- * Thin wrapper around the TF.js pose-detection model call.
+ * Pose estimation wrappers for MoveNet (TF.js) and MediaPipe Pose Landmarker.
  *
  * Accepts a canvas element (drawn from a video frame) and returns an array
  * of normalized keypoints with confidence scores, filtered by minScore.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
+
+import type { PoseBackend } from "@/utils/poseConstants";
+import { estimateFrameMediaPipe } from "@/pipeline/mediapipePoseDetection";
+
+export type { PoseBackend };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
@@ -31,7 +36,7 @@ export interface PoseFrame {
 const DEFAULT_MIN_SCORE = 0.3;
 
 /**
- * Run pose estimation on a single video frame canvas.
+ * Run MoveNet pose estimation on a single video frame canvas.
  *
  * @param detector  - The loaded TF.js PoseDetector instance.
  * @param canvas    - A canvas element containing the current video frame pixels.
@@ -70,4 +75,34 @@ export async function estimateFrame(
     }));
 
   return { timestamp, keypoints };
+}
+
+/**
+ * Run pose estimation on a single video frame using the specified backend.
+ *
+ * Dispatches to the MoveNet (TF.js) or MediaPipe Pose Landmarker wrapper
+ * based on `backend`. The result is always a unified PoseFrame.
+ *
+ * @param detector  - The loaded model (TF.js PoseDetector or MediaPipe PoseLandmarker).
+ * @param canvas    - A canvas element containing the current video frame pixels.
+ * @param timestamp - The video timestamp (seconds) this frame corresponds to.
+ * @param backend   - Which backend produced the detector ("movenet" | "mediapipe").
+ * @param minScore  - Keypoints below this confidence threshold are dropped.
+ * @returns A PoseFrame, or null if no pose was detected.
+ */
+export async function estimateFrameUnified(
+  detector: PoseDetector,
+  canvas: HTMLCanvasElement,
+  timestamp: number,
+  backend: PoseBackend,
+  minScore: number = DEFAULT_MIN_SCORE,
+): Promise<PoseFrame | null> {
+  if (backend === "mediapipe") {
+    // MediaPipe's detectForVideo is synchronous — return via resolved promise
+    // for a consistent async interface with the MoveNet path.
+    return Promise.resolve(
+      estimateFrameMediaPipe(detector, canvas, timestamp, minScore),
+    );
+  }
+  return estimateFrame(detector, canvas, timestamp, minScore);
 }

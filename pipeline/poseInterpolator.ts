@@ -11,7 +11,13 @@
  */
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
-import { MOVENET_KEYPOINT_COUNT, KP_NAMES, SKELETON_EDGES } from "@/utils/poseConstants";
+import {
+  MOVENET_KEYPOINT_COUNT,
+  KP_NAMES,
+  SKELETON_EDGES,
+  type PoseBackend,
+  getTopology,
+} from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Landmark estimation hook (pluggable — not yet implemented)
@@ -101,22 +107,64 @@ function oneEuroStep(
 // Precomputed skeleton adjacency + full keypoint name set
 // ---------------------------------------------------------------------------
 
-const ADJACENCY: ReadonlyMap<string, readonly string[]> = (() => {
+/** Build an adjacency map from a set of skeleton edges and keypoint names. */
+function buildAdjacency(
+  edges: [number, number][],
+  names: Record<number, string>,
+): ReadonlyMap<string, readonly string[]> {
   const adj = new Map<string, string[]>();
-  for (const [fromIdx, toIdx] of SKELETON_EDGES) {
-    const from = KP_NAMES[fromIdx];
-    const to = KP_NAMES[toIdx];
+  for (const [fromIdx, toIdx] of edges) {
+    const from = names[fromIdx];
+    const to = names[toIdx];
+    if (!from || !to) continue;
     if (!adj.has(from)) adj.set(from, []);
     if (!adj.has(to)) adj.set(to, []);
     adj.get(from)!.push(to);
     adj.get(to)!.push(from);
   }
   return adj;
-})();
+}
 
-const ALL_KP_NAMES: ReadonlySet<string> = new Set(
-  Object.values(KP_NAMES) as string[],
+/** Build a set of all keypoint names for a given keypoint name record. */
+function buildAllNames(
+  names: Record<number, string>,
+): ReadonlySet<string> {
+  return new Set(Object.values(names) as string[]);
+}
+
+// Default (MoveNet) precomputed values — used when no backend is specified.
+const ADJACENCY: ReadonlyMap<string, readonly string[]> = buildAdjacency(
+  SKELETON_EDGES,
+  KP_NAMES,
 );
+
+const ALL_KP_NAMES: ReadonlySet<string> = buildAllNames(KP_NAMES);
+
+// Cache for MediaPipe topology (built on first use).
+let mediapipeAdjacency: ReadonlyMap<string, readonly string[]> | null = null;
+let mediapipeAllNames: ReadonlySet<string> | null = null;
+
+function getAdjacency(backend?: PoseBackend): ReadonlyMap<string, readonly string[]> {
+  if (backend === "mediapipe") {
+    if (!mediapipeAdjacency) {
+      const topo = getTopology("mediapipe");
+      mediapipeAdjacency = buildAdjacency(topo.skeletonEdges, topo.keypointNames);
+    }
+    return mediapipeAdjacency;
+  }
+  return ADJACENCY;
+}
+
+function getAllKpNames(backend?: PoseBackend): ReadonlySet<string> {
+  if (backend === "mediapipe") {
+    if (!mediapipeAllNames) {
+      const topo = getTopology("mediapipe");
+      mediapipeAllNames = buildAllNames(topo.keypointNames);
+    }
+    return mediapipeAllNames;
+  }
+  return ALL_KP_NAMES;
+}
 
 // ---------------------------------------------------------------------------
 // Filtering
@@ -137,15 +185,18 @@ const ALL_KP_NAMES: ReadonlySet<string> = new Set(
  *                           counted as bad. Default: 0.3.
  * @param maxMissingAllowed - Maximum number of bad/missing keypoints before
  *                           the frame is discarded. Default: 2.
+ * @param keypointCount    - Expected total keypoints for the topology.
+ *                           Defaults to MOVENET_KEYPOINT_COUNT (17).
  */
 export function filterLandmarks(
   frames: PoseFrame[],
   minScore = 0.3,
   maxMissingAllowed = 2,
+  keypointCount: number = MOVENET_KEYPOINT_COUNT,
 ): PoseFrame[] {
   return frames.filter(f => {
     const lowConf = f.keypoints.filter(kp => kp.score < minScore).length;
-    const missing = Math.max(0, MOVENET_KEYPOINT_COUNT - f.keypoints.length);
+    const missing = Math.max(0, keypointCount - f.keypoints.length);
     return (lowConf + missing) <= maxMissingAllowed;
   });
 }
@@ -254,7 +305,7 @@ export function interpolatePoseFrames(
  * and skeletal geometry.
  *
  * For each frame:
- *  1. Identify which of the 17 MoveNet keypoints are absent.
+ *  1. Identify which keypoints are absent (based on the active topology).
  *  2. Temporal: if both a previous and next frame contain the keypoint
  *     within `maxTemporalGap`, linearly interpolate.
  *  3. Structural: if a skeleton neighbour exists in the current frame and
@@ -268,18 +319,23 @@ export function interpolatePoseFrames(
  * @param frames          - Dense PoseFrame array (e.g. after interpolatePoseFrames).
  * @param maxTemporalGap  - How many frames to search in each direction. Default: 10.
  * @param maxEstimatable  - Skip estimation when more keypoints are missing. Default: 5.
+ * @param backend         - Which pose backend produced these frames. Default: "movenet".
  */
 export function estimateMissingLandmarks(
   frames: PoseFrame[],
   maxTemporalGap = 10,
   maxEstimatable = 5,
+  backend?: PoseBackend,
 ): PoseFrame[] {
   if (frames.length === 0) return frames;
+
+  const adjacency = getAdjacency(backend);
+  const allNames = getAllKpNames(backend);
 
   return frames.map((frame, i) => {
     const existing = new Map(frame.keypoints.map(kp => [kp.name, kp]));
     const missing: string[] = [];
-    for (const name of ALL_KP_NAMES) {
+    for (const name of allNames) {
       if (!existing.has(name)) missing.push(name);
     }
     if (missing.length === 0 || missing.length > maxEstimatable) return frame;
@@ -314,7 +370,7 @@ export function estimateMissingLandmarks(
       }
 
       // 2. Structural: bone-vector from a connected joint in a nearby frame.
-      const neighbors = ADJACENCY.get(name);
+      const neighbors = adjacency.get(name);
       if (neighbors) {
         let found = false;
         for (const neighborName of neighbors) {

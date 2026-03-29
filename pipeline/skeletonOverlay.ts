@@ -2,8 +2,12 @@
  * Skeleton overlay drawing for CanvasRenderingContext2D.
  *
  * Converts normalized PoseFrame keypoints to image-space pixel coordinates
- * via a homography matrix, then draws the MoveNet skeleton (limbs + joints)
- * onto the canvas.
+ * via a homography matrix, then draws the skeleton (limbs + joints) onto
+ * the canvas.
+ *
+ * Supports both MoveNet (17 keypoints) and MediaPipe Pose Landmarker
+ * (33 keypoints) topologies. The caller may supply custom skeleton edges
+ * and keypoint names via SkeletonStyle; defaults to MoveNet topology.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
@@ -28,6 +32,18 @@ export interface SkeletonStyle {
   lineWidth?: number;
   /** Joint circle radius in CSS pixels (1–15). Default 5. */
   pointRadius?: number;
+  /**
+   * Custom skeleton edges as [fromIndex, toIndex] pairs.
+   * Supply MediaPipe edges when rendering 33-keypoint data.
+   * Defaults to MoveNet SKELETON_EDGES.
+   */
+  skeletonEdges?: [number, number][];
+  /**
+   * Custom keypoint index → name mapping.
+   * Supply MediaPipe names when rendering 33-keypoint data.
+   * Defaults to MoveNet KP_NAMES.
+   */
+  keypointNames?: Record<number, string>;
 }
 
 /**
@@ -77,15 +93,17 @@ export function drawSkeleton(
   const jointColor = options?.jointColor ?? JOINT_COLOR;
   const lineWidth = options?.lineWidth ?? LIMB_WIDTH;
   const pointRadius = options?.pointRadius ?? JOINT_RADIUS;
+  const edges = options?.skeletonEdges ?? SKELETON_EDGES;
+  const names: Record<number, string> = options?.keypointNames ?? KP_NAMES;
   // Draw limb lines first so joints render on top.
   ctx.save();
   ctx.lineWidth = lineWidth;
   ctx.strokeStyle = limbColor;
   ctx.lineCap = "round";
 
-  for (const [fromIdx, toIdx] of SKELETON_EDGES) {
-    const from = keypoints[KP_NAMES[fromIdx]];
-    const to = keypoints[KP_NAMES[toIdx]];
+  for (const [fromIdx, toIdx] of edges) {
+    const from = keypoints[names[fromIdx]];
+    const to = keypoints[names[toIdx]];
     if (!from || !to) continue;
 
     ctx.beginPath();

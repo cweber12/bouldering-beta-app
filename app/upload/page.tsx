@@ -7,7 +7,7 @@ import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
 import { useOpenCV } from "@/hooks/useOpenCV";
-import { useTFModel } from "@/hooks/useTFModel";
+import { usePoseModel, type PoseModelConfig, DEFAULT_POSE_MODEL, type MoveNetVariant, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
@@ -95,7 +95,10 @@ const FRAME_CONDITIONS: FrameCondition[] = [
 
 function UploadPageInner() {
   const { cv } = useOpenCV();
-  const { model } = useTFModel();
+
+  // Model selection state
+  const [modelConfig, setModelConfig] = useState<PoseModelConfig>(DEFAULT_POSE_MODEL);
+  const { model, backend } = usePoseModel(modelConfig);
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, userPrefix, status: s3Status } = useS3Storage();
@@ -299,7 +302,7 @@ function UploadPageInner() {
       climberCrop,
       orbCrop,
       conditions,
-    }, videoCurrentTime > 0 ? videoCurrentTime : 0);
+    }, videoCurrentTime > 0 ? videoCurrentTime : 0, backend);
   }
 
   async function handleSaveToDevice() {
@@ -594,6 +597,71 @@ function UploadPageInner() {
     <aside className="w-full lg:w-72 shrink-0">
       <div className="rounded-2xl border border-[#2d4e5e] bg-[#233D4D] divide-y divide-[#2d4e5e]">
 
+        {/* ── Pose model ──────────────────────────── */}
+        <div className="px-4 py-4 flex flex-col gap-3">
+          <div>
+            <p className="text-sm font-semibold text-[#F5FBE6]">Pose detection model</p>
+            <p className="text-xs text-[#6a9ca0] mt-0.5">Select the model and variant for skeleton extraction.</p>
+          </div>
+          <div className="flex gap-2">
+            {(["movenet", "mediapipe"] as const).map(b => (
+              <button
+                key={b}
+                onClick={() => setModelConfig(
+                  b === "movenet"
+                    ? { backend: "movenet", variant: "lightning" }
+                    : { backend: "mediapipe", variant: "lite" },
+                )}
+                disabled={isProcessing}
+                className={[
+                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition",
+                  modelConfig.backend === b
+                    ? "border-[#FE7F2D]/60 bg-[#FE7F2D]/10 text-[#FE7F2D]"
+                    : "border-[#2d4e5e] bg-[#192e3a] text-[#8fbfc0] hover:border-[#3d6474] hover:text-[#8fbfc0]",
+                  isProcessing ? "cursor-not-allowed opacity-50" : "",
+                ].join(" ")}
+              >
+                {b === "movenet" ? "MoveNet" : "MediaPipe"}
+              </button>
+            ))}
+          </div>
+          {/* Variant selector */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-medium text-[#8fbfc0]">Variant</label>
+            <select
+              value={modelConfig.variant}
+              onChange={e => {
+                const val = e.target.value;
+                if (modelConfig.backend === "movenet") {
+                  setModelConfig({ backend: "movenet", variant: val as MoveNetVariant });
+                } else {
+                  setModelConfig({ backend: "mediapipe", variant: val as MediaPipeVariant });
+                }
+              }}
+              disabled={isProcessing}
+              className="rounded-xl border border-[#2d4e5e] bg-[#192e3a] px-3 py-2 text-sm text-[#F5FBE6] outline-none transition focus:border-[#FE7F2D]/60 disabled:opacity-50"
+            >
+              {modelConfig.backend === "movenet" ? (
+                <>
+                  <option value="lightning">Lightning (fast)</option>
+                  <option value="thunder">Thunder (accurate)</option>
+                </>
+              ) : (
+                <>
+                  <option value="lite">Lite (fast)</option>
+                  <option value="full">Full (balanced)</option>
+                  <option value="heavy">Heavy (accurate)</option>
+                </>
+              )}
+            </select>
+            <p className="text-xs text-[#6a9ca0]">
+              {modelConfig.backend === "movenet"
+                ? "MoveNet: 17 keypoints (COCO). Lightning is faster; Thunder is more accurate."
+                : "MediaPipe Pose Landmarker: 33 keypoints (BlazePose). Lite is fastest; Heavy is most accurate."}
+            </p>
+          </div>
+        </div>
+
         {/* ── Location ─────────────────────────────── */}
         <div className="px-4 py-4 flex flex-col gap-3">
           <div>
@@ -862,7 +930,7 @@ function UploadPageInner() {
 
 export default function UploadPage() {
   return (
-    <LoadingGate>
+    <LoadingGate requiresTF={false}>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-[#8fbfc0]">

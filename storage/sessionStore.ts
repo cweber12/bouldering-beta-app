@@ -9,8 +9,10 @@
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
 import type { CropBox } from "@/pipeline/cropDetector";
+import type { PoseBackend } from "@/utils/poseConstants";
 export type { OrbKeypoint, OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
 export type { CropBox } from "@/pipeline/cropDetector";
+export type { PoseBackend } from "@/utils/poseConstants";
 
 export interface VideoMeta {
   /** Original filename. */
@@ -50,6 +52,11 @@ export interface RouteAttempt {
   videoMeta: VideoMeta;
   /** Processed pose frames in chronological order. */
   frames: PoseFrame[];
+  /**
+   * Which pose-detection backend produced the frames.
+   * Legacy data without this field defaults to "movenet".
+   */
+  poseBackend?: PoseBackend;
   /**
    * ORB features extracted from the reference frame (frame 0 by default).
    * Null when ORB extraction was skipped or failed.

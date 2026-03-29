@@ -15,6 +15,7 @@ import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
+import { getTopology } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -111,7 +112,10 @@ function CompareSlot({
         orbFeatures: att.orbFeatures,
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
-        skeletonStyle: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
+        skeletonStyle: (() => {
+          const topo = getTopology(att.poseBackend ?? "movenet");
+          return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+        })(),
         targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
@@ -188,7 +192,10 @@ function CompareSlot({
             imageFile={imageFile}
             layers={[{
               frames: skeletonData.frames,
-              style: { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius },
+              style: (() => {
+                const topo = getTopology(attempt?.poseBackend ?? "movenet");
+                return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+              })(),
             }]}
             duration={skeletonData.duration}
             hidePlayButton={hidePlayButton}
@@ -270,9 +277,10 @@ function OverlayPlayer({
     let layerIdx = 0;
     for (let i = 0; i < attempts.length; i++) {
       if (attempts[i] && matchResults[i]) {
+        const topo = getTopology(attempts[i]?.poseBackend ?? "movenet");
         layers.push({
           frames: multiData.layers[layerIdx].frames,
-          style: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
+          style: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames },
         });
         layerIdx++;
       }
@@ -291,13 +299,14 @@ function OverlayPlayer({
       const att = attempts[i];
       const mr = matchResults[i];
       if (!att?.orbFeatures || !mr) continue;
+      const topo = getTopology(att.poseBackend ?? "movenet");
       layerInputs.push({
         frames: att.frames,
         videoMeta: att.videoMeta,
         orbFeatures: att.orbFeatures,
         queryOrb: mr.queryOrb,
         matches: mr.matches,
-        skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius },
+        skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames },
       });
     }
     if (layerInputs.length === 0) return;

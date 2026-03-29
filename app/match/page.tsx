@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
@@ -15,6 +15,7 @@ import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { getTopology } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams)
@@ -50,6 +51,14 @@ function MatchPageInner() {
     pointRadius: 5,
   });
 
+  // Derive topology-aware style: inject skeleton edges + keypoint names
+  // from the attempt's pose backend so FramePlayer renders the right skeleton.
+  const topoStyle: SkeletonStyle = useMemo(() => {
+    const backend = attempt?.poseBackend ?? "movenet";
+    const topo = getTopology(backend);
+    return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+  }, [skeletonStyle, attempt]);
+
   // Pre-compute skeleton frames (instant — pure math, no video encoding).
   const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
     useSkeletonFrames(cv, attemptId || null, matchResult);
@@ -58,8 +67,8 @@ function MatchPageInner() {
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
   const [styleOpen, setStyleOpen] = useState(false);
-  const styleRef = useRef(skeletonStyle);
-  useEffect(() => { styleRef.current = skeletonStyle; }, [skeletonStyle]);
+  const styleRef = useRef(topoStyle);
+  useEffect(() => { styleRef.current = topoStyle; }, [topoStyle]);
 
   // Sync URL param changes via derived state in handlers rather than an effect.
   // The initial values are already set in useState() initialisers above.
@@ -416,7 +425,7 @@ function MatchPageInner() {
           <p className="text-sm font-medium text-[#c5dcd8]">Pose overlay</p>
           <FramePlayer
             imageFile={imageFile}
-            layers={[{ frames: skeletonData.frames, style: skeletonStyle }]}
+            layers={[{ frames: skeletonData.frames, style: topoStyle }]}
             duration={skeletonData.duration}
           />
 

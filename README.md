@@ -1,11 +1,12 @@
 # Bouldering Beta
 
-Analyse a climbing run in-browser using **MoveNet Lightning** pose estimation
-and **OpenCV.js** ORB feature matching — then save results to **Amazon S3** for
-access across devices.
+Analyse a climbing run in-browser using **MoveNet** or **MediaPipe Pose Landmarker**
+pose estimation and **OpenCV.js** ORB feature matching — then save results to
+**Amazon S3** for access across devices.
 
-The app records skeleton poses frame-by-frame from a video using MoveNet Lightning
-(TF.js WebGL), extracts **ORB reference features** (OpenCV.js WASM) from the first
+The app records skeleton poses frame-by-frame from a video using the selected
+pose model (MoveNet via TF.js WebGL, or MediaPipe Pose Landmarker via GPU
+delegate), extracts **ORB reference features** (OpenCV.js WASM) from the first
 frame, then overlays the movement onto a static route photo via a perspective
 (homography) transform. The output is a downloadable **WebM** video.
 
@@ -16,14 +17,23 @@ Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any ru
 
 ### Pose estimation
 
-MoveNet Lightning runs on every sampled frame (indoor: every frame; outdoor: configurable stride). After estimation, two post-processing passes are applied:
+The upload page offers a model selector: **MoveNet** (Lightning / Thunder — 17
+COCO keypoints) or **MediaPipe Pose Landmarker** (Lite / Full / Heavy — 33
+BlazePose keypoints including hands and feet). The chosen model runs on every
+sampled frame (indoor: every frame; outdoor: configurable stride). After
+estimation, two post-processing passes are applied:
 
 1. **Interpolation** — for outdoor mode, `interpolatePoseFrames` fills the dense frame timeline from sparse keyframe detections using linear interpolation.
 2. **Smoothing** — `smoothPoseFrames` runs on every mode: forward-fill and backward-fill eliminate brief keypoint dropouts, then an exponential moving average (α = 0.3) reduces jitter.
 
 ### Skeleton overlay
 
-`drawSkeleton` accepts a `SkeletonStyle` object `{ limbColor, jointColor, lineWidth, pointRadius }` to customise the look of each rendered frame. The match page exposes a style panel (colour pickers + sliders) that feeds into the WebM render.
+`drawSkeleton` accepts a `SkeletonStyle` object `{ limbColor, jointColor,
+lineWidth, pointRadius, skeletonEdges?, keypointNames? }` to customise the look
+of each rendered frame. Topology-aware edges and keypoint names are injected
+automatically based on the run's `poseBackend` field so both MoveNet and
+MediaPipe skeletons render correctly. The match page exposes a style panel
+(colour pickers + sliders) that feeds into the WebM render.
 
 ## Pages
 
@@ -108,7 +118,8 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | Framework | Next.js 16 App Router |
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 |
-| Pose detection | TF.js 4.22 + MoveNet Lightning (WebGL) |
+| Pose detection | TF.js 4.22 + MoveNet (Lightning / Thunder, WebGL) |
+| Pose detection (alt) | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate) |
 | Computer vision | OpenCV.js 4.12 (WASM, main thread) |
 | Video encoding | MediaRecorder API (WebM) |
 | Testing | Vitest + jsdom + Testing Library |
