@@ -62,10 +62,10 @@ export default function LoginPage() {
     <main className="flex flex-1 items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm flex flex-col gap-6">
         <div className="flex flex-col items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-[#F5FBE6]">
+          <h1 className="text-2xl font-bold tracking-tight text-fg">
             {mode === "login" ? "Sign in" : "Create account"}
           </h1>
-          <p className="text-sm text-[#8fbfc0]">
+          <p className="text-sm text-fg-secondary">
             {mode === "login"
               ? "Sign in to access your climbing data."
               : "Create a free account to get started."}
@@ -80,7 +80,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-xs font-medium text-[#8fbfc0]">
+            <label htmlFor="email" className="text-xs font-medium text-fg-secondary">
               Email
             </label>
             <input
@@ -90,13 +90,13 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="rounded-lg border border-[#2d4e5e] bg-[#192e3a] px-3 py-2.5 text-sm text-[#F5FBE6] outline-none transition placeholder:text-[#3d6e7a] focus:border-[#FE7F2D]/60"
+              className="rounded-lg border border-edge bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
               placeholder="you@example.com"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-xs font-medium text-[#8fbfc0]">
+            <label htmlFor="password" className="text-xs font-medium text-fg-secondary">
               Password
             </label>
             <input
@@ -107,7 +107,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="rounded-lg border border-[#2d4e5e] bg-[#192e3a] px-3 py-2.5 text-sm text-[#F5FBE6] outline-none transition placeholder:text-[#3d6e7a] focus:border-[#FE7F2D]/60"
+              className="rounded-lg border border-edge bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
               placeholder={mode === "signup" ? "At least 6 characters" : ""}
             />
           </div>
@@ -121,7 +121,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting || authLoading}
-            className="rounded-xl bg-[#FE7F2D] px-6 py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting
               ? "Please wait\u2026"
@@ -131,13 +131,13 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div className="flex items-center justify-center gap-1 text-xs text-[#6a9ca0]">
+        <div className="flex items-center justify-center gap-1 text-xs text-fg-muted">
           {mode === "login" ? (
             <>
               Don&apos;t have an account?{" "}
               <button
                 onClick={() => { setMode("signup"); setError(null); setSignupSuccess(false); }}
-                className="font-medium text-[#c5dcd8] hover:text-[#F5FBE6] transition"
+                className="font-medium text-fg-light hover:text-fg transition"
               >
                 Sign up
               </button>
@@ -147,7 +147,7 @@ export default function LoginPage() {
               Already have an account?{" "}
               <button
                 onClick={() => { setMode("login"); setError(null); setSignupSuccess(false); }}
-                className="font-medium text-[#c5dcd8] hover:text-[#F5FBE6] transition"
+                className="font-medium text-fg-light hover:text-fg transition"
               >
                 Sign in
               </button>
@@ -157,7 +157,7 @@ export default function LoginPage() {
 
         <Link
           href="/"
-          className="text-center text-xs text-[#6a9ca0] transition hover:text-[#8fbfc0]"
+          className="text-center text-xs text-fg-muted transition hover:text-fg-secondary"
         >
           &larr; Back to home
         </Link>

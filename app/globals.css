@@ -1,19 +1,61 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0f1c24;
-  --foreground: #F5FBE6;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* ─── Surfaces ─────────────────────────── */
+  --color-surface: #183B4E;
+  --color-surface-alt: #0e2535;
+  --color-card: #1a3a52;
+  --color-inset: #132d3f;
+
+  /* ─── Foreground / text ────────────────── */
+  --color-fg: #F3F3E0;
+  --color-fg-secondary: #8ba8c4;
+  --color-fg-muted: #6889a8;
+  --color-fg-light: #c4d4e0;
+  --color-fg-placeholder: #4a7099;
+
+  /* ─── Borders ──────────────────────────── */
+  --color-edge: #2a4a6b;
+  --color-edge-hover: #3d6089;
+
+  /* ─── Accent (CTA / interactive) ───────── */
+  --color-accent: #DDA853;
+  --color-accent-hover: #c4913a;
+
+  /* ─── Primary (interactive sections) ───── */
+  --color-primary: #27548A;
+
+  /* ─── Semantic ─────────────────────────── */
+  --color-success: #3daa78;
+
+  /* ─── Fonts ────────────────────────────── */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+/* ─── Light mode overrides (future) ──────── */
+/*
+.theme-light {
+  --color-surface: #f8f7f0;
+  --color-surface-alt: #F3F3E0;
+  --color-card: #ffffff;
+  --color-inset: #edecd8;
+  --color-fg: #183B4E;
+  --color-fg-secondary: #4a6170;
+  --color-fg-muted: #7a8e9a;
+  --color-fg-light: #5a7080;
+  --color-fg-placeholder: #a0b0b8;
+  --color-edge: #c8cdd0;
+  --color-edge-hover: #a0aab0;
+  --color-accent: #DDA853;
+  --color-accent-hover: #c4913a;
+  --color-primary: #27548A;
+  --color-success: #3daa78;
+}
+*/
+
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-surface);
+  color: var(--color-fg);
   font-family: Arial, Helvetica, sans-serif;
 }

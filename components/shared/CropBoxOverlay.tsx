@@ -48,7 +48,7 @@ const CURSOR_MAP: Record<HandleId, string> = {
 /** Minimum size of the crop box as a fraction of the container. */
 const MIN_SIZE = 0.05;
 
-const HANDLE_PX = 10;
+const HANDLE_PX = 15;
 
 /** Invisible hit area around each handle for easier touch interaction. */
 const HIT_AREA_PX = 36;
@@ -227,8 +227,9 @@ export default function CropBoxOverlay({
           top: pct(y),
           width: pct(w),
           height: pct(h),
-          border: "1.5px solid rgba(0,0,0,0.9)",
-          boxShadow: "0 0 0 0.5px rgba(255,255,255,0.35) inset, 0 0 0 0.5px rgba(255,255,255,0.35)",
+          border: "2px solid rgba(255,255,255,0.85)",
+          borderRadius: 4,
+          boxShadow: "0 0 0 1px rgba(0,0,0,0.5)",
           cursor: disabled ? "default" : CURSOR_MAP["move"],
         }}
         onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}
@@ -261,9 +262,10 @@ export default function CropBoxOverlay({
                 width: HANDLE_PX,
                 height: HANDLE_PX,
                 transform: "translate(-50%, -50%)",
-                background: "#000",
-                border: "1.5px solid rgba(255,255,255,0.7)",
-                borderRadius: 2,
+                background: "#fff",
+                border: "2px solid #000",
+                borderRadius: "50%",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
               }}
             />
           </div>

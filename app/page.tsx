@@ -106,10 +106,10 @@ function DemoPreview() {
   const pct = Math.round(((frame + 1) / TOTAL_DEMO_FRAMES) * 100);
 
   return (
-    <div className="w-full max-w-sm overflow-hidden rounded-xl border border-[#2d4e5e] bg-[#233D4D] shadow-xl">
-      <div className="flex items-center justify-between border-b border-[#2d4e5e] bg-[#192e3a] px-3 py-1.5">
-        <span className="text-xs font-mono text-[#6a9ca0]">route-photo.jpg</span>
-        <span className="text-xs font-mono text-[#6a9ca0]">
+    <div className="w-full max-w-sm overflow-hidden rounded-xl border border-edge bg-card shadow-xl">
+      <div className="flex items-center justify-between border-b border-edge bg-inset px-3 py-1.5">
+        <span className="text-xs font-mono text-fg-muted">route-photo.jpg</span>
+        <span className="text-xs font-mono text-fg-muted">
           frame {frame + 1}/{TOTAL_DEMO_FRAMES}
         </span>
       </div>
@@ -130,14 +130,14 @@ function DemoPreview() {
           aria-label="Demo skeleton overlay animation"
         />
       </div>
-      <div className="flex items-center gap-2 border-t border-[#2d4e5e] bg-[#192e3a] px-3 py-1.5">
-        <div className="h-1 flex-1 overflow-hidden rounded-full bg-[#2d4e5e]">
+      <div className="flex items-center gap-2 border-t border-edge bg-inset px-3 py-1.5">
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-edge">
           <div
-            className="h-full rounded-full bg-[#3daa78] transition-all duration-75"
+            className="h-full rounded-full bg-success transition-all duration-75"
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="w-8 text-right text-xs font-mono text-[#6a9ca0]">{pct}%</span>
+        <span className="w-8 text-right text-xs font-mono text-fg-muted">{pct}%</span>
       </div>
     </div>
   );
@@ -148,21 +148,21 @@ export default function Home() {
   return (
     <main className="flex flex-1 flex-col items-center gap-16 px-6 py-16">
       <div className="flex flex-col items-center gap-4 text-center max-w-lg">
-        <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-[#2d4e5e] bg-[#233D4D] px-3 py-1 text-xs font-medium text-[#8fbfc0]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#3daa78]" />
+        <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-edge bg-card px-3 py-1 text-xs font-medium text-fg-secondary">
+          <span className="h-1.5 w-1.5 rounded-full bg-success" />
           All processing runs locally
         </div>
-        <h1 className="text-4xl font-bold tracking-tight text-[#F5FBE6]">
+        <h1 className="text-4xl font-bold tracking-tight text-fg">
           Route&nbsp;Renderer
         </h1>
-        <p className="text-base text-[#8fbfc0] leading-relaxed">
+        <p className="text-base text-fg-secondary leading-relaxed">
           Record your bouldering runs, extract skeleton poses with MoveNet, then
           project your movement onto a route photo &#8212; entirely in your browser.
         </p>
         {!loading && !user && (
           <Link
             href="/login"
-            className="mt-2 flex items-center gap-2 rounded-xl bg-[#FE7F2D] px-6 py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] active:scale-95"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover active:scale-95"
           >
             Sign in to get started
             <svg
@@ -184,7 +184,7 @@ export default function Home() {
         {!loading && user && (
           <Link
             href="/upload"
-            className="mt-2 flex items-center gap-2 rounded-xl bg-[#FE7F2D] px-6 py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] active:scale-95"
+            className="mt-2 flex items-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover active:scale-95"
           >
             Get started
             <svg
@@ -206,15 +206,15 @@ export default function Home() {
       </div>
 
       <div className="flex flex-col items-center gap-3">
-        <p className="text-xs text-[#6a9ca0] uppercase tracking-wider">Live demo</p>
+        <p className="text-xs text-fg-muted uppercase tracking-wider">Live demo</p>
         <DemoPreview />
-        <p className="text-xs text-[#6a9ca0]">
+        <p className="text-xs text-fg-muted">
           Animated skeleton overlay &#8212; example of what Route Renderer produces
         </p>
       </div>
 
       <div className="w-full max-w-2xl">
-        <p className="mb-6 text-center text-xs text-[#6a9ca0] uppercase tracking-wider">
+        <p className="mb-6 text-center text-xs text-fg-muted uppercase tracking-wider">
           How it works
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -237,13 +237,13 @@ export default function Home() {
           ].map(({ step, title, body }) => (
             <div
               key={step}
-              className="rounded-xl border border-[#2d4e5e] bg-[#233D4D] px-5 py-5 flex flex-col gap-2"
+              className="rounded-xl border border-edge bg-card px-5 py-5 flex flex-col gap-2"
             >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#3d6474] text-xs font-bold text-[#8fbfc0]">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-edge-hover text-xs font-bold text-fg-secondary">
                 {step}
               </div>
-              <p className="text-sm font-semibold text-[#F5FBE6]">{title}</p>
-              <p className="text-xs text-[#8fbfc0] leading-relaxed">{body}</p>
+              <p className="text-sm font-semibold text-fg">{title}</p>
+              <p className="text-xs text-fg-secondary leading-relaxed">{body}</p>
             </div>
           ))}
         </div>

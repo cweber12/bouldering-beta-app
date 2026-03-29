@@ -107,7 +107,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-t-2xl bg-[#233D4D] shadow-2xl sm:rounded-2xl"
+        className="relative w-full max-w-lg overflow-hidden rounded-t-2xl bg-card shadow-2xl sm:rounded-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Camera preview */}
@@ -143,7 +143,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
             <button
               onClick={takePhoto}
               disabled={!ready}
-              className="flex-1 rounded-xl bg-[#FE7F2D] py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:opacity-40"
+              className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
             >
               Take photo
             </button>
@@ -151,7 +151,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
             <button
               onClick={startRecording}
               disabled={!ready}
-              className="flex-1 rounded-xl bg-[#FE7F2D] py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:opacity-40"
+              className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
             >
               Start recording
             </button>
@@ -165,7 +165,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
           )}
           <button
             onClick={onClose}
-            className="rounded-xl border border-[#2d4e5e] px-5 py-3 text-sm font-medium text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]"
+            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
           >
             Cancel
           </button>

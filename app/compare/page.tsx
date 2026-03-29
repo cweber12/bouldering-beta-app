@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LoadingGate from "@/components/shared/LoadingGate";
@@ -137,7 +137,7 @@ function CompareSlot({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-xl border border-[#2d4e5e] bg-[#233D4D] p-4"
+      className="flex flex-col gap-3 rounded-xl border border-edge bg-card p-4"
       style={{ borderTopColor: limbColor, borderTopWidth: 2 }}
     >
       <div className="flex items-center gap-2">
@@ -145,7 +145,7 @@ function CompareSlot({
           className="h-2 w-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: limbColor }}
         />
-        <span className="text-xs font-medium text-[#c5dcd8]">Climb {slotIndex + 1}</span>
+        <span className="text-xs font-medium text-fg-light">Climb {slotIndex + 1}</span>
         {attempt && (
           <span className={[
             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
@@ -157,12 +157,12 @@ function CompareSlot({
           </span>
         )}
         {attempt?.rating && (
-          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-[#192e3a] text-[#c5dcd8]">
+          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
             {attempt.rating}
           </span>
         )}
         {attempt && (
-          <span className="ml-auto text-xs text-[#6a9ca0]">
+          <span className="ml-auto text-xs text-fg-muted">
             {attempt.frames.length} frames
             {attempt.videoMeta?.duration != null && (
               <> &middot; {Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</>
@@ -172,17 +172,17 @@ function CompareSlot({
       </div>
 
       {attempt?.notes && (
-        <div className="rounded border border-[#2d4e5e] bg-[#192e3a]/50 px-3 py-1.5">
-          <p className="text-xs text-[#6a9ca0]">{attempt.notes}</p>
+        <div className="rounded border border-edge bg-inset/50 px-3 py-1.5">
+          <p className="text-xs text-fg-muted">{attempt.notes}</p>
         </div>
       )}
 
       {!attempt && (
-        <p className="text-xs text-[#6a9ca0] italic">No climb loaded</p>
+        <p className="text-xs text-fg-muted italic">No climb loaded</p>
       )}
 
       {attempt && matchStatus === "matching" && (
-        <p className="text-xs text-[#8fbfc0] animate-pulse">Matching&#8230;</p>
+        <p className="text-xs text-fg-secondary animate-pulse">Matching&#8230;</p>
       )}
 
       {isReady && imageFile && !hidePlayer && (
@@ -201,14 +201,14 @@ function CompareSlot({
             hidePlayButton={hidePlayButton}
           />
           {exportStatus === "rendering" ? (
-            <div className="flex items-center justify-between text-xs text-[#6a9ca0]">
+            <div className="flex items-center justify-between text-xs text-fg-muted">
               <span>Exporting&#8230;</span>
               <span>{exportProgress}%</span>
             </div>
           ) : (
             <button
               onClick={handleDownload}
-              className="text-center text-xs text-[#6a9ca0] hover:text-[#c5dcd8] transition"
+              className="text-center text-xs text-fg-muted hover:text-fg-light transition"
             >
               Download .webm
             </button>
@@ -335,7 +335,7 @@ function OverlayPlayer({
 
   if (playerLayers.length === 0 || !multiData) {
     return (
-      <p className="text-xs text-[#6a9ca0] italic">
+      <p className="text-xs text-fg-muted italic">
         Overlay will appear here once at least one run has been matched.
       </p>
     );
@@ -349,14 +349,14 @@ function OverlayPlayer({
         duration={multiData.duration}
       />
       {exportStatus === "rendering" ? (
-        <div className="flex items-center justify-between text-xs text-[#6a9ca0]">
+        <div className="flex items-center justify-between text-xs text-fg-muted">
           <span>Exporting overlay&#8230;</span>
           <span>{exportProgress}%</span>
         </div>
       ) : (
         <button
           onClick={handleDownload}
-          className="text-center text-xs text-[#6a9ca0] hover:text-[#c5dcd8] transition"
+          className="text-center text-xs text-fg-muted hover:text-fg-light transition"
         >
           Download .webm
         </button>
@@ -485,193 +485,24 @@ function ComparePageInner() {
   const anyLoaded = attempts.slice(0, slotCount).some(Boolean);
 
   return (
-    <div className="flex-1 bg-[#0f1c24]">
+    <div className="flex-1 bg-surface">
     <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
       {/* Header */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-[#F5FBE6]">Compare Climbs</h1>
-        <p className="text-sm text-[#8fbfc0]">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Compare Climbs</h1>
+        <p className="text-sm text-fg-secondary">
           Load multiple climbs and overlay or compare them side by side on the same route photo.
         </p>
       </div>
 
-      {/* Route photo */}
-      <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium text-[#c5dcd8]">Route photo</p>
-        <div className="grid grid-cols-2 gap-3">
-          {/* Select from file */}
-          <label
-            className={[
-              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              "bg-[#215E61] border-[#2d4e5e] text-[#c5dcd8] hover:border-[#FE7F2D]/60 hover:text-[#F5FBE6]",
-              !imageFile ? "animate-pulse border-[#FE7F2D]/30" : "",
-            ].join(" ")}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
-            </svg>
-            <span className="font-medium text-[#F5FBE6]">{imageFile ? imageFile.name : "Select route photo"}</span>
-            <span className="text-xs text-[#c5dcd8]">JPG, PNG, WebP</span>
-            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-          </label>
-
-          {/* Take with camera */}
-          <button
-            type="button"
-            onClick={() => setShowCamera(true)}
-            className={[
-              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              "bg-[#215E61] border-[#2d4e5e] text-[#c5dcd8] hover:border-[#FE7F2D]/60 hover:text-[#F5FBE6]",
-              !imageFile ? "animate-pulse border-[#FE7F2D]/30" : "",
-            ].join(" ")}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-            </svg>
-            <span className="font-medium text-[#F5FBE6]">Take a photo</span>
-            <span className="text-xs text-[#c5dcd8]">Opens camera</span>
-          </button>
-        </div>
-
-        {/* Crop UI — shown after image selected, before match triggered */}
-        {imagePreviewUrl && imageFile && !cropConfirmed && (
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-[#8fbfc0]">
-              Adjust the crop region to focus ORB matching on the relevant wall area.
-            </p>
-            <div className="relative w-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={imagePreviewUrl}
-                alt="Route photo"
-                className="max-h-[32rem] w-full rounded-xl border border-[#2d4e5e] bg-[#233D4D] object-contain"
-              />
-              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
-            </div>
-            <button
-              onClick={handleApplyAndMatch}
-              disabled={!anyLoaded}
-              className={[
-                "flex items-center justify-center gap-2 rounded-xl bg-[#FE7F2D] px-6 py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:cursor-not-allowed disabled:opacity-50",
-                anyLoaded ? "ring-2 ring-[#FE7F2D]/30 ring-offset-2 ring-offset-[#0f1c24] animate-pulse" : "",
-              ].join(" ")}
-            >
-              Apply &amp; View
-            </button>
-            {!anyLoaded && (
-              <p className="text-xs text-[#6a9ca0]">Load at least one climb below to enable matching.</p>
-            )}
-          </div>
-        )}
-
-      </div>
-
-      {/* View mode + skeleton style dropdown + master play */}
-      {anyLoaded && imageFile && (
-        <div className="flex items-center gap-2">
-          {([ "sidebyside", "overlay"] as ViewMode[]).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={[
-                "rounded-lg border px-4 py-2 text-sm font-medium transition",
-                viewMode === mode
-                  ? "border-[#FE7F2D]/60 bg-[#233D4D] text-[#F5FBE6]"
-                  : "border-[#2d4e5e] bg-[#233D4D] text-[#6a9ca0] hover:border-[#3d6474] hover:text-[#c5dcd8]",
-              ].join(" ")}
-            >
-              {mode === "sidebyside" ? "Side by side" : "Overlay"}
-            </button>
-          ))}
-
-          {/* Skeleton style dropdown */}
-          {cropConfirmed && (
-            <div className="relative">
-              <button
-                onClick={() => setStyleOpen(o => !o)}
-                className="rounded-lg border border-[#2d4e5e] bg-[#233D4D] px-4 py-2 text-sm font-medium text-[#6a9ca0] transition hover:border-[#3d6474] hover:text-[#c5dcd8]"
-              >
-                Style ▾
-              </button>
-              {styleOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-[#2d4e5e] bg-[#233D4D] p-3 shadow-xl">
-                  <label className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-xs text-[#8fbfc0]">
-                      <span>Line width</span>
-                      <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="8"
-                      step="0.5"
-                      value={skeletonLineWidth}
-                      onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
-                      className="w-full accent-[#FE7F2D]"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-xs text-[#8fbfc0]">
-                      <span>Point radius</span>
-                      <span className="tabular-nums">{skeletonPointRadius} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="1"
-                      value={skeletonPointRadius}
-                      onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
-                      className="w-full accent-[#FE7F2D]"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Master play button — side-by-side only */}
-          {viewMode === "sidebyside" && cropConfirmed && (
-            <button
-              onClick={() => {
-                const next = !masterPlaying;
-                setMasterPlaying(next);
-                for (let i = 0; i < slotCount; i++) {
-                  const ref = playerRefs.current[i];
-                  if (ref) {
-                    if (next) ref.play();
-                    else ref.pause();
-                  }
-                }
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-[#2d4e5e] bg-[#233D4D] px-4 py-2 text-sm font-medium text-[#6a9ca0] transition hover:border-[#3d6474] hover:text-[#c5dcd8]"
-              aria-label={masterPlaying ? "Pause all" : "Play all"}
-            >
-              {masterPlaying ? (
-                <>
-                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>
-                  Pause all
-                </>
-              ) : (
-                <>
-                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-                  Play all
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Run slots */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-[#c5dcd8]">Climbs</p>
+          <p className="text-sm font-medium text-fg-light">Climbs</p>
           {slotCount < MAX_SLOTS && (
             <button
               onClick={() => setSlotCount(c => c + 1)}
-              className="text-xs text-[#6a9ca0] hover:text-[#c5dcd8] transition"
+              className="text-xs text-fg-muted hover:text-fg-light transition"
             >
               + Add climb
             </button>
@@ -695,7 +526,7 @@ function ComparePageInner() {
                   type="color"
                   value={slotColors[i]}
                   onChange={(e) => handleColorChange(i, e.target.value)}
-                  className="h-7 w-7 cursor-pointer rounded border border-[#2d4e5e] bg-transparent p-0.5"
+                  className="h-7 w-7 cursor-pointer rounded border border-edge bg-transparent p-0.5"
                   title={`Climb ${i + 1} skeleton color`}
                   aria-label={`Climb ${i + 1} skeleton color`}
                 />
@@ -737,17 +568,185 @@ function ComparePageInner() {
         </div>
       </div>
 
+      {/* Route photo */}
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-medium text-fg-light">Route photo</p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Select from file */}
+          <label
+            className={[
+              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+              "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
+              !imageFile ? "animate-pulse border-accent/30" : "",
+            ].join(" ")}
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+            </svg>
+            <span className="font-medium text-fg">{imageFile ? imageFile.name : "Select route photo"}</span>
+            <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+          </label>
+
+          {/* Take with camera */}
+          <button
+            type="button"
+            onClick={() => setShowCamera(true)}
+            className={[
+              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+              "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
+              !imageFile ? "animate-pulse border-accent/30" : "",
+            ].join(" ")}
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+            </svg>
+            <span className="font-medium text-fg">Take a photo</span>
+            <span className="text-xs text-fg-light">Opens camera</span>
+          </button>
+        </div>
+
+        {/* Crop UI — shown after image selected, before match triggered */}
+        {imagePreviewUrl && imageFile && !cropConfirmed && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-fg-secondary">
+              Adjust the crop region to focus ORB matching on the relevant wall area.
+            </p>
+            <div className="relative w-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreviewUrl}
+                alt="Route photo"
+                className="max-h-[32rem] w-full rounded-xl border border-edge bg-card object-contain"
+              />
+              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
+            </div>
+            <button
+              onClick={handleApplyAndMatch}
+              disabled={!anyLoaded}
+              className={[
+                "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50",
+                anyLoaded ? "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse" : "",
+              ].join(" ")}
+            >
+              Apply &amp; View
+            </button>
+            {!anyLoaded && (
+              <p className="text-xs text-fg-muted">Load at least one climb below to enable matching.</p>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* View mode + skeleton style dropdown + master play */}
+      {anyLoaded && imageFile && (
+        <div className="flex items-center gap-2">
+          {([ "sidebyside", "overlay"] as ViewMode[]).map(mode => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={[
+                "rounded-lg border px-4 py-2 text-sm font-medium transition",
+                viewMode === mode
+                  ? "border-accent/60 bg-card text-fg"
+                  : "border-edge bg-card text-fg-muted hover:border-edge-hover hover:text-fg-light",
+              ].join(" ")}
+            >
+              {mode === "sidebyside" ? "Side by side" : "Overlay"}
+            </button>
+          ))}
+
+          {/* Skeleton style dropdown */}
+          {cropConfirmed && (
+            <div className="relative">
+              <button
+                onClick={() => setStyleOpen(o => !o)}
+                className="rounded-lg border border-edge bg-card px-4 py-2 text-sm font-medium text-fg-muted transition hover:border-edge-hover hover:text-fg-light"
+              >
+                Style ▾
+              </button>
+              {styleOpen && (
+                <div className="absolute left-0 top-full z-20 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-edge bg-card p-3 shadow-xl">
+                  <label className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-fg-secondary">
+                      <span>Line width</span>
+                      <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="8"
+                      step="0.5"
+                      value={skeletonLineWidth}
+                      onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
+                      className="w-full accent-accent"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-xs text-fg-secondary">
+                      <span>Point radius</span>
+                      <span className="tabular-nums">{skeletonPointRadius} px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      step="1"
+                      value={skeletonPointRadius}
+                      onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
+                      className="w-full accent-accent"
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Master play button — side-by-side only */}
+          {viewMode === "sidebyside" && cropConfirmed && (
+            <button
+              onClick={() => {
+                const next = !masterPlaying;
+                setMasterPlaying(next);
+                for (let i = 0; i < slotCount; i++) {
+                  const ref = playerRefs.current[i];
+                  if (ref) {
+                    if (next) ref.play();
+                    else ref.pause();
+                  }
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-4 py-2 text-sm font-medium text-fg-muted transition hover:border-edge-hover hover:text-fg-light"
+              aria-label={masterPlaying ? "Pause all" : "Play all"}
+            >
+              {masterPlaying ? (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>
+                  Pause all
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                  Play all
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      )}
       {/* Overlay mode result */}
       {viewMode === "overlay" && imageFile && anyLoaded && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-[#c5dcd8]">
+          <p className="text-sm font-medium text-fg-light">
             Overlay (all skeletons simultaneously)
           </p>
           {/* Color legend */}
           <div className="flex flex-wrap gap-3 text-xs">
             {attempts.slice(0, slotCount).map((att, i) =>
               att ? (
-                <span key={i} className="flex items-center gap-1.5 text-[#8fbfc0]">
+                <span key={i} className="flex items-center gap-1.5 text-fg-secondary">
                   <span
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: slotColors[i] }}
@@ -786,7 +785,7 @@ export default function ComparePage() {
     <LoadingGate requiresTF={false}>
       <Suspense
         fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-[#6a9ca0]">
+          <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
             Loading&#8230;
           </div>
         }

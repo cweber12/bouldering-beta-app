@@ -42,7 +42,7 @@ const TAB_MS: Record<AnalysisTab, number> = {
 };
 
 // ---------------------------------------------------------------------------
-// RouteAnalysisGraph — inline SVG time-series chart
+// RouteAnalysisGraph â€” inline SVG time-series chart
 // ---------------------------------------------------------------------------
 
 function RouteAnalysisGraph({
@@ -95,7 +95,7 @@ function RouteAnalysisGraph({
     <div className="flex flex-col gap-2">
       <button
         onClick={() => setShowAnalysis(!showAnalysis)}
-        className="flex items-center gap-1.5 self-start rounded-lg border border-[#2d4e5e] px-3 py-1.5 text-xs text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]"
+        className="flex items-center gap-1.5 self-start rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
       >
         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
@@ -107,7 +107,7 @@ function RouteAnalysisGraph({
       </button>
 
       {showAnalysis && (
-        <div className="rounded-lg border border-[#2d4e5e] bg-[#233D4D] p-3 flex flex-col gap-2">
+        <div className="rounded-lg border border-edge bg-card p-3 flex flex-col gap-2">
           {/* Tabs */}
           <div className="flex gap-1">
             {ANALYSIS_TABS.map(tab => (
@@ -117,8 +117,8 @@ function RouteAnalysisGraph({
                 className={[
                   "rounded px-2.5 py-1 text-xs font-medium capitalize transition",
                   activeTab === tab
-                    ? "bg-[#192e3a] text-[#F5FBE6]"
-                    : "text-[#6a9ca0] hover:text-[#c5dcd8]",
+                    ? "bg-inset text-fg"
+                    : "text-fg-muted hover:text-fg-light",
                 ].join(" ")}
               >
                 {tab}
@@ -127,7 +127,7 @@ function RouteAnalysisGraph({
           </div>
 
           {points.length === 0 ? (
-            <p className="text-xs text-[#6a9ca0] py-4 text-center">No runs with duration data in this range.</p>
+            <p className="text-xs text-fg-muted py-4 text-center">No runs with duration data in this range.</p>
           ) : (
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full" preserveAspectRatio="xMidYMid meet">
               {/* Grid lines */}
@@ -135,8 +135,8 @@ function RouteAnalysisGraph({
                 const yPos = PAD.top + plotH - f * plotH;
                 return (
                   <g key={`grid-${f}`}>
-                    <line x1={PAD.left} y1={yPos} x2={PAD.left + plotW} y2={yPos} stroke="#2d4e5e" strokeWidth="0.5" />
-                    <text x={PAD.left - 6} y={yPos + 3} textAnchor="end" className="fill-[#6a9ca0]" fontSize="9">
+                    <line x1={PAD.left} y1={yPos} x2={PAD.left + plotW} y2={yPos} stroke="var(--color-edge)" strokeWidth="0.5" />
+                    <text x={PAD.left - 6} y={yPos + 3} textAnchor="end" className="fill-fg-muted" fontSize="9">
                       {formatDuration(maxDur * f)}
                     </text>
                   </g>
@@ -147,7 +147,7 @@ function RouteAnalysisGraph({
               {xTicks.map((ts, i) => {
                 const xPos = x(ts);
                 return (
-                  <text key={`xt-${i}`} x={xPos} y={H - 6} textAnchor="middle" className="fill-[#6a9ca0]" fontSize="8">
+                  <text key={`xt-${i}`} x={xPos} y={H - 6} textAnchor="middle" className="fill-fg-muted" fontSize="8">
                     {new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
                   </text>
                 );
@@ -157,7 +157,7 @@ function RouteAnalysisGraph({
               {points.length > 1 && (
                 <polyline
                   fill="none"
-                  stroke="#8fbfc0"
+                  stroke="var(--color-fg-secondary)"
                   strokeWidth="1"
                   strokeLinejoin="round"
                   points={points.map(p => `${x(p.ts)},${y(p.duration)}`).join(" ")}
@@ -173,12 +173,12 @@ function RouteAnalysisGraph({
                   r="4"
                   className={p.isSend ? "fill-emerald-400" : "fill-amber-400"}
                 >
-                  <title>{new Date(p.ts).toLocaleString()} — {formatDuration(p.duration)}</title>
+                  <title>{new Date(p.ts).toLocaleString()} â€” {formatDuration(p.duration)}</title>
                 </circle>
               ))}
 
               {/* Y-axis label */}
-              <text x="10" y={PAD.top + plotH / 2} textAnchor="middle" transform={`rotate(-90, 10, ${PAD.top + plotH / 2})`} className="fill-[#6a9ca0]" fontSize="9">
+              <text x="10" y={PAD.top + plotH / 2} textAnchor="middle" transform={`rotate(-90, 10, ${PAD.top + plotH / 2})`} className="fill-fg-muted" fontSize="9">
                 Elapsed
               </text>
             </svg>
@@ -186,10 +186,10 @@ function RouteAnalysisGraph({
 
           {/* Legend */}
           <div className="flex items-center gap-4 justify-center">
-            <span className="flex items-center gap-1.5 text-xs text-[#6a9ca0]">
+            <span className="flex items-center gap-1.5 text-xs text-fg-muted">
               <span className="inline-block h-2 w-2 rounded-full bg-amber-400" /> Attempt
             </span>
-            <span className="flex items-center gap-1.5 text-xs text-[#6a9ca0]">
+            <span className="flex items-center gap-1.5 text-xs text-fg-muted">
               <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" /> Send
             </span>
           </div>
@@ -299,7 +299,7 @@ export default function S3RoutePicker({
     return () => { cancelled = true; };
   }, [attemptEntries]);
 
-  // Fetch states on open — then auto-select defaults if provided.
+  // Fetch states on open â€” then auto-select defaults if provided.
   const handleOpen = useCallback(async () => {
     if (!userPrefix) return;
     setOpen(true);
@@ -488,8 +488,8 @@ export default function S3RoutePicker({
   }
 
   const selectClass = compact
-    ? "rounded border border-[#2d4e5e] bg-[#192e3a] px-2 py-1 text-xs text-[#F5FBE6] outline-none disabled:opacity-40"
-    : "rounded-lg border border-[#2d4e5e] bg-[#192e3a] px-3 py-2 text-sm text-[#F5FBE6] outline-none transition focus:border-[#FE7F2D]/60 disabled:opacity-40";
+    ? "rounded border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none disabled:opacity-40"
+    : "rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition focus:border-accent/60 disabled:opacity-40";
 
   return (
     <div className="flex flex-col gap-2">
@@ -498,8 +498,8 @@ export default function S3RoutePicker({
           <button
             onClick={handleOpen}
             className={[
-              "flex items-center gap-2 rounded-lg border border-[#2d4e5e] px-3 py-2 text-xs text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]",
-              pulseButtons && !open ? "ring-2 ring-[#FE7F2D]/50 ring-offset-1 ring-offset-[#0f1c24] animate-pulse" : "",
+              "flex items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg",
+              pulseButtons && !open ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : "",
             ].join(" ")}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -510,8 +510,8 @@ export default function S3RoutePicker({
         )}
 
         <label className={[
-          "flex cursor-pointer items-center gap-2 rounded-lg border border-[#2d4e5e] px-3 py-2 text-xs text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]",
-          !alwaysOpen && pulseButtons && !open ? "ring-2 ring-[#FE7F2D]/50 ring-offset-1 ring-offset-[#0f1c24] animate-pulse" : "",
+          "flex cursor-pointer items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg",
+          !alwaysOpen && pulseButtons && !open ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : "",
         ].join(" ")}>
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
@@ -520,37 +520,37 @@ export default function S3RoutePicker({
           <input type="file" accept="application/json,.json" className="hidden" onChange={handleFileLoad} />
         </label>
 
-        {loading && <span className="text-xs text-[#6a9ca0] animate-pulse">Loading&#8230;</span>}
+        {loading && <span className="text-xs text-fg-muted animate-pulse">Loading&#8230;</span>}
       </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
       {open && (
-        <div className="flex flex-col gap-3 rounded-lg border border-[#2d4e5e] bg-[#192e3a] p-3">
+        <div className="flex flex-col gap-3 rounded-lg border border-edge bg-inset p-3">
           {stateNames.length === 0 && !loading && (
-            <p className="text-xs text-[#6a9ca0]">No routes found in S3.</p>
+            <p className="text-xs text-fg-muted">No routes found in S3.</p>
           )}
 
           {stateNames.length > 0 && (
             <div className={compact ? "grid grid-cols-3 gap-2" : "grid grid-cols-1 gap-3 sm:grid-cols-3"}>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[#8fbfc0]">State / Region</label>
-                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={[selectClass, !selectedState ? "ring-2 ring-[#FE7F2D]/50 ring-offset-1 ring-offset-[#0f1c24] animate-pulse" : ""].join(" ")}>
-                  <option value="">— select —</option>
+                <label className="text-xs font-medium text-fg-secondary">State / Region</label>
+                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={[selectClass, !selectedState ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                  <option value="">â€” select â€”</option>
                   {stateNames.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[#8fbfc0]">Area</label>
-                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={[selectClass, selectedState && !selectedArea ? "ring-2 ring-[#FE7F2D]/50 ring-offset-1 ring-offset-[#0f1c24] animate-pulse" : ""].join(" ")}>
-                  <option value="">— select —</option>
+                <label className="text-xs font-medium text-fg-secondary">Area</label>
+                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={[selectClass, selectedState && !selectedArea ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                  <option value="">â€” select â€”</option>
                   {areaNames.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[#8fbfc0]">Route</label>
-                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={[selectClass, selectedArea && !selectedRoute ? "ring-2 ring-[#FE7F2D]/50 ring-offset-1 ring-offset-[#0f1c24] animate-pulse" : ""].join(" ")}>
-                  <option value="">— select —</option>
+                <label className="text-xs font-medium text-fg-secondary">Route</label>
+                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={[selectClass, selectedArea && !selectedRoute ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                  <option value="">â€” select â€”</option>
                   {routeNames.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -558,8 +558,8 @@ export default function S3RoutePicker({
           )}
 
           {attemptEntries.length > 0 && (
-            <div className={["flex flex-col gap-2", !loading ? "ring-2 ring-[#FE7F2D]/40 ring-offset-1 ring-offset-[#0f1c24] animate-pulse rounded-lg" : ""].join(" ")}>
-              <div className="flex flex-col divide-y divide-[#2d4e5e] rounded-lg border border-[#2d4e5e] overflow-hidden">
+            <div className={["flex flex-col gap-2", !loading ? "ring-2 ring-accent/40 ring-offset-1 ring-offset-surface animate-pulse rounded-lg" : ""].join(" ")}>
+              <div className="flex flex-col divide-y divide-edge rounded-lg border border-edge overflow-hidden">
                 {attemptEntries.map(entry => {
                   const fileName = entry.key.split("/").pop() ?? entry.key;
                   const rType = parseRunType(fileName);
@@ -592,15 +592,15 @@ export default function S3RoutePicker({
                           {rType}
                         </span>
                         {meta?.rating && (
-                          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-[#192e3a] text-[#c5dcd8]">
+                          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
                             {meta.rating}
                           </span>
                         )}
                         {meta?.duration != null && (
-                          <span className="text-xs text-[#6a9ca0]">{formatDuration(meta.duration)}</span>
+                          <span className="text-xs text-fg-muted">{formatDuration(meta.duration)}</span>
                         )}
                         {entry.size != null && (
-                          <span className="text-xs text-[#6a9ca0]">{(entry.size / 1024).toFixed(0)} KB</span>
+                          <span className="text-xs text-fg-muted">{(entry.size / 1024).toFixed(0)} KB</span>
                         )}
                       </button>
                       {isPendingDelete ? (
@@ -613,7 +613,7 @@ export default function S3RoutePicker({
                           </button>
                           <button
                             onClick={() => setDeletePending(null)}
-                            className="rounded px-2 py-1 text-xs font-medium bg-[#192e3a] text-[#8fbfc0] hover:bg-[#2d4e5e] hover:text-[#F5FBE6] transition"
+                            className="rounded px-2 py-1 text-xs font-medium bg-inset text-fg-secondary hover:bg-edge hover:text-fg transition"
                           >
                             Cancel
                           </button>
@@ -621,7 +621,7 @@ export default function S3RoutePicker({
                       ) : (
                         <button
                           onClick={() => setDeletePending(entry.key)}
-                          className="shrink-0 ml-3 rounded p-1 text-[#6a9ca0] hover:text-red-400 transition"
+                          className="shrink-0 ml-3 rounded p-1 text-fg-muted hover:text-red-400 transition"
                           aria-label="Delete climb"
                         >
                           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -640,7 +640,7 @@ export default function S3RoutePicker({
           )}
 
           {attemptEntries.length === 0 && selectedRoute && !loading && (
-            <p className="text-xs text-[#6a9ca0]">No run files found for this route.</p>
+            <p className="text-xs text-fg-muted">No run files found for this route.</p>
           )}
         </div>
       )}

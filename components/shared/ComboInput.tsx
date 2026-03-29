@@ -15,7 +15,7 @@ interface ComboInputProps {
  * Text input with a custom dropdown of suggestions populated from S3.
  *
  * Shows all existing values on focus; filters as the user types.
- * Free text entry is always allowed — suggestions are additive, not restrictive.
+ * Free text entry is always allowed â€” suggestions are additive, not restrictive.
  */
 export default function ComboInput({
   label,
@@ -73,7 +73,7 @@ export default function ComboInput({
 
   return (
     <div className="relative flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-[#8fbfc0]">
+      <label htmlFor={id} className="text-xs font-medium text-fg-secondary">
         {label}
       </label>
       <div className="relative">
@@ -88,7 +88,7 @@ export default function ComboInput({
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"
-          className="w-full rounded-lg border border-[#2d4e5e] bg-[#192e3a] px-3 py-2 pr-7 text-sm text-[#F5FBE6] placeholder-[#3d6e7a] outline-none transition focus:border-[#FE7F2D]/60 disabled:opacity-50"
+          className="w-full rounded-lg border border-edge bg-inset px-3 py-2 pr-7 text-sm text-fg placeholder-fg-placeholder outline-none transition focus:border-accent/60 disabled:opacity-50"
         />
         {suggestions.length > 0 && !disabled && (
           <button
@@ -96,7 +96,7 @@ export default function ComboInput({
             tabIndex={-1}
             onMouseDown={handleChevron}
             aria-label="Toggle suggestions"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6a9ca0] hover:text-[#c5dcd8]"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg-light"
           >
             <svg
               className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -114,15 +114,15 @@ export default function ComboInput({
       {open && visible.length > 0 && (
         <ul
           onMouseDown={e => e.preventDefault()}
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-[#2d4e5e] bg-[#233D4D] py-1 shadow-xl"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-edge bg-card py-1 shadow-xl"
         >
           {visible.map(s => (
             <li key={s}>
               <button
                 type="button"
                 onClick={() => handleSelect(s)}
-                className={`w-full px-3 py-2 text-left text-sm transition hover:bg-[#192e3a] ${
-                  s === value ? "font-medium text-[#F5FBE6]" : "text-[#c5dcd8]"
+                className={`w-full px-3 py-2 text-left text-sm transition hover:bg-inset ${
+                  s === value ? "font-medium text-fg" : "text-fg-light"
                 }`}
               >
                 {s}

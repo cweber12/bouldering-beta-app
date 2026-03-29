@@ -32,13 +32,13 @@ export default function LoadingGate({
 
   if (pending) {
     const label = (() => {
-      if (!cvReady && requiresTF && !tfReady) return "Loading OpenCV + TensorFlow.js…";
-      if (!cvReady) return "Loading OpenCV.js…";
-      return "Loading pose model…";
+      if (!cvReady && requiresTF && !tfReady) return "Loading OpenCV + TensorFlow.jsâ€¦";
+      if (!cvReady) return "Loading OpenCV.jsâ€¦";
+      return "Loading pose modelâ€¦";
     })();
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-zinc-950 text-zinc-300">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-zinc-600 border-t-zinc-200" />
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-surface text-fg">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
         <p className="text-sm font-medium tracking-wide">{label}</p>
       </div>
     );
