@@ -143,12 +143,12 @@ export default function NavBar() {
 
   return (
     <nav
-      className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur"
+      className="sticky top-0 z-50 border-b border-[#2d4e5e] bg-[#0d1920]/95 backdrop-blur"
       aria-label="Main navigation"
     >
       <div ref={helpRef} className="relative mx-auto max-w-4xl px-6">
         <div className="flex items-center gap-1">
-          <span className="mr-6 py-3 text-sm font-semibold text-zinc-200 tracking-tight">
+          <span className="mr-6 py-3 text-sm font-semibold text-[#F5FBE6] tracking-tight">
             Route Renderer
           </span>
 
@@ -164,8 +164,8 @@ export default function NavBar() {
                 className={[
                   "border-b-2 px-3 py-3 text-sm transition",
                   active
-                    ? "border-zinc-200 font-medium text-zinc-100"
-                    : "border-transparent text-zinc-500 hover:text-zinc-300",
+                    ? "border-[#FE7F2D] font-medium text-[#F5FBE6]"
+                    : "border-transparent text-[#6a9ca0] hover:text-[#c5dcd8]",
                 ].join(" ")}
                 aria-current={active ? "page" : undefined}
               >
@@ -181,8 +181,8 @@ export default function NavBar() {
               className={[
                 "flex items-center gap-1 border-b-2 px-3 py-3 text-sm transition",
                 helpOpen
-                  ? "border-zinc-400 font-medium text-zinc-200"
-                  : "border-transparent text-zinc-500 hover:text-zinc-300",
+                  ? "border-[#FE7F2D] font-medium text-[#F5FBE6]"
+                  : "border-transparent text-[#6a9ca0] hover:text-[#c5dcd8]",
               ].join(" ")}
               aria-expanded={helpOpen}
             >
@@ -201,19 +201,19 @@ export default function NavBar() {
             {!loading && !user && (
               <Link
                 href="/login"
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+                className="rounded-lg border border-[#2d4e5e] px-3 py-1.5 text-xs text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]"
               >
                 Sign in
               </Link>
             )}
             {!loading && user && (
               <div className="flex items-center gap-3">
-                <span className="text-xs text-zinc-500 truncate max-w-[160px]">
+                <span className="text-xs text-[#6a9ca0] truncate max-w-[160px]">
                   {user.email}
                 </span>
                 <button
                   onClick={handleSignOut}
-                  className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-zinc-500 hover:text-zinc-200"
+                  className="rounded-lg border border-[#2d4e5e] px-3 py-1.5 text-xs text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]"
                 >
                   Sign out
                 </button>
@@ -224,13 +224,13 @@ export default function NavBar() {
 
         {/* Help panel dropdown */}
         {helpOpen && helpSections.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-40 border-b border-zinc-800 bg-zinc-950 shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-40 border-b border-[#2d4e5e] bg-[#0d1920] shadow-xl">
             <div className="px-6 py-5 flex flex-col gap-3">
               {helpSections.map(section => (
                 <InfoDropdown key={section.title} title={section.title}>
                   <ul className="flex flex-col gap-1.5 pl-4 list-disc">
                     {section.bullets.map((bullet, j) => (
-                      <li key={j} className="text-xs text-zinc-500 leading-relaxed">
+                      <li key={j} className="text-xs text-[#8fbfc0] leading-relaxed">
                         {bullet}
                       </li>
                     ))}

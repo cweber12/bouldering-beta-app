@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
+  /** "video" (default) records a clip; "photo" captures a still frame. */
+  mode?: "video" | "photo";
   onCapture: (file: File) => void;
   onClose: () => void;
 }
 
-export default function CameraRecorderModal({ onCapture, onClose }: Props) {
+export default function CameraRecorderModal({ mode = "video", onCapture, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -16,10 +18,12 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  const audioConstraint = mode === "video";
+
   useEffect(() => {
     let active = true;
     navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" }, audio: true })
+      .getUserMedia({ video: { facingMode: "environment" }, audio: audioConstraint })
       .then(stream => {
         if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
         streamRef.current = stream;
@@ -41,6 +45,7 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
       active = false;
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startRecording() {
@@ -74,17 +79,35 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
     setRecording(false);
   }
 
+  function takePhoto() {
+    const video = videoRef.current;
+    if (!video || !streamRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+      onCapture(file);
+    }, "image/jpeg", 0.92);
+  }
+
+  const ariaLabel = mode === "photo" ? "Take a photo" : "Record a video";
+
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Record a video"
+      aria-label={ariaLabel}
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 sm:items-center"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-lg overflow-hidden rounded-t-2xl shadow-2xl sm:rounded-2xl"
-        style={{ backgroundColor: "#143D60" }}
+        className="relative w-full max-w-lg overflow-hidden rounded-t-2xl bg-[#233D4D] shadow-2xl sm:rounded-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Camera preview */}
@@ -116,12 +139,19 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
         )}
 
         <div className="flex gap-3 p-4">
-          {error ? null : !recording ? (
+          {error ? null : mode === "photo" ? (
+            <button
+              onClick={takePhoto}
+              disabled={!ready}
+              className="flex-1 rounded-xl bg-[#FE7F2D] py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:opacity-40"
+            >
+              Take photo
+            </button>
+          ) : !recording ? (
             <button
               onClick={startRecording}
               disabled={!ready}
-              className="flex-1 rounded-xl py-3 text-sm font-semibold text-[#DDEB9D] transition disabled:opacity-40"
-              style={{ backgroundColor: "#EB5B00" }}
+              className="flex-1 rounded-xl bg-[#FE7F2D] py-3 text-sm font-semibold text-[#F5FBE6] transition hover:bg-[#e56015] disabled:opacity-40"
             >
               Start recording
             </button>
@@ -135,8 +165,7 @@ export default function CameraRecorderModal({ onCapture, onClose }: Props) {
           )}
           <button
             onClick={onClose}
-            className="rounded-xl border px-5 py-3 text-sm font-medium transition hover:text-[#DDEB9D]"
-            style={{ borderColor: "#1c5277", color: "#8dc4d8" }}
+            className="rounded-xl border border-[#2d4e5e] px-5 py-3 text-sm font-medium text-[#8fbfc0] transition hover:border-[#3d6474] hover:text-[#F5FBE6]"
           >
             Cancel
           </button>

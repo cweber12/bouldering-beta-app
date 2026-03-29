@@ -12,13 +12,13 @@ export default function InfoDropdown({ title, children, defaultOpen = false }: I
   return (
     <details
       open={defaultOpen}
-      className="group w-full rounded-lg border border-zinc-800 bg-zinc-900"
+      className="group w-full rounded-lg border border-[#2d4e5e] bg-[#233D4D]"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-zinc-300 select-none transition hover:text-zinc-100">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-[#c5dcd8] select-none transition hover:text-[#F5FBE6]">
         <span>{title}</span>
         {/* Chevron rotates when open */}
         <svg
-          className="h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
+          className="h-4 w-4 shrink-0 text-[#6a9ca0] transition-transform duration-200 group-open:rotate-180"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
@@ -28,7 +28,7 @@ export default function InfoDropdown({ title, children, defaultOpen = false }: I
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </summary>
-      <div className="border-t border-zinc-800 px-4 py-3 text-sm leading-relaxed text-zinc-400">
+      <div className="border-t border-[#2d4e5e] px-4 py-3 text-sm leading-relaxed text-[#8fbfc0]">
         {children}
       </div>
     </details>
