@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import type { S3AttemptEntry } from "@/hooks/useS3Storage";
 import { attemptTimestampLabel, loadAttemptFromJson, parseRunType } from "@/utils/fsHelpers";
@@ -33,6 +33,28 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+/** Resize and JPEG-compress a File to a base64 data URL (max 1280×960, 82 % quality). */
+async function compressImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_W = 1280, MAX_H = 960;
+      const scale = Math.min(1, MAX_W / img.naturalWidth, MAX_H / img.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.naturalWidth  * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src = url;
+  });
 }
 
 const ANALYSIS_TABS: AnalysisTab[] = ["day", "week", "month", "all"];
@@ -204,6 +226,8 @@ function RouteAnalysisGraph({
 interface S3RoutePickerProps {
   /** Called when an attempt is successfully loaded from S3. */
   onLoad: (attempt: RouteAttempt) => void;
+  /** Called when the route image changes (fetched from S3 or newly uploaded). Null when no image. */
+  onRouteImageLoaded?: (dataUrl: string | null) => void;
   /** Button label. */
   label?: string;
   /** When true shows a compact inline layout. */
@@ -233,6 +257,7 @@ interface S3RoutePickerProps {
  */
 export default function S3RoutePicker({
   onLoad,
+  onRouteImageLoaded,
   label = "Load from S3",
   compact = false,
   defaultState,
@@ -266,8 +291,40 @@ export default function S3RoutePicker({
   const [runMeta, setRunMeta] = useState<Map<string, RunMeta>>(new Map());
   const [deletePending, setDeletePending] = useState<string | null>(null);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
+  // Route image stored in S3 at `{prefix}/{state}/{area}/{route}/route-image.json`.
+  const [routeImageDataUrl, setRouteImageDataUrl] = useState<string | null>(null);
+  const [routeImageUploading, setRouteImageUploading] = useState(false);
 
-  // Unique grades derived from loaded run metadata for the route-level header.
+  // Stable ref for the callback so effects don't need it as a dependency.
+  const onRouteImageLoadedRef = useRef(onRouteImageLoaded);
+  useEffect(() => { onRouteImageLoadedRef.current = onRouteImageLoaded; });
+
+  // Fetch route image whenever the selected route changes.
+  useEffect(() => {
+    if (!selectedRoute || !userPrefix || !selectedState || !selectedArea) {
+      setRouteImageDataUrl(null);
+      onRouteImageLoadedRef.current?.(null);
+      return;
+    }
+    const key = `${userPrefix}/${selectedState}/${selectedArea}/${selectedRoute}/route-image.json`;
+    let cancelled = false;
+    async function fetchImage() {
+      try {
+        const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
+        if (!res.ok) { if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); } return; }
+        const raw = await res.json() as Record<string, unknown>;
+        const url = typeof raw.dataUrl === "string" ? raw.dataUrl : null;
+        if (!cancelled) {
+          setRouteImageDataUrl(url);
+          onRouteImageLoadedRef.current?.(url);
+        }
+      } catch {
+        if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); }
+      }
+    }
+    fetchImage();
+    return () => { cancelled = true; };
+  }, [selectedRoute, userPrefix, selectedState, selectedArea]);
   const routeGrades = useMemo(() => {
     const grades = new Set<string>();
     for (const m of runMeta.values()) {
@@ -338,7 +395,7 @@ export default function S3RoutePicker({
             setSelectedRoute(defaultRoute);
             const prefix = `${userPrefix}/${defaultState}/${defaultArea}/${defaultRoute}/`;
             const entries = await listAttempts(prefix);
-            const filtered = entries.filter(e => e.key.endsWith(".json"));
+            const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"));
             filtered.sort((a, b) => {
               const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
               const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
@@ -399,7 +456,7 @@ export default function S3RoutePicker({
     try {
       const prefix = `${userPrefix}/${selectedState}/${selectedArea}/${route}/`;
       const entries = await listAttempts(prefix);
-      const filtered = entries.filter(e => e.key.endsWith(".json"));
+      const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"));
       // Sort by embedded timestamp (newest first) so attempts and sends
       // are interleaved in chronological order.
       filtered.sort((a, b) => {
@@ -578,6 +635,55 @@ export default function S3RoutePicker({
                   <span key={g} className="text-sm font-medium text-fg-secondary">{g}</span>
                 ))}
               </div>
+              {/* Route image — shown when available */}
+              {routeImageDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- data URL, not remote image
+                <img
+                  src={routeImageDataUrl}
+                  alt={`${selectedRoute} route photo`}
+                  className="w-full rounded-lg border border-edge object-contain max-h-48"
+                />
+              )}
+              {/* Route image upload */}
+              {selectedRoute && userPrefix && (
+                <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs text-fg-muted hover:text-fg-light transition">
+                  {routeImageUploading ? (
+                    <span className="animate-pulse">Saving&#8230;</span>
+                  ) : (
+                    <>
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                      {routeImageDataUrl ? "Update route photo" : "Upload route photo"}
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={routeImageUploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file || !userPrefix) return;
+                      setRouteImageUploading(true);
+                      try {
+                        const dataUrl = await compressImageToDataUrl(file);
+                        const key = `${userPrefix}/${selectedState}/${selectedArea}/${selectedRoute}/route-image.json`;
+                        const res = await fetch("/api/s3/put", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ key, body: JSON.stringify({ dataUrl }) }),
+                        });
+                        if (res.ok) {
+                          setRouteImageDataUrl(dataUrl);
+                          onRouteImageLoadedRef.current?.(dataUrl);
+                        }
+                      } catch { /* ignore upload errors silently */ }
+                      finally { setRouteImageUploading(false); }
+                    }}
+                  />
+                </label>
+              )}
               <div className="flex flex-col divide-y divide-edge rounded-lg border border-edge overflow-hidden">
                 {attemptEntries.map(entry => {
                   const fileName = entry.key.split("/").pop() ?? entry.key;

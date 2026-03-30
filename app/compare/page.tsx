@@ -6,6 +6,7 @@ import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOv
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer, { type FramePlayerLayer, type FramePlayerHandle } from "@/components/shared/FramePlayer";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
+import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -16,6 +17,7 @@ import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { getTopology } from "@/utils/poseConstants";
+import { sanitizeDirName } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -372,6 +374,16 @@ function OverlayPlayer({
 const MAX_SLOTS = 4;
 const INITIAL_SLOTS = 2;
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+async function dataUrlToFile(dataUrl: string, filename = "route-image.jpg"): Promise<File> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
+}
+
 function ComparePageInner() {
   const { cv } = useOpenCV();
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
@@ -380,8 +392,10 @@ function ComparePageInner() {
   const [slotCount, setSlotCount] = useState(INITIAL_SLOTS);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const imagePreviewRef = useRef<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [userPickedImage, setUserPickedImage] = useState(false);
+  const routeImageConvertingRef = useRef(false);
+  const imagePreviewUrlRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("sidebyside");
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
@@ -396,7 +410,6 @@ function ComparePageInner() {
   // Shared skeleton style applied to all slots simultaneously.
   const [skeletonLineWidth, setSkeletonLineWidth] = useState(2.5);
   const [skeletonPointRadius, setSkeletonPointRadius] = useState(2);
-  const [styleOpen, setStyleOpen] = useState(false);
 
   // Crop box for ORB detection on the shared route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
@@ -415,11 +428,26 @@ function ComparePageInner() {
   );
   const [masterPlaying, setMasterPlaying] = useState(false);
 
+  // Revoke objectURL on unmount.
   useEffect(() => {
     return () => {
-      if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
+      if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
     };
   }, []);
+
+  /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
+  function setImageFileWithPreview(file: File | null) {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = null;
+    }
+    setImageFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      imagePreviewUrlRef.current = url;
+      setImagePreviewUrl(url);
+    }
+  }
 
   const handleMatchResult = useCallback((idx: number, result: ImageMatchResult | null) => {
     setMatchResults(prev => {
@@ -436,9 +464,9 @@ function ComparePageInner() {
       // Auto-populate defaults from the first loaded run.
       const isFirstRun = prev.every(a => a === null);
       if (isFirstRun) {
-        setDefaultState(attempt.state || undefined);
-        setDefaultArea(attempt.area || undefined);
-        setDefaultRoute(attempt.route || undefined);
+        setDefaultState(attempt.state ? sanitizeDirName(attempt.state) : undefined);
+        setDefaultArea(attempt.area ? sanitizeDirName(attempt.area) : undefined);
+        setDefaultRoute(attempt.route ? sanitizeDirName(attempt.route) : undefined);
       }
       return next;
     });
@@ -466,27 +494,31 @@ function ComparePageInner() {
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
-    const url = URL.createObjectURL(file);
-    imagePreviewRef.current = url;
-    setImagePreviewUrl(url);
-    setImageFile(file);
+    setImageFileWithPreview(file);
+    setUserPickedImage(true);
     setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
     setCropConfirmed(false);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
   }
 
   function handleCameraCapture(file: File) {
-    if (imagePreviewRef.current) URL.revokeObjectURL(imagePreviewRef.current);
-    const url = URL.createObjectURL(file);
-    imagePreviewRef.current = url;
-    setImagePreviewUrl(url);
-    setImageFile(file);
+    setImageFileWithPreview(file);
+    setUserPickedImage(true);
     setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
     setCropConfirmed(false);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
     setShowCamera(false);
   }
+
+  // Auto-populate route image from S3 when slot 0 loads a climb with a route photo.
+  const handleRouteImageLoaded = useCallback((dataUrl: string | null) => {
+    if (!dataUrl || userPickedImage || routeImageConvertingRef.current) return;
+    routeImageConvertingRef.current = true;
+    dataUrlToFile(dataUrl)
+      .then(file => { setImageFileWithPreview(file); })
+      .catch(() => { /* ignore */ })
+      .finally(() => { routeImageConvertingRef.current = false; });
+  }, [userPickedImage]);
 
   function handleApplyAndMatch() {
     setCropConfirmed(true);
@@ -544,6 +576,7 @@ function ComparePageInner() {
                   defaultArea={defaultArea}
                   defaultRoute={defaultRoute}
                   pulseButtons={i === 0 && !!imageFile && !anyLoaded}
+                  onRouteImageLoaded={i === 0 ? handleRouteImageLoaded : undefined}
                 />
               </div>
             </div>
@@ -643,48 +676,12 @@ function ComparePageInner() {
 
           {/* Skeleton style dropdown */}
           {cropConfirmed && (
-            <div className="relative">
-              <button
-                onClick={() => setStyleOpen(o => !o)}
-                className="rounded-lg border border-edge bg-card px-4 py-2 text-sm font-medium text-fg-muted transition hover:border-edge-hover hover:text-fg-light"
-              >
-                Style ▾
-              </button>
-              {styleOpen && (
-                <div className="absolute left-0 top-full z-20 mt-1 flex w-56 flex-col gap-3 rounded-lg border border-edge bg-card p-3 shadow-xl">
-                  <label className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-xs text-fg-secondary">
-                      <span>Line width</span>
-                      <span className="tabular-nums">{skeletonLineWidth.toFixed(1)} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="8"
-                      step="0.5"
-                      value={skeletonLineWidth}
-                      onChange={(e) => setSkeletonLineWidth(parseFloat(e.target.value))}
-                      className="w-full accent-accent"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1.5">
-                    <div className="flex items-center justify-between text-xs text-fg-secondary">
-                      <span>Point radius</span>
-                      <span className="tabular-nums">{skeletonPointRadius} px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="10"
-                      step="1"
-                      value={skeletonPointRadius}
-                      onChange={(e) => setSkeletonPointRadius(parseInt(e.target.value, 10))}
-                      className="w-full accent-accent"
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
+            <SkeletonStylePanel
+              onChange={s => {
+                if (s.lineWidth != null) setSkeletonLineWidth(s.lineWidth);
+                if (s.pointRadius != null) setSkeletonPointRadius(s.pointRadius);
+              }}
+            />
           )}
 
           {/* Master play button — side-by-side only */}

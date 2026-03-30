@@ -314,10 +314,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             } else {
               orbFeatures = extractFeatures(cv, referenceImageData);
             }
-            // Generate thumbnail: draw ORB keypoints on the middle frame.
+            // Generate thumbnail: draw ORB crop bounding box on the middle frame.
             const thumbSource = middleFrameImageData ?? referenceImageData;
             const thumbnail = thumbSource
-              ? generateOrbThumbnail(thumbSource, orbFeatures.keypoints)
+              ? generateOrbThumbnail(thumbSource, orbFeatures)
               : undefined;
             middleFrameImageData = null; // allow GC
 

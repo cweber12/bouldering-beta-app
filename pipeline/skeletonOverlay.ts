@@ -42,6 +42,26 @@ export interface SkeletonStyle {
    * Defaults to MediaPipe MP_KP_NAMES.
    */
   keypointNames?: Record<number, string>;
+  /**
+   * Per-keypoint color overrides keyed by keypoint name.
+   * When set, overrides `jointColor` for the named joint.
+   */
+  jointColorOverrides?: Partial<Record<string, string>>;
+  /**
+   * Per-keypoint radius overrides keyed by keypoint name.
+   * When set, overrides `pointRadius` for the named joint.
+   */
+  jointRadiusOverrides?: Partial<Record<string, number>>;
+  /**
+   * Per-edge color overrides. Key format: `"${fromIdx}-${toIdx}"` matching
+   * the indices used in `skeletonEdges`. Overrides `limbColor` for that edge.
+   */
+  edgeColorMap?: Partial<Record<string, string>>;
+  /**
+   * Per-edge line-width overrides. Same key format as `edgeColorMap`.
+   * Overrides `lineWidth` for that edge.
+   */
+  edgeWidthMap?: Partial<Record<string, number>>;
 }
 
 /**
@@ -125,10 +145,12 @@ export function drawSkeleton(
   const pointRadius = options?.pointRadius ?? JOINT_RADIUS;
   const edges = options?.skeletonEdges ?? MP_SKELETON_EDGES;
   const names: Record<number, string> = options?.keypointNames ?? MP_KP_NAMES;
+  const edgeColorMap = options?.edgeColorMap;
+  const edgeWidthMap = options?.edgeWidthMap;
+  const jointColorOverrides = options?.jointColorOverrides;
+  const jointRadiusOverrides = options?.jointRadiusOverrides;
   // Draw limb lines first so joints render on top.
   ctx.save();
-  ctx.lineWidth = lineWidth;
-  ctx.strokeStyle = limbColor;
   ctx.lineCap = "round";
 
   for (const [fromIdx, toIdx] of edges) {
@@ -136,17 +158,21 @@ export function drawSkeleton(
     const to = keypoints[names[toIdx]];
     if (!from || !to) continue;
 
+    const edgeKey = `${fromIdx}-${toIdx}`;
+    ctx.strokeStyle = edgeColorMap?.[edgeKey] ?? limbColor;
+    ctx.lineWidth = edgeWidthMap?.[edgeKey] ?? lineWidth;
+
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
   }
 
-  // Draw joint circles.
-  ctx.fillStyle = jointColor;
-  for (const pt of Object.values(keypoints)) {
+  // Draw joint circles — per-keypoint overrides take precedence.
+  for (const [name, pt] of Object.entries(keypoints)) {
+    ctx.fillStyle = jointColorOverrides?.[name] ?? jointColor;
     ctx.beginPath();
-    ctx.arc(pt.x, pt.y, pointRadius, 0, Math.PI * 2);
+    ctx.arc(pt.x, pt.y, jointRadiusOverrides?.[name] ?? pointRadius, 0, Math.PI * 2);
     ctx.fill();
   }
 

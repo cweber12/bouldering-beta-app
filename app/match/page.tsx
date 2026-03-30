@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
@@ -8,23 +8,60 @@ import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOv
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer from "@/components/shared/FramePlayer";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
+import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
+import { useS3Storage } from "@/hooks/useS3Storage";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { getTopology } from "@/utils/poseConstants";
+import { sanitizeDirName } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams)
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Resize & JPEG-compress an image File to a data URL (max 1280×960, 82 % quality). */
+async function compressImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_W = 1280, MAX_H = 960;
+      const scale = Math.min(1, MAX_W / img.naturalWidth, MAX_H / img.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.naturalWidth  * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.src = url;
+  });
+}
+
+/** Convert a data URL string to a File object (for auto-populating imageFile from S3 route image). */
+async function dataUrlToFile(dataUrl: string, filename = "route-image.jpg"): Promise<File> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], filename, { type: blob.type });
+}
+
 function MatchPageInner() {
   const urlAttemptId = useSearchParams().get("id") ?? "";
 
   const { cv } = useOpenCV();
+  const { userPrefix } = useS3Storage();
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
 
@@ -35,18 +72,19 @@ function MatchPageInner() {
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
-  const imagePreviewUrlRef = useRef<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const imagePreviewUrlRef = useRef<string | null>(null);
+  // Whether the current imageFile was explicitly chosen by the user (vs auto-loaded from route image).
+  const [userPickedImage, setUserPickedImage] = useState(false);
+  const routeImageConvertingRef = useRef(false);
 
   // Crop box for ORB detection on the route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   // Track whether the user has confirmed the crop and triggered matching.
   const [matchTriggered, setMatchTriggered] = useState(false);
 
-  // Skeleton overlay style — adjustable in real time; FramePlayer reads latest.
+  // Skeleton overlay style — managed by SkeletonStylePanel, applied in real time.
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({
-    limbColor: "rgba(0,220,120,0.85)",
-    jointColor: "rgba(255,220,0,0.92)",
     lineWidth: 2.5,
     pointRadius: 5,
   });
@@ -66,18 +104,29 @@ function MatchPageInner() {
   // On-demand video export state (renders WebM in background when user downloads).
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
-  const [styleOpen, setStyleOpen] = useState(false);
   const styleRef = useRef(topoStyle);
   useEffect(() => { styleRef.current = topoStyle; }, [topoStyle]);
 
-  // Sync URL param changes via derived state in handlers rather than an effect.
-  // The initial values are already set in useState() initialisers above.
-
+  // Revoke objectURL on unmount.
   useEffect(() => {
     return () => {
       if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
     };
   }, []);
+
+  /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
+  function setImageFileWithPreview(file: File | null) {
+    if (imagePreviewUrlRef.current) {
+      URL.revokeObjectURL(imagePreviewUrlRef.current);
+      imagePreviewUrlRef.current = null;
+    }
+    setImageFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      imagePreviewUrlRef.current = url;
+      setImagePreviewUrl(url);
+    }
+  }
 
   // ---- Attempt loading ----
 
@@ -95,25 +144,42 @@ function MatchPageInner() {
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    const url = URL.createObjectURL(file);
-    imagePreviewUrlRef.current = url;
-    setImagePreviewUrl(url);
-    setImageFile(file);
-    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
-    setMatchTriggered(false);
+    handleImageFileSet(file);
   }
 
   function handleCameraCapture(file: File) {
-    if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
-    const url = URL.createObjectURL(file);
-    imagePreviewUrlRef.current = url;
-    setImagePreviewUrl(url);
-    setImageFile(file);
-    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
-    setMatchTriggered(false);
+    handleImageFileSet(file);
     setShowCamera(false);
   }
+
+  // Save the selected file and, when a climb is loaded, persist the image to S3 as the route photo.
+  function handleImageFileSet(file: File) {
+    setImageFileWithPreview(file);
+    setUserPickedImage(true);
+    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
+    setMatchTriggered(false);
+    if (attempt && userPrefix) {
+      compressImageToDataUrl(file).then(dataUrl => {
+        const key = `${userPrefix}/${sanitizeDirName(attempt.state || "Unknown")}/${sanitizeDirName(attempt.area || "Unknown")}/${sanitizeDirName(attempt.route || "Unknown")}/route-image.json`;
+        fetch("/api/s3/put", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, body: JSON.stringify({ dataUrl }) }),
+        }).catch(() => { /* fire-and-forget */ });
+      }).catch(() => { /* ignore */ });
+    }
+  }
+
+  // Called by S3RoutePicker when a route image is available in S3.
+  // Auto-populates imageFile only when the user hasn't chosen their own photo.
+  const handleRouteImageLoaded = useCallback((dataUrl: string | null) => {
+    if (!dataUrl || userPickedImage || routeImageConvertingRef.current) return;
+    routeImageConvertingRef.current = true;
+    dataUrlToFile(dataUrl)
+      .then(file => { setImageFileWithPreview(file); })
+      .catch(() => { /* ignore */ })
+      .finally(() => { routeImageConvertingRef.current = false; });
+  }, [userPickedImage]);
 
   function handleApplyAndMatch() {
     if (!imageFile || !cv || !attemptId) return;
@@ -237,124 +303,49 @@ function MatchPageInner() {
 
         <S3RoutePicker
           onLoad={handleLoadAttempt}
+          onRouteImageLoaded={handleRouteImageLoaded}
           alwaysOpen
         />
       </div>
 
-      {/* Skeleton style controls — collapsible */}
+      {/* Skeleton style */}
       {hasAttempt && (
-        <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-3">
-          <button
-            onClick={() => setStyleOpen(o => !o)}
-            className="flex items-center justify-between w-full text-left"
-            aria-expanded={styleOpen}
-          >
-            <span className="text-sm font-medium text-fg-light">Skeleton style</span>
-            <svg
-              className={["h-4 w-4 text-fg-muted transition-transform duration-200", styleOpen ? "rotate-180" : ""].join(" ")}
-              fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-            </svg>
-          </button>
-          {styleOpen && (
-            <div className="flex flex-col gap-4 pt-1">
-              <p className="text-xs text-fg-muted -mt-1">
-                Adjust colours and sizes — changes apply to the player in real time.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-fg-secondary">Limb color</label>
-                  <input
-                    type="color"
-                    value={skeletonStyle.limbColor?.replace(/rgba?\([^)]+\)/, "#00dc78") ?? "#00dc78"}
-                    onChange={e => setSkeletonStyle(s => ({ ...s, limbColor: e.target.value }))}
-                    className="h-8 w-full cursor-pointer rounded border border-edge bg-inset p-0.5"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-fg-secondary">Joint color</label>
-                  <input
-                    type="color"
-                    value={skeletonStyle.jointColor?.replace(/rgba?\([^)]+\)/, "#ffdc00") ?? "#ffdc00"}
-                    onChange={e => setSkeletonStyle(s => ({ ...s, jointColor: e.target.value }))}
-                    className="h-8 w-full cursor-pointer rounded border border-edge bg-inset p-0.5"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex justify-between text-xs text-fg-secondary">
-                    <span>Line width</span>
-                    <span className="font-mono text-fg-light">{skeletonStyle.lineWidth ?? 2.5}px</span>
-                  </label>
-                  <input
-                    type="range" min={0.5} max={8} step={0.5}
-                    value={skeletonStyle.lineWidth ?? 2.5}
-                    onChange={e => setSkeletonStyle(s => ({ ...s, lineWidth: Number(e.target.value) }))}
-                    className="accent-accent"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="flex justify-between text-xs text-fg-secondary">
-                    <span>Point radius</span>
-                    <span className="font-mono text-fg-light">{skeletonStyle.pointRadius ?? 5}px</span>
-                  </label>
-                  <input
-                    type="range" min={1} max={12} step={1}
-                    value={skeletonStyle.pointRadius ?? 5}
-                    onChange={e => setSkeletonStyle(s => ({ ...s, pointRadius: Number(e.target.value) }))}
-                    className="accent-accent"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+          <SkeletonStylePanel onChange={setSkeletonStyle} />
         </div>
       )}
 
-      {/* Route image upload */}
-      <div className="flex flex-col gap-4">
+      {/* Route photo section — upload only when no image is loaded */}
+      {hasAttempt && !imageFile && (
         <div className="grid grid-cols-2 gap-3">
           {/* Select from file */}
           <label
             className={[
               "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              !hasAttempt || isMatching
+              isMatching
                 ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
-                : [
-                    "bg-primary border-edge text-fg-light",
-                    "hover:border-accent/60 hover:text-fg",
-                    hasAttempt && !imageFile && !isMatching ? "animate-pulse border-accent/30" : "",
-                  ].join(" "),
+                : "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg animate-pulse border-accent/30",
             ].join(" ")}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
             </svg>
-            <span className="font-medium text-fg">{isMatching ? "Loading..." : "Select a photo"}</span>
+            <span className="font-medium text-fg">Select a photo</span>
             <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={!hasAttempt || isMatching}
-              onChange={handleImageChange}
-            />
+            <input type="file" accept="image/*" className="hidden" disabled={isMatching} onChange={handleImageChange} />
           </label>
 
           {/* Take with camera */}
           <button
             type="button"
             onClick={() => setShowCamera(true)}
-            disabled={!hasAttempt || isMatching}
+            disabled={isMatching}
             className={[
               "flex flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              !hasAttempt || isMatching
+              isMatching
                 ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
-                : [
-                    "cursor-pointer bg-primary border-edge text-fg-light",
-                    "hover:border-accent/60 hover:text-fg",
-                    hasAttempt && !imageFile && !isMatching ? "animate-pulse border-accent/30" : "",
-                  ].join(" "),
+                : "cursor-pointer bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg animate-pulse border-accent/30",
             ].join(" ")}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -365,14 +356,20 @@ function MatchPageInner() {
             <span className="text-xs text-fg-light">Opens camera</span>
           </button>
         </div>
+      )}
 
         {/* Crop UI — shown after image selected, before match is triggered */}
         {imagePreviewUrl && imageFile && !matchTriggered && !isMatching && (
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-fg-secondary">
-              Adjust the crop region to focus ORB matching on the relevant wall area, then click
-              &ldquo;Apply &amp; Match&rdquo;.
-            </p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-fg-secondary">
+                Adjust the crop region then click &ldquo;Apply &amp; View&rdquo;.
+              </p>
+              <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg-light transition">
+                Change photo
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </label>
+            </div>
             <div className="relative w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -405,7 +402,6 @@ function MatchPageInner() {
             className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
           />
         )}
-      </div>
 
       {/* Match stats */}
       {isMatchDone && matchResult && (
@@ -467,6 +463,20 @@ function MatchPageInner() {
               </svg>
               {exportStatus === "done" ? "Download again (.webm)" : "Download pose overlay video (.webm)"}
             </button>
+          )}
+
+          {/* Load another climb for the same route */}
+          {attempt && (
+            <div className="flex flex-col gap-3 pt-2 border-t border-edge">
+              <p className="text-sm font-medium text-fg-light">Load another climb</p>
+              <S3RoutePicker
+                onLoad={handleLoadAttempt}
+                alwaysOpen
+                defaultState={attempt.state ? sanitizeDirName(attempt.state) : undefined}
+                defaultArea={attempt.area ? sanitizeDirName(attempt.area) : undefined}
+                defaultRoute={attempt.route ? sanitizeDirName(attempt.route) : undefined}
+              />
+            </div>
           )}
         </div>
       )}
