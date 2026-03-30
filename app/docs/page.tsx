@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Docs â€” Bouldering Beta",
+  title: "Docs — Bouldering Beta",
   description: "How Bouldering Beta works: pose detection, ORB matching, and homography.",
 };
 
@@ -28,25 +28,25 @@ export default function DocsPage() {
           <h2 className="text-xl font-semibold text-fg-light">How it works (overview)</h2>
           <ol className="mt-4 flex flex-col gap-3 pl-5 list-decimal text-fg-secondary leading-relaxed">
             <li>
-              <strong className="text-fg-light">Video analysis (Upload page)</strong> â€” You
+              <strong className="text-fg-light">Video analysis (Upload page)</strong> — You
               upload a short climbing video. The app samples a frame every 100 ms, runs
               the chosen pose model ({" "}
               <span className="font-mono text-fg-light">MediaPipe Pose Landmarker</span> &mdash; 33 BlazePose keypoints)
               on each frame and stores the pose timeline.
             </li>
             <li>
-              <strong className="text-fg-light">ORB feature extraction</strong> â€” After polling
+              <strong className="text-fg-light">ORB feature extraction</strong> — After polling
               all frames, ORB (Oriented FAST and Rotated BRIEF) descriptors are extracted from
               the first video frame. These encode the wall&apos;s texture so it can be recognised
               in an external photo later.
             </li>
             <li>
-              <strong className="text-fg-light">Image matching (Match page)</strong> â€” You
+              <strong className="text-fg-light">Image matching (Match page)</strong> — You
               upload a photo of the same section of wall. ORB features are extracted from it,
               then matched against the video-frame features to find correspondences.
             </li>
             <li>
-              <strong className="text-fg-light">Homography &amp; overlay</strong> â€” The matched
+              <strong className="text-fg-light">Homography &amp; overlay</strong> — The matched
               keypoints are used to compute a perspective transform (homography). Each skeleton
               frame is reprojected through this transform onto the route photo and rendered as a
               WebM video that you can download.
@@ -115,7 +115,7 @@ export default function DocsPage() {
             <div className="rounded-xl border border-edge bg-card px-5 py-4">
               <p className="text-sm font-semibold text-fg-light">1. Prepare your footage</p>
               <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
-                Film your climbing run in portrait or landscape â€” either works. The camera
+                Film your climbing run in portrait or landscape — either works. The camera
                 should be stationary and include the entire wall section. For outdoor climbs,
                 zoom in as much as possible to improve pose accuracy.
               </p>
@@ -132,7 +132,7 @@ export default function DocsPage() {
                 <a href="#modes" className="text-fg-light hover:underline">
                   see below
                 </a>
-                ). This controls how pose detection is applied â€” indoor uses full-frame detection
+                ). This controls how pose detection is applied — indoor uses full-frame detection
                 while outdoor crops around the estimated hip position before each inference.
               </p>
             </div>
@@ -151,7 +151,7 @@ export default function DocsPage() {
               <p className="mt-2 text-sm text-fg-secondary">
                 If lighting conditions are challenging, expand the{" "}
                 <strong className="text-fg-light">Frame adjustments</strong> panel and select
-                the conditions that apply â€” see{" "}
+                the conditions that apply — see{" "}
                 <a href="#lighting" className="text-fg-light hover:underline">
                   Lighting &amp; preprocessing
                 </a>{" "}
@@ -172,7 +172,7 @@ export default function DocsPage() {
                 On the Match page a <strong className="text-fg-light">Skeleton style</strong>{" "}
                 panel appears once matching completes. Use the colour pickers to change limb and
                 joint colours. Use the sliders to adjust line width and joint radius. Changes
-                take effect on the next render â€” click{" "}
+                take effect on the next render — click{" "}
                 <strong className="text-fg-light">Apply &amp; Match</strong> again to re-export
                 with updated styles.
               </p>
@@ -189,7 +189,7 @@ export default function DocsPage() {
                 </Link>
                 , upload a photo of the wall from a similar angle. The match statistics panel
                 shows how many ORB correspondences were found. Aim for at least 10 good matches
-                for a stable homography. The pose overlay video renders automatically â€” download
+                for a stable homography. The pose overlay video renders automatically — download
                 it as a <code className="text-fg-light">.webm</code> file.
               </p>
             </div>
@@ -205,7 +205,7 @@ export default function DocsPage() {
             Pose detection is sensitive to contrast and sharpness. When lighting conditions
             are poor, selecting the matching conditions on the Upload page causes each frame
             to be preprocessed before being sent to the pose model. This does{" "}
-            <strong className="text-fg-light">not</strong> affect the ORB background crop â€”
+            <strong className="text-fg-light">not</strong> affect the ORB background crop —
             ORB feature matching uses pixel normalisation (histogram equalisation) independently
             to keep descriptor gradients consistent between the video and the uploaded photo.
           </p>
@@ -227,7 +227,7 @@ export default function DocsPage() {
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Backlit</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-light">equalizeHist blend + gamma Î³=1.4</td>
+                  <td className="px-4 py-3 font-mono text-xs text-fg-light">equalizeHist blend + gamma γ=1.4</td>
                   <td className="px-4 py-3">Improves contrast then lifts midtones to reduce silhouette effect</td>
                 </tr>
                 <tr>
@@ -242,12 +242,12 @@ export default function DocsPage() {
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Gym lighting</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-light">pre-blur (Ïƒ=3) + equalizeHist blend (40 %)</td>
+                  <td className="px-4 py-3 font-mono text-xs text-fg-light">pre-blur (σ=3) + equalizeHist blend (40 %)</td>
                   <td className="px-4 py-3">Evens out large fluorescent hot-spots before boosting contrast</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Dusty / hazy lens</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-light">Unsharp mask (Ïƒ=1.5)</td>
+                  <td className="px-4 py-3 font-mono text-xs text-fg-light">Unsharp mask (σ=1.5)</td>
                   <td className="px-4 py-3">Restores edge clarity lost to lens fog or chalk dust</td>
                 </tr>
               </tbody>
@@ -274,7 +274,7 @@ export default function DocsPage() {
               <p className="text-sm font-semibold text-fg-light">Indoor</p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
                 <li>Full-frame pose detection on every sampled frame.</li>
-                <li>Climber fills most of the frame â€” keypoints are easy to detect.</li>
+                <li>Climber fills most of the frame — keypoints are easy to detect.</li>
                 <li>No crop, no interpolation, fastest processing.</li>
               </ul>
             </div>
@@ -285,9 +285,9 @@ export default function DocsPage() {
                 <li>
                   Crops a window around the detected hip position before each inference. The
                   window size and starting position are set by the <strong className="text-fg-light">Climber crop</strong>{" "}
-                  box on the Upload page â€” it is re-centred on the hip each frame.
+                  box on the Upload page — it is re-centred on the hip each frame.
                 </li>
-                <li>Pose runs every N-th sampled frame (configurable 1â€“30).</li>
+                <li>Pose runs every N-th sampled frame (configurable 1–30).</li>
                 <li>
                   Intermediate frames are filled by linear interpolation of the keypoints.
                 </li>
@@ -297,15 +297,15 @@ export default function DocsPage() {
           </div>
 
           <p className="mt-4 text-sm text-fg-secondary leading-relaxed">
-            <strong className="text-fg-light">Frame step</strong> (outdoor only) â€” controls how
+            <strong className="text-fg-light">Frame step</strong> (outdoor only) — controls how
             often full pose detection runs. A step of 1 runs pose on every sampled frame (most
             accurate, slowest). A step of 10 runs it every 10th frame and interpolates the rest,
             which is faster but smoother rather than precisely tracked. For a first look at an
-            attempt, 5â€“10 is a good starting point.
+            attempt, 5–10 is a good starting point.
           </p>
           <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
-            <strong className="text-fg-light">Smoothing</strong> â€” after interpolation both
-            modes apply an exponential moving average (Î± = 0.3) over every keypoint track.
+            <strong className="text-fg-light">Smoothing</strong> — after interpolation both
+            modes apply an exponential moving average (α = 0.3) over every keypoint track.
             Brief dropouts (frames where a joint was not detected) are filled in before
             smoothing. This reduces skeletal jitter in the final overlay video without
             introducing noticeable lag.
@@ -318,8 +318,8 @@ export default function DocsPage() {
         <section className="mt-10">
           <h2 className="text-xl font-semibold text-fg-light">Privacy &amp; data storage</h2>
           <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
-            All processing â€” video decoding, pose inference, ORB feature extraction, homography
-            computation, and video rendering â€” happens locally in your browser.{" "}
+            All processing — video decoding, pose inference, ORB feature extraction, homography
+            computation, and video rendering — happens locally in your browser.{" "}
             <strong className="text-fg-light">
               No video frames or images are sent to any server.
             </strong>
@@ -374,7 +374,7 @@ export default function DocsPage() {
               <div className="px-5 pb-4 pt-1 text-sm text-fg-secondary leading-relaxed">
                 OpenCV (~8 MB WASM) and the pose model are loaded fresh each session. A slow
                 connection will cause a longer initial wait. Reload the page and wait a few
-                seconds. If it persists, check the browser console for network errors â€” the
+                seconds. If it persists, check the browser console for network errors — the
                 assets may be blocked by a browser extension or firewall.
               </div>
             </details>

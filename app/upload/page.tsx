@@ -368,7 +368,7 @@ function UploadPageInner() {
 
   const videoAndCropSection = (
     <div className="flex-1 min-w-0 flex flex-col gap-4">
-      {/* Video input â€” upload file or record with camera */}
+      {/* Video input — upload file or record with camera */}
       <div className="grid grid-cols-2 gap-3">
         {/* Choose existing file */}
         <label
@@ -402,7 +402,7 @@ function UploadPageInner() {
           />
         </label>
 
-        {/* Record with camera â€” opens getUserMedia modal (works on all devices) */}
+        {/* Record with camera — opens getUserMedia modal (works on all devices) */}
         <button
           type="button"
           onClick={() => setShowCamera(true)}
@@ -431,13 +431,13 @@ function UploadPageInner() {
         </button>
       </div>
 
-      {/* Crop UI ï¿½ shown after file selected, before processing */}
+      {/* Crop UI � shown after file selected, before processing */}
       {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
         <div className="flex flex-col gap-3">
           {/* Crop mode toggle */}
           <div className="flex flex-col gap-2">
             <p className="text-xs font-medium text-fg-secondary">
-              Set crop regions ï¿½ drag handles to resize, drag interior to move
+              Set crop regions � drag handles to resize, drag interior to move
             </p>
             <div className="flex gap-2">
               <button
@@ -493,7 +493,7 @@ function UploadPageInner() {
             <canvas ref={cropCanvasRef} className="hidden" />
           </div>
 
-          {/* Video controls â€” below the overlay so they are never covered */}
+          {/* Video controls — below the overlay so they are never covered */}
           {hasCropFrame && (
             <div className="flex items-center gap-3 rounded-xl border border-inset bg-card px-3 py-2">
               <button
@@ -543,7 +543,7 @@ function UploadPageInner() {
               aria-label="Frame step"
             />
             <p className="text-xs text-fg-muted">
-              1 = every frame (slowest, most accurate) ï¿½ 30 = every 30th frame (fastest, more interpolation between detections)
+              1 = every frame (slowest, most accurate) � 30 = every 30th frame (fastest, more interpolation between detections)
             </p>
           </div>
 
@@ -600,7 +600,7 @@ function UploadPageInner() {
     <aside className="w-full lg:w-72 shrink-0">
       <div className="rounded-2xl border border-edge bg-card divide-y divide-edge">
 
-        {/* â”€â”€ Pose model â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Pose model ──────────────────────────── */}
         <div className="px-4 py-4 flex flex-col gap-3">
           <div>
             <p className="text-sm font-semibold text-fg">Pose detection model</p>
@@ -624,7 +624,7 @@ function UploadPageInner() {
           </div>
         </div>
 
-        {/* â”€â”€ Location â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Location ─────────────────────────────── */}
         <div className="px-4 py-4 flex flex-col gap-3">
           <div>
             <p className="text-sm font-semibold text-fg">Location</p>
@@ -656,7 +656,7 @@ function UploadPageInner() {
           />
         </div>
 
-        {/* â”€â”€ Climb type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Climb type ───────────────────────────── */}
         <div className="px-4 py-4 flex flex-col gap-3">
           <p className="text-sm font-semibold text-fg">Climb type</p>
           <div className="flex gap-2">
@@ -684,7 +684,7 @@ function UploadPageInner() {
           </p>
         </div>
 
-        {/* â”€â”€ Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Details ──────────────────────────────── */}
         <div className="px-4 py-4 flex flex-col gap-3">
           <p className="text-sm font-semibold text-fg">Details <span className="text-fg-muted font-normal">(optional)</span></p>
           <div className="flex flex-col gap-1.5">
@@ -703,7 +703,7 @@ function UploadPageInner() {
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="Anything to remember about this runâ€¦"
+              placeholder="Anything to remember about this run…"
               rows={3}
               disabled={isProcessing}
               className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 disabled:opacity-50 resize-none"
@@ -711,7 +711,7 @@ function UploadPageInner() {
           </div>
         </div>
 
-        {/* â”€â”€ Shooting conditions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+        {/* ── Shooting conditions ───────────────────── */}
         {!isDone && !isProcessing && (
           <details className="px-4 py-4 group/details">
             <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
@@ -771,7 +771,7 @@ function UploadPageInner() {
 
 
 
-      {/* Main content ï¿½ sidebar + video/crop */}
+      {/* Main content � sidebar + video/crop */}
       {/* On large screens: sidebar left, video right. On small: video top, sidebar bottom. */}
       <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-start">
         {sidebarSection}
@@ -789,7 +789,7 @@ function UploadPageInner() {
           </div>
           <p className="text-center text-xs text-fg-secondary">
             Analysing frame {currentFrame} of {totalFrames} ({progressPct}%)
-            <span className="ml-1.5 text-fg-muted">ï¿½ pose every {frameStep} frames</span>
+            <span className="ml-1.5 text-fg-muted">� pose every {frameStep} frames</span>
           </p>
         </div>
       )}
@@ -799,14 +799,14 @@ function UploadPageInner() {
       )}
       {isDone && orbStatus === "failed" && (
         <p className="text-center text-sm text-amber-400">
-          Feature extraction failed ï¿½ image matching will be unavailable.
+          Feature extraction failed � image matching will be unavailable.
         </p>
       )}
 
       {/* Result actions */}
       {showResults && activeAttemptId && activeAttempt && (
         <div className="flex flex-col gap-3">
-          {/* Video preview â€” shown above action buttons once processing is done */}
+          {/* Video preview — shown above action buttons once processing is done */}
           {videoPreviewUrl && (
             <video
               src={videoPreviewUrl}
@@ -820,11 +820,11 @@ function UploadPageInner() {
           <div className="rounded-2xl border border-success/25 bg-success/5 px-5 py-4">
             <p className="text-sm font-semibold text-success">Analysis complete</p>
             <p className="mt-0.5 text-xs text-success/70">
-              {activeAttempt.frames.length} pose frames ï¿½{" "}
+              {activeAttempt.frames.length} pose frames �{" "}
               {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points extracted
-              {activeAttempt.state && ` ï¿½ ${activeAttempt.state}`}
-              {activeAttempt.area  && ` ï¿½ ${activeAttempt.area}`}
-              {activeAttempt.route && ` ï¿½ ${activeAttempt.route}`}
+              {activeAttempt.state && ` � ${activeAttempt.state}`}
+              {activeAttempt.area  && ` � ${activeAttempt.area}`}
+              {activeAttempt.route && ` � ${activeAttempt.route}`}
             </p>
           </div>
 
@@ -876,7 +876,7 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploadingâ€¦" : s3Saved ? "Uploaded" : "Upload"}
+            {s3Status === "loading" ? "Uploading…" : s3Saved ? "Uploaded" : "Upload"}
           </button>
 
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}

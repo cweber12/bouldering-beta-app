@@ -15,7 +15,7 @@ interface ComboInputProps {
  * Text input with a custom dropdown of suggestions populated from S3.
  *
  * Shows all existing values on focus; filters as the user types.
- * Free text entry is always allowed â€” suggestions are additive, not restrictive.
+ * Free text entry is always allowed — suggestions are additive, not restrictive.
  */
 export default function ComboInput({
   label,

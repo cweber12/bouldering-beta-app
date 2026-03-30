@@ -79,6 +79,11 @@ export interface RouteAttempt {
   /** Optional freeform notes about the run. */
   notes?: string;
   /**
+   * Scaled-down PNG data URL of the middle video frame with ORB keypoints
+   * drawn as green dots. Used as a preview thumbnail in the route picker.
+   */
+  thumbnail?: string;
+  /**
    * For outdoor mode: one FrameCapture per frame on which pose detection was
    * actually executed (every N-th sampled frame). Null for indoor mode.
    */

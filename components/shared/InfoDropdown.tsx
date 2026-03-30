@@ -6,7 +6,7 @@ interface InfoDropdownProps {
 
 /**
  * Accessible disclosure accordion using native <details>/<summary>.
- * No JavaScript needed â€” the browser handles expand/collapse.
+ * No JavaScript needed — the browser handles expand/collapse.
  */
 export default function InfoDropdown({ title, children, defaultOpen = false }: InfoDropdownProps) {
   return (

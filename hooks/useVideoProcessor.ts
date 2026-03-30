@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { estimateFrameUnified, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
+import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
 import {
   extractHipCenter,
@@ -154,6 +155,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
         const id = `run-${Date.now()}`;
         let referenceImageData: ImageData | null = null;
+        let middleFrameImageData: ImageData | null = null;
+        const middleIndex = Math.floor(frameCount / 2);
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -177,6 +180,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           // Always capture the first full frame for ORB reference.
           if (i === 0) {
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+          // Capture the middle frame for the ORB thumbnail.
+          if (i === middleIndex) {
+            middleFrameImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
           }
 
           // Collect every timestamp for the dense interpolation timeline.
@@ -307,6 +314,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             } else {
               orbFeatures = extractFeatures(cv, referenceImageData);
             }
+            // Generate thumbnail: draw ORB keypoints on the middle frame.
+            const thumbSource = middleFrameImageData ?? referenceImageData;
+            const thumbnail = thumbSource
+              ? generateOrbThumbnail(thumbSource, orbFeatures.keypoints)
+              : undefined;
+            middleFrameImageData = null; // allow GC
+
             saveAttempt({
               id,
               videoMeta,
@@ -321,6 +335,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               runType: meta.runType ?? "attempt",
               rating: meta.rating,
               notes: meta.notes,
+              thumbnail: thumbnail || undefined,
             });
             referenceImageData = null; // allow GC
             setOrbStatus("ready");

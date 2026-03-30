@@ -70,8 +70,8 @@ is unaffected.
 
 User accounts are managed by **Supabase Auth** with cookie-based sessions via
 `@supabase/ssr`. Unauthenticated visitors can view the home page and docs;
-upload, match, and compare pages require sign-in. The middleware
-(`middleware.ts`) refreshes the session on every request and redirects
+upload, match, and compare pages require sign-in. The proxy
+(`proxy.ts`) refreshes the session on every request and redirects
 unauthenticated users to `/login`.
 
 All stored data is scoped per user — S3 keys include the user ID, and every API
@@ -85,6 +85,10 @@ upload, match, and compare pages all feature S3-backed dropdown pickers that
 list existing states → areas → routes → runs directly from the bucket.
 Attempts are highlighted in amber and sends in emerald throughout the UI.
 Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
+
+Each saved run may include a scaled-down PNG thumbnail of the middle video frame
+with ORB keypoints drawn as green dots. The thumbnail is stored as a data URL in
+the JSON and displayed inline in the route picker alongside climb information.
 
 ### Environment variables
 

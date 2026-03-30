@@ -19,6 +19,8 @@ interface RunMeta {
   runType: string;
   /** Timestamp parsed from filename for analysis graph. */
   timestamp: number;
+  /** Scaled-down PNG data URL with ORB keypoints drawn. */
+  thumbnail?: string;
 }
 
 type AnalysisTab = "day" | "week" | "month" | "all";
@@ -42,7 +44,7 @@ const TAB_MS: Record<AnalysisTab, number> = {
 };
 
 // ---------------------------------------------------------------------------
-// RouteAnalysisGraph â€” inline SVG time-series chart
+// RouteAnalysisGraph — inline SVG time-series chart
 // ---------------------------------------------------------------------------
 
 function RouteAnalysisGraph({
@@ -173,7 +175,7 @@ function RouteAnalysisGraph({
                   r="4"
                   className={p.isSend ? "fill-emerald-400" : "fill-amber-400"}
                 >
-                  <title>{new Date(p.ts).toLocaleString()} â€” {formatDuration(p.duration)}</title>
+                  <title>{new Date(p.ts).toLocaleString()} — {formatDuration(p.duration)}</title>
                 </circle>
               ))}
 
@@ -263,6 +265,7 @@ export default function S3RoutePicker({
   const [loading, setLoading] = useState(false);
   const [runMeta, setRunMeta] = useState<Map<string, RunMeta>>(new Map());
   const [deletePending, setDeletePending] = useState<string | null>(null);
+  const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
   // Fetch metadata for each run entry in the background when entries change.
   useEffect(() => {
@@ -288,6 +291,7 @@ export default function S3RoutePicker({
               notes: typeof raw.notes === "string" ? raw.notes : undefined,
               runType: parseRunType(fileName),
               timestamp: tsMatch ? parseInt(tsMatch[1], 10) : 0,
+              thumbnail: typeof raw.thumbnail === "string" ? raw.thumbnail : undefined,
             });
           } catch { /* ignore individual failures */ }
         }),
@@ -299,7 +303,7 @@ export default function S3RoutePicker({
     return () => { cancelled = true; };
   }, [attemptEntries]);
 
-  // Fetch states on open â€” then auto-select defaults if provided.
+  // Fetch states on open — then auto-select defaults if provided.
   const handleOpen = useCallback(async () => {
     if (!userPrefix) return;
     setOpen(true);
@@ -536,21 +540,21 @@ export default function S3RoutePicker({
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">State / Region</label>
                 <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={[selectClass, !selectedState ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
-                  <option value="">â€” select â€”</option>
+                  <option value="">— select —</option>
                   {stateNames.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">Area</label>
                 <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={[selectClass, selectedState && !selectedArea ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
-                  <option value="">â€” select â€”</option>
+                  <option value="">— select —</option>
                   {areaNames.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">Route</label>
                 <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={[selectClass, selectedArea && !selectedRoute ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
-                  <option value="">â€” select â€”</option>
+                  <option value="">— select —</option>
                   {routeNames.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -566,68 +570,111 @@ export default function S3RoutePicker({
                   const isSend = rType === "send";
                   const meta = runMeta.get(entry.key);
                   const isPendingDelete = deletePending === entry.key;
+                  const isExpanded = expandedEntry === entry.key;
                   return (
                     <div
                       key={entry.key}
                       className={[
-                        "flex items-center justify-between px-4 py-2.5 text-sm transition",
+                        "flex flex-col transition",
                         isSend
                           ? "bg-emerald-950/20 text-emerald-300"
                           : "bg-amber-950/20 text-amber-300",
                         isPendingDelete ? "bg-red-950/30 border-red-800/40" : "",
                       ].join(" ")}
                     >
-                      <button
-                        onClick={() => handleAttemptSelect(entry)}
-                        disabled={status === "loading" || isPendingDelete}
-                        className="flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap disabled:opacity-40"
-                      >
-                        <span>{attemptTimestampLabel(fileName)}</span>
-                        <span className={[
-                          "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
-                          isSend
-                            ? "bg-emerald-900/40 text-emerald-400"
-                            : "bg-amber-900/40 text-amber-400",
-                        ].join(" ")}>
-                          {rType}
-                        </span>
-                        {meta?.rating && (
-                          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
-                            {meta.rating}
-                          </span>
-                        )}
-                        {meta?.duration != null && (
-                          <span className="text-xs text-fg-muted">{formatDuration(meta.duration)}</span>
-                        )}
-                        {entry.size != null && (
-                          <span className="text-xs text-fg-muted">{(entry.size / 1024).toFixed(0)} KB</span>
-                        )}
-                      </button>
-                      {isPendingDelete ? (
-                        <div className="flex items-center gap-1.5 shrink-0 ml-3">
-                          <button
-                            onClick={() => handleDeleteAttempt(entry.key)}
-                            className="rounded px-2 py-1 text-xs font-medium bg-red-900/50 text-red-300 hover:bg-red-800/60 transition"
-                          >
-                            Delete
-                          </button>
-                          <button
-                            onClick={() => setDeletePending(null)}
-                            className="rounded px-2 py-1 text-xs font-medium bg-inset text-fg-secondary hover:bg-edge hover:text-fg transition"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
+                      <div className="flex items-center justify-between px-4 py-2.5 text-sm">
                         <button
-                          onClick={() => setDeletePending(entry.key)}
-                          className="shrink-0 ml-3 rounded p-1 text-fg-muted hover:text-red-400 transition"
-                          aria-label="Delete climb"
+                          onClick={() => {
+                            setExpandedEntry(isExpanded ? null : entry.key);
+                          }}
+                          className="flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap"
                         >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          {meta?.thumbnail && (
+                            // eslint-disable-next-line @next/next/no-img-element -- data URL thumbnail, not a remote image
+                            <img
+                              src={meta.thumbnail}
+                              alt=""
+                              className="h-8 w-8 rounded object-cover shrink-0"
+                            />
+                          )}
+                          <span>{attemptTimestampLabel(fileName)}</span>
+                          <span className={[
+                            "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
+                            isSend
+                              ? "bg-emerald-900/40 text-emerald-400"
+                              : "bg-amber-900/40 text-amber-400",
+                          ].join(" ")}>
+                            {rType}
+                          </span>
+                          {meta?.rating && (
+                            <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
+                              {meta.rating}
+                            </span>
+                          )}
+                          {meta?.duration != null && (
+                            <span className="text-xs text-fg-muted">{formatDuration(meta.duration)}</span>
+                          )}
+                          {entry.size != null && (
+                            <span className="text-xs text-fg-muted">{(entry.size / 1024).toFixed(0)} KB</span>
+                          )}
                         </button>
+                        <div className="flex items-center gap-1 shrink-0 ml-3">
+                          <button
+                            onClick={() => handleAttemptSelect(entry)}
+                            disabled={status === "loading" || isPendingDelete}
+                            className="rounded px-2 py-1 text-xs font-medium bg-inset text-fg-secondary hover:bg-edge hover:text-fg transition disabled:opacity-40"
+                          >
+                            Load
+                          </button>
+                          {isPendingDelete ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleDeleteAttempt(entry.key)}
+                                className="rounded px-2 py-1 text-xs font-medium bg-red-900/50 text-red-300 hover:bg-red-800/60 transition"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => setDeletePending(null)}
+                                className="rounded px-2 py-1 text-xs font-medium bg-inset text-fg-secondary hover:bg-edge hover:text-fg transition"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeletePending(entry.key)}
+                              className="rounded p-1 text-fg-muted hover:text-red-400 transition"
+                              aria-label="Delete climb"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded detail panel */}
+                      {isExpanded && (
+                        <div className="flex gap-3 px-4 pb-3 pt-1">
+                          {meta?.thumbnail && (
+                            // eslint-disable-next-line @next/next/no-img-element -- data URL thumbnail, not a remote image
+                            <img
+                              src={meta.thumbnail}
+                              alt="ORB feature thumbnail"
+                              className="h-28 w-auto rounded border border-edge object-contain shrink-0"
+                            />
+                          )}
+                          <div className="flex flex-col gap-1 text-xs text-fg-secondary min-w-0">
+                            {meta?.rating && <p><span className="text-fg-muted">Grade:</span> {meta.rating}</p>}
+                            {meta?.duration != null && <p><span className="text-fg-muted">Duration:</span> {formatDuration(meta.duration)}</p>}
+                            {meta?.notes && <p className="text-fg-muted italic break-words">{meta.notes}</p>}
+                            {!meta?.rating && !meta?.notes && meta?.duration == null && (
+                              <p className="text-fg-muted">No additional info.</p>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                   );

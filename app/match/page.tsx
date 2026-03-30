@@ -43,7 +43,7 @@ function MatchPageInner() {
   // Track whether the user has confirmed the crop and triggered matching.
   const [matchTriggered, setMatchTriggered] = useState(false);
 
-  // Skeleton overlay style Ã¢â‚¬â€ adjustable in real time; FramePlayer reads latest.
+  // Skeleton overlay style — adjustable in real time; FramePlayer reads latest.
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({
     limbColor: "rgba(0,220,120,0.85)",
     jointColor: "rgba(255,220,0,0.92)",
@@ -59,7 +59,7 @@ function MatchPageInner() {
     return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
   }, [skeletonStyle, attempt]);
 
-  // Pre-compute skeleton frames (instant Ã¢â‚¬â€ pure math, no video encoding).
+  // Pre-compute skeleton frames (instant — pure math, no video encoding).
   const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
     useSkeletonFrames(cv, attemptId || null, matchResult);
 
@@ -175,7 +175,7 @@ function MatchPageInner() {
           </p>
         </div>
         <Link href="/upload" className="shrink-0 text-xs text-fg-muted hover:text-fg-light transition">
-          Ã¢â€ Â Back to upload
+          ← Back to upload
         </Link>
       </div>
 
@@ -241,7 +241,7 @@ function MatchPageInner() {
         />
       </div>
 
-      {/* Skeleton style controls Ã¢â‚¬â€ collapsible */}
+      {/* Skeleton style controls — collapsible */}
       {hasAttempt && (
         <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-3">
           <button
@@ -260,7 +260,7 @@ function MatchPageInner() {
           {styleOpen && (
             <div className="flex flex-col gap-4 pt-1">
               <p className="text-xs text-fg-muted -mt-1">
-                Adjust colours and sizes Ã¢â‚¬â€ changes apply to the player in real time.
+                Adjust colours and sizes — changes apply to the player in real time.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
@@ -366,7 +366,7 @@ function MatchPageInner() {
           </button>
         </div>
 
-        {/* Crop UI Ã¢â‚¬â€ shown after image selected, before match is triggered */}
+        {/* Crop UI — shown after image selected, before match is triggered */}
         {imagePreviewUrl && imageFile && !matchTriggered && !isMatching && (
           <div className="flex flex-col gap-3">
             <p className="text-xs text-fg-secondary">
@@ -396,7 +396,7 @@ function MatchPageInner() {
           </div>
         )}
 
-        {/* Static preview after match triggered Ã¢â‚¬â€ hidden once frames are ready or when new image selected */}
+        {/* Static preview after match triggered — hidden once frames are ready or when new image selected */}
         {imagePreviewUrl && matchTriggered && (isMatching || !isFrameReady) && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -433,7 +433,7 @@ function MatchPageInner() {
         </div>
       )}
 
-      {/* Pose overlay Ã¢â‚¬â€ instant frame-by-frame player (no video encoding) */}
+      {/* Pose overlay — instant frame-by-frame player (no video encoding) */}
       {isFrameReady && imageFile && (
         <div className="flex flex-col gap-3">
           <p className="text-sm font-medium text-fg-light">Pose overlay</p>
