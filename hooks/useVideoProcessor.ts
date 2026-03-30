@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { estimateFrameUnified, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
 import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
@@ -36,7 +36,7 @@ export interface VideoProcessorResult {
    * followed by landmark filtering, interpolation, and EMA smoothing.
    *
    * @param file      - The video to process.
-   * @param detector  - Loaded pose detector (TF.js PoseDetector or MediaPipe PoseLandmarker).
+   * @param detector  - Loaded MediaPipe PoseLandmarker instance.
    * @param cv        - Initialised OpenCV runtime.
    * @param frameStep - Pose detection runs every N-th sampled frame.
    *                    Gaps are filled by filtering + linear interpolation.
@@ -44,8 +44,7 @@ export interface VideoProcessorResult {
    * @param meta      - Optional location + classification metadata.
    * @param cropOptions - Optional user-defined crop boxes and lighting hints.
    * @param startTime - Optional start time in seconds.
-   * @param backend   - Which pose backend is active ("movenet" | "mediapipe").
-   *                    Default: "movenet".
+   * @param backend   - Which pose backend is active. Default: "mediapipe".
    */
   process: (
     file: File,
@@ -57,6 +56,8 @@ export interface VideoProcessorResult {
     startTime?: number,
     backend?: PoseBackend,
   ) => Promise<void>;
+  /** Abort any in-flight processing and reset all state back to idle. */
+  reset: () => void;
   status: ProcessingStatus;
   /** Tracks background ORB extraction after the seek loop completes. */
   orbStatus: OrbStatus;
@@ -88,6 +89,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const process = useCallback(
     async (
@@ -98,7 +100,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
       cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
       startTime: number = 0,
-      backend: PoseBackend = "movenet",
+      backend: PoseBackend = "mediapipe",
     ) => {
       abortRef.current = false;
       setStatus("processing");
@@ -344,5 +346,33 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     [frameIntervalMs],
   );
 
-  return { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage };
+  // Abort processing when the component unmounts so background work does not
+  // continue silently (fixes the upload-page navigation bug).
+  const resetRef = useRef(() => {
+    abortRef.current = true;
+  });
+
+  const reset = useCallback(() => {
+    abortRef.current = true;
+    if (mountedRef.current) {
+      setStatus("idle");
+      setOrbStatus("idle");
+      setCurrentFrame(0);
+      setTotalFrames(0);
+      setAttemptId(null);
+      setErrorMessage(null);
+    }
+  }, []);
+
+  // On unmount, abort any in-flight processing.
+  useEffect(() => {
+    mountedRef.current = true;
+    const resetFn = resetRef.current;
+    return () => {
+      mountedRef.current = false;
+      resetFn();
+    };
+  }, []);
+
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage };
 }

@@ -34,7 +34,7 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
       title: "What this page does",
       bullets: [
         "Upload a climbing video and this page analyses it entirely in your browser â€” nothing is sent to a third-party server.",
-        "MoveNet Lightning tracks your skeleton joint-by-joint on every sampled frame of the video.",
+        "MediaPipe Pose Landmarker tracks your skeleton joint-by-joint on every sampled frame of the video.",
         "ORB feature matching simultaneously memorises the unique texture of the wall from the first video frame.",
         "The result is a compact .json file you take to the View page to overlay your movement onto a still route photo.",
       ],

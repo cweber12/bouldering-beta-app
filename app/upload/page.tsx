@@ -7,7 +7,7 @@ import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
 import { useOpenCV } from "@/hooks/useOpenCV";
-import { usePoseModel, type PoseModelConfig, DEFAULT_POSE_MODEL, type MoveNetVariant, type MediaPipeVariant } from "@/hooks/usePoseModel";
+import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { getAttempt } from "@/storage/sessionStore";
@@ -96,10 +96,10 @@ const FRAME_CONDITIONS: FrameCondition[] = [
 function UploadPageInner() {
   const { cv } = useOpenCV();
 
-  // Model selection state
-  const [modelConfig, setModelConfig] = useState<PoseModelConfig>(DEFAULT_POSE_MODEL);
-  const { model, backend } = usePoseModel(modelConfig);
-  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
+  // Model selection state — MediaPipe only
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("lite");
+  const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
+  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, userPrefix, status: s3Status } = useS3Storage();
 
@@ -197,8 +197,11 @@ function UploadPageInner() {
   // Clear session when navigating away so fresh state on return.
   useEffect(() => {
     return () => {
-      try { window.sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      // Reset video processing state — route info is preserved via
+      // sessionStorage but the video / processing state should not persist.
+      resetProcessor();
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -302,7 +305,7 @@ function UploadPageInner() {
       climberCrop,
       orbCrop,
       conditions,
-    }, videoCurrentTime > 0 ? videoCurrentTime : 0, backend);
+    }, videoCurrentTime > 0 ? videoCurrentTime : 0);
   }
 
   async function handleSaveToDevice() {
@@ -601,63 +604,22 @@ function UploadPageInner() {
         <div className="px-4 py-4 flex flex-col gap-3">
           <div>
             <p className="text-sm font-semibold text-fg">Pose detection model</p>
-            <p className="text-xs text-fg-muted mt-0.5">Select the model and variant for skeleton extraction.</p>
+            <p className="text-xs text-fg-muted mt-0.5">MediaPipe Pose Landmarker &mdash; 33 BlazePose keypoints.</p>
           </div>
-          <div className="flex gap-2">
-            {(["movenet", "mediapipe"] as const).map(b => (
-              <button
-                key={b}
-                onClick={() => setModelConfig(
-                  b === "movenet"
-                    ? { backend: "movenet", variant: "lightning" }
-                    : { backend: "mediapipe", variant: "lite" },
-                )}
-                disabled={isProcessing}
-                className={[
-                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition",
-                  modelConfig.backend === b
-                    ? "border-accent/60 bg-accent/10 text-accent"
-                    : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  isProcessing ? "cursor-not-allowed opacity-50" : "",
-                ].join(" ")}
-              >
-                {b === "movenet" ? "MoveNet" : "MediaPipe"}
-              </button>
-            ))}
-          </div>
-          {/* Variant selector */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-fg-secondary">Variant</label>
             <select
-              value={modelConfig.variant}
-              onChange={e => {
-                const val = e.target.value;
-                if (modelConfig.backend === "movenet") {
-                  setModelConfig({ backend: "movenet", variant: val as MoveNetVariant });
-                } else {
-                  setModelConfig({ backend: "mediapipe", variant: val as MediaPipeVariant });
-                }
-              }}
+              value={modelVariant}
+              onChange={e => setModelVariant(e.target.value as MediaPipeVariant)}
               disabled={isProcessing}
               className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition focus:border-accent/60 disabled:opacity-50"
             >
-              {modelConfig.backend === "movenet" ? (
-                <>
-                  <option value="lightning">Lightning (fast)</option>
-                  <option value="thunder">Thunder (accurate)</option>
-                </>
-              ) : (
-                <>
-                  <option value="lite">Lite (fast)</option>
-                  <option value="full">Full (balanced)</option>
-                  <option value="heavy">Heavy (accurate)</option>
-                </>
-              )}
+              <option value="lite">Lite (fast)</option>
+              <option value="full">Full (balanced)</option>
+              <option value="heavy">Heavy (accurate)</option>
             </select>
             <p className="text-xs text-fg-muted">
-              {modelConfig.backend === "movenet"
-                ? "MoveNet: 17 keypoints (COCO). Lightning is faster; Thunder is more accurate."
-                : "MediaPipe Pose Landmarker: 33 keypoints (BlazePose). Lite is fastest; Heavy is most accurate."}
+              Lite is fastest; Heavy is most accurate.
             </p>
           </div>
         </div>
@@ -942,7 +904,7 @@ function UploadPageInner() {
 
 export default function UploadPage() {
   return (
-    <LoadingGate requiresTF={false}>
+    <LoadingGate>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-fg-secondary">

@@ -31,8 +31,7 @@ export default function DocsPage() {
               <strong className="text-fg-light">Video analysis (Upload page)</strong> â€” You
               upload a short climbing video. The app samples a frame every 100 ms, runs
               the chosen pose model ({" "}
-              <span className="font-mono text-fg-light">MoveNet</span> â€” 17 keypoints, or{" "}
-              <span className="font-mono text-fg-light">MediaPipe Pose Landmarker</span> â€” 33 keypoints)
+              <span className="font-mono text-fg-light">MediaPipe Pose Landmarker</span> &mdash; 33 BlazePose keypoints)
               on each frame and stores the pose timeline.
             </li>
             <li>
@@ -72,13 +71,6 @@ export default function DocsPage() {
               <tbody className="divide-y divide-edge">
                 <tr>
                   <td className="px-4 py-3">Pose detection</td>
-                  <td className="px-4 py-3 font-mono text-fg-light">
-                    TF.js 4.22 + MoveNet (Lightning / Thunder)
-                  </td>
-                  <td className="px-4 py-3">17 COCO keypoints, WebGL backend</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">Pose detection (alt)</td>
                   <td className="px-4 py-3 font-mono text-fg-light">
                     MediaPipe Pose Landmarker (Lite / Full / Heavy)
                   </td>
@@ -366,7 +358,7 @@ export default function DocsPage() {
                 <svg className="h-4 w-4 text-zinc-500 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
               </summary>
               <div className="px-5 pb-4 pt-1 text-sm text-fg-secondary leading-relaxed">
-                Both MoveNet and MediaPipe require a browser with WebGL / GPU support. Make
+                MediaPipe requires a browser with WebGL / GPU support. Make
                 sure hardware acceleration is enabled in your browser settings. Very long videos
                 (over 5 minutes) can take several minutes to process. You can trim to just the
                 crux section before uploading. For outdoor mode, increase the frame step to skip
@@ -415,21 +407,6 @@ export default function DocsPage() {
                       MediaPipe Pose Landmarker
                     </a>{" "}
                     (models &amp; WASM runtime)
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg-light">Apache 2.0</td>
-                  <td className="px-4 py-3">&copy; Google LLC</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">
-                    <a
-                      href="https://www.tensorflow.org/lite/models/pose_estimation/overview"
-                      className="text-fg-light hover:underline"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      MoveNet (Lightning / Thunder)
-                    </a>{" "}
-                    via TensorFlow.js
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-fg-light">Apache 2.0</td>
                   <td className="px-4 py-3">&copy; Google LLC</td>

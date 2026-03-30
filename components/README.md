@@ -42,6 +42,6 @@ import InfoDropdown from "@/components/shared/InfoDropdown";
 
 ### `LoadingGate`
 
-Gates child content until both OpenCV and TF.js are ready.
+Gates child content until OpenCV is ready.
 
 Located at `components/shared/LoadingGate.tsx`. Used on the Upload and Match pages to prevent hooks from running before runtimes are initialised.

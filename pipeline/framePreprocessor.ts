@@ -1,6 +1,6 @@
 /**
  * Lighting-condition-specific preprocessing applied to the pose-detection
- * canvas before each frame is analysed by MoveNet.
+ * canvas before each frame is analysed by MediaPipe.
  *
  * Only the canvas passed explicitly is modified — the ORB reference canvas
  * and any other surfaces are left untouched.

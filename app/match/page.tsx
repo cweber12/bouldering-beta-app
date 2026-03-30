@@ -54,7 +54,7 @@ function MatchPageInner() {
   // Derive topology-aware style: inject skeleton edges + keypoint names
   // from the attempt's pose backend so FramePlayer renders the right skeleton.
   const topoStyle: SkeletonStyle = useMemo(() => {
-    const backend = attempt?.poseBackend ?? "movenet";
+    const backend = attempt?.poseBackend ?? "mediapipe";
     const topo = getTopology(backend);
     return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
   }, [skeletonStyle, attempt]);
@@ -84,6 +84,10 @@ function MatchPageInner() {
   function handleLoadAttempt(loaded: RouteAttempt) {
     setAttemptId(loaded.id);
     setAttempt(loaded);
+    // Reset match state so the user can re-select a climb without reload.
+    setMatchTriggered(false);
+    setExportStatus("idle");
+    setExportProgress(0);
   }
 
   // ---- Image matching ----
@@ -477,7 +481,7 @@ function MatchPageInner() {
 
 export default function MatchPage() {
   return (
-    <LoadingGate requiresTF={false}>
+    <LoadingGate>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">

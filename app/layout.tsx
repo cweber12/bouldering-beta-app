@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Route Renderer",
   description:
-    "Record climbing attempts, extract pose data with MoveNet, then overlay your skeleton onto a route photo — all locally in your browser.",
+    "Record climbing attempts, extract pose data with MediaPipe, then overlay your skeleton onto a route photo — all locally in your browser.",
 };
 
 export default function RootLayout({

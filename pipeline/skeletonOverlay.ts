@@ -5,15 +5,15 @@
  * via a homography matrix, then draws the skeleton (limbs + joints) onto
  * the canvas.
  *
- * Supports both MoveNet (17 keypoints) and MediaPipe Pose Landmarker
- * (33 keypoints) topologies. The caller may supply custom skeleton edges
- * and keypoint names via SkeletonStyle; defaults to MoveNet topology.
+ * Uses MediaPipe Pose Landmarker (33 keypoints, BlazePose topology).
+ * The caller may supply custom skeleton edges and keypoint names via
+ * SkeletonStyle; defaults to MediaPipe topology.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
-import { SKELETON_EDGES, KP_NAMES } from "@/utils/poseConstants";
+import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
 import { applyHomographyMatrix } from "@/pipeline/homography";
 
 const JOINT_RADIUS = 5;
@@ -34,14 +34,12 @@ export interface SkeletonStyle {
   pointRadius?: number;
   /**
    * Custom skeleton edges as [fromIndex, toIndex] pairs.
-   * Supply MediaPipe edges when rendering 33-keypoint data.
-   * Defaults to MoveNet SKELETON_EDGES.
+   * Defaults to MediaPipe MP_SKELETON_EDGES.
    */
   skeletonEdges?: [number, number][];
   /**
    * Custom keypoint index → name mapping.
-   * Supply MediaPipe names when rendering 33-keypoint data.
-   * Defaults to MoveNet KP_NAMES.
+   * Defaults to MediaPipe MP_KP_NAMES.
    */
   keypointNames?: Record<number, string>;
 }
@@ -74,7 +72,7 @@ export function buildTransformedKeypoints(
 }
 
 /**
- * Draw a MoveNet pose skeleton (limb lines + joint circles) onto a canvas 2D
+ * Draw a pose skeleton (limb lines + joint circles) onto a canvas 2D
  * context using image-space pixel coordinates.
  *
  * Edges with a missing endpoint are silently skipped (keypoint was below the
@@ -93,8 +91,8 @@ export function drawSkeleton(
   const jointColor = options?.jointColor ?? JOINT_COLOR;
   const lineWidth = options?.lineWidth ?? LIMB_WIDTH;
   const pointRadius = options?.pointRadius ?? JOINT_RADIUS;
-  const edges = options?.skeletonEdges ?? SKELETON_EDGES;
-  const names: Record<number, string> = options?.keypointNames ?? KP_NAMES;
+  const edges = options?.skeletonEdges ?? MP_SKELETON_EDGES;
+  const names: Record<number, string> = options?.keypointNames ?? MP_KP_NAMES;
   // Draw limb lines first so joints render on top.
   ctx.save();
   ctx.lineWidth = lineWidth;

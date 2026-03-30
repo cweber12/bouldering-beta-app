@@ -1,11 +1,8 @@
 /**
- * Keypoint indices and skeleton edge definitions for MoveNet (17 keypoints)
- * and MediaPipe Pose Landmarker (33 keypoints).
+ * Keypoint indices and skeleton edge definitions for
+ * MediaPipe Pose Landmarker (33 keypoints, BlazePose topology).
  *
  * Every renderer and consumer imports from here — never hardcode indices.
- *
- * MoveNet keypoint order matches the COCO topology:
- * https://github.com/tensorflow/tfjs-models/tree/master/pose-detection#keypoint-diagram
  *
  * MediaPipe Pose Landmarker uses the BlazePose 33-keypoint topology:
  * https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker
@@ -15,84 +12,12 @@
 // Pose backend type
 // ---------------------------------------------------------------------------
 
-/** Identifies which pose-detection backend produced a set of keypoints. */
-export type PoseBackend = "movenet" | "mediapipe";
-
-// ---------------------------------------------------------------------------
-// MoveNet (17 COCO keypoints)
-// ---------------------------------------------------------------------------
-
-export const KP = {
-  NOSE: 0,
-  LEFT_EYE: 1,
-  RIGHT_EYE: 2,
-  LEFT_EAR: 3,
-  RIGHT_EAR: 4,
-  LEFT_SHOULDER: 5,
-  RIGHT_SHOULDER: 6,
-  LEFT_ELBOW: 7,
-  RIGHT_ELBOW: 8,
-  LEFT_WRIST: 9,
-  RIGHT_WRIST: 10,
-  LEFT_HIP: 11,
-  RIGHT_HIP: 12,
-  LEFT_KNEE: 13,
-  RIGHT_KNEE: 14,
-  LEFT_ANKLE: 15,
-  RIGHT_ANKLE: 16,
-} as const;
-
-export type KeypointIndex = (typeof KP)[keyof typeof KP];
-
-/** Human-readable name for each MoveNet keypoint index. */
-export const KP_NAMES: Record<KeypointIndex, string> = {
-  [KP.NOSE]: "nose",
-  [KP.LEFT_EYE]: "left_eye",
-  [KP.RIGHT_EYE]: "right_eye",
-  [KP.LEFT_EAR]: "left_ear",
-  [KP.RIGHT_EAR]: "right_ear",
-  [KP.LEFT_SHOULDER]: "left_shoulder",
-  [KP.RIGHT_SHOULDER]: "right_shoulder",
-  [KP.LEFT_ELBOW]: "left_elbow",
-  [KP.RIGHT_ELBOW]: "right_elbow",
-  [KP.LEFT_WRIST]: "left_wrist",
-  [KP.RIGHT_WRIST]: "right_wrist",
-  [KP.LEFT_HIP]: "left_hip",
-  [KP.RIGHT_HIP]: "right_hip",
-  [KP.LEFT_KNEE]: "left_knee",
-  [KP.RIGHT_KNEE]: "right_knee",
-  [KP.LEFT_ANKLE]: "left_ankle",
-  [KP.RIGHT_ANKLE]: "right_ankle",
-};
-
-/** Skeleton edges as [from, to] keypoint index pairs for MoveNet. */
-export const SKELETON_EDGES: [KeypointIndex, KeypointIndex][] = [
-  // Head
-  [KP.LEFT_EAR, KP.LEFT_EYE],
-  [KP.LEFT_EYE, KP.NOSE],
-  [KP.NOSE, KP.RIGHT_EYE],
-  [KP.RIGHT_EYE, KP.RIGHT_EAR],
-  // Torso
-  [KP.LEFT_SHOULDER, KP.RIGHT_SHOULDER],
-  [KP.LEFT_SHOULDER, KP.LEFT_HIP],
-  [KP.RIGHT_SHOULDER, KP.RIGHT_HIP],
-  [KP.LEFT_HIP, KP.RIGHT_HIP],
-  // Left arm
-  [KP.LEFT_SHOULDER, KP.LEFT_ELBOW],
-  [KP.LEFT_ELBOW, KP.LEFT_WRIST],
-  // Right arm
-  [KP.RIGHT_SHOULDER, KP.RIGHT_ELBOW],
-  [KP.RIGHT_ELBOW, KP.RIGHT_WRIST],
-  // Left leg
-  [KP.LEFT_HIP, KP.LEFT_KNEE],
-  [KP.LEFT_KNEE, KP.LEFT_ANKLE],
-  // Right leg
-  [KP.RIGHT_HIP, KP.RIGHT_KNEE],
-  [KP.RIGHT_KNEE, KP.RIGHT_ANKLE],
-];
-
-/** Total number of MoveNet keypoints. */
-export const MOVENET_KEYPOINT_COUNT = 17;
+/**
+ * Identifies which pose-detection backend produced a set of keypoints.
+ * Only MediaPipe is supported; the type is kept as a literal for
+ * backwards-compatibility with stored RouteAttempt data.
+ */
+export type PoseBackend = "mediapipe";
 
 // ---------------------------------------------------------------------------
 // MediaPipe Pose Landmarker (33 BlazePose keypoints)
@@ -231,18 +156,11 @@ export interface PoseTopology {
   skeletonEdges: [number, number][];
 }
 
-/** Return the topology constants for the given pose backend. */
-export function getTopology(backend: PoseBackend): PoseTopology {
-  if (backend === "mediapipe") {
-    return {
-      keypointCount: MEDIAPIPE_KEYPOINT_COUNT,
-      keypointNames: MP_KP_NAMES,
-      skeletonEdges: MP_SKELETON_EDGES,
-    };
-  }
+/** Return the topology constants for the MediaPipe pose backend. */
+export function getTopology(_backend?: PoseBackend): PoseTopology {
   return {
-    keypointCount: MOVENET_KEYPOINT_COUNT,
-    keypointNames: KP_NAMES,
-    skeletonEdges: SKELETON_EDGES,
+    keypointCount: MEDIAPIPE_KEYPOINT_COUNT,
+    keypointNames: MP_KP_NAMES,
+    skeletonEdges: MP_SKELETON_EDGES,
   };
 }

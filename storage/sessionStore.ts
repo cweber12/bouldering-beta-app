@@ -54,7 +54,7 @@ export interface RouteAttempt {
   frames: PoseFrame[];
   /**
    * Which pose-detection backend produced the frames.
-   * Legacy data without this field defaults to "movenet".
+   * Only "mediapipe" is supported. Legacy data defaults to "mediapipe".
    */
   poseBackend?: PoseBackend;
   /**

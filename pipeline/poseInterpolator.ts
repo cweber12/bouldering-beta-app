@@ -12,11 +12,10 @@
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
 import {
-  MOVENET_KEYPOINT_COUNT,
-  KP_NAMES,
-  SKELETON_EDGES,
+  MEDIAPIPE_KEYPOINT_COUNT,
+  MP_KP_NAMES,
+  MP_SKELETON_EDGES,
   type PoseBackend,
-  getTopology,
 } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
@@ -132,37 +131,19 @@ function buildAllNames(
   return new Set(Object.values(names) as string[]);
 }
 
-// Default (MoveNet) precomputed values — used when no backend is specified.
+// Precomputed MediaPipe topology values.
 const ADJACENCY: ReadonlyMap<string, readonly string[]> = buildAdjacency(
-  SKELETON_EDGES,
-  KP_NAMES,
+  MP_SKELETON_EDGES,
+  MP_KP_NAMES,
 );
 
-const ALL_KP_NAMES: ReadonlySet<string> = buildAllNames(KP_NAMES);
+const ALL_KP_NAMES: ReadonlySet<string> = buildAllNames(MP_KP_NAMES);
 
-// Cache for MediaPipe topology (built on first use).
-let mediapipeAdjacency: ReadonlyMap<string, readonly string[]> | null = null;
-let mediapipeAllNames: ReadonlySet<string> | null = null;
-
-function getAdjacency(backend?: PoseBackend): ReadonlyMap<string, readonly string[]> {
-  if (backend === "mediapipe") {
-    if (!mediapipeAdjacency) {
-      const topo = getTopology("mediapipe");
-      mediapipeAdjacency = buildAdjacency(topo.skeletonEdges, topo.keypointNames);
-    }
-    return mediapipeAdjacency;
-  }
+function getAdjacency(_backend?: PoseBackend): ReadonlyMap<string, readonly string[]> {
   return ADJACENCY;
 }
 
-function getAllKpNames(backend?: PoseBackend): ReadonlySet<string> {
-  if (backend === "mediapipe") {
-    if (!mediapipeAllNames) {
-      const topo = getTopology("mediapipe");
-      mediapipeAllNames = buildAllNames(topo.keypointNames);
-    }
-    return mediapipeAllNames;
-  }
+function getAllKpNames(_backend?: PoseBackend): ReadonlySet<string> {
   return ALL_KP_NAMES;
 }
 
@@ -186,13 +167,13 @@ function getAllKpNames(backend?: PoseBackend): ReadonlySet<string> {
  * @param maxMissingAllowed - Maximum number of bad/missing keypoints before
  *                           the frame is discarded. Default: 2.
  * @param keypointCount    - Expected total keypoints for the topology.
- *                           Defaults to MOVENET_KEYPOINT_COUNT (17).
+ *                           Defaults to MEDIAPIPE_KEYPOINT_COUNT (33).
  */
 export function filterLandmarks(
   frames: PoseFrame[],
   minScore = 0.3,
   maxMissingAllowed = 2,
-  keypointCount: number = MOVENET_KEYPOINT_COUNT,
+  keypointCount: number = MEDIAPIPE_KEYPOINT_COUNT,
 ): PoseFrame[] {
   return frames.filter(f => {
     const lowConf = f.keypoints.filter(kp => kp.score < minScore).length;
@@ -319,7 +300,7 @@ export function interpolatePoseFrames(
  * @param frames          - Dense PoseFrame array (e.g. after interpolatePoseFrames).
  * @param maxTemporalGap  - How many frames to search in each direction. Default: 10.
  * @param maxEstimatable  - Skip estimation when more keypoints are missing. Default: 5.
- * @param backend         - Which pose backend produced these frames. Default: "movenet".
+ * @param backend         - Which pose backend produced these frames. Default: "mediapipe".
  */
 export function estimateMissingLandmarks(
   frames: PoseFrame[],

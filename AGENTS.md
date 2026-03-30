@@ -10,7 +10,7 @@
 | Language | TypeScript **strict**, `"module": "esnext"`, `"moduleResolution": "bundler"` |
 | Styling | Tailwind CSS v4 |
 | Computer vision | `@techstark/opencv-js ^4.12.0` (WASM, main thread only) |
-| Pose estimation | TF.js **4.22**  + `@tensorflow-models/pose-detection ^2.1.3` (MoveNet Lightning, WebGL) |
+| Pose estimation | `@mediapipe/tasks-vision ^0.10.34` (MediaPipe Pose Landmarker, GPU delegate) |
 | Testing | Vitest **^4.1.1** + jsdom + `@testing-library/react ^16.3.2` |
 | Path alias | `@/*` → project root |
 
@@ -27,13 +27,13 @@ pipeline/        Framework-agnostic processing modules (NO React imports)
   orbDetector.ts   extractFeatures(cv, imageData), matchOrbFeatures(cv, ref, query)
   homography.ts    computeHomography(), applyHomographyMatrix()
   skeletonOverlay.ts  buildTransformedKeypoints(), drawSkeleton()
-  poseDetection.ts   estimateFrame()
+  poseDetection.ts   estimateFrameUnified()
   poseVideoRenderer.ts  renderPoseVideo() — MediaRecorder + canvas.captureStream
   [orbFeatures.ts / orbMatcher.ts / orbWorker.js]  legacy worker files, not used
 
 hooks/           React hooks that wire pipeline modules to UI state
   useOpenCV.ts     loads /public/opencv.js; exposes { ready, cv }
-  useTFModel.ts    loads MoveNet Lightning; exposes { ready, model }
+  usePoseModel.ts  loads MediaPipe Pose Landmarker; exposes { ready, model }
   useVideoProcessor.ts  seek loop → pose estimation → ORB extraction
   useImageMatcher.ts    upload image → extractFeatures → matchOrbFeatures
   usePoseVideo.ts  auto-renders annotated WebM from match result
@@ -42,7 +42,7 @@ storage/
   sessionStore.ts  in-memory Map; exports RunType, RouteAttempt (includes runType, rating?, notes?)
 
 utils/
-  poseConstants.ts  KP indices, KP_NAMES, SKELETON_EDGES (MoveNet/COCO topology)
+  poseConstants.ts  MP_KP indices, MP_KP_NAMES, MP_SKELETON_EDGES (MediaPipe/BlazePose topology)
   cvHelpers.ts
 
 workers/         Legacy Web Worker files (keep, do not delete)

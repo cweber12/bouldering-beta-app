@@ -7,7 +7,7 @@ Framework-agnostic processing modules. **Zero React imports.** All functions are
 ### `framePreprocessor.ts`
 
 Lighting-condition-specific preprocessing applied to the pose-detection canvas before each
-MoveNet inference. The ORB background canvas is never touched.
+MediaPipe inference. The ORB background canvas is never touched.
 
 | Export | Signature | Description |
 |---|---|---|
@@ -48,11 +48,11 @@ Perspective transform computation and application.
 
 ### `poseDetection.ts`
 
-MoveNet inference wrapper.
+MediaPipe Pose Landmarker inference wrapper.
 
 | Export | Signature | Description |
 |---|---|---|
-| `estimateFrame` | `(model, canvas) → Promise<PoseFrame>` | Run MoveNet Lightning on an offscreen canvas; returns 17 keypoints. |
+| `estimateFrameUnified` | `(detector, canvas, timestamp, backend?, minScore?) → Promise<PoseFrame>` | Run MediaPipe Pose Landmarker on a canvas; returns up to 33 keypoints. |
 
 Types exported: `PoseFrame`, `Keypoint`.
 

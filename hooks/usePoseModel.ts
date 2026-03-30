@@ -1,14 +1,13 @@
 "use client";
 
 /**
- * Unified pose model hook — loads either a MoveNet (TF.js) or MediaPipe
- * Pose Landmarker model based on the requested configuration.
+ * Pose model hook — loads a MediaPipe Pose Landmarker model.
  *
- * Returns the loaded detector/landmarker, readiness flag, and which backend
- * is active so downstream code can dispatch correctly.
+ * Returns the loaded landmarker, readiness flag, and the backend identifier
+ * so downstream code can dispatch correctly.
  *
- * Model instances are cached at module level (one per backend+variant
- * combination) and shared across all hook consumers.
+ * Model instances are cached at module level (one per variant) and shared
+ * across all hook consumers.
  */
 
 import { useEffect, useState } from "react";
@@ -21,20 +20,12 @@ type PoseDetector = any;
 // Model configuration types
 // ---------------------------------------------------------------------------
 
-export type MoveNetVariant = "lightning" | "thunder";
 export type MediaPipeVariant = "lite" | "full" | "heavy";
 
-export interface MoveNetModelConfig {
-  backend: "movenet";
-  variant: MoveNetVariant;
-}
-
-export interface MediaPipeModelConfig {
+export interface PoseModelConfig {
   backend: "mediapipe";
   variant: MediaPipeVariant;
 }
-
-export type PoseModelConfig = MoveNetModelConfig | MediaPipeModelConfig;
 
 export interface UsePoseModelResult {
   model: PoseDetector | null;
@@ -47,8 +38,8 @@ export interface UsePoseModelResult {
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_POSE_MODEL: PoseModelConfig = {
-  backend: "movenet",
-  variant: "lightning",
+  backend: "mediapipe",
+  variant: "lite",
 };
 
 // ---------------------------------------------------------------------------
@@ -67,42 +58,6 @@ function configKey(config: PoseModelConfig): string {
 function notifyReady() {
   for (const fn of [...listeners]) fn();
   listeners.length = 0;
-}
-
-// ---------------------------------------------------------------------------
-// MoveNet loader (TF.js)
-// ---------------------------------------------------------------------------
-
-async function loadMoveNet(variant: MoveNetVariant): Promise<void> {
-  const tf = await import("@tensorflow/tfjs");
-  await import("@tensorflow/tfjs-backend-webgl");
-  await tf.setBackend("webgl");
-  await tf.ready();
-
-  const poseDetection = await import("@tensorflow-models/pose-detection");
-
-  const modelType =
-    variant === "thunder"
-      ? poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
-      : poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
-
-  const detector = await poseDetection.createDetector(
-    poseDetection.SupportedModels.MoveNet,
-    { modelType },
-  );
-
-  // Warm up with a blank canvas so WebGL shaders compile before real inference.
-  try {
-    const warmup = document.createElement("canvas");
-    warmup.width = 192;
-    warmup.height = 192;
-    await detector.estimatePoses(warmup, { flipHorizontal: false });
-  } catch {
-    // Warm-up is best-effort.
-  }
-
-  cachedModel = detector;
-  console.info(`[usePoseModel] MoveNet ${variant} loaded on backend: ${tf.getBackend()}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,9 +106,7 @@ async function loadMediaPipe(variant: MediaPipeVariant): Promise<void> {
 function disposeCurrentModel(): void {
   if (!cachedModel) return;
   try {
-    // MediaPipe PoseLandmarker exposes .close(); TF.js PoseDetector exposes .dispose().
     if (typeof cachedModel.close === "function") cachedModel.close();
-    else if (typeof cachedModel.dispose === "function") cachedModel.dispose();
   } catch {
     // Best-effort cleanup.
   }
@@ -162,11 +115,7 @@ function disposeCurrentModel(): void {
 
 async function loadModel(config: PoseModelConfig): Promise<void> {
   disposeCurrentModel();
-  if (config.backend === "mediapipe") {
-    await loadMediaPipe(config.variant);
-  } else {
-    await loadMoveNet(config.variant);
-  }
+  await loadMediaPipe(config.variant);
   cachedConfigKey = configKey(config);
   notifyReady();
 }
@@ -176,7 +125,7 @@ async function loadModel(config: PoseModelConfig): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
- * Load and cache a pose detection model.
+ * Load and cache a MediaPipe Pose Landmarker model.
  *
  * The model is cached at module level so navigating between pages does not
  * trigger a reload. When the config changes, the old model is discarded and
@@ -187,12 +136,9 @@ export function usePoseModel(
 ): UsePoseModelResult {
   const key = configKey(config);
 
-  // A counter that triggers re-renders when the model becomes available.
-  // `ready` is derived from the module-level cache, not stored directly.
   const [, rerender] = useState(0);
 
   useEffect(() => {
-    // Already loaded with the requested config — no work needed.
     if (cachedModel && cachedConfigKey === key) {
       return;
     }
@@ -218,6 +164,6 @@ export function usePoseModel(
   return {
     model: ready ? cachedModel : null,
     ready,
-    backend: config.backend,
+    backend: "mediapipe",
   };
 }

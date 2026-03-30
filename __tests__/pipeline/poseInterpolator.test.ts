@@ -188,26 +188,42 @@ describe("smoothPoseFrames", () => {
 // filterLandmarks
 // ---------------------------------------------------------------------------
 
-// Build a frame where every keypoint has a score above threshold.
+// Build a frame with all 33 MediaPipe keypoints, each above threshold.
 function goodFrame(ts: number): PoseFrame {
   return frame(ts, [
-    ["nose", 0.5, 0.5, 0.9],
-    ["left_eye", 0.4, 0.4, 0.9],
-    ["right_eye", 0.6, 0.4, 0.9],
-    ["left_ear", 0.3, 0.5, 0.9],
-    ["right_ear", 0.7, 0.5, 0.9],
-    ["left_shoulder", 0.3, 0.6, 0.9],
-    ["right_shoulder", 0.7, 0.6, 0.9],
-    ["left_elbow", 0.3, 0.7, 0.9],
-    ["right_elbow", 0.7, 0.7, 0.9],
-    ["left_wrist", 0.3, 0.8, 0.9],
-    ["right_wrist", 0.7, 0.8, 0.9],
-    ["left_hip", 0.4, 0.85, 0.9],
-    ["right_hip", 0.6, 0.85, 0.9],
-    ["left_knee", 0.4, 0.9, 0.9],
-    ["right_knee", 0.6, 0.9, 0.9],
-    ["left_ankle", 0.4, 0.95, 0.9],
-    ["right_ankle", 0.6, 0.95, 0.9],
+    ["nose", 0.5, 0.1],
+    ["left_eye_inner", 0.48, 0.09],
+    ["left_eye", 0.46, 0.09],
+    ["left_eye_outer", 0.44, 0.09],
+    ["right_eye_inner", 0.52, 0.09],
+    ["right_eye", 0.54, 0.09],
+    ["right_eye_outer", 0.56, 0.09],
+    ["left_ear", 0.4, 0.1],
+    ["right_ear", 0.6, 0.1],
+    ["mouth_left", 0.48, 0.12],
+    ["mouth_right", 0.52, 0.12],
+    ["left_shoulder", 0.35, 0.25],
+    ["right_shoulder", 0.65, 0.25],
+    ["left_elbow", 0.3, 0.4],
+    ["right_elbow", 0.7, 0.4],
+    ["left_wrist", 0.28, 0.55],
+    ["right_wrist", 0.72, 0.55],
+    ["left_pinky", 0.27, 0.57],
+    ["right_pinky", 0.73, 0.57],
+    ["left_index", 0.28, 0.58],
+    ["right_index", 0.72, 0.58],
+    ["left_thumb", 0.29, 0.56],
+    ["right_thumb", 0.71, 0.56],
+    ["left_hip", 0.4, 0.6],
+    ["right_hip", 0.6, 0.6],
+    ["left_knee", 0.38, 0.75],
+    ["right_knee", 0.62, 0.75],
+    ["left_ankle", 0.37, 0.9],
+    ["right_ankle", 0.63, 0.9],
+    ["left_heel", 0.36, 0.92],
+    ["right_heel", 0.64, 0.92],
+    ["left_foot_index", 0.38, 0.93],
+    ["right_foot_index", 0.62, 0.93],
   ]);
 }
 
@@ -216,7 +232,7 @@ describe("filterLandmarks", () => {
     expect(filterLandmarks([])).toEqual([]);
   });
 
-  it("keeps frames with all 17 high-confidence keypoints", () => {
+  it("keeps frames with all 33 high-confidence keypoints", () => {
     const frames = [goodFrame(0), goodFrame(1)];
     expect(filterLandmarks(frames)).toHaveLength(2);
   });
@@ -282,13 +298,13 @@ describe("filterLandmarks", () => {
     expect(filterLandmarks([f], 0.4, 0)).toHaveLength(1);
   });
 
-  it("uses custom keypointCount for MediaPipe topology (33 keypoints)", () => {
-    // A frame with 17 MoveNet keypoints: 33 - 17 = 16 missing for MP topology.
-    const f = goodFrame(0);
-    // With default keypointCount(17): 0 missing → kept.
-    expect(filterLandmarks([f])).toHaveLength(1);
-    // With keypointCount=33: 16 missing > maxMissingAllowed(2) → dropped.
-    expect(filterLandmarks([f], 0.3, 2, 33)).toHaveLength(0);
+  it("uses custom keypointCount to allow fewer keypoints", () => {
+    // Build a frame with only 10 keypoints — less than default 33.
+    const f = frame(0, Array.from({ length: 10 }, (_, i) => [`kp_${i}`, 0.5, 0.5, 0.9]));
+    // Default keypointCount=33: 23 missing > maxMissingAllowed(2) → dropped.
+    expect(filterLandmarks([f])).toHaveLength(0);
+    // With keypointCount=10: 0 missing → kept.
+    expect(filterLandmarks([f], 0.3, 2, 10)).toHaveLength(1);
   });
 
   it("keeps MediaPipe frames when enough keypoints are present", () => {
@@ -349,11 +365,11 @@ describe("estimateMissingLandmarks", () => {
     expect(estimateMissingLandmarks([])).toEqual([]);
   });
 
-  it("returns frames unchanged when all 17 keypoints are present", () => {
+  it("returns frames unchanged when all 33 keypoints are present", () => {
     const frames = [goodFrame(0), goodFrame(1)];
     const result = estimateMissingLandmarks(frames);
-    expect(result[0].keypoints).toHaveLength(17);
-    expect(result[1].keypoints).toHaveLength(17);
+    expect(result[0].keypoints).toHaveLength(33);
+    expect(result[1].keypoints).toHaveLength(33);
   });
 
   it("fills a missing keypoint via temporal interpolation from prev and next", () => {
@@ -361,7 +377,7 @@ describe("estimateMissingLandmarks", () => {
     const f0 = frame(0, [["left_wrist", 0.2, 0.4, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
     const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
     const f2 = frame(2, [["left_wrist", 0.4, 0.6, 0.9], ["left_elbow", 0.4, 0.4, 0.9]]);
-    const result = estimateMissingLandmarks([f0, f1, f2], 10, 17);
+    const result = estimateMissingLandmarks([f0, f1, f2], 10, 33);
     const estimated = result[1].keypoints.find(k => k.name === "left_wrist");
     expect(estimated).toBeDefined();
     // Temporal lerp: midpoint between (0.2, 0.4) and (0.4, 0.6).
@@ -377,7 +393,7 @@ describe("estimateMissingLandmarks", () => {
     const f0 = frame(0, [["left_wrist", 0.2, 0.5, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
     const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
     // No frame 2 with left_wrist → no temporal lerp, so structural kicks in.
-    const result = estimateMissingLandmarks([f0, f1], 10, 17);
+    const result = estimateMissingLandmarks([f0, f1], 10, 33);
     const est = result[1].keypoints.find(k => k.name === "left_wrist");
     expect(est).toBeDefined();
     // Bone vector from frame 0: wrist(0.2, 0.5) - elbow(0.3, 0.3) = (-0.1, 0.2)
@@ -401,7 +417,7 @@ describe("estimateMissingLandmarks", () => {
     // prev is 1 frame away (≤ 2), so extrapolation should apply.
     const f0 = frame(0, [["nose", 0.5, 0.5, 0.9]]);
     const f1: PoseFrame = { timestamp: 1, keypoints: [] };
-    const result = estimateMissingLandmarks([f0, f1], 10, 17);
+    const result = estimateMissingLandmarks([f0, f1], 10, 33);
     const est = result[1].keypoints.find(k => k.name === "nose");
     expect(est).toBeDefined();
     expect(est!.x).toBeCloseTo(0.5);
@@ -443,7 +459,7 @@ describe("estimateMissingLandmarks", () => {
   it("returns frames unchanged with mediapipe backend when all keypoints present", () => {
     const frames = [goodFrame(0), goodFrame(1)];
     const result = estimateMissingLandmarks(frames, 10, 5, "mediapipe");
-    expect(result[0].keypoints).toHaveLength(17);
-    expect(result[1].keypoints).toHaveLength(17);
+    expect(result[0].keypoints).toHaveLength(33);
+    expect(result[1].keypoints).toHaveLength(33);
   });
 });

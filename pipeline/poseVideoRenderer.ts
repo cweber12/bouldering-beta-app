@@ -7,7 +7,7 @@
  *  2. For each PoseFrame (chronological order):
  *     a. Drawing the route image onto an offscreen canvas.
  *     b. Transforming each keypoint through H.
- *     c. Drawing the MoveNet skeleton overlay.
+ *     c. Drawing the skeleton overlay.
  *  3. Capturing the canvas via MediaRecorder and returning the resulting
  *     object URL pointing to a WebM blob.
  *

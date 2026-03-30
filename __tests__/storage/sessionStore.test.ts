@@ -191,12 +191,6 @@ describe("sessionStore — orbFeatures", () => {
 
 describe("sessionStore — poseBackend", () => {
   it("stores poseBackend when provided", () => {
-    const a: RouteAttempt = { ...makeAttempt("pb-movenet"), poseBackend: "movenet" };
-    saveAttempt(a);
-    expect(getAttempt("pb-movenet")?.poseBackend).toBe("movenet");
-  });
-
-  it("stores mediapipe backend", () => {
     const a: RouteAttempt = { ...makeAttempt("pb-mp"), poseBackend: "mediapipe" };
     saveAttempt(a);
     expect(getAttempt("pb-mp")?.poseBackend).toBe("mediapipe");

@@ -113,7 +113,7 @@ function CompareSlot({
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
         skeletonStyle: (() => {
-          const topo = getTopology(att.poseBackend ?? "movenet");
+          const topo = getTopology(att.poseBackend ?? "mediapipe");
           return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
         })(),
         targetFps: 60,
@@ -193,7 +193,7 @@ function CompareSlot({
             layers={[{
               frames: skeletonData.frames,
               style: (() => {
-                const topo = getTopology(attempt?.poseBackend ?? "movenet");
+                const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
                 return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
               })(),
             }]}
@@ -277,7 +277,7 @@ function OverlayPlayer({
     let layerIdx = 0;
     for (let i = 0; i < attempts.length; i++) {
       if (attempts[i] && matchResults[i]) {
-        const topo = getTopology(attempts[i]?.poseBackend ?? "movenet");
+        const topo = getTopology(attempts[i]?.poseBackend ?? "mediapipe");
         layers.push({
           frames: multiData.layers[layerIdx].frames,
           style: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames },
@@ -299,7 +299,7 @@ function OverlayPlayer({
       const att = attempts[i];
       const mr = matchResults[i];
       if (!att?.orbFeatures || !mr) continue;
-      const topo = getTopology(att.poseBackend ?? "movenet");
+      const topo = getTopology(att.poseBackend ?? "mediapipe");
       layerInputs.push({
         frames: att.frames,
         videoMeta: att.videoMeta,
@@ -442,6 +442,17 @@ function ComparePageInner() {
       }
       return next;
     });
+    // Clear stale match result for this slot so CompareSlot re-runs matching
+    // when a new climb is selected without requiring a page reload.
+    setMatchResults(prev => {
+      const next = [...prev];
+      next[idx] = null;
+      return next;
+    });
+    // Bump trigger so the CompareSlot effect re-fires matching.
+    if (imageFile && cropConfirmed) {
+      setMatchTrigger(t => t + 1);
+    }
   }
 
   function handleColorChange(idx: number, hex: string) {
@@ -782,7 +793,7 @@ function ComparePageInner() {
 
 export default function ComparePage() {
   return (
-    <LoadingGate requiresTF={false}>
+    <LoadingGate>
       <Suspense
         fallback={
           <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">

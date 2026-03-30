@@ -1,6 +1,6 @@
 # hooks/
 
-React hooks that wire `pipeline/` modules to component state. No OpenCV or TF.js calls directly — hooks call pipeline functions and own all React state transitions and error boundaries.
+React hooks that wire `pipeline/` modules to component state. No OpenCV calls directly — hooks call pipeline functions and own all React state transitions and error boundaries.
 
 ## Hooks
 
@@ -17,16 +17,16 @@ const { ready, cv } = useOpenCV();
 
 OpenCV **must not** be loaded inside a Web Worker — the WASM bootstrap is async and unreliable in worker scope.
 
-### `useTFModel`
+### `usePoseModel`
 
-Loads the MoveNet Lightning pose detection model via TF.js.
+Loads the MediaPipe Pose Landmarker model.
 
 ```ts
-const { ready, model } = useTFModel();
+const { ready, model } = usePoseModel();
 ```
 
-- `ready: boolean` — true once the model is warm (first inference run).
-- `model` — the MoveNet detector instance (typed as `any`); `null` until ready.
+- `ready: boolean` — true once the model is loaded and warmed up.
+- `model` — the MediaPipe PoseLandmarker instance (typed as `any`); `null` until ready.
 
 ### `useVideoProcessor`
 
