@@ -267,6 +267,15 @@ export default function S3RoutePicker({
   const [deletePending, setDeletePending] = useState<string | null>(null);
   const [expandedEntry, setExpandedEntry] = useState<string | null>(null);
 
+  // Unique grades derived from loaded run metadata for the route-level header.
+  const routeGrades = useMemo(() => {
+    const grades = new Set<string>();
+    for (const m of runMeta.values()) {
+      if (m.rating) grades.add(m.rating);
+    }
+    return Array.from(grades).sort();
+  }, [runMeta]);
+
   // Fetch metadata for each run entry in the background when entries change.
   useEffect(() => {
     if (attemptEntries.length === 0) {
@@ -562,7 +571,13 @@ export default function S3RoutePicker({
           )}
 
           {attemptEntries.length > 0 && (
-            <div className={["flex flex-col gap-2", !loading ? "ring-2 ring-accent/40 ring-offset-1 ring-offset-surface animate-pulse rounded-lg" : ""].join(" ")}>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline gap-3 flex-wrap px-1">
+                <span className="text-base font-semibold text-fg">{selectedRoute}</span>
+                {routeGrades.map(g => (
+                  <span key={g} className="text-sm font-medium text-fg-secondary">{g}</span>
+                ))}
+              </div>
               <div className="flex flex-col divide-y divide-edge rounded-lg border border-edge overflow-hidden">
                 {attemptEntries.map(entry => {
                   const fileName = entry.key.split("/").pop() ?? entry.key;
@@ -589,12 +604,12 @@ export default function S3RoutePicker({
                           }}
                           className="flex-1 min-w-0 text-left flex items-center gap-2 flex-wrap"
                         >
-                          {meta?.thumbnail && (
+                          {meta?.thumbnail && !isExpanded && (
                             // eslint-disable-next-line @next/next/no-img-element -- data URL thumbnail, not a remote image
                             <img
                               src={meta.thumbnail}
                               alt=""
-                              className="h-8 w-8 rounded object-cover shrink-0"
+                              className="h-10 w-10 rounded object-cover shrink-0"
                             />
                           )}
                           <span>{attemptTimestampLabel(fileName)}</span>
@@ -606,11 +621,6 @@ export default function S3RoutePicker({
                           ].join(" ")}>
                             {rType}
                           </span>
-                          {meta?.rating && (
-                            <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
-                              {meta.rating}
-                            </span>
-                          )}
                           {meta?.duration != null && (
                             <span className="text-xs text-fg-muted">{formatDuration(meta.duration)}</span>
                           )}
@@ -622,7 +632,10 @@ export default function S3RoutePicker({
                           <button
                             onClick={() => handleAttemptSelect(entry)}
                             disabled={status === "loading" || isPendingDelete}
-                            className="rounded px-2 py-1 text-xs font-medium bg-inset text-fg-secondary hover:bg-edge hover:text-fg transition disabled:opacity-40"
+                            className={[
+                              "rounded px-3 py-1.5 text-xs font-semibold bg-accent text-surface hover:opacity-90 transition disabled:opacity-40",
+                              pulseButtons && !isExpanded ? "animate-pulse" : "",
+                            ].join(" ")}
                           >
                             Load
                           </button>
@@ -663,15 +676,18 @@ export default function S3RoutePicker({
                             <img
                               src={meta.thumbnail}
                               alt="ORB feature thumbnail"
-                              className="h-28 w-auto rounded border border-edge object-contain shrink-0"
+                              className="h-36 w-auto rounded border border-edge object-contain shrink-0"
                             />
                           )}
-                          <div className="flex flex-col gap-1 text-xs text-fg-secondary min-w-0">
-                            {meta?.rating && <p><span className="text-fg-muted">Grade:</span> {meta.rating}</p>}
-                            {meta?.duration != null && <p><span className="text-fg-muted">Duration:</span> {formatDuration(meta.duration)}</p>}
-                            {meta?.notes && <p className="text-fg-muted italic break-words">{meta.notes}</p>}
-                            {!meta?.rating && !meta?.notes && meta?.duration == null && (
-                              <p className="text-fg-muted">No additional info.</p>
+                          <div className="flex flex-col gap-1.5 text-sm text-fg-secondary min-w-0">
+                            {meta?.duration != null && (
+                              <p className="font-medium text-fg">{formatDuration(meta.duration)}</p>
+                            )}
+                            {meta?.notes && (
+                              <p className="text-xs text-fg-muted italic break-words leading-relaxed">{meta.notes}</p>
+                            )}
+                            {meta?.duration == null && !meta?.notes && (
+                              <p className="text-xs text-fg-muted">No additional info.</p>
                             )}
                           </div>
                         </div>

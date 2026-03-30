@@ -70,10 +70,11 @@ describe("generateOrbThumbnail", () => {
     // putImageData called once with the source frame
     expect(ctxs[0].putImageData).toHaveBeenCalledOnce();
 
-    // arc called once per keypoint with radius 0.25 (0.5 px diameter)
-    expect(ctxs[0].arc).toHaveBeenCalledTimes(2);
-    expect(ctxs[0].arc).toHaveBeenNthCalledWith(1, 100, 200, 0.25, 0, Math.PI * 2);
-    expect(ctxs[0].arc).toHaveBeenNthCalledWith(2, 300, 400, 0.25, 0, Math.PI * 2);
+    // arc called once per keypoint on the thumbnail canvas with the fixed
+    // DOT_RADIUS and scaled coordinates (scale = 320 / 640 = 0.5)
+    expect(ctxs[1].arc).toHaveBeenCalledTimes(2);
+    expect(ctxs[1].arc).toHaveBeenNthCalledWith(1, 50, 100, 2.5, 0, Math.PI * 2);
+    expect(ctxs[1].arc).toHaveBeenNthCalledWith(2, 150, 200, 2.5, 0, Math.PI * 2);
 
     // Thumbnail canvas scaled to max 320 wide
     expect(canvases[1].width).toBe(320);
@@ -97,6 +98,6 @@ describe("generateOrbThumbnail", () => {
     const imageData = { data: new Uint8ClampedArray(4), width: 640, height: 480, colorSpace: "srgb" } as ImageData;
     const result = generateOrbThumbnail(imageData, []);
     expect(result).toBe("data:image/png;base64,ABCD");
-    expect(ctxs[0].arc).not.toHaveBeenCalled();
+    expect(ctxs[1].arc).not.toHaveBeenCalled();
   });
 });
