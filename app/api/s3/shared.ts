@@ -5,6 +5,9 @@ import { cookies } from "next/headers";
 /** The S3 key prefix scoping all RouteData objects. */
 export const S3_PREFIX = process.env.S3_KEY_PREFIX ?? "RouteData";
 
+/** The S3 key prefix scoping all profile objects. */
+export const PROFILE_PREFIX = "ProfileData";
+
 /** Singleton S3 client — reuses the HTTP connection pool across requests. */
 export const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 
@@ -37,6 +40,33 @@ export async function getAuthUserId(): Promise<string | null> {
   );
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id ?? null;
+}
+
+/**
+ * Authenticate the current request via Supabase cookies.
+ * Returns `{ id, email }` or `null` when unauthenticated.
+ */
+export async function getAuthUser(): Promise<{ id: string; email: string } | null> {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll(); },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options),
+            );
+          } catch { /* read-only in some contexts */ }
+        },
+      },
+    },
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  return { id: user.id, email: user.email ?? "" };
 }
 
 /**
@@ -88,3 +118,43 @@ export function awsErrorMessage(err: unknown): string {
   }
   return String(err);
 }
+
+// ---------------------------------------------------------------------------
+// Profile helpers
+// ---------------------------------------------------------------------------
+
+/** S3 key for a user's profile JSON. */
+export function profileKey(userId: string): string {
+  return `${PROFILE_PREFIX}/${userId}/profile.json`;
+}
+
+/** S3 key for a user's following list. */
+export function followingKey(userId: string): string {
+  return `${PROFILE_PREFIX}/${userId}/following.json`;
+}
+
+/** S3 key for a user's search-index entry. */
+export function indexKey(userId: string): string {
+  return `${PROFILE_PREFIX}/_index/${userId}.json`;
+}
+
+/** Validate a profile-scoped S3 key (must be under ProfileData/{userId}/). */
+export function isValidProfileKey(key: string, userId: string): boolean {
+  return (
+    key.length <= 1024 &&
+    key.endsWith(".json") &&
+    !key.includes("..") &&
+    key.startsWith(`${PROFILE_PREFIX}/${userId}/`)
+  );
+}
+
+/** Validate a prefix for listing a user's route data (any authenticated user may list). */
+export function isValidRoutePrefix(prefix: string, targetUserId: string): boolean {
+  return (
+    !prefix.includes("..") &&
+    (prefix === `${S3_PREFIX}/${targetUserId}` || prefix.startsWith(`${S3_PREFIX}/${targetUserId}/`))
+  );
+}
+
+/** Maximum allowed length for user-supplied profile text fields. */
+export const PROFILE_TEXT_LIMIT = 500;

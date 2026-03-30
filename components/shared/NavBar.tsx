@@ -16,6 +16,7 @@ const AUTH_TABS = [
   { href: "/upload", label: "Upload" },
   { href: "/match", label: "View" },
   { href: "/compare", label: "Compare" },
+  { href: "/profile", label: "Profile" },
   { href: "/docs", label: "Docs" },
 ] as const;
 
