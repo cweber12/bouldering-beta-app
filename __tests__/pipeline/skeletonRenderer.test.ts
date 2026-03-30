@@ -10,9 +10,13 @@ vi.mock("@/pipeline/homography", () => ({
   computeHomography: vi.fn(),
 }));
 
-vi.mock("@/pipeline/skeletonOverlay", () => ({
-  buildTransformedKeypoints: vi.fn(),
-}));
+vi.mock("@/pipeline/skeletonOverlay", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/pipeline/skeletonOverlay")>();
+  return {
+    ...actual,
+    buildTransformedKeypoints: vi.fn(),
+  };
+});
 
 import { computeHomography } from "@/pipeline/homography";
 import { buildTransformedKeypoints } from "@/pipeline/skeletonOverlay";

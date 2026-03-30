@@ -72,6 +72,38 @@ export function buildTransformedKeypoints(
 }
 
 /**
+ * Linearly interpolate between two keypoint maps.
+ *
+ * Keys present in both maps are blended; keys in only one map are taken as-is.
+ *
+ * @param a     - Keypoints at the earlier timestamp.
+ * @param b     - Keypoints at the later timestamp.
+ * @param alpha - Blend factor in [0, 1]: 0 = fully a, 1 = fully b.
+ */
+export function lerpKeypoints(
+  a: Record<string, { x: number; y: number }>,
+  b: Record<string, { x: number; y: number }>,
+  alpha: number,
+): Record<string, { x: number; y: number }> {
+  const out: Record<string, { x: number; y: number }> = {};
+  for (const name of Object.keys(a)) {
+    const pb = b[name];
+    if (pb) {
+      out[name] = {
+        x: a[name].x + alpha * (pb.x - a[name].x),
+        y: a[name].y + alpha * (pb.y - a[name].y),
+      };
+    } else {
+      out[name] = a[name];
+    }
+  }
+  for (const name of Object.keys(b)) {
+    if (!out[name]) out[name] = b[name];
+  }
+  return out;
+}
+
+/**
  * Draw a pose skeleton (limb lines + joint circles) onto a canvas 2D
  * context using image-space pixel coordinates.
  *

@@ -24,7 +24,7 @@ type CV = any;
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
 import { computeHomography } from "@/pipeline/homography";
-import { buildTransformedKeypoints, drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 
 export type { SkeletonStyle };
 
@@ -156,25 +156,48 @@ export async function renderPoseVideo({
     recorder.start();
 
     (async () => {
-      // Two-pointer: advance cursor as output timestamps increase.
-      let cursor = 0;
+      // Floor-bracket interpolation: advance cursor to the last frame ≤ t,
+      // then lerp between that frame and the next for smooth motion.
+      let floorIdx = 0;
+      let cachedFloorKp: Record<string, { x: number; y: number }> | null = null;
+      let cachedFloorAt = -1;
+      let cachedCeilKp: Record<string, { x: number; y: number }> | null = null;
+      let cachedCeilAt = -1;
+
       for (let i = 0; i < totalOutputFrames; i++) {
         const t = firstTs + (i / fps);
-        while (cursor < sortedFrames.length - 1 &&
-               Math.abs(sortedFrames[cursor + 1].timestamp - t) <= Math.abs(sortedFrames[cursor].timestamp - t)) {
-          cursor++;
+
+        while (floorIdx < sortedFrames.length - 1 && sortedFrames[floorIdx + 1].timestamp <= t) {
+          floorIdx++;
         }
-        const frame = sortedFrames[cursor];
+
         ctx.drawImage(imageBitmap, 0, 0);
 
-        if (frame.keypoints.length > 0) {
-          const kp = buildTransformedKeypoints(
-            frame,
-            h,
-            videoMeta.width,
-            videoMeta.height,
-          );
-          drawSkeleton(ctx, kp, skeletonStyle);
+        // Compute / reuse transformed keypoints for floor frame.
+        if (cachedFloorAt !== floorIdx) {
+          cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
+            ? buildTransformedKeypoints(sortedFrames[floorIdx], h, videoMeta.width, videoMeta.height)
+            : null;
+          cachedFloorAt = floorIdx;
+        }
+
+        if (cachedFloorKp) {
+          const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
+
+          if (cachedCeilAt !== ceilIdx) {
+            cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
+              ? buildTransformedKeypoints(sortedFrames[ceilIdx], h, videoMeta.width, videoMeta.height)
+              : null;
+            cachedCeilAt = ceilIdx;
+          }
+
+          if (cachedCeilKp && ceilIdx !== floorIdx) {
+            const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
+            const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
+            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), skeletonStyle);
+          } else {
+            drawSkeleton(ctx, cachedFloorKp, skeletonStyle);
+          }
         }
 
         onProgress?.(i + 1, totalOutputFrames);

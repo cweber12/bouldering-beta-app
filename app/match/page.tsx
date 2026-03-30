@@ -185,13 +185,23 @@ function MatchPageInner() {
         <p className="text-sm font-medium text-fg-light">Climbs</p>
 
         {hasAttempt && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between rounded-lg border border-edge bg-inset px-4 py-3">
-              <div className="flex flex-col gap-0.5">
-                <span className="flex items-center gap-2 text-xs font-mono text-fg-light">
-                  {attempt.id}
+          <div className="flex flex-col gap-3">
+            <div className="rounded-lg border border-edge bg-inset px-4 py-4">
+              {/* Route path & type header */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  {(attempt.state || attempt.area || attempt.route) && (
+                    <p className="text-sm font-semibold text-fg">
+                      {[attempt.area, attempt.route].filter(Boolean).join(" \u203a ")}
+                    </p>
+                  )}
+                  {attempt.state && (
+                    <p className="text-xs text-fg-muted">{attempt.state}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   <span className={[
-                    "rounded px-1.5 py-0.5 text-xs font-medium font-sans capitalize",
+                    "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
                     attempt.runType === "send"
                       ? "bg-emerald-900/40 text-emerald-400"
                       : "bg-amber-900/40 text-amber-400",
@@ -199,27 +209,27 @@ function MatchPageInner() {
                     {attempt.runType ?? "attempt"}
                   </span>
                   {attempt.rating && (
-                    <span className="rounded px-1.5 py-0.5 text-xs font-medium font-sans bg-card text-fg-light">
+                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-card text-fg-light">
                       {attempt.rating}
                     </span>
                   )}
-                </span>
-                <span className="text-xs text-fg-muted">
-                  {attempt.frames.length} pose frames &middot;{" "}
-                  {attempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints
-                  {attempt.videoMeta?.duration != null && (
-                    <> &middot; {Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</>
-                  )}
-                  {attempt.state && ` \u00b7 ${attempt.state}`}
-                  {attempt.area && ` \u203a ${attempt.area}`}
-                  {attempt.route && ` \u203a ${attempt.route}`}
-                </span>
+                </div>
               </div>
-              <span className="text-xs font-medium text-emerald-400">Loaded</span>
+
+              {/* Stats row */}
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-secondary">
+                {attempt.videoMeta?.duration != null && (
+                  <span>{Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</span>
+                )}
+                <span>{attempt.frames.length} frames</span>
+                <span>{attempt.orbFeatures?.keypoints.length ?? 0} ORB keypoints</span>
+              </div>
             </div>
+
             {attempt.notes && (
               <div className="rounded-lg border border-edge bg-inset/50 px-4 py-2.5">
-                <p className="text-xs text-fg-muted">{attempt.notes}</p>
+                <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
+                <p className="text-sm text-fg-light">{attempt.notes}</p>
               </div>
             )}
           </div>

@@ -22,6 +22,7 @@ import { computeHomography } from "@/pipeline/homography";
 import {
   buildTransformedKeypoints,
   drawSkeleton,
+  lerpKeypoints,
   type SkeletonStyle,
 } from "@/pipeline/skeletonOverlay";
 
@@ -150,8 +151,14 @@ export async function renderMultiPoseVideo({
     if (e.data.size > 0) chunks.push(e.data);
   };
 
-  // Per-layer two-pointer cursors for O(n) frame lookup across the timeline.
+  // Per-layer floor cursors and keypoint caches for O(n) interpolated lookup.
   const cursors = Array.from({ length: layers.length }, () => 0);
+  const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] =
+    layers.map(() => null);
+  const cachedFloorAt: number[] = layers.map(() => -1);
+  const cachedCeilKp: (Record<string, { x: number; y: number }> | null)[] =
+    layers.map(() => null);
+  const cachedCeilAt: number[] = layers.map(() => -1);
 
   return new Promise<string>((resolve, reject) => {
     recorder.onstop = () => {
@@ -174,30 +181,47 @@ export async function renderMultiPoseVideo({
         // Draw background image once per output frame.
         ctx.drawImage(imageBitmap, 0, 0);
 
-        // Draw each layer's nearest-frame skeleton.
+        // Draw each layer's interpolated skeleton.
         for (let li = 0; li < layers.length; li++) {
           const sf = sortedLayerFrames[li];
           if (sf.length === 0) continue;
 
-          // Advance two-pointer to the nearest frame at time t.
+          // Advance floor cursor to last frame with timestamp ≤ t.
           while (
             cursors[li] < sf.length - 1 &&
-            Math.abs(sf[cursors[li] + 1].timestamp - t) <=
-              Math.abs(sf[cursors[li]].timestamp - t)
+            sf[cursors[li] + 1].timestamp <= t
           ) {
             cursors[li]++;
           }
 
-          const frame = sf[cursors[li]];
-          if (frame.keypoints.length === 0) continue;
+          const fi = cursors[li];
 
-          const kp = buildTransformedKeypoints(
-            frame,
-            homographies[li],
-            layers[li].videoMeta.width,
-            layers[li].videoMeta.height,
-          );
-          drawSkeleton(ctx, kp, layers[li].skeletonStyle);
+          // Compute / reuse transformed keypoints for floor frame.
+          if (cachedFloorAt[li] !== fi) {
+            cachedFloorKp[li] = sf[fi].keypoints.length > 0
+              ? buildTransformedKeypoints(sf[fi], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
+              : null;
+            cachedFloorAt[li] = fi;
+          }
+
+          if (!cachedFloorKp[li]) continue;
+
+          const ci = Math.min(fi + 1, sf.length - 1);
+
+          if (cachedCeilAt[li] !== ci) {
+            cachedCeilKp[li] = ci !== fi && sf[ci].keypoints.length > 0
+              ? buildTransformedKeypoints(sf[ci], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
+              : null;
+            cachedCeilAt[li] = ci;
+          }
+
+          if (cachedCeilKp[li] && ci !== fi) {
+            const dt = sf[ci].timestamp - sf[fi].timestamp;
+            const alpha = dt > 0 ? (t - sf[fi].timestamp) / dt : 0;
+            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layers[li].skeletonStyle);
+          } else {
+            drawSkeleton(ctx, cachedFloorKp[li]!, layers[li].skeletonStyle);
+          }
         }
 
         onProgress?.(i + 1, totalOutputFrames);

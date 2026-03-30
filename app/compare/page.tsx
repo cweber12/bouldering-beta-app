@@ -506,7 +506,7 @@ function ComparePageInner() {
         </p>
       </div>
 
-      {/* Run slots */}
+      {/* Run slots — climb pickers only (players rendered below mode buttons) */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-fg-light">Climbs</p>
@@ -520,60 +520,32 @@ function ComparePageInner() {
           )}
         </div>
 
-        {/* In side-by-side mode render slots in a 2-column grid so both are
-            visible simultaneously. In overlay mode keep them stacked. */}
-        <div
-          className={
-            viewMode === "sidebyside"
-              ? "grid grid-cols-1 gap-4 sm:grid-cols-2"
-              : "flex flex-col gap-4"
-          }
-        >
+        <div className="flex flex-col gap-3">
           {Array.from({ length: slotCount }, (_, i) => (
-            <div key={i} className="flex flex-col gap-2">
-              {/* Color picker + route loader row */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={slotColors[i]}
-                  onChange={(e) => handleColorChange(i, e.target.value)}
-                  className="h-7 w-7 cursor-pointer rounded border border-edge bg-transparent p-0.5"
-                  title={`Climb ${i + 1} skeleton color`}
-                  aria-label={`Climb ${i + 1} skeleton color`}
+            <div key={i} className="flex items-center gap-2">
+              <input
+                type="color"
+                value={slotColors[i]}
+                onChange={(e) => handleColorChange(i, e.target.value)}
+                className="h-7 w-7 cursor-pointer rounded border border-edge bg-transparent p-0.5"
+                title={`Climb ${i + 1} skeleton color`}
+                aria-label={`Climb ${i + 1} skeleton color`}
+              />
+              <div className="min-w-0 flex-1">
+                <S3RoutePicker
+                  label={
+                    attempts[i]
+                      ? `Change Climb ${i + 1}`
+                      : `Load Climb ${i + 1}`
+                  }
+                  onLoad={(att) => handleLoadAttempt(i, att)}
+                  compact
+                  defaultState={defaultState}
+                  defaultArea={defaultArea}
+                  defaultRoute={defaultRoute}
+                  pulseButtons={i === 0 && !!imageFile && !anyLoaded}
                 />
-                <div className="min-w-0 flex-1">
-                  <S3RoutePicker
-                    label={
-                      attempts[i]
-                        ? `Change Climb ${i + 1}`
-                        : `Load Climb ${i + 1}`
-                    }
-                    onLoad={(att) => handleLoadAttempt(i, att)}
-                    compact
-                    defaultState={defaultState}
-                    defaultArea={defaultArea}
-                    defaultRoute={defaultRoute}
-                    pulseButtons={i === 0 && !!imageFile && !anyLoaded}
-                  />
-                </div>
               </div>
-              {attempts[i] && (
-                <CompareSlot
-                  slotIndex={i}
-                  attempt={attempts[i]}
-                  imageFile={imageFile}
-                  imageCrop={imageCrop}
-                  matchTrigger={matchTrigger}
-                  cv={cv}
-                  limbColor={slotColors[i]}
-                  lineWidth={skeletonLineWidth}
-                  pointRadius={skeletonPointRadius}
-                  onMatchResult={handleMatchResult}
-                  hidePlayer={viewMode === "overlay"}
-                  hidePlayButton={viewMode === "sidebyside"}
-                  playerRef={(el) => { playerRefs.current[i] = el; }}
-                />
-              )}
             </div>
           ))}
         </div>
@@ -747,6 +719,38 @@ function ComparePageInner() {
           )}
         </div>
       )}
+
+      {/* Climb slots — always rendered to preserve matching state;
+          positioned below the mode buttons per user request. */}
+      <div
+        className={
+          viewMode === "sidebyside"
+            ? "grid grid-cols-1 gap-4 sm:grid-cols-2"
+            : "flex flex-col gap-4"
+        }
+      >
+        {Array.from({ length: slotCount }, (_, i) =>
+          attempts[i] ? (
+            <CompareSlot
+              key={i}
+              slotIndex={i}
+              attempt={attempts[i]}
+              imageFile={imageFile}
+              imageCrop={imageCrop}
+              matchTrigger={matchTrigger}
+              cv={cv}
+              limbColor={slotColors[i]}
+              lineWidth={skeletonLineWidth}
+              pointRadius={skeletonPointRadius}
+              onMatchResult={handleMatchResult}
+              hidePlayer={viewMode === "overlay"}
+              hidePlayButton={viewMode === "sidebyside"}
+              playerRef={(el) => { playerRefs.current[i] = el; }}
+            />
+          ) : null,
+        )}
+      </div>
+
       {/* Overlay mode result */}
       {viewMode === "overlay" && imageFile && anyLoaded && (
         <div className="flex flex-col gap-3">
