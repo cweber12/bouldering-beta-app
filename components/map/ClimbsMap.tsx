@@ -17,6 +17,8 @@ export interface ClimbPin {
   runType: string;
   /** Optional timestamp label. */
   timestamp?: string;
+  /** S3 key for the climb JSON — used for click navigation. */
+  key?: string;
 }
 
 export interface ClimbsMapProps {
@@ -24,6 +26,8 @@ export interface ClimbsMapProps {
   /** Tailwind / inline height (default 400 px). */
   height?: number;
   className?: string;
+  /** Called when a pin is clicked (if the pin has a key). */
+  onPinClick?: (key: string) => void;
 }
 
 const TOPO_TILE_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
@@ -61,6 +65,7 @@ export default function ClimbsMap({
   pins,
   height = 400,
   className = "",
+  onPinClick,
 }: ClimbsMapProps) {
   const mapRef = useRef<LeafletMap | null>(null);
   const clusterRef = useRef<MarkerClusterGroup | null>(null);
@@ -155,13 +160,37 @@ export default function ClimbsMap({
           .map((p) => {
             const typeLabel = p.runType === "send" ? "✓ Send" : "Attempt";
             const ts = p.timestamp ? `<br/><span style="color:#9ca3af;font-size:11px">${p.timestamp}</span>` : "";
-            return `<div style="margin-bottom:4px"><strong>${p.label}</strong> — ${typeLabel}${ts}</div>`;
+            const clickable = p.key && onPinClick ? " style=\"cursor:pointer;text-decoration:underline\"" : "";
+            return `<div style="margin-bottom:4px"><strong${clickable} data-climb-key="${p.key ?? ""}">${p.label}</strong> — ${typeLabel}${ts}</div>`;
           })
           .join("");
 
         const popupContent = `<div style="font-family:sans-serif;font-size:13px;line-height:1.5;max-width:220px">${popupRows}</div>`;
 
-        L.marker([lat, lng], { icon }).bindPopup(popupContent).addTo(cluster);
+        const marker = L.marker([lat, lng], { icon }).bindPopup(popupContent);
+
+        // If there's exactly one climb at this location and it has a key,
+        // clicking the marker opens the detail view directly.
+        if (group.length === 1 && group[0].key && onPinClick) {
+          const climbKey = group[0].key;
+          marker.on("click", () => onPinClick(climbKey));
+        } else if (onPinClick) {
+          // For grouped pins, attach click on popup content links.
+          marker.on("popupopen", () => {
+            const popup = marker.getPopup();
+            if (!popup) return;
+            const container = popup.getElement();
+            if (!container) return;
+            container.querySelectorAll("[data-climb-key]").forEach((el) => {
+              const key = el.getAttribute("data-climb-key");
+              if (key) {
+                (el as HTMLElement).addEventListener("click", () => onPinClick(key));
+              }
+            });
+          });
+        }
+
+        marker.addTo(cluster);
       }
 
       // Fit the map to show all pins with some padding.
@@ -172,7 +201,7 @@ export default function ClimbsMap({
         mapRef.current!.setView([39, -98], 4);
       }
     })();
-  }, [ready, grouped]);
+  }, [ready, grouped, onPinClick]);
   return (
     <div
       ref={containerRef}

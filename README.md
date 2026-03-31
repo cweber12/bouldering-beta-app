@@ -42,8 +42,8 @@ skeletons render correctly. The match page exposes a style panel
 | `/upload` | Upload & process a climbing video | Yes |
 | `/match` | Match a route photo and download the pose overlay | Yes |
 | `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
-| `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; edit mode for profile fields, search & follow | Yes |
-| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle | Yes |
+| `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes |
+| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal | Yes |
 | `/docs` | Usage guide | No |
 
 ## Interactive crop boxes
@@ -156,6 +156,7 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | `/api/profile/[userId]` | GET | Read any user's public profile |
 | `/api/profile/[userId]/climbs` | GET | List any user's climbs (raw S3 keys) |
 | `/api/profile/[userId]/climbs/page` | GET | Paginated climb summaries with thumbnails, filters |
+| `/api/profile/[userId]/climbs/detail` | GET | Single climb detail by S3 key |
 | `/api/profile/[userId]/pins` | GET | GPS pins for a user's climbs (map view) |
 | `/api/profile/follow` | GET/POST/DELETE | List/add/remove followed users |
 | `/api/profile/search` | GET | Search users by name or email |

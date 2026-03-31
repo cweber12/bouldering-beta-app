@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
+import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
+import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
@@ -81,6 +83,10 @@ export default function PublicProfilePage() {
   const isOwnProfile = user?.id === userId;
   const isFollowing = following.includes(userId);
 
+  // Climb detail modal
+  const [selectedClimb, setSelectedClimb] = useState<ClimbDetailData | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
   // ------ Load profile ----------------------------------------------------
 
   useEffect(() => {
@@ -149,9 +155,10 @@ export default function PublicProfilePage() {
       try {
         const res = await fetch(`/api/profile/${userId}/pins`);
         if (!res.ok) return;
-        const data = (await res.json()) as { pins?: Array<{ lat: number; lng: number; route: string; area: string; runType: string; timestamp?: string }> };
+        const data = (await res.json()) as { pins?: Array<{ key: string; lat: number; lng: number; route: string; area: string; runType: string; timestamp?: string }> };
         if (!cancelled && Array.isArray(data.pins)) {
           setPins(data.pins.map((p) => ({
+            key: p.key,
             lat: p.lat,
             lng: p.lng,
             label: `${p.route} \u2014 ${p.area}`,
@@ -217,6 +224,35 @@ export default function PublicProfilePage() {
       console.error("[profile] unfollow error:", err);
     }
   }, [userId]);
+
+  // ------ Climb detail handlers -------------------------------------------
+
+  const handleCardClick = useCallback((climb: ClimbSummary) => {
+    setSelectedClimb(climb);
+  }, []);
+
+  const handlePinClick = useCallback(async (climbKey: string) => {
+    // Check if we already have this climb in the grid data.
+    const found = climbs.find((c) => c.key === climbKey);
+    if (found) {
+      setSelectedClimb(found);
+      return;
+    }
+    // Otherwise fetch the detail from the API.
+    setLoadingDetail(true);
+    try {
+      const res = await fetch(
+        `/api/profile/${userId}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as ClimbDetailData;
+      setSelectedClimb(data);
+    } catch (err) {
+      console.error("[profile view] detail fetch error:", err);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [userId, climbs]);
 
   // ------ Filter helpers --------------------------------------------------
 
@@ -409,7 +445,7 @@ export default function PublicProfilePage() {
                 No GPS-tagged climbs yet.
               </div>
             ) : (
-              <ClimbsMap pins={pins} height={400} />
+              <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
             )}
           </section>
         )}
@@ -432,7 +468,8 @@ export default function PublicProfilePage() {
                   {climbs.map((c) => (
                     <div
                       key={c.key}
-                      className="group relative overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                      onClick={() => handleCardClick(c)}
+                      className="group relative cursor-pointer overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
                     >
                       {/* Thumbnail or placeholder */}
                       <div className="relative aspect-square w-full bg-inset">
@@ -513,6 +550,18 @@ export default function PublicProfilePage() {
           </section>
         )}
         </>
+      )}
+
+      {/* ---- Climb detail modal ---- */}
+      {selectedClimb && (
+        <ClimbDetailModal climb={selectedClimb} onClose={() => setSelectedClimb(null)} />
+      )}
+
+      {/* ---- Loading detail spinner ---- */}
+      {loadingDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+        </div>
       )}
     </main>
   );
