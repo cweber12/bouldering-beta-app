@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
+import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
 import ImageCropper from "@/components/shared/ImageCropper";
 import LocationAutocomplete from "@/components/shared/LocationAutocomplete";
+import type { ClimbPin } from "@/components/map/ClimbsMap";
+
+const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,21 +31,45 @@ interface SearchResult {
   location?: string;
 }
 
+interface ClimbSummary {
+  key: string;
+  state: string;
+  area: string;
+  route: string;
+  runType: string;
+  timestamp: string;
+  rating?: string;
+  notes?: string;
+  thumbnail?: string;
+  coordinates?: { lat: number; lng: number };
+}
+
+interface ClimbPageResponse {
+  items: ClimbSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const EMPTY_PROFILE: ProfileData = { displayName: "", location: "", bio: "", profilePicture: "" };
 const TEXT_LIMIT = 500;
+const PAGE_SIZE = 16;
 
 // ---------------------------------------------------------------------------
-// Profile page
+// Profile page — view / edit mode
 // ---------------------------------------------------------------------------
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const { request: geoRequest, loading: geoLoading } = useGeolocation();
   const { reverseGeocode } = useGeocoding();
+
+  // View / edit mode
+  const [editing, setEditing] = useState(false);
 
   const [profile, setProfile] = useState<ProfileData>(EMPTY_PROFILE);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -50,6 +78,23 @@ export default function ProfilePage() {
 
   // Photo cropper
   const [showCropper, setShowCropper] = useState(false);
+
+  // Climb grid state
+  const [climbs, setClimbs] = useState<ClimbSummary[]>([]);
+  const [climbTotal, setClimbTotal] = useState(0);
+  const [climbPage, setClimbPage] = useState(1);
+  const [loadingClimbs, setLoadingClimbs] = useState(true);
+
+  // Filters
+  const [filterState, setFilterState] = useState("");
+  const [filterArea, setFilterArea] = useState("");
+  const [filterRoute, setFilterRoute] = useState("");
+  const [filterRating, setFilterRating] = useState("");
+
+  // Map / list toggle
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [pins, setPins] = useState<ClimbPin[]>([]);
+  const [loadingPins, setLoadingPins] = useState(false);
 
   // Search & follow
   const [searchQuery, setSearchQuery] = useState("");
@@ -87,6 +132,69 @@ export default function ProfilePage() {
 
     return () => { cancelled = true; };
   }, [authLoading, user]);
+
+  // ------ Load climbs (paginated) -----------------------------------------
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+    setLoadingClimbs(true);
+
+    const params = new URLSearchParams({
+      page: String(climbPage),
+      pageSize: String(PAGE_SIZE),
+    });
+    if (filterState) params.set("state", filterState);
+    if (filterArea) params.set("area", filterArea);
+    if (filterRoute) params.set("route", filterRoute);
+    if (filterRating) params.set("rating", filterRating);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/profile/${user.id}/climbs/page?${params}`);
+        if (!res.ok) throw new Error("Failed to load climbs.");
+        const data = (await res.json()) as ClimbPageResponse;
+        if (!cancelled) {
+          setClimbs(data.items);
+          setClimbTotal(data.total);
+        }
+      } catch (err) {
+        console.error("[profile] climbs error:", err);
+      } finally {
+        if (!cancelled) setLoadingClimbs(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute, filterRating]);
+
+  // ------ Load pins when map mode is active --------------------------------
+
+  useEffect(() => {
+    if (viewMode !== "map" || authLoading || !user) return;
+    let cancelled = false;
+    setLoadingPins(true);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/profile/${user.id}/pins`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { pins?: Array<{ lat: number; lng: number; route: string; area: string; state: string; runType: string; timestamp?: string }> };
+        if (!cancelled && Array.isArray(data.pins)) {
+          setPins(data.pins.map((p) => ({
+            lat: p.lat,
+            lng: p.lng,
+            label: `${p.route} — ${p.area}`,
+            runType: p.runType,
+            timestamp: p.timestamp,
+          })));
+        }
+      } catch { /* ignore */ }
+      finally { if (!cancelled) setLoadingPins(false); }
+    })();
+
+    return () => { cancelled = true; };
+  }, [viewMode, authLoading, user]);
 
   // ------ Load following list on mount ------------------------------------
 
@@ -242,19 +350,52 @@ export default function ProfilePage() {
     }
   }, []);
 
+  // ------ Filter helpers --------------------------------------------------
+
+  const applyFilters = useCallback(() => {
+    setClimbPage(1);
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilterState("");
+    setFilterArea("");
+    setFilterRoute("");
+    setFilterRating("");
+    setClimbPage(1);
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(climbTotal / PAGE_SIZE));
+
   // ------ Render ----------------------------------------------------------
 
-  return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-10">
-      <h1 className="mb-6 text-xl font-semibold text-fg">Profile</h1>
-
-      {(authLoading || loadingProfile) ? (
+  if (authLoading || loadingProfile) {
+    return (
+      <main className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex flex-col items-center gap-4 py-20">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
           <p className="text-sm text-fg-muted">Loading profile&#8230;</p>
         </div>
-      ) : (
-        <>
+      </main>
+    );
+  }
+
+  // =========================================================================
+  // EDIT MODE
+  // =========================================================================
+  if (editing) {
+    return (
+      <main className="mx-auto w-full max-w-2xl px-6 py-10">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-fg">Edit Profile</h1>
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+          >
+            Done
+          </button>
+        </div>
+
         {/* ---- Avatar ---- */}
         <section className="mb-8 flex items-center gap-6">
           <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
@@ -374,7 +515,7 @@ export default function ProfilePage() {
               disabled={saving}
               className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface transition hover:bg-accent-hover disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save profile"}
+              {saving ? "Saving\u2026" : "Save profile"}
             </button>
             {saveMsg && (
               <span
@@ -400,7 +541,7 @@ export default function ProfilePage() {
           />
 
           {searching && (
-            <p className="text-xs text-fg-muted">Searching…</p>
+            <p className="text-xs text-fg-muted">Searching\u2026</p>
           )}
 
           {searchResults.length > 0 && (
@@ -486,7 +627,253 @@ export default function ProfilePage() {
             </ul>
           )}
         </section>
-        </>
+      </main>
+    );
+  }
+
+  // =========================================================================
+  // VIEW MODE (default)
+  // =========================================================================
+
+  const displayName = profile.displayName || user?.email || "User";
+
+  return (
+    <main className="mx-auto w-full max-w-4xl px-6 py-10">
+      {/* ---- Profile header (read-only) ---- */}
+      <section className="mb-8 flex items-center gap-6">
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
+          {profile.profilePicture ? (
+            <NextImage
+              src={profile.profilePicture}
+              alt={`${displayName}'s avatar`}
+              width={80}
+              height={80}
+              unoptimized
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl text-fg-muted">
+              {displayName[0]?.toUpperCase() ?? "?"}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold text-fg">{displayName}</h1>
+          {profile.location && (
+            <p className="text-xs text-fg-muted">{profile.location}</p>
+          )}
+          {profile.bio && (
+            <p className="mt-1 text-sm text-fg-secondary">{profile.bio}</p>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-2 w-fit rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-accent"
+          >
+            Edit profile
+          </button>
+        </div>
+      </section>
+
+      <hr className="mb-6 border-edge" />
+
+      {/* ---- Filters ---- */}
+      <section className="mb-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State</label>
+            <input
+              type="text"
+              value={filterState}
+              onChange={(e) => setFilterState(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Any"
+              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
+            <input
+              type="text"
+              value={filterArea}
+              onChange={(e) => setFilterArea(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Any"
+              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Route</label>
+            <input
+              type="text"
+              value={filterRoute}
+              onChange={(e) => setFilterRoute(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Any"
+              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Rating</label>
+            <input
+              type="text"
+              value={filterRating}
+              onChange={(e) => setFilterRating(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              placeholder="Any"
+              className="w-24 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            />
+          </div>
+          {(filterState || filterArea || filterRoute || filterRating) && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ---- List / Map toggle ---- */}
+      <section className="mb-6 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-fg">
+          Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
+        </h2>
+        <div className="flex rounded-lg border border-edge text-xs">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`px-3 py-1.5 transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("map")}
+            className={`px-3 py-1.5 transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+          >
+            Map
+          </button>
+        </div>
+      </section>
+
+      {/* ---- Map view ---- */}
+      {viewMode === "map" && (
+        <section className="mb-6 rounded-xl border border-edge overflow-hidden">
+          {loadingPins ? (
+            <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+              Loading map&#8230;
+            </div>
+          ) : pins.length === 0 ? (
+            <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+              No GPS-tagged climbs yet.
+            </div>
+          ) : (
+            <ClimbsMap pins={pins} height={400} />
+          )}
+        </section>
+      )}
+
+      {/* ---- Climb grid (4×4) ---- */}
+      {viewMode === "list" && (
+        <section className="mb-8">
+          {loadingClimbs ? (
+            <div className="flex flex-col items-center gap-4 py-10">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
+              <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
+            </div>
+          ) : climbs.length === 0 ? (
+            <p className="py-8 text-center text-xs text-fg-muted">
+              {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
+            </p>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {climbs.map((c) => (
+                  <div
+                    key={c.key}
+                    className="group relative overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                  >
+                    {/* Thumbnail or placeholder */}
+                    <div className="relative aspect-square w-full bg-inset">
+                      {c.thumbnail ? (
+                        <NextImage
+                          src={c.thumbnail}
+                          alt={`${c.route} climb`}
+                          fill
+                          unoptimized
+                          className="object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
+                          <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                          </svg>
+                        </div>
+                      )}
+
+                      {/* Run type badge */}
+                      <span
+                        className={[
+                          "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                          c.runType === "send"
+                            ? "bg-emerald-500/80 text-white"
+                            : "bg-amber-500/80 text-white",
+                        ].join(" ")}
+                      >
+                        {c.runType}
+                      </span>
+                    </div>
+
+                    {/* Info overlay */}
+                    <div className="px-3 py-2.5">
+                      <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                      <p className="truncate text-[10px] text-fg-muted">
+                        {c.area} &middot; {c.state}
+                      </p>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                        {c.rating && (
+                          <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                            {c.rating}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
+                    disabled={climbPage <= 1}
+                    className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-fg-muted">
+                    Page {climbPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={climbPage >= totalPages}
+                    className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </section>
       )}
     </main>
   );

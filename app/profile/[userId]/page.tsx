@@ -6,7 +6,6 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
-import { attemptTimestampLabel, parseRunType } from "@/utils/fsHelpers";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
@@ -23,31 +22,31 @@ interface ProfileData {
   profilePicture?: string;
 }
 
-interface ClimbEntry {
+interface ClimbSummary {
   key: string;
-  label: string;
-  runType: string;
   state: string;
   area: string;
   route: string;
+  runType: string;
+  timestamp: string;
+  rating?: string;
+  notes?: string;
+  thumbnail?: string;
+  coordinates?: { lat: number; lng: number };
+}
+
+interface ClimbPageResponse {
+  items: ClimbSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Constants
 // ---------------------------------------------------------------------------
 
-/** Parse an S3 key into route segments. Key: RouteData/{uid}/{state}/{area}/{route}/{filename} */
-function parseClimbKey(key: string): { state: string; area: string; route: string; filename: string } | null {
-  const parts = key.split("/");
-  // RouteData / userId / state / area / route / filename
-  if (parts.length < 6) return null;
-  return {
-    state: parts[2],
-    area: parts[3],
-    route: parts[4],
-    filename: parts[parts.length - 1],
-  };
-}
+const PAGE_SIZE = 16;
 
 // ---------------------------------------------------------------------------
 // Public Profile Page
@@ -61,12 +60,22 @@ export default function PublicProfilePage() {
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
-  const [climbs, setClimbs] = useState<ClimbEntry[]>([]);
+  // Climb grid state
+  const [climbs, setClimbs] = useState<ClimbSummary[]>([]);
+  const [climbTotal, setClimbTotal] = useState(0);
+  const [climbPage, setClimbPage] = useState(1);
   const [loadingClimbs, setLoadingClimbs] = useState(true);
 
+  // Filters
+  const [filterState, setFilterState] = useState("");
+  const [filterArea, setFilterArea] = useState("");
+  const [filterRoute, setFilterRoute] = useState("");
+  const [filterRating, setFilterRating] = useState("");
+
+  // Map / list toggle
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [pins, setPins] = useState<ClimbPin[]>([]);
   const [loadingPins, setLoadingPins] = useState(false);
-  const [showMap, setShowMap] = useState(false);
 
   const [following, setFollowing] = useState<string[]>([]);
   const isOwnProfile = user?.id === userId;
@@ -94,46 +103,31 @@ export default function PublicProfilePage() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  // ------ Load climbs -----------------------------------------------------
+  // ------ Load climbs (paginated) -----------------------------------------
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
+    setLoadingClimbs(true);
+
+    const searchParams = new URLSearchParams({
+      page: String(climbPage),
+      pageSize: String(PAGE_SIZE),
+    });
+    if (filterState) searchParams.set("state", filterState);
+    if (filterArea) searchParams.set("area", filterArea);
+    if (filterRoute) searchParams.set("route", filterRoute);
+    if (filterRating) searchParams.set("rating", filterRating);
 
     (async () => {
       try {
-        const res = await fetch(`/api/profile/${userId}/climbs`);
+        const res = await fetch(`/api/profile/${userId}/climbs/page?${searchParams}`);
         if (!res.ok) throw new Error("Failed to load climbs.");
-        const data = (await res.json()) as { objects: Array<{ Key?: string }> };
-        const entries: ClimbEntry[] = [];
-
-        for (const obj of data.objects) {
-          if (!obj.Key) continue;
-          // Exclude non-run files (like route-image.json)
-          if (!obj.Key.match(/run-\d+.*\.json$/) && !obj.Key.match(/attempt-\d+\.json$/)) continue;
-
-          const parsed = parseClimbKey(obj.Key);
-          if (!parsed) continue;
-
-          entries.push({
-            key: obj.Key,
-            label: attemptTimestampLabel(parsed.filename),
-            runType: parseRunType(parsed.filename),
-            state: parsed.state,
-            area: parsed.area,
-            route: parsed.route,
-          });
+        const data = (await res.json()) as ClimbPageResponse;
+        if (!cancelled) {
+          setClimbs(data.items);
+          setClimbTotal(data.total);
         }
-
-        // Group by route, newest first
-        entries.sort((a, b) => {
-          const cmp = `${a.state}/${a.area}/${a.route}`.localeCompare(`${b.state}/${b.area}/${b.route}`);
-          if (cmp !== 0) return cmp;
-          // Newer first (later timestamps → higher values in filename)
-          return b.key.localeCompare(a.key);
-        });
-
-        if (!cancelled) setClimbs(entries);
       } catch (err) {
         console.error("[profile view] climbs error:", err);
       } finally {
@@ -142,12 +136,12 @@ export default function PublicProfilePage() {
     })();
 
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, climbPage, filterState, filterArea, filterRoute, filterRating]);
 
-  // ------ Load follow list + pins lazily when map is opened ------------
+  // ------ Load pins when map mode is active --------------------------------
 
   useEffect(() => {
-    if (!showMap || !userId) return;
+    if (viewMode !== "map" || !userId) return;
     let cancelled = false;
     setLoadingPins(true);
 
@@ -155,15 +149,24 @@ export default function PublicProfilePage() {
       try {
         const res = await fetch(`/api/profile/${userId}/pins`);
         if (!res.ok) return;
-        const data = (await res.json()) as { pins?: ClimbPin[] };
-        if (!cancelled && Array.isArray(data.pins)) setPins(data.pins);
-      } catch { /* ignore */ } finally {
-        if (!cancelled) setLoadingPins(false);
-      }
+        const data = (await res.json()) as { pins?: Array<{ lat: number; lng: number; route: string; area: string; runType: string; timestamp?: string }> };
+        if (!cancelled && Array.isArray(data.pins)) {
+          setPins(data.pins.map((p) => ({
+            lat: p.lat,
+            lng: p.lng,
+            label: `${p.route} \u2014 ${p.area}`,
+            runType: p.runType,
+            timestamp: p.timestamp,
+          })));
+        }
+      } catch { /* ignore */ }
+      finally { if (!cancelled) setLoadingPins(false); }
     })();
 
     return () => { cancelled = true; };
-  }, [showMap, userId]);
+  }, [viewMode, userId]);
+
+  // ------ Load follow list ------------------------------------------------
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -215,26 +218,33 @@ export default function PublicProfilePage() {
     }
   }, [userId]);
 
-  // ------ Group climbs by route -------------------------------------------
+  // ------ Filter helpers --------------------------------------------------
 
-  const groupedClimbs = climbs.reduce<Map<string, ClimbEntry[]>>((acc, c) => {
-    const routeKey = `${c.state} / ${c.area} / ${c.route}`;
-    if (!acc.has(routeKey)) acc.set(routeKey, []);
-    acc.get(routeKey)!.push(c);
-    return acc;
-  }, new Map());
+  const applyFilters = useCallback(() => {
+    setClimbPage(1);
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilterState("");
+    setFilterArea("");
+    setFilterRoute("");
+    setFilterRating("");
+    setClimbPage(1);
+  }, []);
+
+  const totalPages = Math.max(1, Math.ceil(climbTotal / PAGE_SIZE));
 
   // ------ Render ----------------------------------------------------------
 
   const displayName = profile?.displayName || profile?.userId || "User";
 
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-10">
+    <main className="mx-auto w-full max-w-4xl px-6 py-10">
       <Link
         href="/profile"
         className="mb-6 inline-block text-xs text-fg-muted hover:text-accent"
       >
-        ← Back to my profile
+        &larr; Back to my profile
       </Link>
 
       {loadingProfile ? (
@@ -305,79 +315,203 @@ export default function PublicProfilePage() {
 
         <hr className="mb-6 border-edge" />
 
-        {/* ---- Climb map ---- */}
-        <section className="mb-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-fg">Climb map</h2>
-            <button
-              type="button"
-              onClick={() => setShowMap((v) => !v)}
-              className="text-xs text-fg-secondary transition hover:text-accent"
-            >
-              {showMap ? "Hide map" : "Show map"}
-            </button>
-          </div>
-
-          {showMap && (
-            <div className="rounded-xl border border-edge overflow-hidden">
-              {loadingPins ? (
-                <div className="flex items-center justify-center h-40 text-xs text-fg-muted">
-                  Loading pins&#8230;
-                </div>
-              ) : pins.length === 0 ? (
-                <div className="flex items-center justify-center h-40 text-xs text-fg-muted">
-                  No GPS-tagged climbs yet.
-                </div>
-              ) : (
-                <ClimbsMap pins={pins} height={400} />
-              )}
+        {/* ---- Filters ---- */}
+        <section className="mb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State</label>
+              <input
+                type="text"
+                value={filterState}
+                onChange={(e) => setFilterState(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Any"
+                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              />
             </div>
-          )}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
+              <input
+                type="text"
+                value={filterArea}
+                onChange={(e) => setFilterArea(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Any"
+                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Route</label>
+              <input
+                type="text"
+                value={filterRoute}
+                onChange={(e) => setFilterRoute(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Any"
+                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Rating</label>
+              <input
+                type="text"
+                value={filterRating}
+                onChange={(e) => setFilterRating(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                placeholder="Any"
+                className="w-24 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              />
+            </div>
+            {(filterState || filterArea || filterRoute || filterRating) && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </section>
 
-        <hr className="mb-6 border-edge" />
+        {/* ---- List / Map toggle ---- */}
+        <section className="mb-6 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-fg">
+            Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
+          </h2>
+          <div className="flex rounded-lg border border-edge text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`px-3 py-1.5 transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("map")}
+              className={`px-3 py-1.5 transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            >
+              Map
+            </button>
+          </div>
+        </section>
 
-        {/* ---- Climbs ---- */}
-        <section>
-          <h2 className="mb-4 text-sm font-semibold text-fg">Climbs</h2>
-
-          {loadingClimbs ? (
-            <div className="flex flex-col items-center gap-4 py-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
-              <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
-            </div>
-          ) : climbs.length === 0 ? (
-              <p className="text-xs text-fg-muted">No climbs recorded yet.</p>
-            ) : (
-              <div className="flex flex-col gap-5">
-                {[...groupedClimbs.entries()].map(([routeLabel, entries]) => (
-                  <div key={routeLabel}>
-                    <h3 className="mb-2 text-xs font-medium text-fg-secondary">{routeLabel}</h3>
-                    <ul className="flex flex-col gap-1.5">
-                      {entries.map((c) => (
-                        <li
-                          key={c.key}
-                          className="flex items-center gap-3 rounded-lg border border-edge bg-card px-4 py-2"
-                        >
-                          <span
-                            className={[
-                              "inline-block rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                              c.runType === "send"
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-amber-500/20 text-amber-400",
-                            ].join(" ")}
-                          >
-                            {c.runType}
-                          </span>
-                          <span className="text-sm text-fg">{c.label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+        {/* ---- Map view ---- */}
+        {viewMode === "map" && (
+          <section className="mb-6 rounded-xl border border-edge overflow-hidden">
+            {loadingPins ? (
+              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                Loading map&#8230;
               </div>
+            ) : pins.length === 0 ? (
+              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                No GPS-tagged climbs yet.
+              </div>
+            ) : (
+              <ClimbsMap pins={pins} height={400} />
             )}
           </section>
+        )}
+
+        {/* ---- Climb grid (4×4) ---- */}
+        {viewMode === "list" && (
+          <section className="mb-8">
+            {loadingClimbs ? (
+              <div className="flex flex-col items-center gap-4 py-10">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
+                <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
+              </div>
+            ) : climbs.length === 0 ? (
+              <p className="py-8 text-center text-xs text-fg-muted">
+                {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {climbs.map((c) => (
+                    <div
+                      key={c.key}
+                      className="group relative overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                    >
+                      {/* Thumbnail or placeholder */}
+                      <div className="relative aspect-square w-full bg-inset">
+                        {c.thumbnail ? (
+                          <Image
+                            src={c.thumbnail}
+                            alt={`${c.route} climb`}
+                            fill
+                            unoptimized
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
+                            <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                            </svg>
+                          </div>
+                        )}
+
+                        {/* Run type badge */}
+                        <span
+                          className={[
+                            "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                            c.runType === "send"
+                              ? "bg-emerald-500/80 text-white"
+                              : "bg-amber-500/80 text-white",
+                          ].join(" ")}
+                        >
+                          {c.runType}
+                        </span>
+                      </div>
+
+                      {/* Info overlay */}
+                      <div className="px-3 py-2.5">
+                        <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                        <p className="truncate text-[10px] text-fg-muted">
+                          {c.area} &middot; {c.state}
+                        </p>
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                          {c.rating && (
+                            <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                              {c.rating}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="mt-6 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
+                      disabled={climbPage <= 1}
+                      className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-fg-muted">
+                      Page {climbPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={climbPage >= totalPages}
+                      className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        )}
         </>
       )}
     </main>

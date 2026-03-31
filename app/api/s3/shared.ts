@@ -1,12 +1,16 @@
 import { S3Client } from "@aws-sdk/client-s3";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { createServiceClient } from "@/utils/supabase/service";
 
 /** The S3 key prefix scoping all RouteData objects. */
 export const S3_PREFIX = process.env.S3_KEY_PREFIX ?? "RouteData";
 
 /** The S3 key prefix scoping all profile objects. */
 export const PROFILE_PREFIX = "ProfileData";
+
+/** Supabase Storage bucket for profile data. */
+const PROFILE_BUCKET = "user_data";
 
 /** Singleton S3 client — reuses the HTTP connection pool across requests. */
 export const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
@@ -158,3 +162,48 @@ export function isValidRoutePrefix(prefix: string, targetUserId: string): boolea
 
 /** Maximum allowed length for user-supplied profile text fields. */
 export const PROFILE_TEXT_LIMIT = 500;
+
+// ---------------------------------------------------------------------------
+// Supabase Storage helpers (profile data in `user_data` bucket)
+// ---------------------------------------------------------------------------
+
+/**
+ * Read a JSON file from Supabase Storage `user_data` bucket.
+ * Returns `null` when the file does not exist.
+ */
+export async function readProfileStorage<T>(path: string): Promise<T | null> {
+  const sb = createServiceClient();
+  const { data, error } = await sb.storage.from(PROFILE_BUCKET).download(path);
+  if (error) {
+    // "Object not found" is the Supabase Storage equivalent of NoSuchKey.
+    if (error.message?.includes("not found") || error.message?.includes("Not Found")) {
+      return null;
+    }
+    throw error;
+  }
+  const text = await data.text();
+  return JSON.parse(text) as T;
+}
+
+/**
+ * Write a JSON file to Supabase Storage `user_data` bucket (upsert).
+ */
+export async function writeProfileStorage(path: string, body: unknown): Promise<void> {
+  const sb = createServiceClient();
+  const blob = new Blob([JSON.stringify(body)], { type: "application/json" });
+  const { error } = await sb.storage
+    .from(PROFILE_BUCKET)
+    .upload(path, blob, { contentType: "application/json", upsert: true });
+  if (error) throw error;
+}
+
+/**
+ * List file objects in a folder within Supabase Storage `user_data` bucket.
+ * Returns file names (not full paths).
+ */
+export async function listProfileStorage(folder: string): Promise<string[]> {
+  const sb = createServiceClient();
+  const { data, error } = await sb.storage.from(PROFILE_BUCKET).list(folder, { limit: 1000 });
+  if (error) throw error;
+  return (data ?? []).map((f) => f.name);
+}

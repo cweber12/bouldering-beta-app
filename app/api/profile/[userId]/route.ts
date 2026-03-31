@@ -1,7 +1,5 @@
-import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import type { Readable } from "stream";
-import { s3, getBucket, getAuthUserId, profileKey, awsErrorMessage } from "../../s3/shared";
+import { getAuthUserId, profileKey, readProfileStorage } from "../../s3/shared";
 
 // ---------------------------------------------------------------------------
 // GET — read any user's public profile by userId
@@ -23,28 +21,14 @@ export async function GET(
     return NextResponse.json({ error: "Invalid user ID." }, { status: 400 });
   }
 
-  const bucket = getBucket();
-  if (!bucket) {
-    return NextResponse.json({ error: "S3_BUCKET_NAME is not configured." }, { status: 500 });
-  }
-
   try {
-    const cmd = new GetObjectCommand({ Bucket: bucket, Key: profileKey(userId) });
-    const res = await s3.send(cmd);
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of res.Body as Readable) {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    }
-    const text = Buffer.concat(chunks).toString("utf-8");
-    const profile = JSON.parse(text) as Record<string, unknown>;
-    return NextResponse.json({ ...profile, userId });
-  } catch (err) {
-    if ((err as Error & { name?: string }).name === "NoSuchKey") {
+    const profile = await readProfileStorage<Record<string, unknown>>(profileKey(userId));
+    if (!profile) {
       return NextResponse.json({ userId });
     }
-    const msg = awsErrorMessage(err);
-    console.error("[profile/userId/GET]", msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ ...profile, userId });
+  } catch (err) {
+    console.error("[profile/userId/GET]", err);
+    return NextResponse.json({ error: "Failed to load profile." }, { status: 502 });
   }
 }

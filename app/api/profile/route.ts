@@ -1,13 +1,10 @@
-import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import type { Readable } from "stream";
 import {
-  s3,
-  getBucket,
   getAuthUser,
   profileKey,
   indexKey,
-  awsErrorMessage,
+  readProfileStorage,
+  writeProfileStorage,
   PROFILE_TEXT_LIMIT,
 } from "../s3/shared";
 
@@ -33,30 +30,15 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
   }
 
-  const bucket = getBucket();
-  if (!bucket) {
-    return NextResponse.json({ error: "S3_BUCKET_NAME is not configured." }, { status: 500 });
-  }
-
   try {
-    const cmd = new GetObjectCommand({ Bucket: bucket, Key: profileKey(authUser.id) });
-    const res = await s3.send(cmd);
-
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of res.Body as Readable) {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    }
-    const text = Buffer.concat(chunks).toString("utf-8");
-    const profile = JSON.parse(text) as ProfilePayload;
-    return NextResponse.json({ ...profile, userId: authUser.id, email: authUser.email });
-  } catch (err) {
-    // NoSuchKey → fresh profile
-    if ((err as Error & { name?: string }).name === "NoSuchKey") {
+    const profile = await readProfileStorage<ProfilePayload>(profileKey(authUser.id));
+    if (!profile) {
       return NextResponse.json({ userId: authUser.id, email: authUser.email });
     }
-    const msg = awsErrorMessage(err);
-    console.error("[profile/GET]", msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ ...profile, userId: authUser.id, email: authUser.email });
+  } catch (err) {
+    console.error("[profile/GET]", err);
+    return NextResponse.json({ error: "Failed to load profile." }, { status: 502 });
   }
 }
 
@@ -68,11 +50,6 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const authUser = await getAuthUser();
   if (!authUser) {
     return NextResponse.json({ error: "Authentication required." }, { status: 401 });
-  }
-
-  const bucket = getBucket();
-  if (!bucket) {
-    return NextResponse.json({ error: "S3_BUCKET_NAME is not configured." }, { status: 500 });
   }
 
   let payload: ProfilePayload;
@@ -101,42 +78,23 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   try {
     // Save full profile
-    const profileBody = JSON.stringify({
+    await writeProfileStorage(profileKey(authUser.id), {
       displayName: payload.displayName ?? "",
       location: payload.location ?? "",
       bio: payload.bio ?? "",
       profilePicture: payload.profilePicture ?? "",
     });
 
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: profileKey(authUser.id),
-        Body: profileBody,
-        ContentType: "application/json",
-      }),
-    );
-
     // Save search-index entry (no picture — keep small)
-    const indexBody = JSON.stringify({
+    await writeProfileStorage(indexKey(authUser.id), {
       displayName: payload.displayName ?? "",
       email: authUser.email,
       location: payload.location ?? "",
     });
 
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: indexKey(authUser.id),
-        Body: indexBody,
-        ContentType: "application/json",
-      }),
-    );
-
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const msg = awsErrorMessage(err);
-    console.error("[profile/PUT]", msg);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    console.error("[profile/PUT]", err);
+    return NextResponse.json({ error: "Failed to save profile." }, { status: 502 });
   }
 }

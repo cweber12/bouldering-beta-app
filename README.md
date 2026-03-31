@@ -42,8 +42,8 @@ skeletons render correctly. The match page exposes a style panel
 | `/upload` | Upload & process a climbing video | Yes |
 | `/match` | Match a route photo and download the pose overlay | Yes |
 | `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
-| `/profile` | Edit your profile picture, bio, location; search & follow users | Yes |
-| `/profile/[userId]` | View another user's public profile, climbs, and climb map | Yes |
+| `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; edit mode for profile fields, search & follow | Yes |
+| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle | Yes |
 | `/docs` | Usage guide | No |
 
 ## Interactive crop boxes
@@ -88,10 +88,13 @@ list existing states → areas → routes → runs directly from the bucket.
 Attempts are highlighted in amber and sends in emerald throughout the UI.
 Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
 
-Profile data is stored under `ProfileData/{userId}/profile.json` (display name,
-bio, location, profile picture as base64 data URL). A searchable index entry at
+Profile data is stored in a **Supabase Storage** bucket (`user_data`) under
+the path `ProfileData/{userId}/profile.json` (display name, bio, location,
+profile picture as base64 data URL). A searchable index entry at
 `ProfileData/_index/{userId}.json` enables user search by name or email.
 Following relationships are stored at `ProfileData/{userId}/following.json`.
+Access is mediated by a server-side **service role** client that bypasses RLS
+(`SUPABASE_SERVICE_ROLE_KEY` required in `.env.local`).
 
 Each saved run may include a scaled-down PNG thumbnail of the middle video frame
 with ORB keypoints drawn as green dots. The thumbnail is stored as a data URL in
@@ -132,6 +135,7 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyz.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | — |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) | — |
 | `AWS_REGION` | S3 bucket region | `us-east-2` |
 | `AWS_ACCESS_KEY_ID` | IAM access key | — |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key | — |
@@ -150,7 +154,8 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | `/api/s3/delete` | DELETE | Remove a run |
 | `/api/profile` | GET/PUT | Read/update own profile |
 | `/api/profile/[userId]` | GET | Read any user's public profile |
-| `/api/profile/[userId]/climbs` | GET | List any user's climbs |
+| `/api/profile/[userId]/climbs` | GET | List any user's climbs (raw S3 keys) |
+| `/api/profile/[userId]/climbs/page` | GET | Paginated climb summaries with thumbnails, filters |
 | `/api/profile/[userId]/pins` | GET | GPS pins for a user's climbs (map view) |
 | `/api/profile/follow` | GET/POST/DELETE | List/add/remove followed users |
 | `/api/profile/search` | GET | Search users by name or email |
