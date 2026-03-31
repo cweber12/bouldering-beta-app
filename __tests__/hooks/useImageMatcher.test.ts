@@ -454,3 +454,53 @@ describe("useImageMatcher — userCrop", () => {
     expect(extractFeaturesFromCrop).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// useImageMatcher — reset
+// ---------------------------------------------------------------------------
+
+describe("useImageMatcher — reset", () => {
+  it("returns to idle with null result and error after reset()", async () => {
+    const attempt = fakeAttempt(5);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(3));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+    expect(result.current.status).toBe("done");
+    expect(result.current.result).not.toBeNull();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.status).toBe("idle");
+    expect(result.current.result).toBeNull();
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it("clears error state after reset()", async () => {
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(undefined);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "missing-id", mockCv);
+    });
+    expect(result.current.status).toBe("error");
+    expect(result.current.errorMessage).not.toBeNull();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.status).toBe("idle");
+    expect(result.current.errorMessage).toBeNull();
+  });
+});

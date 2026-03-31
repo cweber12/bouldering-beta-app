@@ -34,6 +34,8 @@ export type MatchStatus = "idle" | "matching" | "done" | "error";
 
 export interface ImageMatcherResult {
   matchImage: (file: File, attemptId: string, cv: CV, userCrop?: CropFraction) => Promise<void>;
+  /** Reset all state back to idle (no result, no error). */
+  reset: () => void;
   status: MatchStatus;
   result: ImageMatchResult | null;
   errorMessage: string | null;
@@ -144,7 +146,13 @@ export function useImageMatcher(): ImageMatcherResult {
     }
   }, []);
 
-  return { matchImage, status, result, errorMessage };
+  const reset = useCallback(() => {
+    setStatus("idle");
+    setResult(null);
+    setErrorMessage(null);
+  }, []);
+
+  return { matchImage, reset, status, result, errorMessage };
 }
 
 /**

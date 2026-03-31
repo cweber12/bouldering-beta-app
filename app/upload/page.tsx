@@ -20,7 +20,8 @@ import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { RunType } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
-import { drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
@@ -101,6 +102,13 @@ const FRAME_CONDITIONS: FrameCondition[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Module-level cache — survives component unmount so state persists when
+// the user navigates away from the upload page and returns.
+// ---------------------------------------------------------------------------
+let cachedPendingFile: File | null = null;
+let cachedVideoUrl: string | null = null;
+
+// ---------------------------------------------------------------------------
 // Upload page inner
 // ---------------------------------------------------------------------------
 
@@ -110,10 +118,10 @@ function UploadPageInner() {
   // Model selection state — MediaPipe only
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("lite");
   const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
-  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
+  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
-  const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
+  const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
 
   // Restore prior attempt from session so users can return from the match page.
@@ -129,8 +137,8 @@ function UploadPageInner() {
   const [runType, setRunType] = useState<RunType>(() => restoredAttempt?.runType ?? "attempt");
   const [rating, setRating] = useState(() => restoredAttempt?.rating ?? "");
   const [notes, setNotes] = useState(() => restoredAttempt?.notes ?? "");
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
   const [frameStep, setFrameStep] = useState(5);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved] = useState(false);
@@ -139,7 +147,7 @@ function UploadPageInner() {
   const [conditions, setConditions] = useState<Set<string>>(new Set());
   const [newFileSelected, setNewFileSelected] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
-  const previewUrlRef = useRef<string | null>(null);
+  const previewUrlRef = useRef<string | null>(cachedVideoUrl);
 
   // ---- Post-processing phase ----
   // "input" = editing / pre-process, "results" = showing landmark preview + save options,
@@ -148,9 +156,8 @@ function UploadPageInner() {
     restoredAttempt ? "results" : "input"
   );
 
-  // First-frame landmark preview canvas
-  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [landmarkDrawn, setLandmarkDrawn] = useState(false);
+  // First-frame image for animated landmark preview (FramePlayer background)
+  const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
 
   // Inline route photo overlay state
   const [routePhotoFile, setRoutePhotoFile] = useState<File | null>(null);
@@ -158,6 +165,10 @@ function UploadPageInner() {
   const routePhotoPreviewUrlRef = useRef<string | null>(null);
   const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
+
+  // Edit-mode flag — set when user clicks "Edit climb" from results.
+  // Allows the input phase to show the crop UI even when isDone is true.
+  const [editMode, setEditMode] = useState(false);
 
   // Skeleton style for overlays
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
@@ -272,18 +283,19 @@ function UploadPageInner() {
   const isProcessing = status === "processing";
   const isDone = status === "done";
   const orbReady = orbStatus === "ready";
+  const orbFinished = orbReady || orbStatus === "failed";
 
   // Persist the attempt id into session so user can return from match page.
   const activeAttemptId = isDone ? attemptId : restoredAttempt?.id ?? null;
   const activeAttempt   = activeAttemptId ? getAttempt(activeAttemptId) : null;
-  const showResults     = phase !== "input" && !newFileSelected && ((isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing));
+  const showResults     = phase !== "input" && !newFileSelected && ((isDone && orbFinished) || (!isDone && !!restoredAttempt && !isProcessing));
 
   // Switch to results phase when processing completes
   useEffect(() => {
-    if (isDone && orbReady && phase === "input") {
+    if (isDone && orbFinished && phase === "input" && !editMode) {
       setPhase("results");
     }
-  }, [isDone, orbReady, phase]);
+  }, [isDone, orbFinished, phase, editMode]);
 
   useEffect(() => {
     if (isDone && attemptId) {
@@ -291,21 +303,12 @@ function UploadPageInner() {
     }
   }, [isDone, attemptId]);
 
-  // Clear session when navigating away so fresh state on return.
-  useEffect(() => {
-    return () => {
-      // Reset video processing state — route info is preserved via
-      // sessionStorage but the video / processing state should not persist.
-      resetProcessor();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Cache file and URL in module scope so state survives navigation.
+  useEffect(() => { cachedPendingFile = pendingFile; }, [pendingFile]);
+  useEffect(() => { cachedVideoUrl = videoPreviewUrl; }, [videoPreviewUrl]);
 
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    };
-  }, []);
+  // Only revoke the video preview URL when a new file is loaded (handled in
+  // loadVideoFile), NOT on unmount — we want it to survive navigation.
 
   useEffect(() => {
     return () => {
@@ -313,19 +316,13 @@ function UploadPageInner() {
     };
   }, []);
 
-  // Draw first-frame landmark preview when phase switches to "results"
+  // Capture first video frame as a File for the animated landmark preview.
   useEffect(() => {
     if (phase !== "results" || !activeAttempt || !videoPreviewUrl) return;
-    const canvas = landmarkCanvasRef.current;
-    if (!canvas) return;
-
-    const frames = activeAttempt.frames;
-    const firstFrame = frames[0];
-    if (!firstFrame || firstFrame.keypoints.length === 0) return;
     const vw = activeAttempt.videoMeta.width;
     const vh = activeAttempt.videoMeta.height;
 
-    // Draw the first video frame then overlay the skeleton
+    let cancelled = false;
     const video = document.createElement("video");
     video.muted = true;
     video.playsInline = true;
@@ -333,19 +330,17 @@ function UploadPageInner() {
     video.src = videoPreviewUrl;
 
     const onSeeked = () => {
+      if (cancelled) return;
+      const canvas = document.createElement("canvas");
       canvas.width = vw;
       canvas.height = vh;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(video, 0, 0, vw, vh);
-
-      // Build pixel-space keypoints from normalized values
-      const pixelKps: Record<string, { x: number; y: number }> = {};
-      for (const kp of firstFrame.keypoints) {
-        pixelKps[kp.name] = { x: kp.x * vw, y: kp.y * vh };
-      }
-      drawSkeleton(ctx, pixelKps, topoStyle);
-      setLandmarkDrawn(true);
+      canvas.toBlob((blob) => {
+        if (cancelled || !blob) return;
+        setFirstFrameFile(new File([blob], "first-frame.png", { type: "image/png" }));
+      }, "image/png");
       video.removeEventListener("seeked", onSeeked);
     };
 
@@ -353,8 +348,28 @@ function UploadPageInner() {
     video.addEventListener("loadeddata", () => {
       video.currentTime = 0;
     }, { once: true });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, activeAttemptId, videoPreviewUrl]);
+
+  // Build animated skeleton frames from all pose frames in video-pixel space.
+  // No homography needed — this is for the first-frame landmark preview.
+  const firstFrameSkeletonData = useMemo(() => {
+    if (!activeAttempt) return null;
+    const { frames, videoMeta } = activeAttempt;
+    if (!frames.length) return null;
+    const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
+    const firstTs = sorted[0].timestamp;
+    const lastTs = sorted[sorted.length - 1].timestamp;
+    const duration = Math.max(lastTs - firstTs, 0.1);
+    const renderedFrames: RenderedSkeletonFrame[] = sorted.map(f => ({
+      timestamp: f.timestamp - firstTs,
+      keypoints: Object.fromEntries(
+        f.keypoints.map(kp => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }])
+      ),
+    }));
+    return { frames: renderedFrames, duration };
+  }, [activeAttempt]);
 
   function toggleCondition(id: string) {
     setConditions(prev => {
@@ -379,7 +394,8 @@ function UploadPageInner() {
     setSavedRouteDirHandle(null);
     setNewFileSelected(true);
     setPhase("input");
-    setLandmarkDrawn(false);
+    setEditMode(false);
+    setFirstFrameFile(null);
     // Clear route photo overlay state
     clearRoutePhoto();
   }
@@ -405,6 +421,7 @@ function UploadPageInner() {
     setRouteMatchTriggered(false);
     setExportStatus("idle");
     setExportProgress(0);
+    resetMatcher();
   }
 
   function handleRoutePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -413,6 +430,7 @@ function UploadPageInner() {
     setRoutePhotoWithPreview(file);
     setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
     setRouteMatchTriggered(false);
+    resetMatcher();
   }
 
   function handleApplyRouteMatch() {
@@ -422,10 +440,15 @@ function UploadPageInner() {
   }
 
   function handleEditClimb() {
+    setEditMode(true);
     setPhase("input");
-    setNewFileSelected(true);
-    setLandmarkDrawn(false);
+    setFirstFrameFile(null);
     clearRoutePhoto();
+  }
+
+  function handleBackToResultsFromEdit() {
+    setEditMode(false);
+    setPhase("results");
   }
 
   function handleViewOnRoutePhoto() {
@@ -543,8 +566,9 @@ function UploadPageInner() {
     if (!pendingFile || !model || !cv) return;
     setShowCropWarning(false);
     setNewFileSelected(false);
+    setEditMode(false);
     setPhase("input");
-    setLandmarkDrawn(false);
+    setFirstFrameFile(null);
     clearRoutePhoto();
     process(pendingFile, model, cv, frameStep, { state, area, route, runType, rating: rating || undefined, notes: notes || undefined }, {
       climberCrop,
@@ -690,8 +714,21 @@ function UploadPageInner() {
         </button>
       </div>
 
-      {/* Crop UI — shown after file selected, before processing */}
-      {videoPreviewUrl && pendingFile && !isProcessing && !isDone && phase === "input" && (
+      {/* Edit-mode banner — return to results without re-processing */}
+      {editMode && activeAttempt && (
+        <button
+          onClick={handleBackToResultsFromEdit}
+          className="self-start flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Back to results
+        </button>
+      )}
+
+      {/* Crop UI — shown after file selected, before processing (or in edit mode) */}
+      {videoPreviewUrl && pendingFile && !isProcessing && (!isDone || editMode) && phase === "input" && (
         <div className="flex flex-col gap-3">
           {/* Crop mode toggle */}
           <div className="flex flex-col gap-2">
@@ -1124,14 +1161,17 @@ function UploadPageInner() {
             </p>
           </div>
 
-          {/* First-frame landmark preview */}
+          {/* Animated first-frame landmark preview */}
           <div className="flex flex-col gap-2">
             <p className="text-sm font-medium text-fg-light">Recorded pose landmarks</p>
-            <canvas
-              ref={landmarkCanvasRef}
-              className="w-full rounded-xl border border-edge bg-card object-contain"
-            />
-            {!landmarkDrawn && (
+            {firstFrameFile && firstFrameSkeletonData ? (
+              <FramePlayer
+                imageFile={firstFrameFile}
+                layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
+                duration={firstFrameSkeletonData.duration}
+                className="w-full rounded-xl border border-edge"
+              />
+            ) : (
               <p className="text-xs text-fg-muted text-center">Loading preview&hellip;</p>
             )}
           </div>
@@ -1142,7 +1182,8 @@ function UploadPageInner() {
             <SkeletonStylePanel onChange={setSkeletonStyle} />
           </div>
 
-          {/* View on route photo — opens file picker */}
+          {/* View on route photo — opens file picker (requires ORB features) */}
+          {orbReady && (
           <label
             className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover"
           >
@@ -1157,6 +1198,7 @@ function UploadPageInner() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
+                resetMatcher();
                 setRoutePhotoWithPreview(file);
                 setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
                 setRouteMatchTriggered(false);
@@ -1164,6 +1206,7 @@ function UploadPageInner() {
               }}
             />
           </label>
+          )}
 
           {/* Edit climb — go back to pre-process state */}
           <button
