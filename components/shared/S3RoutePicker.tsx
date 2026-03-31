@@ -224,8 +224,8 @@ function RouteAnalysisGraph({
 }
 
 interface S3RoutePickerProps {
-  /** Called when an attempt is successfully loaded from S3. */
-  onLoad: (attempt: RouteAttempt) => void;
+  /** Called when an attempt is successfully loaded from S3. Second param is the S3 object key (absent for local file loads). */
+  onLoad: (attempt: RouteAttempt, entryKey?: string) => void;
   /** Called when the route image changes (fetched from S3 or newly uploaded). Null when no image. */
   onRouteImageLoaded?: (dataUrl: string | null) => void;
   /** Button label. */
@@ -242,6 +242,12 @@ interface S3RoutePickerProps {
   pulseButtons?: boolean;
   /** When true, the S3 panel opens automatically and the S3 load button is hidden. */
   alwaysOpen?: boolean;
+  /** When true, entries show Select/Remove toggle instead of Load. */
+  selectable?: boolean;
+  /** S3 entry keys currently selected (used with selectable mode). */
+  selectedKeys?: ReadonlySet<string>;
+  /** Called when an entry is deselected in selectable mode. */
+  onDeselect?: (entryKey: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +271,9 @@ export default function S3RoutePicker({
   defaultRoute,
   pulseButtons = false,
   alwaysOpen = false,
+  selectable = false,
+  selectedKeys,
+  onDeselect,
 }: S3RoutePickerProps) {
   const { listPrefixes, listAttempts, downloadAttempt, deleteAttempt, userPrefix, status } = useS3Storage();
 
@@ -478,8 +487,8 @@ export default function S3RoutePicker({
     try {
       const attempt = await downloadAttempt(entry.key);
       saveAttempt(attempt);
-      onLoad(attempt);
-      setOpen(false);
+      onLoad(attempt, entry.key);
+      if (!selectable) setOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load attempt.");
     } finally {
@@ -697,6 +706,7 @@ export default function S3RoutePicker({
                       key={entry.key}
                       className={[
                         "flex flex-col transition",
+                        selectable && selectedKeys?.has(entry.key) ? "ring-1 ring-accent/40" : "",
                         isSend
                           ? "bg-emerald-950/20 text-emerald-300"
                           : "bg-amber-950/20 text-amber-300",
@@ -735,16 +745,26 @@ export default function S3RoutePicker({
                           )}
                         </button>
                         <div className="flex items-center gap-1 shrink-0 ml-3">
-                          <button
-                            onClick={() => handleAttemptSelect(entry)}
-                            disabled={status === "loading" || isPendingDelete}
-                            className={[
-                              "rounded px-3 py-1.5 text-xs font-semibold bg-accent text-surface hover:opacity-90 transition disabled:opacity-40",
-                              pulseButtons && !isExpanded ? "animate-pulse" : "",
-                            ].join(" ")}
-                          >
-                            Load
-                          </button>
+                          {selectable && selectedKeys?.has(entry.key) ? (
+                            <button
+                              onClick={() => onDeselect?.(entry.key)}
+                              disabled={isPendingDelete}
+                              className="rounded px-3 py-1.5 text-xs font-semibold bg-emerald-900/40 text-emerald-400 hover:bg-red-900/40 hover:text-red-400 transition disabled:opacity-40"
+                            >
+                              Selected ✓
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleAttemptSelect(entry)}
+                              disabled={status === "loading" || isPendingDelete}
+                              className={[
+                                "rounded px-3 py-1.5 text-xs font-semibold bg-accent text-surface hover:opacity-90 transition disabled:opacity-40",
+                                pulseButtons && !isExpanded ? "animate-pulse" : "",
+                              ].join(" ")}
+                            >
+                              {selectable ? "Select" : "Load"}
+                            </button>
+                          )}
                           {isPendingDelete ? (
                             <div className="flex items-center gap-1.5">
                               <button

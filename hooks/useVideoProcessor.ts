@@ -29,6 +29,14 @@ type CV = any;
 export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 
+/**
+ * Module-level monotonic counter (seconds) for MediaPipe timestamps.
+ * Each run advances by the video duration + gap so detectForVideo()
+ * always receives strictly increasing ms values that stay well within
+ * int32 range (~2.15 billion ms ≈ 596 hours total capacity).
+ */
+let nextMpTimestampSec = 1;
+
 export interface VideoProcessorResult {
   /**
    * Start processing the supplied video File.
@@ -164,13 +172,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const frameCaptures: FrameCapture[] = [];
         let lastHipCenter: HipCenter | null = null;
 
-        // MediaPipe requires strictly increasing timestamps across ALL
-        // detectForVideo() calls — even across different videos.  Using
-        // Date.now() as a per-run base guarantees monotonicity because
-        // epoch milliseconds always increase between runs.   The offset
-        // is only used for the MediaPipe call; PoseFrame.timestamp keeps
-        // the real video time so interpolation / playback stay correct.
-        const mpTimestampBaseMs = Date.now();
+        // Offset ensuring MediaPipe receives strictly increasing timestamps
+        // across runs without overflowing int32 (max ≈ 2 147 483 647 ms).
+        // A module-level counter advances by each video's duration + gap,
+        // keeping cumulative milliseconds well under the limit.
+        const mpTimestampBase = nextMpTimestampSec;
+        nextMpTimestampSec += duration + 2;
 
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
@@ -249,7 +256,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             const frame = await estimateFrameUnified(
               detector, poseCanvas,
-              mpTimestampBaseMs / 1000 + video.currentTime, // monotonically increasing for MediaPipe
+              mpTimestampBase + video.currentTime, // monotonically increasing for MediaPipe
               backend,
             );
             if (frame) {

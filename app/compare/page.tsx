@@ -17,7 +17,6 @@ import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { getTopology } from "@/utils/poseConstants";
-import { sanitizeDirName } from "@/utils/fsHelpers";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -372,7 +371,6 @@ function OverlayPlayer({
 // ---------------------------------------------------------------------------
 
 const MAX_SLOTS = 4;
-const INITIAL_SLOTS = 2;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -389,7 +387,6 @@ function ComparePageInner() {
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
-  const [slotCount, setSlotCount] = useState(INITIAL_SLOTS);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
@@ -399,6 +396,15 @@ function ComparePageInner() {
   const [viewMode, setViewMode] = useState<ViewMode>("sidebyside");
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
+  );
+
+  // Track which S3 entry key is loaded in each slot for toggle-select.
+  const [slotKeys, setSlotKeys] = useState<(string | null)[]>(
+    () => Array.from({ length: MAX_SLOTS }, () => null),
+  );
+  const selectedKeys = useMemo(
+    () => new Set(slotKeys.filter((k): k is string => k !== null)),
+    [slotKeys],
   );
 
   // One hex limb color per slot; pre-populated from defaults so each slot
@@ -417,16 +423,26 @@ function ComparePageInner() {
   const [matchTrigger, setMatchTrigger] = useState(0);
   const [cropConfirmed, setCropConfirmed] = useState(false);
 
-  // Auto-populate state/area/route from the first loaded run.
-  const [defaultState, setDefaultState] = useState<string | undefined>();
-  const [defaultArea, setDefaultArea] = useState<string | undefined>();
-  const [defaultRoute, setDefaultRoute] = useState<string | undefined>();
+  // Dropdown state for "Update route photo" button.
+  const [showUpdateMenu, setShowUpdateMenu] = useState(false);
+  const updateMenuRef = useRef<HTMLDivElement>(null);
 
   // FramePlayer refs for master play control (side-by-side).
   const playerRefs = useRef<(FramePlayerHandle | null)[]>(
     Array.from({ length: MAX_SLOTS }, () => null),
   );
   const [masterPlaying, setMasterPlaying] = useState(false);
+
+  // Close update menu on outside click.
+  useEffect(() => {
+    function onPointerDown(e: PointerEvent) {
+      if (updateMenuRef.current && !updateMenuRef.current.contains(e.target as Node)) {
+        setShowUpdateMenu(false);
+      }
+    }
+    if (showUpdateMenu) document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showUpdateMenu]);
 
   // Revoke objectURL on unmount.
   useEffect(() => {
@@ -457,21 +473,23 @@ function ComparePageInner() {
     });
   }, []);
 
-  function handleLoadAttempt(idx: number, attempt: RouteAttempt) {
+  function handleSelectAttempt(attempt: RouteAttempt, entryKey?: string) {
+    const idx = attempts.findIndex(a => a === null);
+    if (idx === -1) return; // all slots full
+
     setAttempts(prev => {
       const next = [...prev];
       next[idx] = attempt;
-      // Auto-populate defaults from the first loaded run.
-      const isFirstRun = prev.every(a => a === null);
-      if (isFirstRun) {
-        setDefaultState(attempt.state ? sanitizeDirName(attempt.state) : undefined);
-        setDefaultArea(attempt.area ? sanitizeDirName(attempt.area) : undefined);
-        setDefaultRoute(attempt.route ? sanitizeDirName(attempt.route) : undefined);
-      }
       return next;
     });
-    // Clear stale match result for this slot so CompareSlot re-runs matching
-    // when a new climb is selected without requiring a page reload.
+    if (entryKey) {
+      setSlotKeys(prev => {
+        const next = [...prev];
+        next[idx] = entryKey;
+        return next;
+      });
+    }
+    // Clear stale match result for this slot.
     setMatchResults(prev => {
       const next = [...prev];
       next[idx] = null;
@@ -481,6 +499,14 @@ function ComparePageInner() {
     if (imageFile && cropConfirmed) {
       setMatchTrigger(t => t + 1);
     }
+  }
+
+  function handleDeselectAttempt(entryKey: string) {
+    const idx = slotKeys.indexOf(entryKey);
+    if (idx === -1) return;
+    setAttempts(prev => { const n = [...prev]; n[idx] = null; return n; });
+    setSlotKeys(prev => { const n = [...prev]; n[idx] = null; return n; });
+    setMatchResults(prev => { const n = [...prev]; n[idx] = null; return n; });
   }
 
   function handleColorChange(idx: number, hex: string) {
@@ -499,6 +525,7 @@ function ComparePageInner() {
     setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
     setCropConfirmed(false);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    setShowUpdateMenu(false);
   }
 
   function handleCameraCapture(file: File) {
@@ -508,9 +535,10 @@ function ComparePageInner() {
     setCropConfirmed(false);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
     setShowCamera(false);
+    setShowUpdateMenu(false);
   }
 
-  // Auto-populate route image from S3 when slot 0 loads a climb with a route photo.
+  // Auto-populate route image from S3 when route has a route photo.
   const handleRouteImageLoaded = useCallback((dataUrl: string | null) => {
     if (!dataUrl || userPickedImage || routeImageConvertingRef.current) return;
     routeImageConvertingRef.current = true;
@@ -525,7 +553,8 @@ function ComparePageInner() {
     setMatchTrigger(t => t + 1);
   }
 
-  const anyLoaded = attempts.slice(0, slotCount).some(Boolean);
+  const activeSlots = attempts.filter(Boolean).length;
+  const anyLoaded = activeSlots > 0;
 
   return (
     <div className="flex-1 bg-surface">
@@ -534,101 +563,30 @@ function ComparePageInner() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold tracking-tight text-fg">Compare Climbs</h1>
         <p className="text-sm text-fg-secondary">
-          Load multiple climbs and overlay or compare them side by side on the same route photo.
+          Select a route, then toggle climbs to compare them side by side or overlaid on the same route photo.
         </p>
       </div>
 
-      {/* Run slots — climb pickers only (players rendered below mode buttons) */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-fg-light">Climbs</p>
-          {slotCount < MAX_SLOTS && (
-            <button
-              onClick={() => setSlotCount(c => c + 1)}
-              className="text-xs text-fg-muted hover:text-fg-light transition"
-            >
-              + Add climb
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: slotCount }, (_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <input
-                type="color"
-                value={slotColors[i]}
-                onChange={(e) => handleColorChange(i, e.target.value)}
-                className="h-7 w-7 cursor-pointer rounded border border-edge bg-transparent p-0.5"
-                title={`Climb ${i + 1} skeleton color`}
-                aria-label={`Climb ${i + 1} skeleton color`}
-              />
-              <div className="min-w-0 flex-1">
-                <S3RoutePicker
-                  label={
-                    attempts[i]
-                      ? `Change Climb ${i + 1}`
-                      : `Load Climb ${i + 1}`
-                  }
-                  onLoad={(att) => handleLoadAttempt(i, att)}
-                  compact
-                  defaultState={defaultState}
-                  defaultArea={defaultArea}
-                  defaultRoute={defaultRoute}
-                  pulseButtons={i === 0 && !!imageFile && !anyLoaded}
-                  onRouteImageLoaded={i === 0 ? handleRouteImageLoaded : undefined}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
+      {/* Single shared route picker with selectable climb entries */}
+      <div className="flex flex-col gap-3">
+        <S3RoutePicker
+          label="Select Route"
+          alwaysOpen
+          selectable
+          selectedKeys={selectedKeys}
+          onLoad={handleSelectAttempt}
+          onDeselect={handleDeselectAttempt}
+          onRouteImageLoaded={handleRouteImageLoaded}
+        />
       </div>
 
       {/* Route photo */}
       <div className="flex flex-col gap-3">
         <p className="text-sm font-medium text-fg-light">Route photo</p>
-        <div className="grid grid-cols-2 gap-3">
-          {/* Select from file */}
-          <label
-            className={[
-              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
-              !imageFile ? "animate-pulse border-accent/30" : "",
-            ].join(" ")}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
-            </svg>
-            <span className="font-medium text-fg">{imageFile ? imageFile.name : "Select route photo"}</span>
-            <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
-            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-          </label>
 
-          {/* Take with camera */}
-          <button
-            type="button"
-            onClick={() => setShowCamera(true)}
-            className={[
-              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-              "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
-              !imageFile ? "animate-pulse border-accent/30" : "",
-            ].join(" ")}
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-            </svg>
-            <span className="font-medium text-fg">Take a photo</span>
-            <span className="text-xs text-fg-light">Opens camera</span>
-          </button>
-        </div>
-
-        {/* Crop UI — shown after image selected, before match triggered */}
-        {imagePreviewUrl && imageFile && !cropConfirmed && (
+        {imageFile && imagePreviewUrl ? (
+          /* Image exists — show preview with update button in corner */
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-fg-secondary">
-              Adjust the crop region to focus ORB matching on the relevant wall area.
-            </p>
             <div className="relative w-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -636,29 +594,106 @@ function ComparePageInner() {
                 alt="Route photo"
                 className="max-h-[32rem] w-full rounded-xl border border-edge bg-card object-contain"
               />
-              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
+              {!cropConfirmed && <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />}
+
+              {/* Update route photo — corner dropdown */}
+              <div ref={updateMenuRef} className="absolute top-2 right-2">
+                <button
+                  onClick={() => setShowUpdateMenu(v => !v)}
+                  className="flex items-center gap-1.5 rounded-lg bg-surface/80 backdrop-blur px-3 py-1.5 text-xs font-medium text-fg-light border border-edge hover:bg-surface hover:text-fg transition shadow-sm"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+                  </svg>
+                  Update photo
+                </button>
+                {showUpdateMenu && (
+                  <div className="absolute right-0 mt-1 w-44 rounded-lg border border-edge bg-card shadow-lg overflow-hidden z-10">
+                    <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-light hover:bg-inset transition">
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                      </svg>
+                      Select file
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    </label>
+                    <button
+                      onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-light hover:bg-inset transition"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+                      </svg>
+                      Take a photo
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <button
-              onClick={handleApplyAndMatch}
-              disabled={!anyLoaded}
-              className={[
-                "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50",
-                anyLoaded ? "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse" : "",
-              ].join(" ")}
-            >
-              Apply &amp; View
-            </button>
-            {!anyLoaded && (
-              <p className="text-xs text-fg-muted">Load at least one climb below to enable matching.</p>
+
+            {/* Apply & View button — shown before crop is confirmed */}
+            {!cropConfirmed && (
+              <>
+                <p className="text-xs text-fg-secondary">
+                  Adjust the crop region to focus ORB matching on the relevant wall area.
+                </p>
+                <button
+                  onClick={handleApplyAndMatch}
+                  disabled={!anyLoaded}
+                  className={[
+                    "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50",
+                    anyLoaded ? "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse" : "",
+                  ].join(" ")}
+                >
+                  Apply &amp; View
+                </button>
+                {!anyLoaded && (
+                  <p className="text-xs text-fg-muted">Select at least one climb above to enable matching.</p>
+                )}
+              </>
             )}
           </div>
-        )}
+        ) : (
+          /* No image yet — show upload / camera cards */
+          <div className="grid grid-cols-2 gap-3">
+            <label
+              className={[
+                "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+                "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
+                "animate-pulse border-accent/30",
+              ].join(" ")}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+              </svg>
+              <span className="font-medium text-fg">Select route photo</span>
+              <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+            </label>
 
+            <button
+              type="button"
+              onClick={() => setShowCamera(true)}
+              className={[
+                "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+                "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
+                "animate-pulse border-accent/30",
+              ].join(" ")}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+              </svg>
+              <span className="font-medium text-fg">Take a photo</span>
+              <span className="text-xs text-fg-light">Opens camera</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* View mode + skeleton style dropdown + master play */}
       {anyLoaded && imageFile && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {([ "sidebyside", "overlay"] as ViewMode[]).map(mode => (
             <button
               key={mode}
@@ -690,7 +725,7 @@ function ComparePageInner() {
               onClick={() => {
                 const next = !masterPlaying;
                 setMasterPlaying(next);
-                for (let i = 0; i < slotCount; i++) {
+                for (let i = 0; i < MAX_SLOTS; i++) {
                   const ref = playerRefs.current[i];
                   if (ref) {
                     if (next) ref.play();
@@ -714,11 +749,29 @@ function ComparePageInner() {
               )}
             </button>
           )}
+
+          {/* Slot color pickers */}
+          {cropConfirmed && (
+            <div className="flex items-center gap-1 ml-auto">
+              {Array.from({ length: MAX_SLOTS }, (_, i) =>
+                attempts[i] ? (
+                  <input
+                    key={i}
+                    type="color"
+                    value={slotColors[i]}
+                    onChange={(e) => handleColorChange(i, e.target.value)}
+                    className="h-6 w-6 cursor-pointer rounded border border-edge bg-transparent p-0.5"
+                    title={`Climb ${i + 1} color`}
+                    aria-label={`Climb ${i + 1} skeleton color`}
+                  />
+                ) : null,
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Climb slots — always rendered to preserve matching state;
-          positioned below the mode buttons per user request. */}
+      {/* Climb slots — always rendered to preserve matching state */}
       <div
         className={
           viewMode === "sidebyside"
@@ -726,7 +779,7 @@ function ComparePageInner() {
             : "flex flex-col gap-4"
         }
       >
-        {Array.from({ length: slotCount }, (_, i) =>
+        {Array.from({ length: MAX_SLOTS }, (_, i) =>
           attempts[i] ? (
             <CompareSlot
               key={i}
@@ -756,7 +809,7 @@ function ComparePageInner() {
           </p>
           {/* Color legend */}
           <div className="flex flex-wrap gap-3 text-xs">
-            {attempts.slice(0, slotCount).map((att, i) =>
+            {attempts.map((att, i) =>
               att ? (
                 <span key={i} className="flex items-center gap-1.5 text-fg-secondary">
                   <span
@@ -770,10 +823,10 @@ function ComparePageInner() {
           </div>
           <OverlayPlayer
             imageFile={imageFile}
-            matchResults={matchResults.slice(0, slotCount)}
-            attempts={attempts.slice(0, slotCount)}
+            matchResults={matchResults}
+            attempts={attempts}
             cv={cv}
-            slotColors={slotColors.slice(0, slotCount)}
+            slotColors={slotColors}
             lineWidth={skeletonLineWidth}
             pointRadius={skeletonPointRadius}
           />

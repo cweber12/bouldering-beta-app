@@ -204,6 +204,12 @@ function UploadPageInner() {
           if (!res.ok) return;
           const raw = (await res.json()) as Record<string, unknown>;
           if (typeof raw.rating === "string" && raw.rating) setRating(raw.rating);
+          if (raw.coordinates && typeof raw.coordinates === "object") {
+            const c = raw.coordinates as { lat?: number; lng?: number };
+            if (typeof c.lat === "number" && typeof c.lng === "number") {
+              setCoordinates({ lat: c.lat, lng: c.lng });
+            }
+          }
         } catch { /* ignore */ }
       }).catch(() => {});
     }
