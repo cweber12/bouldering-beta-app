@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import { useAuth } from "@/hooks/useAuth";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { useGeocoding } from "@/hooks/useGeocoding";
+import ImageCropper from "@/components/shared/ImageCropper";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,39 +33,22 @@ interface SearchResult {
 const EMPTY_PROFILE: ProfileData = { displayName: "", location: "", bio: "", profilePicture: "" };
 const TEXT_LIMIT = 500;
 
-/** Compress an image File to a data URL (max 256×256, JPEG 80%). */
-async function compressAvatar(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX = 256;
-      const scale = Math.min(1, MAX / img.naturalWidth, MAX / img.naturalHeight);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.naturalWidth * scale);
-      canvas.height = Math.round(img.naturalHeight * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.8));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
-    img.src = url;
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Profile page
 // ---------------------------------------------------------------------------
 
 export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
+  const { request: geoRequest, loading: geoLoading } = useGeolocation();
+  const { reverseGeocode } = useGeocoding();
 
   const [profile, setProfile] = useState<ProfileData>(EMPTY_PROFILE);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Photo cropper
+  const [showCropper, setShowCropper] = useState(false);
 
   // Search & follow
   const [searchQuery, setSearchQuery] = useState("");
@@ -176,16 +162,25 @@ export default function ProfilePage() {
 
   // ------ Avatar upload ---------------------------------------------------
 
-  const handleAvatarChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const dataUrl = await compressAvatar(file);
-      setProfile((p) => ({ ...p, profilePicture: dataUrl }));
-    } catch (err) {
-      console.error("[profile] avatar compress:", err);
-    }
+  const handleCropDone = useCallback((dataUrl: string) => {
+    setProfile((p) => ({ ...p, profilePicture: dataUrl }));
+    setShowCropper(false);
   }, []);
+
+  // ------ GPS for location ------------------------------------------------
+
+  const handleUseGPS = useCallback(async () => {
+    const geo = await geoRequest();
+    if (!geo) return;
+    const result = await reverseGeocode(geo.lat, geo.lng);
+    if (result) {
+      const { city, town, village, county, state, country } = result.address ?? {};
+      const locality = city ?? town ?? village ?? county ?? "";
+      const region = state ?? country ?? "";
+      const locationStr = [locality, region].filter(Boolean).join(", ");
+      if (locationStr) setProfile((p) => ({ ...p, location: locationStr }));
+    }
+  }, [geoRequest, reverseGeocode]);
 
   // ------ Search ----------------------------------------------------------
 
@@ -279,17 +274,16 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="cursor-pointer rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg">
-              Upload photo
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
-            </label>
+            <button
+              type="button"
+              onClick={() => setShowCropper(true)}
+              className="cursor-pointer rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            >
+              {profile.profilePicture ? "Change photo" : "Upload photo"}
+            </button>
             {profile.profilePicture && (
               <button
+                type="button"
                 onClick={() => setProfile((p) => ({ ...p, profilePicture: "" }))}
                 className="text-xs text-fg-muted hover:text-fg-secondary"
               >
@@ -298,6 +292,16 @@ export default function ProfilePage() {
             )}
           </div>
         </section>
+
+        {/* ---- Photo cropper modal ---- */}
+        {showCropper && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+            <div className="w-full max-w-lg rounded-2xl border border-edge bg-surface p-6 shadow-2xl">
+              <h2 className="mb-4 text-sm font-semibold text-fg">Crop profile photo</h2>
+              <ImageCropper onCrop={handleCropDone} onCancel={() => setShowCropper(false)} />
+            </div>
+          </div>
+        )}
 
         {/* ---- Profile fields ---- */}
         <section className="mb-8 flex flex-col gap-4">
@@ -319,14 +323,32 @@ export default function ProfilePage() {
             <label className="mb-1 block text-xs font-medium text-fg-secondary">
               Location
             </label>
-            <input
-              type="text"
-              maxLength={TEXT_LIMIT}
-              value={profile.location}
-              onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
-              placeholder="e.g. Boulder, CO"
-              className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                maxLength={TEXT_LIMIT}
+                value={profile.location}
+                onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
+                placeholder="e.g. Boulder, CO"
+                className="flex-1 rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleUseGPS}
+                disabled={geoLoading}
+                title="Use current location"
+                className="flex shrink-0 items-center justify-center rounded-lg border border-edge bg-inset px-2.5 py-2 text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+              >
+                {geoLoading ? (
+                  <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-edge border-t-accent" />
+                ) : (
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
 
           <div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 
@@ -10,11 +11,15 @@ import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useS3Storage } from "@/hooks/useS3Storage";
+import { useGeolocation } from "@/hooks/useGeolocation";
+import { useGeocoding } from "@/hooks/useGeocoding";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { RunType } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
+
+const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 
 // ---------------------------------------------------------------------------
 // RouteData folder name
@@ -140,6 +145,14 @@ function UploadPageInner() {
 
   // Crop adjustment confirmation dialog
   const [showCropWarning, setShowCropWarning] = useState(false);
+
+  // GPS coordinate tagging
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(
+    () => restoredAttempt?.coordinates ?? null,
+  );
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const { request: geoRequest, loading: geoLoading } = useGeolocation();
+  const { reverseGeocode } = useGeocoding();
 
   // S3-backed suggestions for location fields
   const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
@@ -357,12 +370,26 @@ function UploadPageInner() {
         runType,
         rating: rating || undefined,
         notes: notes || undefined,
+        coordinates: coordinates ?? undefined,
       };
       await uploadAttempt(attemptToUpload);
       setS3Saved(true);
       setLocationWarning(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
+    }
+  }
+
+  async function handleUseGPS() {
+    const geo = await geoRequest();
+    if (!geo) return;
+    setCoordinates({ lat: geo.lat, lng: geo.lng });
+    const result = await reverseGeocode(geo.lat, geo.lng);
+    if (result?.address) {
+      const { state: addrState, city, town, village, county } = result.address;
+      if (addrState && !state.trim()) handleStateChange(addrState);
+      const locality = city ?? town ?? village ?? county ?? "";
+      if (locality && !area.trim()) handleAreaChange(locality);
     }
   }
 
@@ -654,6 +681,57 @@ function UploadPageInner() {
             placeholder="e.g. The Classic"
             disabled={isProcessing}
           />
+
+          {/* GPS coordinate tagging */}
+          <div className="flex flex-col gap-2 pt-1">
+            <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
+            {coordinates ? (
+              <div className="flex items-center justify-between rounded-lg border border-success/40 bg-success/10 px-3 py-2">
+                <span className="text-xs text-success font-mono">
+                  {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCoordinates(null)}
+                  className="ml-2 text-xs text-fg-muted hover:text-red-400 transition"
+                  aria-label="Clear coordinates"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-fg-muted">No coordinates tagged.</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleUseGPS}
+                disabled={geoLoading || isProcessing}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+              >
+                {geoLoading ? (
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
+                ) : (
+                  <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                  </svg>
+                )}
+                Use GPS
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMapPicker(true)}
+                disabled={isProcessing}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+              >
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                Pick on map
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* ── Climb type ───────────────────────────── */}
@@ -897,6 +975,24 @@ function UploadPageInner() {
           onCapture={handleCameraCapture}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
+      {/* Map picker modal */}
+      {showMapPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+          <div className="w-full max-w-2xl rounded-2xl border border-edge bg-surface p-5 shadow-2xl">
+            <h2 className="mb-3 text-sm font-semibold text-fg">Pick climb location on map</h2>
+            <MapPicker
+              initialLat={coordinates?.lat}
+              initialLng={coordinates?.lng}
+              onConfirm={(lat, lng) => {
+                setCoordinates({ lat, lng });
+                setShowMapPicker(false);
+              }}
+              onCancel={() => setShowMapPicker(false)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

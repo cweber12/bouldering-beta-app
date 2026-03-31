@@ -88,6 +88,8 @@ export interface RouteAttempt {
    * actually executed (every N-th sampled frame). Null for indoor mode.
    */
   frameCaptures: FrameCapture[] | null;
+  /** GPS coordinates tagged at upload time. Optional. */
+  coordinates?: { lat: number; lng: number };
 }
 
 // Module-level store — shared across all hook/component instances.

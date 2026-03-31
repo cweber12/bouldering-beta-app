@@ -2,10 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import { attemptTimestampLabel, parseRunType } from "@/utils/fsHelpers";
+import type { ClimbPin } from "@/components/map/ClimbsMap";
+
+const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,6 +63,10 @@ export default function PublicProfilePage() {
 
   const [climbs, setClimbs] = useState<ClimbEntry[]>([]);
   const [loadingClimbs, setLoadingClimbs] = useState(true);
+
+  const [pins, setPins] = useState<ClimbPin[]>([]);
+  const [loadingPins, setLoadingPins] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   const [following, setFollowing] = useState<string[]>([]);
   const isOwnProfile = user?.id === userId;
@@ -136,7 +144,26 @@ export default function PublicProfilePage() {
     return () => { cancelled = true; };
   }, [userId]);
 
-  // ------ Load following list ---------------------------------------------
+  // ------ Load follow list + pins lazily when map is opened ------------
+
+  useEffect(() => {
+    if (!showMap || !userId) return;
+    let cancelled = false;
+    setLoadingPins(true);
+
+    (async () => {
+      try {
+        const res = await fetch(`/api/profile/${userId}/pins`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { pins?: ClimbPin[] };
+        if (!cancelled && Array.isArray(data.pins)) setPins(data.pins);
+      } catch { /* ignore */ } finally {
+        if (!cancelled) setLoadingPins(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [showMap, userId]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -274,6 +301,38 @@ export default function PublicProfilePage() {
               </Link>
             )}
           </div>
+        </section>
+
+        <hr className="mb-6 border-edge" />
+
+        {/* ---- Climb map ---- */}
+        <section className="mb-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-fg">Climb map</h2>
+            <button
+              type="button"
+              onClick={() => setShowMap((v) => !v)}
+              className="text-xs text-fg-secondary transition hover:text-accent"
+            >
+              {showMap ? "Hide map" : "Show map"}
+            </button>
+          </div>
+
+          {showMap && (
+            <div className="rounded-xl border border-edge overflow-hidden">
+              {loadingPins ? (
+                <div className="flex items-center justify-center h-40 text-xs text-fg-muted">
+                  Loading pins&#8230;
+                </div>
+              ) : pins.length === 0 ? (
+                <div className="flex items-center justify-center h-40 text-xs text-fg-muted">
+                  No GPS-tagged climbs yet.
+                </div>
+              ) : (
+                <ClimbsMap pins={pins} height={400} />
+              )}
+            </div>
+          )}
         </section>
 
         <hr className="mb-6 border-edge" />

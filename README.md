@@ -43,7 +43,7 @@ skeletons render correctly. The match page exposes a style panel
 | `/match` | Match a route photo and download the pose overlay | Yes |
 | `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
 | `/profile` | Edit your profile picture, bio, location; search & follow users | Yes |
-| `/profile/[userId]` | View another user's public profile and climbs | Yes |
+| `/profile/[userId]` | View another user's public profile, climbs, and climb map | Yes |
 | `/docs` | Usage guide | No |
 
 ## Interactive crop boxes
@@ -97,6 +97,35 @@ Each saved run may include a scaled-down PNG thumbnail of the middle video frame
 with ORB keypoints drawn as green dots. The thumbnail is stored as a data URL in
 the JSON and displayed inline in the route picker alongside climb information.
 
+## Location & Maps
+
+Climb locations are captured via two mechanisms, both of which require no API key:
+
+- **GPS auto-fill** — a crosshair button on the upload page and the profile page
+  calls `navigator.geolocation` to get the device's current coordinates. On the
+  upload page the coordinates are stored with the run and the state/area fields
+  are auto-populated via **Nominatim** (OpenStreetMap reverse geocoding). On the
+  profile page the location field is auto-populated with the nearest locality.
+
+- **Map picker** — a "Pick on map" button on the upload page opens a full-screen
+  **Leaflet** map with an **OpenTopoMap** tile layer (topo contours + hiking trails)
+  where the user can click or drag a pin to select a precise climb location.
+
+- **Location autocomplete** — the location autocomplete component (`LocationAutocomplete`)
+  queries Nominatim forward-search with a 500 ms debounce and displays a dropdown
+  of up to five suggestions.
+
+- **Climbs map** — the public profile page (`/profile/[userId]`) includes an
+  interactive Leaflet map showing all of the user's GPS-tagged climbs as colour-coded
+  pins (amber = attempt, emerald = send). Nearby pins are automatically clustered
+  via **leaflet.markercluster**; clicking a cluster or hovering a pin reveals a
+  popup listing each climb.
+
+- **Profile photo crop** — the profile page replaces the plain avatar upload with a
+  circular crop editor (`react-image-crop`) that lets users zoom and reposition
+  their photo before saving. The cropped image is compressed to JPEG 85 % at
+  256 × 256 px maximum before being stored as a data URL.
+
 ### Environment variables
 
 | Variable | Purpose | Example |
@@ -122,6 +151,7 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | `/api/profile` | GET/PUT | Read/update own profile |
 | `/api/profile/[userId]` | GET | Read any user's public profile |
 | `/api/profile/[userId]/climbs` | GET | List any user's climbs |
+| `/api/profile/[userId]/pins` | GET | GPS pins for a user's climbs (map view) |
 | `/api/profile/follow` | GET/POST/DELETE | List/add/remove followed users |
 | `/api/profile/search` | GET | Search users by name or email |
 
@@ -135,6 +165,9 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | Pose detection | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate) |
 | Computer vision | OpenCV.js 4.12 (WASM, main thread) |
 | Video encoding | MediaRecorder API (WebM) |
+| Maps | Leaflet + react-leaflet, OpenTopoMap tiles, leaflet.markercluster |
+| Geocoding | Nominatim (OpenStreetMap, no API key required) |
+| Photo cropping | react-image-crop (circular crop, canvas output) |
 | Testing | Vitest + jsdom + Testing Library |
 
 ## Development
