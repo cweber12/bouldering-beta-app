@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
 import ImageCropper from "@/components/shared/ImageCropper";
+import LocationAutocomplete from "@/components/shared/LocationAutocomplete";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -324,14 +325,13 @@ export default function ProfilePage() {
               Location
             </label>
             <div className="flex gap-2">
-              <input
-                type="text"
-                maxLength={TEXT_LIMIT}
-                value={profile.location}
-                onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
-                placeholder="e.g. Boulder, CO"
-                className="flex-1 rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
-              />
+              <div className="flex-1 min-w-0">
+                <LocationAutocomplete
+                  value={profile.location}
+                  onChange={(v) => setProfile((p) => ({ ...p, location: v.slice(0, TEXT_LIMIT) }))}
+                  placeholder="e.g. Boulder, CO"
+                />
+              </div>
               <button
                 type="button"
                 onClick={handleUseGPS}
