@@ -14,7 +14,7 @@ import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
-import { getAttempt } from "@/storage/sessionStore";
+import { getAttempt, saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { getTopology } from "@/utils/poseConstants";
@@ -58,10 +58,12 @@ async function dataUrlToFile(dataUrl: string, filename = "route-image.jpg"): Pro
 }
 
 function MatchPageInner() {
-  const urlAttemptId = useSearchParams().get("id") ?? "";
+  const params = useSearchParams();
+  const urlAttemptId = params.get("id") ?? "";
+  const urlClimbKey = params.get("key") ?? "";
 
   const { cv } = useOpenCV();
-  const { userPrefix } = useS3Storage();
+  const { userPrefix, downloadAttempt: s3Download } = useS3Storage();
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
 
@@ -113,6 +115,25 @@ function MatchPageInner() {
       if (imagePreviewUrlRef.current) URL.revokeObjectURL(imagePreviewUrlRef.current);
     };
   }, []);
+
+  // Auto-load climb from S3 when navigating with ?key= parameter.
+  useEffect(() => {
+    if (!urlClimbKey || attempt) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await s3Download(urlClimbKey);
+        if (cancelled) return;
+        saveAttempt(loaded);
+        setAttemptId(loaded.id);
+        setAttempt(loaded);
+      } catch (err) {
+        console.error("[MatchPage] Failed to load climb from key:", err);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlClimbKey, s3Download]);
 
   /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
   function setImageFileWithPreview(file: File | null) {
@@ -240,8 +261,14 @@ function MatchPageInner() {
             the ORB reference features extracted on the Upload page.
           </p>
         </div>
-        <Link href="/upload" className="shrink-0 text-xs text-fg-muted hover:text-fg-light transition">
-          ← Back to upload
+        <Link
+          href="/upload"
+          className="shrink-0 flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          Upload page
         </Link>
       </div>
 
@@ -250,9 +277,27 @@ function MatchPageInner() {
       <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-4">
         <p className="text-sm font-medium text-fg-light">Climbs</p>
 
+        <S3RoutePicker
+          onLoad={handleLoadAttempt}
+          onRouteImageLoaded={handleRouteImageLoaded}
+          alwaysOpen
+        />
+
         {hasAttempt && (
           <div className="flex flex-col gap-3">
             <div className="rounded-lg border border-edge bg-inset px-4 py-4">
+              {/* Thumbnail image */}
+              {attempt.thumbnail && (
+                <div className="mb-3 overflow-hidden rounded-lg">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={attempt.thumbnail}
+                    alt={`${attempt.route ?? "Climb"} thumbnail`}
+                    className="w-full max-h-48 object-contain rounded-lg"
+                  />
+                </div>
+              )}
+
               {/* Route path & type header */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
@@ -300,12 +345,6 @@ function MatchPageInner() {
             )}
           </div>
         )}
-
-        <S3RoutePicker
-          onLoad={handleLoadAttempt}
-          onRouteImageLoaded={handleRouteImageLoaded}
-          alwaysOpen
-        />
       </div>
 
       {/* Skeleton style */}
@@ -463,20 +502,6 @@ function MatchPageInner() {
               </svg>
               {exportStatus === "done" ? "Download again (.webm)" : "Download pose overlay video (.webm)"}
             </button>
-          )}
-
-          {/* Load another climb for the same route */}
-          {attempt && (
-            <div className="flex flex-col gap-3 pt-2 border-t border-edge">
-              <p className="text-sm font-medium text-fg-light">Load another climb</p>
-              <S3RoutePicker
-                onLoad={handleLoadAttempt}
-                alwaysOpen
-                defaultState={attempt.state ? sanitizeDirName(attempt.state) : undefined}
-                defaultArea={attempt.area ? sanitizeDirName(attempt.area) : undefined}
-                defaultRoute={attempt.route ? sanitizeDirName(attempt.route) : undefined}
-              />
-            </div>
           )}
         </div>
       )}

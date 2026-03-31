@@ -80,7 +80,7 @@ interface LimbGroupCfg  { color: string; width: number; }
 
 const DEFAULT_JOINT_HEX = "#ffdc00";
 const DEFAULT_LIMB_HEX  = "#00dc78";
-const DEFAULT_RADIUS    = 5;
+const DEFAULT_RADIUS    = 2;
 const DEFAULT_WIDTH     = 2.5;
 
 // ---------------------------------------------------------------------------

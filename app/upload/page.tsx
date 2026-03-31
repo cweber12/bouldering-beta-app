@@ -106,7 +106,7 @@ function UploadPageInner() {
   const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
   const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
-  const { uploadAttempt, listPrefixes, userPrefix, status: s3Status } = useS3Storage();
+  const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
 
   // Restore prior attempt from session so users can return from the match page.
   const [restoredAttempt] = useState<RouteAttempt | null>(() => {
@@ -186,6 +186,27 @@ function UploadPageInner() {
 
   function handleRouteChange(val: string) {
     setRoute(val);
+
+    // Auto-populate rating from the most recent run for this route.
+    if (val.trim() && state.trim() && area.trim() && userPrefix) {
+      const prefix = `${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(area)}/${sanitizeDirName(val)}/`;
+      listAttempts(prefix).then(async (entries) => {
+        const runs = entries
+          .filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"))
+          .sort((a, b) => {
+            const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+            const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+            return tsB - tsA;
+          });
+        if (runs.length === 0) return;
+        try {
+          const res = await fetch(`/api/s3/get?key=${encodeURIComponent(runs[0].key)}`);
+          if (!res.ok) return;
+          const raw = (await res.json()) as Record<string, unknown>;
+          if (typeof raw.rating === "string" && raw.rating) setRating(raw.rating);
+        } catch { /* ignore */ }
+      }).catch(() => {});
+    }
   }
 
   // Only show the location warning while any required field is still empty.
@@ -842,8 +863,14 @@ function UploadPageInner() {
             Upload or record a climbing video to extract skeleton poses and wall reference features.
           </p>
         </div>
-        <Link href="/" className="shrink-0 text-xs text-fg-secondary transition hover:text-fg">
-          &#8592; Home
+        <Link
+          href="/match"
+          className="shrink-0 flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+        >
+          View page
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
         </Link>
       </div>
 
@@ -884,17 +911,6 @@ function UploadPageInner() {
       {/* Result actions */}
       {showResults && activeAttemptId && activeAttempt && (
         <div className="flex flex-col gap-3">
-          {/* Video preview — shown above action buttons once processing is done */}
-          {videoPreviewUrl && (
-            <video
-              src={videoPreviewUrl}
-              controls
-              muted
-              playsInline
-              className="w-full rounded-2xl border border-edge bg-surface"
-            />
-          )}
-
           <div className="rounded-2xl border border-success/25 bg-success/5 px-5 py-4">
             <p className="text-sm font-semibold text-success">Analysis complete</p>
             <p className="mt-0.5 text-xs text-success/70">

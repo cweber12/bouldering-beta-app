@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -62,7 +63,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
               alt={`${climb.route} climb`}
               fill
               unoptimized
-              className="object-cover"
+              className="object-contain"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
@@ -107,6 +108,16 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
           {climb.notes && (
             <p className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{climb.notes}</p>
           )}
+
+          <Link
+            href={`/match?key=${encodeURIComponent(climb.key)}`}
+            className="mt-4 flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-accent-hover"
+          >
+            View on route photo
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
         </div>
       </div>
     </div>

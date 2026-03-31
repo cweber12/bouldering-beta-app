@@ -87,12 +87,13 @@ export default function ClimbsMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    let L: typeof import("leaflet");
+    let aborted = false;
 
     (async () => {
       // Dynamic imports keep Leaflet out of the SSR bundle.
-      L = (await import("leaflet")).default;
+      const L = (await import("leaflet")).default;
       await import("leaflet.markercluster");
+      if (aborted) return;
 
       // Fix Leaflet's default icon path in webpack/bundler environments.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -105,7 +106,11 @@ export default function ClimbsMap({
           "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
 
-      if (!containerRef.current) return;
+      if (!containerRef.current || aborted) return;
+
+      // Guard against container already having a Leaflet map (HMR / strict mode).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((containerRef.current as any)._leaflet_id) return;
 
       const map = L.map(containerRef.current, {
         scrollWheelZoom: true,
@@ -130,10 +135,14 @@ export default function ClimbsMap({
       mapRef.current = map;
       clusterRef.current = cluster;
       map.addLayer(cluster);
+
+      // Ensure tiles render fully (fixes partial tile issue on initial mount).
+      setTimeout(() => { map.invalidateSize(); }, 100);
       setReady(true);
     })();
 
     return () => {
+      aborted = true;
       mapRef.current?.remove();
       mapRef.current = null;
       clusterRef.current = null;

@@ -164,6 +164,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const frameCaptures: FrameCapture[] = [];
         let lastHipCenter: HipCenter | null = null;
 
+        // MediaPipe requires strictly increasing timestamps across ALL
+        // detectForVideo() calls — even across different videos.  Using
+        // Date.now() as a per-run base guarantees monotonicity because
+        // epoch milliseconds always increase between runs.   The offset
+        // is only used for the MediaPipe call; PoseFrame.timestamp keeps
+        // the real video time so interpolation / playback stay correct.
+        const mpTimestampBaseMs = Date.now();
+
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
 
@@ -239,8 +247,17 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
             }
 
-            const frame = await estimateFrameUnified(detector, poseCanvas, video.currentTime, backend);
+            const frame = await estimateFrameUnified(
+              detector, poseCanvas,
+              mpTimestampBaseMs / 1000 + video.currentTime, // monotonically increasing for MediaPipe
+              backend,
+            );
             if (frame) {
+              // Restore actual video timestamp (estimateFrameUnified stored the
+              // offset-adjusted value, but downstream interpolation / playback
+              // need the real video time).
+              frame.timestamp = video.currentTime;
+
               const poseFrame: PoseFrame = appliedCropBox
                 ? {
                     ...frame,
