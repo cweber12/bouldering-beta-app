@@ -1,15 +1,18 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import LoadingGate from "@/components/shared/LoadingGate";
 
 import CropBoxOverlay, { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
+import FramePlayer from "@/components/shared/FramePlayer";
+import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
+import { useImageMatcher } from "@/hooks/useImageMatcher";
+import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -17,6 +20,9 @@ import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { RunType } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
+import { drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
+import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
@@ -107,6 +113,8 @@ function UploadPageInner() {
   const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
+  const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
+    useImageMatcher();
 
   // Restore prior attempt from session so users can return from the match page.
   const [restoredAttempt] = useState<RouteAttempt | null>(() => {
@@ -133,6 +141,32 @@ function UploadPageInner() {
   const [showCamera, setShowCamera] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
 
+  // ---- Post-processing phase ----
+  // "input" = editing / pre-process, "results" = showing landmark preview + save options,
+  // "overlay" = inline route photo overlay
+  const [phase, setPhase] = useState<"input" | "results" | "overlay">(() =>
+    restoredAttempt ? "results" : "input"
+  );
+
+  // First-frame landmark preview canvas
+  const landmarkCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [landmarkDrawn, setLandmarkDrawn] = useState(false);
+
+  // Inline route photo overlay state
+  const [routePhotoFile, setRoutePhotoFile] = useState<File | null>(null);
+  const [routePhotoPreviewUrl, setRoutePhotoPreviewUrl] = useState<string | null>(null);
+  const routePhotoPreviewUrlRef = useRef<string | null>(null);
+  const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
+  const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
+
+  // Skeleton style for overlays
+  const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
+
+  // On-demand video export state
+  const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
+  const [exportProgress, setExportProgress] = useState(0);
+  const styleRef = useRef<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
+
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [activeCropMode, setActiveCropMode] = useState<"climber" | "route">("climber");
@@ -145,6 +179,22 @@ function UploadPageInner() {
 
   // Crop adjustment confirmation dialog
   const [showCropWarning, setShowCropWarning] = useState(false);
+
+  // Derive topology-aware skeleton style
+  const activeAttemptId0 = (status === "done") ? attemptId : restoredAttempt?.id ?? null;
+  const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
+  const topoStyle: SkeletonStyle = useMemo(() => {
+    const backend = activeAttempt0?.poseBackend ?? "mediapipe";
+    const topo = getTopology(backend);
+    return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+  }, [skeletonStyle, activeAttempt0]);
+
+  // Keep styleRef in sync
+  useEffect(() => { styleRef.current = topoStyle; }, [topoStyle]);
+
+  // Pre-compute skeleton frames for the inline route photo overlay
+  const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
+    useSkeletonFrames(cv, activeAttemptId0 || null, matchResult);
 
   // GPS coordinate tagging
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(
@@ -226,7 +276,14 @@ function UploadPageInner() {
   // Persist the attempt id into session so user can return from match page.
   const activeAttemptId = isDone ? attemptId : restoredAttempt?.id ?? null;
   const activeAttempt   = activeAttemptId ? getAttempt(activeAttemptId) : null;
-  const showResults     = !newFileSelected && ((isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing));
+  const showResults     = phase !== "input" && !newFileSelected && ((isDone && orbReady) || (!isDone && !!restoredAttempt && !isProcessing));
+
+  // Switch to results phase when processing completes
+  useEffect(() => {
+    if (isDone && orbReady && phase === "input") {
+      setPhase("results");
+    }
+  }, [isDone, orbReady, phase]);
 
   useEffect(() => {
     if (isDone && attemptId) {
@@ -250,6 +307,55 @@ function UploadPageInner() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (routePhotoPreviewUrlRef.current) URL.revokeObjectURL(routePhotoPreviewUrlRef.current);
+    };
+  }, []);
+
+  // Draw first-frame landmark preview when phase switches to "results"
+  useEffect(() => {
+    if (phase !== "results" || !activeAttempt || !videoPreviewUrl) return;
+    const canvas = landmarkCanvasRef.current;
+    if (!canvas) return;
+
+    const frames = activeAttempt.frames;
+    const firstFrame = frames[0];
+    if (!firstFrame || firstFrame.keypoints.length === 0) return;
+    const vw = activeAttempt.videoMeta.width;
+    const vh = activeAttempt.videoMeta.height;
+
+    // Draw the first video frame then overlay the skeleton
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.src = videoPreviewUrl;
+
+    const onSeeked = () => {
+      canvas.width = vw;
+      canvas.height = vh;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, vw, vh);
+
+      // Build pixel-space keypoints from normalized values
+      const pixelKps: Record<string, { x: number; y: number }> = {};
+      for (const kp of firstFrame.keypoints) {
+        pixelKps[kp.name] = { x: kp.x * vw, y: kp.y * vh };
+      }
+      drawSkeleton(ctx, pixelKps, topoStyle);
+      setLandmarkDrawn(true);
+      video.removeEventListener("seeked", onSeeked);
+    };
+
+    video.addEventListener("seeked", onSeeked);
+    video.addEventListener("loadeddata", () => {
+      video.currentTime = 0;
+    }, { once: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, activeAttemptId, videoPreviewUrl]);
+
   function toggleCondition(id: string) {
     setConditions(prev => {
       const next = new Set(prev);
@@ -272,7 +378,103 @@ function UploadPageInner() {
     setSaveError(null);
     setSavedRouteDirHandle(null);
     setNewFileSelected(true);
+    setPhase("input");
+    setLandmarkDrawn(false);
+    // Clear route photo overlay state
+    clearRoutePhoto();
   }
+
+  function setRoutePhotoWithPreview(file: File | null) {
+    if (routePhotoPreviewUrlRef.current) {
+      URL.revokeObjectURL(routePhotoPreviewUrlRef.current);
+      routePhotoPreviewUrlRef.current = null;
+    }
+    setRoutePhotoFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      routePhotoPreviewUrlRef.current = url;
+      setRoutePhotoPreviewUrl(url);
+    } else {
+      setRoutePhotoPreviewUrl(null);
+    }
+  }
+
+  function clearRoutePhoto() {
+    setRoutePhotoWithPreview(null);
+    setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
+    setRouteMatchTriggered(false);
+    setExportStatus("idle");
+    setExportProgress(0);
+  }
+
+  function handleRoutePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setRoutePhotoWithPreview(file);
+    setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
+    setRouteMatchTriggered(false);
+  }
+
+  function handleApplyRouteMatch() {
+    if (!routePhotoFile || !cv || !activeAttemptId) return;
+    setRouteMatchTriggered(true);
+    matchImage(routePhotoFile, activeAttemptId, cv, routePhotoCrop);
+  }
+
+  function handleEditClimb() {
+    setPhase("input");
+    setNewFileSelected(true);
+    setLandmarkDrawn(false);
+    clearRoutePhoto();
+  }
+
+  function handleViewOnRoutePhoto() {
+    setPhase("overlay");
+  }
+
+  function handleBackToResults() {
+    setPhase("results");
+    clearRoutePhoto();
+  }
+
+  const handleExportUploadVideo = useCallback(async () => {
+    if (!cv || !routePhotoFile || !activeAttemptId || !matchResult) return;
+    const att = getAttempt(activeAttemptId);
+    if (!att?.orbFeatures) return;
+
+    setExportStatus("rendering");
+    setExportProgress(0);
+
+    try {
+      const url = await renderPoseVideo({
+        cv,
+        imageFile: routePhotoFile,
+        frames: att.frames,
+        videoMeta: att.videoMeta,
+        orbFeatures: att.orbFeatures,
+        queryOrb: matchResult.queryOrb,
+        matches: matchResult.matches,
+        skeletonStyle: styleRef.current,
+        targetFps: 60,
+        onProgress: (r: number, t: number) => setExportProgress(Math.round((r / t) * 100)),
+      });
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeAttemptId}-pose-overlay.webm`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setExportStatus("done");
+    } catch (err) {
+      console.error("[UploadPage] Video export failed:", err);
+      setExportStatus("idle");
+    }
+  }, [cv, routePhotoFile, activeAttemptId, matchResult]);
+
+  const isFrameReady = frameStatus === "ready" && !!skeletonData;
+  const isMatching = matchStatus === "matching";
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -341,6 +543,9 @@ function UploadPageInner() {
     if (!pendingFile || !model || !cv) return;
     setShowCropWarning(false);
     setNewFileSelected(false);
+    setPhase("input");
+    setLandmarkDrawn(false);
+    clearRoutePhoto();
     process(pendingFile, model, cv, frameStep, { state, area, route, runType, rating: rating || undefined, notes: notes || undefined }, {
       climberCrop,
       orbCrop,
@@ -485,8 +690,8 @@ function UploadPageInner() {
         </button>
       </div>
 
-      {/* Crop UI � shown after file selected, before processing */}
-      {videoPreviewUrl && pendingFile && !isProcessing && !isDone && (
+      {/* Crop UI — shown after file selected, before processing */}
+      {videoPreviewUrl && pendingFile && !isProcessing && !isDone && phase === "input" && (
         <div className="flex flex-col gap-3">
           {/* Crop mode toggle */}
           <div className="flex flex-col gap-2">
@@ -650,7 +855,7 @@ function UploadPageInner() {
     </div>
   );
 
-  const sidebarSection = pendingFile && !isProcessing && !showResults ? (
+  const sidebarSection = pendingFile && !isProcessing && phase === "input" && !showResults ? (
     <aside className="w-full lg:w-72 shrink-0">
       <div className="rounded-2xl border border-edge bg-card divide-y divide-edge">
 
@@ -869,15 +1074,6 @@ function UploadPageInner() {
             Upload or record a climbing video to extract skeleton poses and wall reference features.
           </p>
         </div>
-        <Link
-          href="/match"
-          className="shrink-0 flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
-        >
-          View page
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </Link>
       </div>
 
 
@@ -914,30 +1110,73 @@ function UploadPageInner() {
         </p>
       )}
 
-      {/* Result actions */}
-      {showResults && activeAttemptId && activeAttempt && (
-        <div className="flex flex-col gap-3">
+      {/* Result actions — results phase: landmark preview + action buttons */}
+      {showResults && activeAttemptId && activeAttempt && phase === "results" && (
+        <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-success/25 bg-success/5 px-5 py-4">
             <p className="text-sm font-semibold text-success">Analysis complete</p>
             <p className="mt-0.5 text-xs text-success/70">
-              {activeAttempt.frames.length} pose frames �{" "}
+              {activeAttempt.frames.length} pose frames &middot;{" "}
               {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points extracted
-              {activeAttempt.state && ` � ${activeAttempt.state}`}
-              {activeAttempt.area  && ` � ${activeAttempt.area}`}
-              {activeAttempt.route && ` � ${activeAttempt.route}`}
+              {activeAttempt.state && ` \u2014 ${activeAttempt.state}`}
+              {activeAttempt.area  && ` \u203a ${activeAttempt.area}`}
+              {activeAttempt.route && ` \u203a ${activeAttempt.route}`}
             </p>
           </div>
 
-          <Link
-            href={`/match?id=${activeAttemptId}`}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover"
-          >
-            View on route photo
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
+          {/* First-frame landmark preview */}
+          <div className="flex flex-col gap-2">
+            <p className="text-sm font-medium text-fg-light">Recorded pose landmarks</p>
+            <canvas
+              ref={landmarkCanvasRef}
+              className="w-full rounded-xl border border-edge bg-card object-contain"
+            />
+            {!landmarkDrawn && (
+              <p className="text-xs text-fg-muted text-center">Loading preview&hellip;</p>
+            )}
+          </div>
 
+          {/* Skeleton style */}
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+            <SkeletonStylePanel onChange={setSkeletonStyle} />
+          </div>
+
+          {/* View on route photo — opens file picker */}
+          <label
+            className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+            </svg>
+            View on route photo
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setRoutePhotoWithPreview(file);
+                setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
+                setRouteMatchTriggered(false);
+                handleViewOnRoutePhoto();
+              }}
+            />
+          </label>
+
+          {/* Edit climb — go back to pre-process state */}
+          <button
+            onClick={handleEditClimb}
+            className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+            </svg>
+            Edit climb
+          </button>
+
+          {/* Save buttons */}
           <button
             onClick={handleSaveToDevice}
             className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
@@ -976,10 +1215,214 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploading…" : s3Saved ? "Uploaded" : "Upload"}
+            {s3Status === "loading" ? "Uploading\u2026" : s3Saved ? "Uploaded" : "Upload"}
           </button>
 
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+        </div>
+      )}
+
+      {/* Overlay phase — inline route photo matching + skeleton overlay */}
+      {showResults && activeAttemptId && activeAttempt && phase === "overlay" && (
+        <div className="flex flex-col gap-4">
+          {/* Back to results */}
+          <button
+            onClick={handleBackToResults}
+            className="self-start flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+            </svg>
+            Back to results
+          </button>
+
+          {/* Route photo upload / change */}
+          {!routePhotoFile && (
+            <div className="grid grid-cols-2 gap-3">
+              <label
+                className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-edge bg-primary px-4 py-6 text-sm text-fg-light transition hover:border-accent/60 hover:text-fg animate-pulse border-accent/30"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                </svg>
+                <span className="font-medium text-fg">Select a photo</span>
+                <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+                <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
+              </label>
+            </div>
+          )}
+
+          {/* Crop UI — shown after route photo selected, before match triggered */}
+          {routePhotoPreviewUrl && routePhotoFile && !routeMatchTriggered && !isMatching && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-fg-secondary">
+                  Adjust the crop region for wall texture matching then click &ldquo;Apply &amp; View&rdquo;.
+                </p>
+                <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg-light transition">
+                  Change photo
+                  <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
+                </label>
+              </div>
+              <div className="relative w-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={routePhotoPreviewUrl}
+                  alt="Route photo preview"
+                  className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
+                />
+                <CropBoxOverlay
+                  box={routePhotoCrop}
+                  onChange={setRoutePhotoCrop}
+                />
+              </div>
+              <button
+                onClick={handleApplyRouteMatch}
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse"
+              >
+                Apply &amp; View
+              </button>
+            </div>
+          )}
+
+          {/* Static preview while matching */}
+          {routePhotoPreviewUrl && routeMatchTriggered && (isMatching || !isFrameReady) && (
+            <div className="flex flex-col gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={routePhotoPreviewUrl}
+                alt="Route photo preview"
+                className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
+              />
+              {isMatching && (
+                <p className="text-center text-sm text-fg-secondary">Matching features&hellip;</p>
+              )}
+            </div>
+          )}
+
+          {/* Match statistics */}
+          {matchStatus === "done" && matchResult && (
+            <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-1">
+              <p className="text-sm font-medium text-fg-light">Match statistics</p>
+              <div className="mt-2 grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
+                  <p className="text-xs text-fg-muted">good matches</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
+                  <p className="text-xs text-fg-muted">query keypoints</p>
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
+                  <p className="text-xs text-fg-muted">reference keypoints</p>
+                </div>
+              </div>
+              {matchResult.matches.length < 10 && (
+                <p className="mt-3 text-xs text-amber-400">
+                  Fewer than 10 matches &mdash; the homography may be unstable. Try a closer or better-lit photo of the same wall section.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Skeleton style */}
+          {routeMatchTriggered && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+              <SkeletonStylePanel onChange={setSkeletonStyle} />
+            </div>
+          )}
+
+          {/* Pose overlay — FramePlayer */}
+          {isFrameReady && routePhotoFile && (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm font-medium text-fg-light">Pose overlay</p>
+              <FramePlayer
+                imageFile={routePhotoFile}
+                layers={[{ frames: skeletonData.frames, style: topoStyle }]}
+                duration={skeletonData.duration}
+              />
+
+              {/* Video export */}
+              {exportStatus === "rendering" ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs text-fg-secondary">
+                    <span>Encoding video for download&hellip;</span>
+                    <span>{exportProgress}%</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-inset">
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-150"
+                      style={{ width: `${exportProgress}%` }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={handleExportUploadVideo}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-light transition hover:border-edge-hover hover:text-fg"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  {exportStatus === "done" ? "Download again (.webm)" : "Download pose overlay video (.webm)"}
+                </button>
+              )}
+
+              {/* Change route photo */}
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                </svg>
+                Change route photo
+                <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
+              </label>
+            </div>
+          )}
+
+          {/* Save buttons in overlay phase */}
+          <div className="flex flex-col gap-3 pt-2 border-t border-edge">
+            <button
+              onClick={handleSaveToDevice}
+              className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+              Save to device
+            </button>
+
+            {showLocationWarning && (
+              <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
+                Enter State/Region, Area, and Route before uploading.
+              </p>
+            )}
+
+            <button
+              onClick={handleSaveToS3}
+              disabled={s3Status === "loading"}
+              className={[
+                "flex items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
+                s3Saved
+                  ? "border-success/30 bg-success/5 text-success hover:border-success/50"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+              ].join(" ")}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+              </svg>
+              {s3Status === "loading" ? "Uploading\u2026" : s3Saved ? "Uploaded" : "Upload"}
+            </button>
+
+            {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+          </div>
+
+          {(matchStatus === "error" || frameStatus === "error") && (
+            <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-400">
+              {matchError ?? frameError}
+            </p>
+          )}
         </div>
       )}
 
