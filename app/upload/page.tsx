@@ -191,6 +191,13 @@ function UploadPageInner() {
   // Crop adjustment confirmation dialog
   const [showCropWarning, setShowCropWarning] = useState(false);
 
+  // Bottom sheet for metadata entry (triggered by save/upload buttons)
+  const [showBottomSheet, setShowBottomSheet] = useState(false);
+  const [bottomSheetAction, setBottomSheetAction] = useState<"save" | "upload">("save");
+
+  // Shooting conditions dropdown (inline with crop buttons)
+  const [showConditionsDropdown, setShowConditionsDropdown] = useState(false);
+
   // Derive topology-aware skeleton style
   const activeAttemptId0 = (status === "done") ? attemptId : restoredAttempt?.id ?? null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
@@ -585,6 +592,7 @@ function UploadPageInner() {
     try {
       const routeDir = await saveAttemptToDevice(attempt);
       setSavedRouteDirHandle(routeDir);
+      setShowBottomSheet(false);
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       setSaveError(err instanceof Error ? err.message : "Save failed.");
@@ -631,9 +639,22 @@ function UploadPageInner() {
       await uploadAttempt(attemptToUpload);
       setS3Saved(true);
       setLocationWarning(false);
+      setShowBottomSheet(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
     }
+  }
+
+  function handleOpenSaveSheet() {
+    setSaveError(null);
+    setBottomSheetAction("save");
+    setShowBottomSheet(true);
+  }
+
+  function handleOpenUploadSheet() {
+    setSaveError(null);
+    setBottomSheetAction("upload");
+    setShowBottomSheet(true);
   }
 
   async function handleUseGPS() {
@@ -735,7 +756,7 @@ function UploadPageInner() {
             <p className="text-xs font-medium text-fg-secondary">
               Set crop regions � drag handles to resize, drag interior to move
             </p>
-            <div className="flex gap-2">
+            <div className="relative flex items-center gap-2">
               <button
                 onClick={() => setActiveCropMode("climber")}
                 className={[
@@ -743,6 +764,7 @@ function UploadPageInner() {
                   activeCropMode === "climber"
                     ? "border-accent/60 bg-accent/10 text-accent"
                     : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                  isCropDefault(climberCrop) ? "animate-pulse" : "",
                 ].join(" ")}
               >
                 Climber crop
@@ -754,10 +776,59 @@ function UploadPageInner() {
                   activeCropMode === "route"
                     ? "border-success/60 bg-success/10 text-success"
                     : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                  isCropDefault(orbCrop) ? "animate-pulse" : "",
                 ].join(" ")}
               >
                 Wall texture crop
               </button>
+
+              {/* Shooting conditions — inline dropdown, right-aligned */}
+              {!isDone && !isProcessing && (
+                <div className="ml-auto relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowConditionsDropdown(p => !p)}
+                    className={[
+                      "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                      showConditionsDropdown
+                        ? "border-accent/60 bg-accent/10 text-accent"
+                        : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                    ].join(" ")}
+                  >
+                    Conditions
+                    {conditions.size > 0 && (
+                      <span className="rounded-full bg-accent/20 px-1.5 text-[10px] font-bold text-accent">{conditions.size}</span>
+                    )}
+                    <svg
+                      className={["h-3 w-3 transition-transform", showConditionsDropdown ? "rotate-180" : ""].join(" ")}
+                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showConditionsDropdown && (
+                    <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-edge bg-card p-3 shadow-xl">
+                      <p className="mb-2 text-xs font-semibold text-fg">Shooting conditions</p>
+                      <div className="flex flex-col gap-2">
+                        {FRAME_CONDITIONS.map(c => (
+                          <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
+                            <input
+                              type="checkbox"
+                              checked={conditions.has(c.id)}
+                              onChange={() => toggleCondition(c.id)}
+                              className="mt-0.5 h-3.5 w-3.5 accent-accent cursor-pointer"
+                            />
+                            <span className="flex flex-col gap-0.5">
+                              <span className="text-xs font-medium text-fg group-hover:text-success transition">{c.label}</span>
+                              <span className="text-xs text-fg-muted">{c.description}</span>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <p className="text-xs text-fg-muted">
               {activeCropMode === "climber"
@@ -824,8 +895,23 @@ function UploadPageInner() {
             </div>
           )}
 
-          {/* Frame step slider */}
-          <div className="flex flex-col gap-2 rounded-xl border border-inset bg-card px-4 py-3">
+          {/* Model variant + Frame step */}
+          <div className="flex flex-col gap-3 rounded-xl border border-inset bg-card px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-xs font-medium text-fg-secondary">Pose model</label>
+              <select
+                value={modelVariant}
+                onChange={e => setModelVariant(e.target.value as MediaPipeVariant)}
+                disabled={isProcessing}
+                className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60 disabled:opacity-50"
+              >
+                <option value="lite">Lite (fast)</option>
+                <option value="full">Full (balanced)</option>
+                <option value="heavy">Heavy (accurate)</option>
+              </select>
+            </div>
+
+            {/* Frame step slider */}
             <label className="flex items-center justify-between text-xs">
               <span className="font-medium text-fg-secondary">Pose detection frequency</span>
               <span className="font-mono text-fg">every {frameStep} frames</span>
@@ -892,235 +978,19 @@ function UploadPageInner() {
     </div>
   );
 
-  const sidebarSection = pendingFile && !isProcessing && phase === "input" && !showResults ? (
-    <aside className="w-full lg:w-72 shrink-0">
-      <div className="rounded-2xl border border-edge bg-card divide-y divide-edge">
-
-        {/* ── Pose model ──────────────────────────── */}
-        <div className="px-4 py-4 flex flex-col gap-3">
-          <div>
-            <p className="text-sm font-semibold text-fg">Pose detection model</p>
-            <p className="text-xs text-fg-muted mt-0.5">MediaPipe Pose Landmarker &mdash; 33 BlazePose keypoints.</p>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-fg-secondary">Variant</label>
-            <select
-              value={modelVariant}
-              onChange={e => setModelVariant(e.target.value as MediaPipeVariant)}
-              disabled={isProcessing}
-              className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition focus:border-accent/60 disabled:opacity-50"
-            >
-              <option value="lite">Lite (fast)</option>
-              <option value="full">Full (balanced)</option>
-              <option value="heavy">Heavy (accurate)</option>
-            </select>
-            <p className="text-xs text-fg-muted">
-              Lite is fastest; Heavy is most accurate.
-            </p>
-          </div>
-        </div>
-
-        {/* ── Location ─────────────────────────────── */}
-        <div className="px-4 py-4 flex flex-col gap-3">
-          <div>
-            <p className="text-sm font-semibold text-fg">Location</p>
-            <p className="text-xs text-fg-muted mt-0.5">Used to organise your saved climbs.</p>
-          </div>
-          <ComboInput
-            label="State / Region"
-            value={state}
-            onChange={handleStateChange}
-            suggestions={stateSuggestions}
-            placeholder="e.g. Colorado"
-            disabled={isProcessing}
-          />
-          <ComboInput
-            label="Area"
-            value={area}
-            onChange={handleAreaChange}
-            suggestions={areaSuggestions}
-            placeholder="e.g. Red Rocks"
-            disabled={isProcessing}
-          />
-          <ComboInput
-            label="Route"
-            value={route}
-            onChange={handleRouteChange}
-            suggestions={routeSuggestions}
-            placeholder="e.g. The Classic"
-            disabled={isProcessing}
-          />
-
-          {/* GPS coordinate tagging */}
-          <div className="flex flex-col gap-2 pt-1">
-            <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
-            {coordinates ? (
-              <div className="flex items-center justify-between rounded-lg border border-success/40 bg-success/10 px-3 py-2">
-                <span className="text-xs text-success font-mono">
-                  {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCoordinates(null)}
-                  className="ml-2 text-xs text-fg-muted hover:text-red-400 transition"
-                  aria-label="Clear coordinates"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
-              <p className="text-xs text-fg-muted">No coordinates tagged.</p>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleUseGPS}
-                disabled={geoLoading || isProcessing}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
-              >
-                {geoLoading ? (
-                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
-                ) : (
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-                  </svg>
-                )}
-                Use GPS
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowMapPicker(true)}
-                disabled={isProcessing}
-                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                Pick on map
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Climb type ───────────────────────────── */}
-        <div className="px-4 py-4 flex flex-col gap-3">
-          <p className="text-sm font-semibold text-fg">Climb type</p>
-          <div className="flex gap-2">
-            {(["attempt", "send"] as RunType[]).map(t => (
-              <button
-                key={t}
-                onClick={() => setRunType(t)}
-                disabled={isProcessing}
-                className={[
-                  "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
-                  runType === t
-                    ? t === "send"
-                      ? "border-success/60 bg-success/10 text-success"
-                      : "border-accent/60 bg-accent/10 text-accent"
-                    : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  isProcessing ? "cursor-not-allowed opacity-50" : "",
-                ].join(" ")}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-fg-muted">
-            {runType === "send" ? "You topped the route successfully." : "You did not complete the route."}
-          </p>
-        </div>
-
-        {/* ── Details ──────────────────────────────── */}
-        <div className="px-4 py-4 flex flex-col gap-3">
-          <p className="text-sm font-semibold text-fg">Details <span className="text-fg-muted font-normal">(optional)</span></p>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-fg-secondary">Grade / Rating</label>
-            <input
-              type="text"
-              value={rating}
-              onChange={e => setRating(e.target.value)}
-              placeholder="e.g. V3, 5.10a, 6a+"
-              disabled={isProcessing}
-              className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 disabled:opacity-50"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium text-fg-secondary">Notes</label>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Anything to remember about this run…"
-              rows={3}
-              disabled={isProcessing}
-              className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 disabled:opacity-50 resize-none"
-            />
-          </div>
-        </div>
-
-        {/* ── Shooting conditions ───────────────────── */}
-        {!isDone && !isProcessing && (
-          <details className="px-4 py-4 group/details">
-            <summary className="flex items-center justify-between cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden">
-              <div>
-                <p className="text-sm font-semibold text-fg">Shooting conditions</p>
-                <p className="text-xs text-fg-muted mt-0.5">
-                  {conditions.size === 0
-                    ? "Select any that apply."
-                    : `${conditions.size} selected`}
-                </p>
-              </div>
-              <svg
-                className="h-4 w-4 text-fg-muted transition-transform group-open/details:rotate-180"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </summary>
-            <div className="flex flex-col gap-2 mt-3">
-              {FRAME_CONDITIONS.map(c => (
-                <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
-                  <input
-                    type="checkbox"
-                    checked={conditions.has(c.id)}
-                    onChange={() => toggleCondition(c.id)}
-                    className="mt-0.5 h-3.5 w-3.5 accent-accent cursor-pointer"
-                  />
-                  <span className="flex flex-col gap-0.5">
-                    <span className="text-xs font-medium text-fg group-hover:text-success transition">{c.label}</span>
-                    <span className="text-xs text-fg-muted">{c.description}</span>
-                  </span>
-                </label>
-              ))}
-            </div>
-          </details>
-        )}
-
-      </div>
-    </aside>
-  ) : null;
-
   return (
     <div className="flex-1 bg-surface">
-      <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
+      <div className="mx-auto w-full max-w-2xl px-6 py-10 flex flex-col gap-8">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-fg">Video Analysis</h1>
-          <p className="text-sm text-fg-secondary">
-            Upload or record a climbing video to extract skeleton poses and wall reference features.
-          </p>
-        </div>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-bold tracking-tight text-fg">Video Analysis</h1>
+        <p className="text-sm text-fg-secondary">
+          Upload or record a climbing video to extract skeleton poses and wall reference features.
+        </p>
       </div>
 
-
-
-      {/* Main content � sidebar + video/crop */}
-      {/* On large screens: sidebar left, video right. On small: video top, sidebar bottom. */}
-      <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-start">
-        {sidebarSection}
-        {videoAndCropSection}
-      </div>
+      {/* Main content */}
+      {videoAndCropSection}
 
       {/* Progress bar */}
       {isProcessing && (
@@ -1169,6 +1039,7 @@ function UploadPageInner() {
                 imageFile={firstFrameFile}
                 layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                 duration={firstFrameSkeletonData.duration}
+                autoPlay
                 className="w-full rounded-xl border border-edge"
               />
             ) : (
@@ -1219,9 +1090,9 @@ function UploadPageInner() {
             Edit climb
           </button>
 
-          {/* Save buttons */}
+          {/* Save buttons — open bottom sheet for metadata entry */}
           <button
-            onClick={handleSaveToDevice}
+            onClick={handleOpenSaveSheet}
             className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -1239,14 +1110,8 @@ function UploadPageInner() {
             </button>
           )}
 
-          {showLocationWarning && (
-            <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
-              Enter State/Region, Area, and Route before uploading.
-            </p>
-          )}
-
           <button
-            onClick={handleSaveToS3}
+            onClick={handleOpenUploadSheet}
             disabled={s3Status === "loading"}
             className={[
               "flex items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
@@ -1258,7 +1123,7 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
             </svg>
-            {s3Status === "loading" ? "Uploading\u2026" : s3Saved ? "Uploaded" : "Upload"}
+            {s3Saved ? "Uploaded" : "Upload"}
           </button>
 
           {saveError && <p className="text-xs text-red-400">{saveError}</p>}
@@ -1385,6 +1250,7 @@ function UploadPageInner() {
                 imageFile={routePhotoFile}
                 layers={[{ frames: skeletonData.frames, style: topoStyle }]}
                 duration={skeletonData.duration}
+                autoPlay
               />
 
               {/* Video export */}
@@ -1427,7 +1293,7 @@ function UploadPageInner() {
           {/* Save buttons in overlay phase */}
           <div className="flex flex-col gap-3 pt-2 border-t border-edge">
             <button
-              onClick={handleSaveToDevice}
+              onClick={handleOpenSaveSheet}
               className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -1436,14 +1302,8 @@ function UploadPageInner() {
               Save to device
             </button>
 
-            {showLocationWarning && (
-              <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
-                Enter State/Region, Area, and Route before uploading.
-              </p>
-            )}
-
             <button
-              onClick={handleSaveToS3}
+              onClick={handleOpenUploadSheet}
               disabled={s3Status === "loading"}
               className={[
                 "flex items-center justify-center gap-2 rounded-xl border px-6 py-3 text-sm transition disabled:cursor-not-allowed disabled:opacity-50",
@@ -1455,7 +1315,7 @@ function UploadPageInner() {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
               </svg>
-              {s3Status === "loading" ? "Uploading\u2026" : s3Saved ? "Uploaded" : "Upload"}
+              {s3Saved ? "Uploaded" : "Upload"}
             </button>
 
             {saveError && <p className="text-xs text-red-400">{saveError}</p>}
@@ -1499,6 +1359,183 @@ function UploadPageInner() {
               }}
               onCancel={() => setShowMapPicker(false)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Bottom sheet — metadata entry for save / upload */}
+      {showBottomSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowBottomSheet(false)} />
+
+          {/* Sheet */}
+          <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+            {/* Close / drag handle */}
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-fg">
+                {bottomSheetAction === "save" ? "Save to Device" : "Upload"}
+              </h2>
+              <button
+                onClick={() => setShowBottomSheet(false)}
+                className="rounded-full p-1 text-fg-muted hover:text-fg transition"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {/* Location */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-fg-secondary">Location</p>
+                <ComboInput
+                  label="State / Region"
+                  value={state}
+                  onChange={handleStateChange}
+                  suggestions={stateSuggestions}
+                  placeholder="e.g. Colorado"
+                />
+                <ComboInput
+                  label="Area"
+                  value={area}
+                  onChange={handleAreaChange}
+                  suggestions={areaSuggestions}
+                  placeholder="e.g. Red Rocks"
+                />
+                <ComboInput
+                  label="Route"
+                  value={route}
+                  onChange={handleRouteChange}
+                  suggestions={routeSuggestions}
+                  placeholder="e.g. The Classic"
+                />
+
+                {/* GPS */}
+                <div className="flex flex-col gap-2 pt-1">
+                  <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
+                  {coordinates ? (
+                    <div className="flex items-center justify-between rounded-lg border border-success/40 bg-success/10 px-3 py-2">
+                      <span className="text-xs text-success font-mono">
+                        {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCoordinates(null)}
+                        className="ml-2 text-xs text-fg-muted hover:text-red-400 transition"
+                        aria-label="Clear coordinates"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-fg-muted">No coordinates tagged.</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleUseGPS}
+                      disabled={geoLoading}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+                    >
+                      {geoLoading ? (
+                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
+                      ) : (
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="12" cy="12" r="3"/>
+                          <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                        </svg>
+                      )}
+                      Use GPS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowBottomSheet(false); setShowMapPicker(true); }}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                      </svg>
+                      Pick on map
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Climb type */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-fg-secondary">Climb type</p>
+                <div className="flex gap-2">
+                  {(["attempt", "send"] as RunType[]).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setRunType(t)}
+                      className={[
+                        "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
+                        runType === t
+                          ? t === "send"
+                            ? "border-success/60 bg-success/10 text-success"
+                            : "border-accent/60 bg-accent/10 text-accent"
+                          : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                      ].join(" ")}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Details */}
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold text-fg-secondary">Details <span className="text-fg-muted font-normal">(optional)</span></p>
+                <input
+                  type="text"
+                  value={rating}
+                  onChange={e => setRating(e.target.value)}
+                  placeholder="Grade / Rating (e.g. V3, 5.10a)"
+                  className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+                />
+                <textarea
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Notes…"
+                  rows={2}
+                  className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 resize-none"
+                />
+              </div>
+
+              {showLocationWarning && (
+                <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
+                  Enter State/Region, Area, and Route before uploading.
+                </p>
+              )}
+              {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+
+              {/* Action button */}
+              <button
+                onClick={bottomSheetAction === "save" ? handleSaveToDevice : handleSaveToS3}
+                disabled={bottomSheetAction === "upload" && s3Status === "loading"}
+                className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {bottomSheetAction === "save" ? (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                    Save to device
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                    </svg>
+                    {s3Status === "loading" ? "Uploading\u2026" : "Upload"}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

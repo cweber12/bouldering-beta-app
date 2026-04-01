@@ -200,6 +200,7 @@ function CompareSlot({
             }]}
             duration={skeletonData.duration}
             hidePlayButton={hidePlayButton}
+            autoPlay
           />
           {exportStatus === "rendering" ? (
             <div className="flex items-center justify-between text-xs text-fg-muted">
@@ -348,6 +349,7 @@ function OverlayPlayer({
         imageFile={imageFile}
         layers={playerLayers}
         duration={multiData.duration}
+        autoPlay
       />
       {exportStatus === "rendering" ? (
         <div className="flex items-center justify-between text-xs text-fg-muted">

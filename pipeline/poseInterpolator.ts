@@ -190,6 +190,18 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+/** Catmull-Rom spline evaluation for a single scalar. */
+function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * t +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+  );
+}
+
 /** Binary search: index of first element with timestamp >= target. */
 function lowerBound(frames: PoseFrame[], target: number): number {
   let lo = 0, hi = frames.length;
@@ -226,6 +238,46 @@ function interpolateKeypoints(from: Keypoint[], to: Keypoint[], t: number): Keyp
     });
 }
 
+/**
+ * Catmull-Rom spline interpolation across four anchor frames.
+ *
+ * Produces a C1-continuous curve through the middle two frames (p1 → p2),
+ * guided by the outer frames (p0, p3). Falls back to linear interpolation
+ * per-keypoint when fewer than four anchor values are available for a joint.
+ */
+function catmullRomInterpolateKeypoints(
+  p0: Keypoint[], p1: Keypoint[], p2: Keypoint[], p3: Keypoint[], t: number,
+): Keypoint[] {
+  const p0Map = new Map(p0.map(kp => [kp.name, kp]));
+  const p2Map = new Map(p2.map(kp => [kp.name, kp]));
+  const p3Map = new Map(p3.map(kp => [kp.name, kp]));
+
+  return p1
+    .filter(kp => p2Map.has(kp.name))
+    .map(kp => {
+      const kp2 = p2Map.get(kp.name)!;
+      const kp0 = p0Map.get(kp.name);
+      const kp3 = p3Map.get(kp.name);
+
+      // Need all 4 control points for Catmull-Rom; fall back to linear otherwise.
+      if (!kp0 || !kp3) {
+        return {
+          name: kp.name,
+          x: lerp(kp.x, kp2.x, t),
+          y: lerp(kp.y, kp2.y, t),
+          score: Math.min(kp.score, kp2.score),
+        };
+      }
+
+      return {
+        name: kp.name,
+        x: catmullRom(kp0.x, kp.x, kp2.x, kp3.x, t),
+        y: catmullRom(kp0.y, kp.y, kp2.y, kp3.y, t),
+        score: Math.min(kp.score, kp2.score),
+      };
+    });
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -234,6 +286,11 @@ function interpolateKeypoints(from: Keypoint[], to: Keypoint[], t: number): Keyp
  * Produce a dense PoseFrame array from a sparse set of detected frames.
  *
  * Uses binary search O(log n) per timestamp instead of linear scan.
+ *
+ * Interior segments (with ≥ 2 anchors on each side) use Catmull-Rom spline
+ * interpolation for C1-continuous motion, eliminating the velocity
+ * discontinuities that make large frame-step values look jumpy.  Boundary
+ * segments fall back to linear interpolation.
  *
  * @param processedFrames - Pose frames returned by the detector (one per
  *                          N-th sampled video frame). Must be sorted by
@@ -270,6 +327,19 @@ export function interpolatePoseFrames(
     const prev = processedFrames[nextIdx - 1];
     const t = (timestamp - prev.timestamp) / (next.timestamp - prev.timestamp);
 
+    // Interior segments: Catmull-Rom spline for smooth acceleration/deceleration
+    if (nextIdx >= 2 && nextIdx + 1 < processedFrames.length) {
+      const prevPrev = processedFrames[nextIdx - 2];
+      const nextNext = processedFrames[nextIdx + 1];
+      return {
+        timestamp,
+        keypoints: catmullRomInterpolateKeypoints(
+          prevPrev.keypoints, prev.keypoints, next.keypoints, nextNext.keypoints, t,
+        ),
+      };
+    }
+
+    // Boundary segments: linear interpolation
     return {
       timestamp,
       keypoints: interpolateKeypoints(prev.keypoints, next.keypoints, t),

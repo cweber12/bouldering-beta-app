@@ -522,6 +522,7 @@ function MatchPageInner() {
             imageFile={imageFile}
             layers={[{ frames: skeletonData.frames, style: topoStyle }]}
             duration={skeletonData.duration}
+            autoPlay
           />
 
           {/* Video export / download */}

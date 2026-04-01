@@ -55,6 +55,15 @@ export default function MapPicker({
 
       if (!containerRef.current) return;
 
+      // Clear stale Leaflet state from a previous mount (React strict mode
+      // or modal close → reopen). Without this, L.map() throws
+      // "Map container is already initialized".
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const el = containerRef.current as any;
+      if (el._leaflet_id) {
+        delete el._leaflet_id;
+      }
+
       const initLat = initialLat ?? 39;
       const initLng = initialLng ?? -98;
       const initZoom = initialLat != null ? 13 : 4;

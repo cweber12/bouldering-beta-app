@@ -27,6 +27,8 @@ interface FramePlayerProps {
   loop?: boolean;
   /** When true the built-in play/pause button is hidden (for master-play UIs). */
   hidePlayButton?: boolean;
+  /** When true, playback starts automatically once the image is loaded. */
+  autoPlay?: boolean;
   className?: string;
 }
 
@@ -89,6 +91,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   duration,
   loop = true,
   hidePlayButton = false,
+  autoPlay = false,
   className,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -205,10 +208,14 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     return () => cancelAnimationFrame(animRef.current);
   }, [playing]);
 
-  // Draw the first frame when the image is ready.
+  // Draw the first frame when the image is ready; auto-play if requested.
   useEffect(() => {
-    if (ready) drawFrame(0);
-  }, [ready, drawFrame]);
+    if (!ready) return;
+    drawFrame(0);
+    if (!autoPlay) return;
+    const id = requestAnimationFrame(() => setPlaying(true));
+    return () => cancelAnimationFrame(id);
+  }, [ready, drawFrame, autoPlay]);
 
   // Re-draw current frame when layers change (e.g. style sliders) while paused.
   useEffect(() => {

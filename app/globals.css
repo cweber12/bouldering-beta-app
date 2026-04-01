@@ -58,3 +58,12 @@ body {
   color: var(--color-fg);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ─── Bottom sheet slide-up animation ── */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out both;
+}
