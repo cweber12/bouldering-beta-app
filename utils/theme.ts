@@ -54,48 +54,48 @@
 export const dark = {
   surface:        "#161a1e",
   surfaceAlt:     "#111417",
-  card:           "#1e2228",
-  inset:          "#131619",
-  fg:             "#e4e2dd",
-  fgSecondary:    "#9ca3ab",
-  fgMuted:        "#636b75",
-  fgLight:        "#b3b9c1",
+  card:           "#1b2130",   // subtle teal-grey tint — scanner identity
+  inset:          "#0f1318",
+  fg:             "#e8e4de",
+  fgSecondary:    "#99a2ac",
+  fgMuted:        "#717d8a",
+  fgLight:        "#b0bac5",
   fgInverse:      "#f9fafb",
-  edge:           "#282e36",
-  edgeHover:      "#3a424e",
+  edge:           "#252e3a",
+  edgeHover:      "#3a4557",
   accent:         "#22c55e",
   accentHover:    "#16a34a",
   success:        "#22c55e",
   danger:         "#f87171",
   caution:        "#fbbf24",
   send:           "#34d399",
-  sendSurface:    "#0d3d24",
+  sendSurface:    "#0c3d22",
   attempt:        "#fbbf24",
-  attemptSurface: "#3d2100",
+  attemptSurface: "#3d2200",
 } as const;
 
 // ─── Light theme canvas values ───────────────────────────────
 export const light = {
-  surface:        "#f3f2ee",
-  surfaceAlt:     "#eae9e4",
-  card:           "#ffffff",
-  inset:          "#e5e4de",
-  fg:             "#1a1d21",
-  fgSecondary:    "#4a5060",
-  fgMuted:        "#7a8290",
-  fgLight:        "#5a6270",
+  surface:        "#efece7",   // warm stone
+  surfaceAlt:     "#e5e1db",
+  card:           "#fefcf9",   // warm near-white
+  inset:          "#ddd9d2",
+  fg:             "#1c1917",   // stone-950 — warm near-black
+  fgSecondary:    "#3d3935",   // stone-800 — warm strong secondary
+  fgMuted:        "#57534e",   // stone-600 — readable muted (~6.3:1)
+  fgLight:        "#78716c",   // stone-500 — decorative only
   fgInverse:      "#ffffff",
-  edge:           "#d0d3d8",
-  edgeHover:      "#a8aeb6",
-  accent:         "#16a34a",
-  accentHover:    "#15803d",
-  success:        "#16a34a",
-  danger:         "#dc2626",
-  caution:        "#b45309",
-  send:           "#059669",
-  sendSurface:    "#d1fae5",
-  attempt:        "#b45309",
-  attemptSurface: "#fef3c7",
+  edge:           "#c8c3bc",   // warm stone-300
+  edgeHover:      "#a29d96",   // stone-400
+  accent:         "#15803d",   // green-700
+  accentHover:    "#166534",   // green-800
+  success:        "#15803d",
+  danger:         "#b91c1c",   // red-700
+  caution:        "#92400e",   // amber-800
+  send:           "#047857",   // emerald-700
+  sendSurface:    "#d1fae5",   // emerald-100
+  attempt:        "#92400e",   // amber-800
+  attemptSurface: "#fef3c7",   // amber-100
 } as const;
 
 export type Theme = typeof dark;

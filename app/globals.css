@@ -1,58 +1,58 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ─── Surfaces (charcoal / granite) ────────────── */
+  /* ─── Surfaces (deep charcoal / scanner dark) ──────── */
   --color-surface:     #161a1e;
   --color-surface-alt: #111417;
-  --color-card:        #1e2228;
-  --color-card-hover:  #262b32;
-  --color-inset:       #131619;
+  --color-card:        #1b2130;   /* subtle teal-grey tint — scanner identity */
+  --color-card-hover:  #222c3d;
+  --color-inset:       #0f1318;
 
-  /* ─── Foreground / text (fog / stone) ──────────── */
-  --color-fg:             #e4e2dd;
-  --color-fg-secondary:   #9ca3ab;
-  --color-fg-muted:       #636b75;
-  --color-fg-light:       #b3b9c1;
-  --color-fg-placeholder: #454d58;
+  /* ─── Foreground / text ─────────────────────────────── */
+  --color-fg:             #e8e4de;   /* warm stone-100, bright and legible */
+  --color-fg-secondary:   #99a2ac;   /* stone-blue — clear hierarchy */
+  --color-fg-muted:       #717d8a;   /* improved contrast from #636b75 */
+  --color-fg-light:       #b0bac5;   /* lighter fill text */
+  --color-fg-placeholder: #434e5e;
   --color-fg-inverse:     #f9fafb;   /* text on colored surfaces */
 
-  /* ─── Borders (slate) ──────────────────────────── */
-  --color-edge:       #282e36;
-  --color-edge-hover: #3a424e;
+  /* ─── Borders (slate) ──────────────────────────────── */
+  --color-edge:       #252e3a;   /* slightly more blue-teal for depth */
+  --color-edge-hover: #3a4557;
 
-  /* ─── Accent (bright green — scan active) ────────── */
+  /* ─── Accent (scanner green) ────────────────────────── */
   --color-accent:       #22c55e;
   --color-accent-hover: #16a34a;
   --color-accent-muted: #166534;
 
-  /* ─── Primary (dark olive) ──────────────────────── */
-  --color-primary: #243028;
+  /* ─── Primary (dark olive) ──────────────────────────── */
+  --color-primary: #1e3028;
 
-  /* ─── Semantic: success ─────────────────────────── */
+  /* ─── Semantic: success ─────────────────────────────── */
   --color-success: #22c55e;
 
-  /* ─── Semantic: danger / error ──────────────────── */
+  /* ─── Semantic: danger / error ──────────────────────── */
   --color-danger:         #f87171;   /* text */
-  --color-danger-surface: #250d0d;   /* background */
-  --color-danger-border:  #5c1a1a;   /* border */
+  --color-danger-surface: #280d0d;   /* background */
+  --color-danger-border:  #6b1f1f;   /* border */
 
-  /* ─── Semantic: caution / warning ───────────────── */
+  /* ─── Semantic: caution / warning ───────────────────── */
   --color-caution:         #fbbf24;  /* text */
-  --color-caution-surface: #201100;  /* background */
-  --color-caution-border:  #5c2e00;  /* border */
+  --color-caution-surface: #221200;  /* background */
+  --color-caution-border:  #6b3600;  /* border */
 
-  /* ─── Semantic: send (completed run) ────────────── */
+  /* ─── Semantic: send (completed run) ────────────────── */
   --color-send:         #34d399;     /* text + chip bg */
-  --color-send-surface: #0d3d24;     /* muted badge background */
+  --color-send-surface: #0c3d22;     /* muted badge background */
 
-  /* ─── Semantic: attempt (incomplete run) ────────── */
-  --color-attempt:         #fbbf24;  /* text + chip bg (same hue as caution) */
-  --color-attempt-surface: #3d2100;  /* muted badge background */
+  /* ─── Semantic: attempt (incomplete run) ────────────── */
+  --color-attempt:         #fbbf24;  /* text + chip bg */
+  --color-attempt-surface: #3d2200;  /* muted badge background */
 
-  /* ─── Scanner glow ──────────────────────────────── */
-  --color-glow: rgba(34, 197, 94, 0.12);
+  /* ─── Scanner glow ──────────────────────────────────── */
+  --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
 
-  /* ─── Fonts ─────────────────────────────────────── */
+  /* ─── Fonts ──────────────────────────────────────────── */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -68,56 +68,56 @@
 .theme-light {
   color-scheme: light;
 
-  /* Surfaces */
-  --color-surface:     #f3f2ee;
-  --color-surface-alt: #eae9e4;
-  --color-card:        #ffffff;
-  --color-card-hover:  #f4f4f0;
-  --color-inset:       #e5e4de;
+  /* ── Surfaces — warm stone / chalk palette ─────────── */
+  --color-surface:     #efece7;   /* warm stone base */
+  --color-surface-alt: #e5e1db;   /* slightly darker alt */
+  --color-card:        #fefcf9;   /* warm near-white card */
+  --color-card-hover:  #f4f1eb;   /* warm card hover */
+  --color-inset:       #ddd9d2;   /* warm recessed area */
 
-  /* Foreground */
-  --color-fg:             #1a1d21;
-  --color-fg-secondary:   #4a5060;
-  --color-fg-muted:       #7a8290;
-  --color-fg-light:       #5a6270;
-  --color-fg-placeholder: #9ca3ab;
+  /* ── Foreground — warm stone tones (full contrast chain) */
+  --color-fg:             #1c1917;   /* stone-950 — near-black, warm */
+  --color-fg-secondary:   #3d3935;   /* stone-800 — strong secondary (was blue-grey) */
+  --color-fg-muted:       #57534e;   /* stone-600 — readable muted (~6.3:1 contrast) */
+  --color-fg-light:       #78716c;   /* stone-500 — decorative/large text only */
+  --color-fg-placeholder: #a8a29e;   /* stone-400 — placeholder (exempted from WCAG) */
   --color-fg-inverse:     #ffffff;
 
-  /* Borders */
-  --color-edge:       #d0d3d8;
-  --color-edge-hover: #a8aeb6;
+  /* ── Borders — warm stone ────────────────────────────── */
+  --color-edge:       #c8c3bc;   /* warm stone-300 — visible but soft */
+  --color-edge-hover: #a29d96;   /* stone-400 — clear hover */
 
-  /* Accent */
-  --color-accent:       #16a34a;
-  --color-accent-hover: #15803d;
-  --color-accent-muted: #bbf7d0;
+  /* ── Accent — richer green for legibility on light bg ── */
+  --color-accent:       #15803d;   /* green-700 — ~4.5:1 on warm surface */
+  --color-accent-hover: #166534;   /* green-800 */
+  --color-accent-muted: #d1fae5;   /* emerald-100 tint */
 
-  /* Primary */
-  --color-primary: #dce8de;
+  /* ── Primary ────────────────────────────────────────── */
+  --color-primary: #dcfce7;   /* emerald-50 */
 
-  /* Semantic: success */
-  --color-success: #16a34a;
+  /* ── Semantic: success ───────────────────────────────── */
+  --color-success: #15803d;
 
-  /* Semantic: danger / error */
-  --color-danger:         #dc2626;
-  --color-danger-surface: #fef2f2;
-  --color-danger-border:  #fca5a5;
+  /* ── Semantic: danger / error ────────────────────────── */
+  --color-danger:         #b91c1c;   /* red-700 — strong on light bg */
+  --color-danger-surface: #fef2f2;   /* red-50 */
+  --color-danger-border:  #fca5a5;   /* red-300 */
 
-  /* Semantic: caution / warning */
-  --color-caution:         #b45309;
-  --color-caution-surface: #fffbeb;
-  --color-caution-border:  #fde68a;
+  /* ── Semantic: caution / warning ─────────────────────── */
+  --color-caution:         #92400e;   /* amber-800 — readable on light bg */
+  --color-caution-surface: #fffbeb;   /* amber-50 */
+  --color-caution-border:  #fde68a;   /* amber-200 */
 
-  /* Semantic: send */
-  --color-send:         #059669;
-  --color-send-surface: #d1fae5;
+  /* ── Semantic: send ──────────────────────────────────── */
+  --color-send:         #047857;   /* emerald-700 — strong on light */
+  --color-send-surface: #d1fae5;   /* emerald-100 */
 
-  /* Semantic: attempt */
-  --color-attempt:         #b45309;
-  --color-attempt-surface: #fef3c7;
+  /* ── Semantic: attempt ───────────────────────────────── */
+  --color-attempt:         #92400e;   /* amber-800 */
+  --color-attempt-surface: #fef3c7;   /* amber-100 */
 
-  /* Glow */
-  --color-glow: rgba(22, 163, 74, 0.07);
+  /* ── Glow ────────────────────────────────────────────── */
+  --color-glow: rgba(21, 128, 61, 0.10);
 }
 
 /* ─── Layout constants ───────────── */
@@ -132,6 +132,21 @@ body {
   background: var(--color-surface);
   color: var(--color-fg);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ─── Smooth theme transitions ────────────────────── */
+/* Gently crossfade colors when toggling light ↔ dark.
+   CSS keyframe animations are a separate property and are unaffected. */
+html {
+  transition: background-color 200ms ease;
+}
+body,
+nav, main, aside, header, footer, dialog {
+  transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease;
 }
 
 /* ─── Layered background — terrain depth + faint scanner glow ─── */
@@ -142,17 +157,18 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 70% 50% at 30% 15%, rgba(34, 197, 94, 0.04), transparent 70%),
-    radial-gradient(ellipse 50% 45% at 75% 85%, rgba(34, 197, 94, 0.025), transparent 70%),
-    linear-gradient(180deg, var(--color-surface) 0%, #0c0f12 100%);
+    radial-gradient(ellipse 90% 60% at 15% 5%, rgba(34, 197, 94, 0.08), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 85% 90%, rgba(34, 197, 94, 0.05), transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(0, 12, 30, 0.6), transparent 70%),
+    linear-gradient(175deg, var(--color-surface) 0%, #070a0e 100%);
   pointer-events: none;
 }
 
 .theme-light body::before {
   background:
-    radial-gradient(ellipse 70% 50% at 30% 15%, rgba(22, 163, 74, 0.04), transparent 70%),
-    radial-gradient(ellipse 50% 45% at 75% 85%, rgba(22, 163, 74, 0.025), transparent 70%),
-    linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-alt) 100%);
+    radial-gradient(ellipse 90% 60% at 15% 5%, rgba(21, 128, 61, 0.06), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 85% 90%, rgba(21, 128, 61, 0.04), transparent 55%),
+    linear-gradient(175deg, var(--color-surface) 0%, #dedad1 100%);
 }
 
 /* ─── Scrollbar — muted and themed ─── */
@@ -227,10 +243,15 @@ input[type="checkbox"] {
   accent-color: var(--color-accent);
 }
 
-/* ─── Selection — green tint ─── */
+/* ─── Selection — themed green tint ─── */
 
 ::selection {
   background: rgba(34, 197, 94, 0.25);
+  color: var(--color-fg);
+}
+
+.theme-light ::selection {
+  background: rgba(21, 128, 61, 0.18);
   color: var(--color-fg);
 }
 
