@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
@@ -83,6 +84,10 @@ function MatchPageInner() {
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   // Track whether the user has confirmed the crop and triggered matching.
   const [matchTriggered, setMatchTriggered] = useState(false);
+
+  // Viewport-fit + fullscreen state for image crop preview
+  const [imageNaturalSize, setImageNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
+  const [imageFullscreen, setImageFullscreen] = useState(false);
 
   // Collapsible climb picker — collapses after a climb is loaded.
   const [pickerCollapsed, setPickerCollapsed] = useState(false);
@@ -250,6 +255,40 @@ function MatchPageInner() {
       console.error("[MatchPage] Video export failed:", err);
       setExportStatus("idle");
     }
+  }
+
+  // ESC key: close image fullscreen
+  useEffect(() => {
+    if (!imageFullscreen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setImageFullscreen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [imageFullscreen]);
+
+  // Compute viewport-fit container style for a media element with known natural dimensions.
+  // The container fills as much horizontal space as available while never exceeding viewport
+  // height (minus nav bar and a small buffer), preserving aspect ratio exactly so that
+  // CropBoxOverlay fraction coordinates always map 1-to-1 with the visible media area.
+  function mediaContainerStyle(w: number, h: number): React.CSSProperties {
+    const ratio = (w / h).toFixed(6);
+    const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
+  }
+
+  function fsMediaContainerStyle(w: number, h: number): React.CSSProperties {
+    const ratio = (w / h).toFixed(6);
+    const maxH = "calc(100dvh - 8rem)";
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
   }
 
   return (
@@ -450,17 +489,38 @@ function MatchPageInner() {
               <p className="text-xs text-fg-secondary">
                 Adjust the crop region then click &ldquo;Apply &amp; View&rdquo;.
               </p>
-              <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
-                Change photo
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setImageFullscreen(true)}
+                  className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+                  aria-label="Expand to fullscreen"
+                  title="Expand preview"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+                  </svg>
+                </button>
+                <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
+                  Change photo
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                </label>
+              </div>
             </div>
-            <div className="relative w-full">
+            {/* Viewport-fit image container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
+            <div
+              className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10"
+              style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imagePreviewUrl}
                 alt="Route photo preview"
-                className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: "fill" }}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  setImageNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
+                }}
               />
               <CropBoxOverlay
                 box={imageCrop}
@@ -480,12 +540,18 @@ function MatchPageInner() {
 
         {/* Static preview after match triggered — hidden once frames are ready or when new image selected */}
         {imagePreviewUrl && matchTriggered && (isMatching || !isFrameReady) && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imagePreviewUrl}
-            alt="Route photo preview"
-            className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
-          />
+          <div
+            className="relative overflow-hidden rounded-xl border border-edge bg-card"
+            style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imagePreviewUrl}
+              alt="Route photo preview"
+              className="absolute inset-0 w-full h-full"
+              style={{ objectFit: "fill" }}
+            />
+          </div>
         )}
 
       {/* Match stats */}
@@ -574,6 +640,66 @@ function MatchPageInner() {
           onCapture={handleCameraCapture}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
+      {/* ── Image crop fullscreen portal ── */}
+      {imageFullscreen && imagePreviewUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Route photo crop — fullscreen"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
+            <p className="text-sm font-medium text-fg">Route photo — adjust crop region</p>
+            <button
+              onClick={() => setImageFullscreen(false)}
+              className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              aria-label="Close fullscreen (Escape)"
+              title="Close fullscreen (Esc)"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Image area */}
+          <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 py-4 min-h-0">
+            <div
+              className="relative overflow-hidden rounded-xl border border-edge/40"
+              style={fsMediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreviewUrl}
+                alt="Route photo preview"
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: "fill" }}
+              />
+              <CropBoxOverlay
+                box={imageCrop}
+                onChange={setImageCrop}
+                disabled={!hasAttempt}
+              />
+            </div>
+          </div>
+
+          {/* Apply button */}
+          {!matchTriggered && (
+            <div className="flex justify-center gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
+              <button
+                onClick={() => { setImageFullscreen(false); handleApplyAndMatch(); }}
+                disabled={!hasAttempt}
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
+              >
+                Apply &amp; View
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body,
       )}
     </div>
     </div>

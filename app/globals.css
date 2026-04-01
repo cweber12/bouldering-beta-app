@@ -61,6 +61,12 @@
   --color-glow: rgba(22, 163, 74, 0.08);
 }
 
+/* ─── Layout constants ───────────── */
+
+:root {
+  --nav-h: 3rem; /* NavBar h-12 = 3rem; used for viewport-fit media preview max-height */
+}
+
 /* ─── Base styles ────────────────── */
 
 body {

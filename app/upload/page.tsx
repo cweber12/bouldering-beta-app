@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import LoadingGate from "@/components/shared/LoadingGate";
 
@@ -187,6 +188,17 @@ function UploadPageInner() {
   const [videoDuration, setVideoDuration] = useState(0);
   const cropVideoRef = useRef<HTMLVideoElement>(null);
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Viewport-fit + fullscreen state for video crop preview
+  const [videoNaturalSize, setVideoNaturalSize] = useState<{ w: number; h: number }>({ w: 16, h: 9 });
+  const [videoFullscreen, setVideoFullscreen] = useState(false);
+  const fullscreenVideoRef = useRef<HTMLVideoElement>(null);
+  const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
+  const [fsIsPlaying, setFsIsPlaying] = useState(false);
+
+  // Viewport-fit + fullscreen state for route photo image preview
+  const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
+  const [routePhotoFullscreen, setRoutePhotoFullscreen] = useState(false);
 
   // Crop adjustment confirmation dialog
   const [showCropWarning, setShowCropWarning] = useState(false);
@@ -528,6 +540,40 @@ function UploadPageInner() {
     ctx.drawImage(video, 0, 0);
     setHasCropFrame(true);
     setVideoDuration(video.duration || 0);
+    setVideoNaturalSize({ w: video.videoWidth || 16, h: video.videoHeight || 9 });
+  }
+
+  // ---- Fullscreen video helpers ----
+
+  function openVideoFullscreen() {
+    setFsVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0);
+    setFsIsPlaying(false);
+    setVideoFullscreen(true);
+  }
+
+  function closeVideoFullscreen() {
+    if (fullscreenVideoRef.current) {
+      fullscreenVideoRef.current.pause();
+    }
+    if (fullscreenVideoRef.current && cropVideoRef.current) {
+      cropVideoRef.current.currentTime = fullscreenVideoRef.current.currentTime;
+      setVideoCurrentTime(fullscreenVideoRef.current.currentTime);
+    }
+    setFsIsPlaying(false);
+    setVideoFullscreen(false);
+  }
+
+  function handleFsPlayPause() {
+    const v = fullscreenVideoRef.current;
+    if (!v) return;
+    if (v.paused) { v.play().catch(() => {}); } else { v.pause(); }
+  }
+
+  function handleFsSeek(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = fullscreenVideoRef.current;
+    if (!v) return;
+    v.currentTime = Number(e.target.value);
+    setFsVideoCurrentTime(Number(e.target.value));
   }
 
   function formatVideoTime(secs: number): string {
@@ -670,6 +716,50 @@ function UploadPageInner() {
     }
   }
 
+  // ESC key: close video fullscreen
+  useEffect(() => {
+    if (!videoFullscreen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeVideoFullscreen();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [videoFullscreen]);
+
+  // ESC key: close route photo fullscreen
+  useEffect(() => {
+    if (!routePhotoFullscreen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setRoutePhotoFullscreen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [routePhotoFullscreen]);
+
+  // Compute viewport-fit container style for a media element with known natural dimensions.
+  // The container fills as much horizontal space as available while never exceeding viewport
+  // height (minus nav bar and a small buffer), preserving aspect ratio exactly so that
+  // CropBoxOverlay fraction coordinates always map 1-to-1 with the visible media area.
+  function mediaContainerStyle(w: number, h: number): React.CSSProperties {
+    const ratio = (w / h).toFixed(6);
+    const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
+  }
+
+  function fsMediaContainerStyle(w: number, h: number): React.CSSProperties {
+    const ratio = (w / h).toFixed(6);
+    const maxH = "calc(100dvh - 8rem)";
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
+  }
+
   const videoAndCropSection = (
     <div className="flex-1 min-w-0 flex flex-col gap-4">
       {/* Video input — upload file or record with camera */}
@@ -749,40 +839,36 @@ function UploadPageInner() {
       {/* Crop UI — shown after file selected, before processing (or in edit mode) */}
       {videoPreviewUrl && pendingFile && !isProcessing && (!isDone || editMode) && phase === "input" && (
         <div className="flex flex-col gap-3">
-          {/* Crop mode toggle */}
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-medium text-fg-secondary">
-              Set crop regions � drag handles to resize, drag interior to move
-            </p>
-            <div className="relative flex items-center gap-2">
-              <button
-                onClick={() => setActiveCropMode("climber")}
-                className={[
-                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                  activeCropMode === "climber"
-                    ? "border-accent/60 bg-accent/10 text-accent"
-                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  isCropDefault(climberCrop) ? "animate-pulse" : "",
-                ].join(" ")}
-              >
-                Climber crop
-              </button>
-              <button
-                onClick={() => setActiveCropMode("route")}
-                className={[
-                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                  activeCropMode === "route"
-                    ? "border-success/60 bg-success/10 text-success"
-                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  isCropDefault(orbCrop) ? "animate-pulse" : "",
-                ].join(" ")}
-              >
-                Wall texture crop
-              </button>
+          {/* ── Crop toolbar: mode buttons + conditions + expand ── */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setActiveCropMode("climber")}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                activeCropMode === "climber"
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                isCropDefault(climberCrop) ? "animate-pulse" : "",
+              ].join(" ")}
+            >
+              Climber crop
+            </button>
+            <button
+              onClick={() => setActiveCropMode("route")}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                activeCropMode === "route"
+                  ? "border-success/60 bg-success/10 text-success"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                isCropDefault(orbCrop) ? "animate-pulse" : "",
+              ].join(" ")}
+            >
+              Wall texture crop
+            </button>
 
-              {/* Shooting conditions — inline dropdown, right-aligned */}
+              {/* Shooting conditions dropdown */}
               {!isDone && !isProcessing && (
-                <div className="ml-auto relative">
+                <div className="relative">
                   <button
                     type="button"
                     onClick={() => setShowConditionsDropdown(p => !p)}
@@ -805,7 +891,7 @@ function UploadPageInner() {
                     </svg>
                   </button>
                   {showConditionsDropdown && (
-                    <div className="absolute right-0 top-full z-20 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
+                    <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
                       <p className="mb-2 text-xs font-semibold text-fg">Shooting conditions</p>
                       <div className="flex flex-col gap-2">
                         {FRAME_CONDITIONS.map(c => (
@@ -827,16 +913,32 @@ function UploadPageInner() {
                   )}
                 </div>
               )}
-            </div>
-            <p className="text-xs text-fg-muted">
-              {activeCropMode === "climber"
-                ? "Climber crop \u2014 follows the climber through each frame."
-                : "Wall texture crop \u2014 used to match this video\u2019s wall to your route photo."}
-            </p>
+
+            {/* Expand to fullscreen */}
+            <button
+              onClick={openVideoFullscreen}
+              className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              aria-label="Expand video preview to fullscreen"
+              title="Expand preview"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+              </svg>
+            </button>
           </div>
 
-          {/* Video with crop overlay on top */}
-          <div className="relative w-full overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10">
+          {/* Active crop mode description */}
+          <p className="text-xs text-fg-muted">
+            {activeCropMode === "climber"
+              ? "Climber crop \u2014 drag handles to resize, drag interior to move. Follows the climber through each frame."
+              : "Wall texture crop \u2014 drag to focus on wall texture used to match this video\u2019s wall to your route photo."}
+          </p>
+
+          {/* Viewport-fit video container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
+          <div
+            className="relative overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10"
+            style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
+          >
             <video
               ref={cropVideoRef}
               src={videoPreviewUrl}
@@ -847,7 +949,8 @@ function UploadPageInner() {
               onPause={() => setIsPlaying(false)}
               onTimeUpdate={() => setVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0)}
               onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
-              className="w-full block"
+              className="absolute inset-0 w-full h-full"
+              style={{ objectFit: "fill" }}
             />
             {hasCropFrame && (
               <CropBoxOverlay
@@ -923,7 +1026,7 @@ function UploadPageInner() {
               aria-label="Frame step"
             />
             <p className="text-xs text-fg-muted">
-              1 = every frame (slowest, most accurate) � 30 = every 30th frame (fastest, more interpolation between detections)
+              1 = every frame (slowest, most accurate) \u2014 30 = every 30th frame (fastest, more interpolation between detections)
             </p>
           </div>
 
@@ -1001,7 +1104,7 @@ function UploadPageInner() {
           </div>
           <p className="text-center text-xs text-fg-secondary">
             Analysing frame {currentFrame} of {totalFrames} ({progressPct}%)
-            <span className="ml-1.5 text-fg-muted">� pose every {frameStep} frames</span>
+            <span className="ml-1.5 text-fg-muted">\u2014 pose every {frameStep} frames</span>
           </p>
         </div>
       )}
@@ -1011,7 +1114,7 @@ function UploadPageInner() {
       )}
       {isDone && orbStatus === "failed" && (
         <p className="text-center text-sm text-amber-400">
-          Feature extraction failed � image matching will be unavailable.
+          Feature extraction failed \u2014 image matching will be unavailable.
         </p>
       )}
 
@@ -1165,17 +1268,38 @@ function UploadPageInner() {
                 <p className="text-xs text-fg-secondary">
                   Adjust the crop region for wall texture matching then click &ldquo;Apply &amp; View&rdquo;.
                 </p>
-                <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
-                  Change photo
-                  <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
-                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setRoutePhotoFullscreen(true)}
+                    className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+                    aria-label="Expand route photo to fullscreen"
+                    title="Expand preview"
+                  >
+                    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+                    </svg>
+                  </button>
+                  <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
+                    Change photo
+                    <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
+                  </label>
+                </div>
               </div>
-              <div className="relative w-full">
+              {/* Viewport-fit image container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
+              <div
+                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10"
+                style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={routePhotoPreviewUrl}
                   alt="Route photo preview"
-                  className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
+                  className="absolute inset-0 w-full h-full"
+                  style={{ objectFit: "fill" }}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
+                  }}
                 />
                 <CropBoxOverlay
                   box={routePhotoCrop}
@@ -1194,12 +1318,18 @@ function UploadPageInner() {
           {/* Static preview while matching */}
           {routePhotoPreviewUrl && routeMatchTriggered && (isMatching || !isFrameReady) && (
             <div className="flex flex-col gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={routePhotoPreviewUrl}
-                alt="Route photo preview"
-                className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
-              />
+              <div
+                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70"
+                style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={routePhotoPreviewUrl}
+                  alt="Route photo preview"
+                  className="absolute inset-0 w-full h-full"
+                  style={{ objectFit: "fill" }}
+                />
+              </div>
               {isMatching && (
                 <p className="text-center text-sm text-fg-secondary">Matching features&hellip;</p>
               )}
@@ -1341,6 +1471,177 @@ function UploadPageInner() {
           onCapture={handleCameraCapture}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
+      {/* ── Video crop fullscreen portal ── */}
+      {videoFullscreen && videoPreviewUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Video crop — fullscreen"
+        >
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
+            <button
+              onClick={() => setActiveCropMode("climber")}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                activeCropMode === "climber"
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+              ].join(" ")}
+            >
+              Climber crop
+            </button>
+            <button
+              onClick={() => setActiveCropMode("route")}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                activeCropMode === "route"
+                  ? "border-success/60 bg-success/10 text-success"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+              ].join(" ")}
+            >
+              Wall texture crop
+            </button>
+            <p className="text-xs text-fg-muted hidden sm:block">
+              {activeCropMode === "climber"
+                ? "Climber crop \u2014 drag handles or interior"
+                : "Wall texture crop \u2014 drag to select wall region"}
+            </p>
+            <button
+              onClick={closeVideoFullscreen}
+              className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              aria-label="Close fullscreen (Escape)"
+              title="Close fullscreen (Esc)"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Video area — fills remaining height */}
+          <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 py-4 min-h-0">
+            <div
+              className="relative overflow-hidden rounded-xl border border-edge/40"
+              style={fsMediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
+            >
+              <video
+                ref={fullscreenVideoRef}
+                src={videoPreviewUrl}
+                muted
+                playsInline
+                onPlay={() => setFsIsPlaying(true)}
+                onPause={() => setFsIsPlaying(false)}
+                onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: "fill" }}
+              />
+              {hasCropFrame && (
+                <CropBoxOverlay
+                  box={activeCropMode === "climber" ? climberCrop : orbCrop}
+                  onChange={activeCropMode === "climber" ? setClimberCrop : setOrbCrop}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Controls */}
+          {hasCropFrame && (
+            <div className="flex items-center gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
+              <button
+                onClick={handleFsPlayPause}
+                className="shrink-0 rounded p-1 text-fg-secondary transition hover:text-fg"
+                aria-label={fsIsPlaying ? "Pause" : "Play"}
+              >
+                {fsIsPlaying ? (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                ) : (
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                )}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={videoDuration || 1}
+                step={0.01}
+                value={fsVideoCurrentTime}
+                onChange={handleFsSeek}
+                className="flex-1 accent-accent"
+                aria-label="Video progress"
+              />
+              <span className="shrink-0 font-mono text-xs text-fg-secondary">
+                {formatVideoTime(fsVideoCurrentTime)} / {formatVideoTime(videoDuration)}
+              </span>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
+
+      {/* ── Route photo fullscreen portal ── */}
+      {routePhotoFullscreen && routePhotoPreviewUrl && createPortal(
+        <div
+          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Route photo crop — fullscreen"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
+            <p className="text-sm font-medium text-fg">Route photo — adjust ORB crop region</p>
+            <button
+              onClick={() => setRoutePhotoFullscreen(false)}
+              className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              aria-label="Close fullscreen (Escape)"
+              title="Close fullscreen (Esc)"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Image area */}
+          <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 py-4 min-h-0">
+            <div
+              className="relative overflow-hidden rounded-xl border border-edge/40"
+              style={fsMediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={routePhotoPreviewUrl}
+                alt="Route photo preview"
+                className="absolute inset-0 w-full h-full"
+                style={{ objectFit: "fill" }}
+              />
+              <CropBoxOverlay
+                box={routePhotoCrop}
+                onChange={setRoutePhotoCrop}
+              />
+            </div>
+          </div>
+
+          {/* Apply button */}
+          {!routeMatchTriggered && (
+            <div className="flex justify-center gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
+              <button
+                onClick={() => { setRoutePhotoFullscreen(false); handleApplyRouteMatch(); }}
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
+              >
+                Apply &amp; View
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body,
       )}
 
       {/* Map picker modal */}
