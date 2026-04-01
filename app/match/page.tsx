@@ -258,7 +258,7 @@ function MatchPageInner() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Matching</h1>
+          <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Overlay</h1>
           <p className="text-[13px] text-fg-secondary leading-relaxed">
             Upload a photo of the route and we&apos;ll overlay your recorded skeleton onto it using
             the ORB reference features extracted on the Upload page.

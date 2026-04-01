@@ -5,10 +5,14 @@ import { useAuth } from "@/hooks/useAuth";
 
 function DemoPreview() {
   return (
-    <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-edge/60 bg-card shadow-2xl shadow-black/20">
+    <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-edge/60 bg-card shadow-2xl shadow-black/20">
+      {/* Faint scan-line overlay */}
+      <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+        <div className="animate-scan-sweep h-full w-1/3 bg-gradient-to-r from-transparent via-accent/5 to-transparent" />
+      </div>
       <div className="flex items-center justify-between border-b border-edge/40 bg-inset/60 px-4 py-2">
         <span className="text-xs font-mono text-fg-muted tracking-wide">pose-overlay.webm</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+        <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
       </div>
       <video
         src="/run-1774824194693-pose-overlay.webm"
@@ -29,21 +33,21 @@ export default function Home() {
     <main className="flex flex-1 flex-col items-center px-4 py-12 sm:px-6 sm:py-20">
       {/* Hero section */}
       <div className="flex flex-col items-center gap-5 text-center max-w-xl">
-        <div className="inline-flex items-center gap-2 rounded-full border border-edge/50 bg-card/60 px-3.5 py-1.5 text-xs font-medium text-fg-secondary backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+        <div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/5 px-3.5 py-1.5 text-xs font-medium text-accent backdrop-blur-sm">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
           All processing runs locally in your browser
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-5xl">
-          Bouldering Beta
+          Route Scanner
         </h1>
         <p className="text-base text-fg-secondary leading-relaxed max-w-md">
-          Record your climbing runs, extract skeleton poses with MediaPipe, then
+          Scan your climbing runs, extract skeleton poses with MediaPipe, then
           project your movement onto a route photo &#8212; entirely in your browser.
         </p>
         {!loading && !user && (
           <Link
             href="/login"
-            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 active:scale-[0.97]"
+            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/25 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/35 active:scale-[0.97]"
           >
             Sign in to get started
             <svg
@@ -65,7 +69,7 @@ export default function Home() {
         {!loading && user && (
           <Link
             href="/upload"
-            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 active:scale-[0.97]"
+            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/25 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/35 active:scale-[0.97]"
           >
             Get started
             <svg
@@ -91,7 +95,7 @@ export default function Home() {
         <p className="text-[11px] font-semibold text-fg-muted uppercase tracking-[0.15em]">Live Demo</p>
         <DemoPreview />
         <p className="text-xs text-fg-muted max-w-xs text-center">
-          Skeleton overlay video &#8212; an example of what Bouldering Beta produces
+          Skeleton overlay video &#8212; an example of what Route Scanner produces
         </p>
       </div>
 
@@ -104,12 +108,12 @@ export default function Home() {
           {[
             {
               step: "1",
-              title: "Upload your video",
+              title: "Scan your video",
               body: "MediaPipe Pose Landmarker detects 33 body keypoints on every sampled frame. ORB descriptors are extracted from the first frame as a reference.",
             },
             {
               step: "2",
-              title: "Match to route photo",
+              title: "Lock to route photo",
               body: "Upload a photo of the route. ORB features are matched and a RANSAC homography maps your skeleton coordinates onto the wall photo.",
             },
             {
@@ -120,7 +124,7 @@ export default function Home() {
           ].map(({ step, title, body }) => (
             <div
               key={step}
-              className="group rounded-2xl border border-edge/50 bg-card/70 px-6 py-6 flex flex-col gap-3 transition-colors duration-200 hover:bg-card hover:border-edge-hover/60"
+              className="group relative rounded-2xl border border-edge/50 bg-card/70 px-6 py-6 flex flex-col gap-3 transition-all duration-200 hover:bg-card hover:border-edge-hover/60 animate-scan-pulse"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-xs font-bold text-accent">
                 {step}

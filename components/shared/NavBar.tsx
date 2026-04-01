@@ -13,7 +13,7 @@ const PUBLIC_TABS = [
 
 const AUTH_TABS = [
   { href: "/", label: "Home" },
-  { href: "/upload", label: "Upload" },
+  { href: "/upload", label: "Scan" },
   { href: "/match", label: "View" },
   { href: "/compare", label: "Compare" },
   { href: "/profile", label: "Profile" },
@@ -84,7 +84,7 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
       bullets: [
         "Drag the crop handles to focus on the wall surface — rock texture, holds, and chalk marks are ideal features for matching.",
         "Exclude sky, trees, gear, people, and the floor — these change between sessions and spoil the match.",
-        "The crop should roughly correspond to the background (ORB) crop you set on the Upload page.",
+        "The crop should roughly correspond to the background (ORB) crop you set on the Scan page.",
         "If matching produces few good matches, try re-cropping to include more distinctive wall texture.",
       ],
     },
@@ -159,11 +159,11 @@ export default function NavBar() {
           <Link href="/" className="mr-4 flex items-center gap-2 py-2 sm:mr-6">
             <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v4a1 1 0 01-1 1H3m18-5v4a1 1 0 001 1h-3M7 21v-4a1 1 0 00-1-1H3m18 5v-4a1 1 0 011-1h-3M12 8v8m-3-5l3-3 3 3" />
               </svg>
             </span>
             <span className="text-sm font-semibold tracking-tight text-fg">
-              Bouldering&nbsp;Beta
+              Route&nbsp;Scanner
             </span>
           </Link>
 

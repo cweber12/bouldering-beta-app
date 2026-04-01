@@ -1,34 +1,37 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ─── Surfaces ─────────────────────────── */
-  --color-surface: #12303f;
-  --color-surface-alt: #0b2230;
-  --color-card: #17384c;
-  --color-card-hover: #1c405a;
-  --color-inset: #0f2836;
+  /* ─── Surfaces (charcoal / granite) ────── */
+  --color-surface: #161a1e;
+  --color-surface-alt: #111417;
+  --color-card: #1e2228;
+  --color-card-hover: #262b32;
+  --color-inset: #131619;
 
-  /* ─── Foreground / text ────────────────── */
-  --color-fg: #F0F0DC;
-  --color-fg-secondary: #8dacc8;
-  --color-fg-muted: #5e8aad;
-  --color-fg-light: #c0d1e0;
-  --color-fg-placeholder: #3f6a90;
+  /* ─── Foreground / text (fog / stone) ──── */
+  --color-fg: #e4e2dd;
+  --color-fg-secondary: #9ca3ab;
+  --color-fg-muted: #636b75;
+  --color-fg-light: #b3b9c1;
+  --color-fg-placeholder: #454d58;
 
-  /* ─── Borders ──────────────────────────── */
-  --color-edge: #243f58;
-  --color-edge-hover: #3a5e7e;
+  /* ─── Borders (slate) ──────────────────── */
+  --color-edge: #282e36;
+  --color-edge-hover: #3a424e;
 
-  /* ─── Accent (CTA / interactive) ───────── */
-  --color-accent: #DDA853;
-  --color-accent-hover: #c4913a;
-  --color-accent-muted: #8a6a35;
+  /* ─── Accent (bright green — scan active) ── */
+  --color-accent: #22c55e;
+  --color-accent-hover: #16a34a;
+  --color-accent-muted: #166534;
 
-  /* ─── Primary (interactive sections) ───── */
-  --color-primary: #1e4670;
+  /* ─── Primary (dark olive) ─────────────── */
+  --color-primary: #243028;
 
   /* ─── Semantic ─────────────────────────── */
-  --color-success: #3daa78;
+  --color-success: #22c55e;
+
+  /* ─── Scanner glow ─────────────────────── */
+  --color-glow: rgba(34, 197, 94, 0.12);
 
   /* ─── Fonts ────────────────────────────── */
   --font-sans: var(--font-geist-sans);
@@ -38,23 +41,24 @@
 /* ─── Light mode overrides ──────── */
 
 .theme-light {
-  --color-surface: #f8f7f0;
-  --color-surface-alt: #F3F3E0;
+  --color-surface: #f3f2ee;
+  --color-surface-alt: #eae9e4;
   --color-card: #ffffff;
   --color-card-hover: #f4f4f0;
-  --color-inset: #edecd8;
-  --color-fg: #12303f;
-  --color-fg-secondary: #4a6170;
-  --color-fg-muted: #7a8e9a;
-  --color-fg-light: #5a7080;
-  --color-fg-placeholder: #a0b0b8;
-  --color-edge: #c8cdd0;
-  --color-edge-hover: #a0aab0;
-  --color-accent: #DDA853;
-  --color-accent-hover: #c4913a;
-  --color-accent-muted: #c4a56a;
-  --color-primary: #27548A;
-  --color-success: #3daa78;
+  --color-inset: #e5e4de;
+  --color-fg: #1a1d21;
+  --color-fg-secondary: #4a5060;
+  --color-fg-muted: #7a8290;
+  --color-fg-light: #5a6270;
+  --color-fg-placeholder: #a0a8b0;
+  --color-edge: #cdd0d4;
+  --color-edge-hover: #a8aeb6;
+  --color-accent: #16a34a;
+  --color-accent-hover: #15803d;
+  --color-accent-muted: #86efac;
+  --color-primary: #dce8de;
+  --color-success: #16a34a;
+  --color-glow: rgba(22, 163, 74, 0.08);
 }
 
 /* ─── Base styles ────────────────── */
@@ -65,7 +69,7 @@ body {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
-/* ─── Subtle background texture ─── */
+/* ─── Layered background — terrain depth + faint scanner glow ─── */
 
 body::before {
   content: "";
@@ -73,13 +77,13 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(30, 70, 112, 0.25), transparent),
-    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(221, 168, 83, 0.06), transparent),
-    var(--color-surface);
+    radial-gradient(ellipse 70% 50% at 30% 15%, rgba(34, 197, 94, 0.04), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 75% 85%, rgba(34, 197, 94, 0.025), transparent 70%),
+    linear-gradient(180deg, var(--color-surface) 0%, #12151a 100%);
   pointer-events: none;
 }
 
-/* ─── Scrollbar — subtle and themed ─── */
+/* ─── Scrollbar — muted and themed ─── */
 
 ::-webkit-scrollbar {
   width: 6px;
@@ -96,7 +100,7 @@ body::before {
   background: var(--color-edge-hover);
 }
 
-/* ─── Focus rings — consistent and accessible ─── */
+/* ─── Focus rings — green scan glow ─── */
 
 :focus-visible {
   outline: 2px solid var(--color-accent);
@@ -124,10 +128,12 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--color-accent);
   margin-top: -5px;
   border: 2px solid var(--color-surface);
-  transition: transform 0.15s ease;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -140,6 +146,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   background: var(--color-accent);
   border: 2px solid var(--color-surface);
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
 }
 
 /* ─── Checkbox accent override ─── */
@@ -148,10 +155,10 @@ input[type="checkbox"] {
   accent-color: var(--color-accent);
 }
 
-/* ─── Selection ─── */
+/* ─── Selection — green tint ─── */
 
 ::selection {
-  background: rgba(221, 168, 83, 0.3);
+  background: rgba(34, 197, 94, 0.25);
   color: var(--color-fg);
 }
 
@@ -194,4 +201,32 @@ input[type="checkbox"] {
   );
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ─── Scanner animations ─────────── */
+
+@keyframes scanSweep {
+  0%   { transform: translateX(-100%); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateX(100%); opacity: 0; }
+}
+.animate-scan-sweep {
+  animation: scanSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes scanPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.15); }
+  50%      { box-shadow: 0 0 12px 3px rgba(34, 197, 94, 0.08); }
+}
+.animate-scan-pulse {
+  animation: scanPulse 3s ease-in-out infinite;
+}
+
+@keyframes beamGlow {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 1; }
+}
+.animate-beam-glow {
+  animation: beamGlow 2s ease-in-out infinite;
 }

@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Route Renderer",
+  title: "Route Scanner",
   description:
-    "Record climbing attempts, extract pose data with MediaPipe, then overlay your skeleton onto a route photo — all locally in your browser.",
+    "Scan your climbing runs, extract pose data with MediaPipe, then overlay your skeleton onto a route photo — all locally in your browser.",
 };
 
 export default function RootLayout({
@@ -31,7 +31,7 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-surface text-fg selection:bg-accent/30">
+      <body className="flex min-h-full flex-col bg-surface text-fg selection:bg-accent/25">
         <Providers>
           <Preloader />
           <NavBar />

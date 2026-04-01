@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Docs — Bouldering Beta",
-  description: "How Bouldering Beta works: pose detection, ORB matching, and homography.",
+  title: "Docs — Route Scanner",
+  description: "How Route Scanner works: pose detection, ORB matching, and homography.",
 };
 
 export default function DocsPage() {
@@ -16,7 +16,7 @@ export default function DocsPage() {
           Documentation
         </h1>
         <p className="mt-3 text-[13px] text-fg-secondary leading-relaxed">
-          Bouldering Beta analyses a climbing video by extracting skeleton poses frame-by-frame,
+          Route Scanner analyses a climbing video by extracting skeleton poses frame-by-frame,
           then overlays the movement onto a route photo using computer vision. Processed runs
           can be saved to Amazon S3 for access across devices, or exported as local JSON files.
         </p>
@@ -28,7 +28,7 @@ export default function DocsPage() {
           <h2 className="text-lg font-semibold text-fg">How it works (overview)</h2>
           <ol className="mt-4 flex flex-col gap-3 pl-5 list-decimal text-fg-secondary leading-relaxed">
             <li>
-              <strong className="text-fg">Video analysis (Upload page)</strong> — You
+              <strong className="text-fg">Video analysis (Scan page)</strong> — You
               upload a short climbing video. The app samples a frame every 100 ms, runs
               the chosen pose model ({" "}
               <span className="font-mono text-fg">MediaPipe Pose Landmarker</span> &mdash; 33 BlazePose keypoints)
@@ -41,7 +41,7 @@ export default function DocsPage() {
               in an external photo later.
             </li>
             <li>
-              <strong className="text-fg">Image matching (Match page)</strong> — You
+              <strong className="text-fg">Image matching (View page)</strong> — You
               upload a photo of the same section of wall. ORB features are extracted from it,
               then matched against the video-frame features to find correspondences.
             </li>
@@ -142,7 +142,7 @@ export default function DocsPage() {
               <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/upload" className="text-fg hover:underline">
-                  Upload page
+                  Scan page
                 </Link>
                 , click the upload area and select your video. Processing begins automatically.
                 A progress bar shows the current frame. When the status banner turns green, ORB
@@ -169,7 +169,7 @@ export default function DocsPage() {
                 4. Adjust skeleton style (optional)
               </p>
               <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
-                On the Match page a <strong className="text-fg">Skeleton style</strong>{" "}
+                On the View page a <strong className="text-fg">Skeleton style</strong>{" "}
                 panel appears once matching completes. Use the colour pickers to change limb and
                 joint colours. Use the sliders to adjust line width and joint radius. Changes
                 take effect on the next render — click{" "}
@@ -185,7 +185,7 @@ export default function DocsPage() {
               <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/match" className="text-fg hover:underline">
-                  Match page
+                  View page
                 </Link>
                 , upload a photo of the wall from a similar angle. The match statistics panel
                 shows how many ORB correspondences were found. Aim for at least 10 good matches
@@ -203,7 +203,7 @@ export default function DocsPage() {
           <h2 className="text-lg font-semibold text-fg">Lighting &amp; preprocessing</h2>
           <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
             Pose detection is sensitive to contrast and sharpness. When lighting conditions
-            are poor, selecting the matching conditions on the Upload page causes each frame
+            are poor, selecting the matching conditions on the Scan page causes each frame
             to be preprocessed before being sent to the pose model. This does{" "}
             <strong className="text-fg">not</strong> affect the ORB background crop —
             ORB feature matching uses pixel normalisation (histogram equalisation) independently
@@ -285,7 +285,7 @@ export default function DocsPage() {
                 <li>
                   Crops a window around the detected hip position before each inference. The
                   window size and starting position are set by the <strong className="text-fg">Climber crop</strong>{" "}
-                  box on the Upload page — it is re-centred on the hip each frame.
+                  box on the Scan page — it is re-centred on the hip each frame.
                 </li>
                 <li>Pose runs every N-th sampled frame (configurable 1–30).</li>
                 <li>

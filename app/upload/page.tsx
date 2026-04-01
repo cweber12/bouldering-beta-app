@@ -936,7 +936,7 @@ function UploadPageInner() {
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
             </svg>
-            Process video
+            Scan video
             {videoCurrentTime > 0 && (
               <span className="text-xs font-normal opacity-75">from {formatVideoTime(videoCurrentTime)}</span>
             )}
@@ -981,9 +981,9 @@ function UploadPageInner() {
       <div className="mx-auto w-full max-w-2xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
       {/* Header */}
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Video Analysis</h1>
+        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Scanner</h1>
         <p className="text-[13px] text-fg-secondary leading-relaxed">
-          Upload or record a climbing video to extract skeleton poses and wall reference features.
+          Upload or record a climbing video to scan skeleton poses and extract wall reference features.
         </p>
       </div>
 

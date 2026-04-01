@@ -563,7 +563,7 @@ function ComparePageInner() {
     <div className="mx-auto w-full max-w-4xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
       {/* Header */}
       <div className="flex flex-col gap-1.5">
-        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Compare Climbs</h1>
+        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Compare Runs</h1>
         <p className="text-[13px] text-fg-secondary leading-relaxed">
           Select a route, then toggle climbs to compare them side by side or overlaid on the same route photo.
         </p>
