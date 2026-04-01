@@ -151,8 +151,8 @@ function CompareSlot({
           <span className={[
             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
             attempt.runType === "send"
-              ? "bg-emerald-900/40 text-emerald-400"
-              : "bg-amber-900/40 text-amber-400",
+              ? "bg-send-surface text-send"
+              : "bg-attempt-surface text-attempt",
           ].join(" ")}>
             {attempt.runType ?? "attempt"}
           </span>
@@ -219,7 +219,7 @@ function CompareSlot({
       )}
 
       {isError && (
-        <p className="text-xs text-red-400">{matchError ?? "Render failed."}</p>
+        <p className="text-xs text-danger">{matchError ?? "Render failed."}</p>
       )}
     </div>
   );

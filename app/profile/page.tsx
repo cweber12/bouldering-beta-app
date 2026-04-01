@@ -474,7 +474,7 @@ export default function ProfilePage() {
 
         {/* ---- Photo cropper modal ---- */}
         {showCropper && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm px-4 py-6">
             <div className="w-full max-w-lg rounded-2xl border border-edge bg-surface p-6 shadow-2xl">
               <h2 className="mb-4 text-sm font-semibold text-fg">Crop profile photo</h2>
               <ImageCropper onCrop={handleCropDone} onCancel={() => setShowCropper(false)} />
@@ -556,7 +556,7 @@ export default function ProfilePage() {
             </button>
             {saveMsg && (
               <span
-                className={`text-xs ${saveMsg === "Profile saved." ? "text-success" : "text-red-400"}`}
+                className={`text-xs ${saveMsg === "Profile saved." ? "text-success" : "text-danger"}`}
               >
                 {saveMsg}
               </span>
@@ -602,7 +602,7 @@ export default function ProfilePage() {
                   {following.includes(r.userId) ? (
                     <button
                       onClick={() => handleUnfollow(r.userId)}
-                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-red-400 hover:text-red-400"
+                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
                     >
                       Unfollow
                     </button>
@@ -654,7 +654,7 @@ export default function ProfilePage() {
                     </Link>
                     <button
                       onClick={() => handleUnfollow(uid)}
-                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-red-400 hover:text-red-400"
+                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
                     >
                       Unfollow
                     </button>
@@ -858,8 +858,8 @@ export default function ProfilePage() {
                         className={[
                           "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
                           c.runType === "send"
-                            ? "bg-emerald-500/80 text-white"
-                            : "bg-amber-500/80 text-white",
+                            ? "bg-send/80 text-fg-inverse"
+                            : "bg-attempt/80 text-fg-inverse",
                         ].join(" ")}
                       >
                         {c.runType}
@@ -921,7 +921,7 @@ export default function ProfilePage() {
 
       {/* ---- Loading detail spinner ---- */}
       {loadingDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
         </div>
       )}

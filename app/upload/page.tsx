@@ -1047,9 +1047,9 @@ function UploadPageInner() {
 
           {/* Crop adjustment warning dialog */}
           {showCropWarning && (
-            <div className="rounded-lg border border-amber-800/60 bg-amber-950/40 px-5 py-4 flex flex-col gap-3">
-              <p className="text-sm font-medium text-amber-300">Crop regions not adjusted</p>
-              <p className="text-xs text-amber-400/80">
+            <div className="rounded-lg border border-caution-border bg-caution-surface px-5 py-4 flex flex-col gap-3">
+              <p className="text-sm font-medium text-caution">Crop regions not adjusted</p>
+              <p className="text-xs text-caution/80">
                 {isCropDefault(climberCrop) && isCropDefault(orbCrop)
                   ? "Neither the climber crop nor the background (ORB) crop has been adjusted from the default."
                   : isCropDefault(climberCrop)
@@ -1113,7 +1113,7 @@ function UploadPageInner() {
         <p className="text-center text-sm text-fg-secondary">Extracting reference features&#8230;</p>
       )}
       {isDone && orbStatus === "failed" && (
-        <p className="text-center text-sm text-amber-400">
+        <p className="text-center text-sm text-caution">
           Feature extraction failed \u2014 image matching will be unavailable.
         </p>
       )}
@@ -1205,7 +1205,7 @@ function UploadPageInner() {
           {savedRouteDirHandle && (
             <button
               onClick={handleDeleteFromDevice}
-              className="flex items-center justify-center gap-2 rounded-xl border border-red-900/40 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition-all duration-200 hover:border-red-700 hover:bg-red-950/30 hover:text-red-300"
+              className="flex items-center justify-center gap-2 rounded-xl border border-danger-border/60 bg-danger-surface px-6 py-3 text-sm text-danger transition-all duration-200 hover:border-danger-border hover:bg-danger-surface/80 hover:text-danger"
             >
               Delete from device
             </button>
@@ -1227,7 +1227,7 @@ function UploadPageInner() {
             {s3Saved ? "Uploaded" : "Upload"}
           </button>
 
-          {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+          {saveError && <p className="text-xs text-danger">{saveError}</p>}
         </div>
       )}
 
@@ -1355,7 +1355,7 @@ function UploadPageInner() {
                 </div>
               </div>
               {matchResult.matches.length < 10 && (
-                <p className="mt-3 text-xs text-amber-400">
+                <p className="mt-3 text-xs text-caution">
                   Fewer than 10 matches &mdash; the homography may be unstable. Try a closer or better-lit photo of the same wall section.
                 </p>
               )}
@@ -1446,11 +1446,11 @@ function UploadPageInner() {
               {s3Saved ? "Uploaded" : "Upload"}
             </button>
 
-            {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+            {saveError && <p className="text-xs text-danger">{saveError}</p>}
           </div>
 
           {(matchStatus === "error" || frameStatus === "error") && (
-            <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-400">
+            <p className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
               {matchError ?? frameError}
             </p>
           )}
@@ -1458,7 +1458,7 @@ function UploadPageInner() {
       )}
 
       {status === "error" && (
-        <p className="rounded-2xl border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-400">
+        <p className="rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
           {errorMessage}
         </p>
       )}
@@ -1723,7 +1723,7 @@ function UploadPageInner() {
                       <button
                         type="button"
                         onClick={() => setCoordinates(null)}
-                        className="ml-2 text-xs text-fg-muted hover:text-red-400 transition"
+                        className="ml-2 text-xs text-fg-muted hover:text-danger transition"
                         aria-label="Clear coordinates"
                       >
                         ✕
@@ -1806,11 +1806,11 @@ function UploadPageInner() {
               </div>
 
               {showLocationWarning && (
-                <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 px-4 py-2.5 text-xs text-amber-400">
+                <p className="rounded-xl border border-caution-border bg-caution-surface px-4 py-2.5 text-xs text-caution">
                   Enter State/Region, Area, and Route before uploading.
                 </p>
               )}
-              {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+              {saveError && <p className="text-xs text-danger">{saveError}</p>}
 
               {/* Action button */}
               <button

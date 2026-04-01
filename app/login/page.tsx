@@ -73,7 +73,7 @@ export default function LoginPage() {
         </div>
 
         {signupSuccess && (
-          <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300">
+          <div className="rounded-xl border border-send-surface bg-send-surface px-4 py-3 text-sm text-send">
             Account created! Check your email for a confirmation link, then sign in.
           </div>
         )}
@@ -113,7 +113,7 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs text-red-400">
+            <p className="rounded-lg border border-danger-border bg-danger-surface px-3 py-2 text-xs text-danger">
               {error}
             </p>
           )}

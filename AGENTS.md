@@ -52,6 +52,18 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 ## Critical Coding Rules
 
+### Color system and theming
+- All colors must use semantic CSS tokens defined in `app/globals.css` (`@theme inline` for dark defaults, `.theme-light` class for light overrides).
+- **Never** use raw Tailwind palette classes for status/semantic colors: no `red-400`, `amber-900`, `emerald-500`, `black/60` etc. where a semantic token exists.
+- Semantic token classes available: `text-danger`, `bg-danger-surface`, `border-danger-border`, `text-caution`, `bg-caution-surface`, `border-caution-border`, `text-send`, `bg-send`, `bg-send-surface`, `text-attempt`, `bg-attempt`, `bg-attempt-surface`, `text-fg-inverse`.
+- Run-type chips: `bg-send/80 text-fg-inverse` (send) and `bg-attempt/80 text-fg-inverse` (attempt). Run-type badges: `bg-send-surface text-send` / `bg-attempt-surface text-attempt`.
+- Error banners: `bg-danger-surface border-danger-border text-danger`. Warning banners: `bg-caution-surface border-caution-border text-caution`.
+- Modal loading overlays: `bg-surface/70 backdrop-blur-sm` (not `bg-black/40`).
+- Theme is toggled via `useTheme()` from `hooks/useTheme.tsx`. `ThemeProvider` is mounted in `components/shared/Providers.tsx`.
+- `ThemeToggle` component lives in `components/shared/ThemeToggle.tsx` — import and place it in the NavBar right-side controls.
+- A FOUC-prevention inline script in `app/layout.tsx` reads `localStorage` and applies `theme-light` or `theme-dark` class to `<html>` before React hydrates.
+- Canvas drawing values (map pins, skeleton overlays) use `utils/theme.ts` `dark`/`light` objects — keep them in sync with `globals.css` tokens.
+
 ### OpenCV (`cv`)
 - OpenCV runs **synchronously on the main thread** via the `cv` object from `useOpenCV`.
 - **Never** create a new WASM runtime inside a Worker — the WASM bootstrap is async and unreliable in worker scope (`importScripts` returns before `onRuntimeInitialized` fires).

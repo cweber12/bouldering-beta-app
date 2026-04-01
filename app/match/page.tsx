@@ -326,8 +326,8 @@ function MatchPageInner() {
                 <span className={[
                   "rounded-full px-2 py-0.5 text-xs font-semibold capitalize",
                   attempt.runType === "send"
-                    ? "bg-emerald-900/40 text-emerald-400"
-                    : "bg-amber-900/40 text-amber-400",
+                    ? "bg-send-surface text-send"
+                    : "bg-attempt-surface text-attempt",
                 ].join(" ")}>
                   {attempt.runType ?? "attempt"}
                 </span>
@@ -397,8 +397,8 @@ function MatchPageInner() {
                       <span className={[
                         "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
                         attempt.runType === "send"
-                          ? "bg-emerald-900/40 text-emerald-400"
-                          : "bg-amber-900/40 text-amber-400",
+                          ? "bg-send-surface text-send"
+                          : "bg-attempt-surface text-attempt",
                       ].join(" ")}>
                         {attempt.runType ?? "attempt"}
                       </span>
@@ -573,7 +573,7 @@ function MatchPageInner() {
             </div>
           </div>
           {matchResult.matches.length < 10 && (
-            <p className="mt-3 text-xs text-amber-400">
+            <p className="mt-3 text-xs text-caution">
               Fewer than 10 matches the homography may be unstable. Try a closer or better-lit photo of the same wall section.
             </p>
           )}
@@ -629,7 +629,7 @@ function MatchPageInner() {
       )}
 
       {(matchStatus === "error" || frameStatus === "error") && (
-        <p className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm text-red-400">
+        <p className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
           {matchError ?? frameError}
         </p>
       )}

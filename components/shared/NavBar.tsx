@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import InfoDropdown from "@/components/shared/InfoDropdown";
+import ThemeToggle from "@/components/shared/ThemeToggle";
 
 const PUBLIC_TABS = [
   { href: "/", label: "Home" },
@@ -218,7 +219,7 @@ export default function NavBar() {
             )}
           </div>
 
-          {/* Right side — auth + mobile hamburger */}
+          {/* Right side — auth + theme toggle + mobile hamburger */}
           <div className="ml-auto flex items-center gap-2">
             {!loading && !user && (
               <Link
@@ -241,6 +242,8 @@ export default function NavBar() {
                 </button>
               </div>
             )}
+
+            <ThemeToggle />
 
             {/* Mobile hamburger */}
             <button

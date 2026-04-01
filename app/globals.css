@@ -1,64 +1,123 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ─── Surfaces (charcoal / granite) ────── */
-  --color-surface: #161a1e;
+  /* ─── Surfaces (charcoal / granite) ────────────── */
+  --color-surface:     #161a1e;
   --color-surface-alt: #111417;
-  --color-card: #1e2228;
-  --color-card-hover: #262b32;
-  --color-inset: #131619;
+  --color-card:        #1e2228;
+  --color-card-hover:  #262b32;
+  --color-inset:       #131619;
 
-  /* ─── Foreground / text (fog / stone) ──── */
-  --color-fg: #e4e2dd;
-  --color-fg-secondary: #9ca3ab;
-  --color-fg-muted: #636b75;
-  --color-fg-light: #b3b9c1;
+  /* ─── Foreground / text (fog / stone) ──────────── */
+  --color-fg:             #e4e2dd;
+  --color-fg-secondary:   #9ca3ab;
+  --color-fg-muted:       #636b75;
+  --color-fg-light:       #b3b9c1;
   --color-fg-placeholder: #454d58;
+  --color-fg-inverse:     #f9fafb;   /* text on colored surfaces */
 
-  /* ─── Borders (slate) ──────────────────── */
-  --color-edge: #282e36;
+  /* ─── Borders (slate) ──────────────────────────── */
+  --color-edge:       #282e36;
   --color-edge-hover: #3a424e;
 
-  /* ─── Accent (bright green — scan active) ── */
-  --color-accent: #22c55e;
+  /* ─── Accent (bright green — scan active) ────────── */
+  --color-accent:       #22c55e;
   --color-accent-hover: #16a34a;
   --color-accent-muted: #166534;
 
-  /* ─── Primary (dark olive) ─────────────── */
+  /* ─── Primary (dark olive) ──────────────────────── */
   --color-primary: #243028;
 
-  /* ─── Semantic ─────────────────────────── */
+  /* ─── Semantic: success ─────────────────────────── */
   --color-success: #22c55e;
 
-  /* ─── Scanner glow ─────────────────────── */
+  /* ─── Semantic: danger / error ──────────────────── */
+  --color-danger:         #f87171;   /* text */
+  --color-danger-surface: #250d0d;   /* background */
+  --color-danger-border:  #5c1a1a;   /* border */
+
+  /* ─── Semantic: caution / warning ───────────────── */
+  --color-caution:         #fbbf24;  /* text */
+  --color-caution-surface: #201100;  /* background */
+  --color-caution-border:  #5c2e00;  /* border */
+
+  /* ─── Semantic: send (completed run) ────────────── */
+  --color-send:         #34d399;     /* text + chip bg */
+  --color-send-surface: #0d3d24;     /* muted badge background */
+
+  /* ─── Semantic: attempt (incomplete run) ────────── */
+  --color-attempt:         #fbbf24;  /* text + chip bg (same hue as caution) */
+  --color-attempt-surface: #3d2100;  /* muted badge background */
+
+  /* ─── Scanner glow ──────────────────────────────── */
   --color-glow: rgba(34, 197, 94, 0.12);
 
-  /* ─── Fonts ────────────────────────────── */
+  /* ─── Fonts ─────────────────────────────────────── */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-/* ─── Light mode overrides ──────── */
+/* ─── Dark mode explicit class (default theme, class kept for symmetry) ── */
+
+.theme-dark {
+  color-scheme: dark;
+}
+
+/* ─── Light mode overrides ──────────────────────────────────────────────── */
 
 .theme-light {
-  --color-surface: #f3f2ee;
+  color-scheme: light;
+
+  /* Surfaces */
+  --color-surface:     #f3f2ee;
   --color-surface-alt: #eae9e4;
-  --color-card: #ffffff;
-  --color-card-hover: #f4f4f0;
-  --color-inset: #e5e4de;
-  --color-fg: #1a1d21;
-  --color-fg-secondary: #4a5060;
-  --color-fg-muted: #7a8290;
-  --color-fg-light: #5a6270;
-  --color-fg-placeholder: #a0a8b0;
-  --color-edge: #cdd0d4;
+  --color-card:        #ffffff;
+  --color-card-hover:  #f4f4f0;
+  --color-inset:       #e5e4de;
+
+  /* Foreground */
+  --color-fg:             #1a1d21;
+  --color-fg-secondary:   #4a5060;
+  --color-fg-muted:       #7a8290;
+  --color-fg-light:       #5a6270;
+  --color-fg-placeholder: #9ca3ab;
+  --color-fg-inverse:     #ffffff;
+
+  /* Borders */
+  --color-edge:       #d0d3d8;
   --color-edge-hover: #a8aeb6;
-  --color-accent: #16a34a;
+
+  /* Accent */
+  --color-accent:       #16a34a;
   --color-accent-hover: #15803d;
-  --color-accent-muted: #86efac;
+  --color-accent-muted: #bbf7d0;
+
+  /* Primary */
   --color-primary: #dce8de;
+
+  /* Semantic: success */
   --color-success: #16a34a;
-  --color-glow: rgba(22, 163, 74, 0.08);
+
+  /* Semantic: danger / error */
+  --color-danger:         #dc2626;
+  --color-danger-surface: #fef2f2;
+  --color-danger-border:  #fca5a5;
+
+  /* Semantic: caution / warning */
+  --color-caution:         #b45309;
+  --color-caution-surface: #fffbeb;
+  --color-caution-border:  #fde68a;
+
+  /* Semantic: send */
+  --color-send:         #059669;
+  --color-send-surface: #d1fae5;
+
+  /* Semantic: attempt */
+  --color-attempt:         #b45309;
+  --color-attempt-surface: #fef3c7;
+
+  /* Glow */
+  --color-glow: rgba(22, 163, 74, 0.07);
 }
 
 /* ─── Layout constants ───────────── */
@@ -85,8 +144,15 @@ body::before {
   background:
     radial-gradient(ellipse 70% 50% at 30% 15%, rgba(34, 197, 94, 0.04), transparent 70%),
     radial-gradient(ellipse 50% 45% at 75% 85%, rgba(34, 197, 94, 0.025), transparent 70%),
-    linear-gradient(180deg, var(--color-surface) 0%, #12151a 100%);
+    linear-gradient(180deg, var(--color-surface) 0%, #0c0f12 100%);
   pointer-events: none;
+}
+
+.theme-light body::before {
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 15%, rgba(22, 163, 74, 0.04), transparent 70%),
+    radial-gradient(ellipse 50% 45% at 75% 85%, rgba(22, 163, 74, 0.025), transparent 70%),
+    linear-gradient(180deg, var(--color-surface) 0%, var(--color-surface-alt) 100%);
 }
 
 /* ─── Scrollbar — muted and themed ─── */
@@ -134,12 +200,12 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--color-accent);
   margin-top: -5px;
   border: 2px solid var(--color-surface);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 6px var(--color-glow);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 0 10px var(--color-glow);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -152,7 +218,7 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   background: var(--color-accent);
   border: 2px solid var(--color-surface);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 6px var(--color-glow);
 }
 
 /* ─── Checkbox accent override ─── */
@@ -222,8 +288,8 @@ input[type="checkbox"] {
 }
 
 @keyframes scanPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.15); }
-  50%      { box-shadow: 0 0 12px 3px rgba(34, 197, 94, 0.08); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--color-glow); }
+  50%      { box-shadow: 0 0 12px 3px var(--color-glow); }
 }
 .animate-scan-pulse {
   animation: scanPulse 3s ease-in-out infinite;

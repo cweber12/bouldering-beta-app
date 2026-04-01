@@ -27,71 +27,76 @@
  * | Clickable card      | primary        | fg              | edge         | accent/60 border      |
  * | Input / inset area  | inset          | fg              | edge         | accent/60 focus       |
  * | Dropdown list       | card           | fg-light        | edge         | inset bg on hover     |
- * | CTA button          | accent         | fg              | —            | accent-hover bg       |
+ * | CTA button          | accent         | surface         | —            | accent-hover bg       |
  * | Secondary button    | card           | fg-secondary    | edge         | edge-hover, fg        |
- * | Navigation bar      | surface-alt/95 | fg-muted        | edge         | fg-light, fg          |
- * | Nav active tab      | —              | fg              | accent       | —                     |
+ * | Navigation bar      | surface-alt/90 | fg-muted        | edge         | fg-light, fg          |
+ * | Nav active tab      | card/60        | fg              | —            | —                     |
+ * | Active tab underline| —              | —               | accent       | —                     |
  * | Modal               | card           | fg              | —            | —                     |
  * | Progress bar track  | inset          | —               | —            | —                     |
  * | Progress bar fill   | accent         | —               | —            | —                     |
  * | Badge / tag         | inset          | fg-light        | —            | —                     |
- * | Label               | —              | fg-secondary    | —            | —                     |
+ * | Run-type chip       | send / attempt | fg-inverse      | —            | —                     |
+ * | Send badge          | send-surface   | send            | —            | —                     |
+ * | Attempt badge       | attempt-surface| attempt         | —            | —                     |
+ * | Error message       | danger-surface | danger          | danger-border| —                     |
+ * | Warning message     | caution-surface| caution         | caution-border| —                    |
+ * | Success message     | send-surface   | send            | —            | —                     |
  * | Heading             | —              | fg              | —            | —                     |
  * | Body text           | —              | fg-secondary    | —            | —                     |
  * | Muted text          | —              | fg-muted        | —            | —                     |
  * | Placeholder         | —              | fg-placeholder  | —            | —                     |
- *
- * ## Palette
- *
- * Base: #F3F3E0 (cream), #27548A (blue), #183B4E (navy), #DDA853 (amber)
- * Source: https://colorhunt.co/palette/f3f3e027548a183b4edda853
  */
 
-// ─── Raw palette hex values ──────────────────────────────
-// Use these for canvas drawing, chart rendering, or anywhere
-// CSS custom properties are not available.
-export const palette = {
-  cream: "#F3F3E0",
-  blue: "#27548A",
-  navy: "#183B4E",
-  amber: "#DDA853",
-} as const;
-
-// ─── Dark theme (active) ─────────────────────────────────
+// ─── Dark theme canvas values ────────────────────────────────
+// Used for canvas drawing, map pins, and anywhere CSS custom
+// properties are not available. Keep in sync with globals.css.
 export const dark = {
-  surface: "#183B4E",
-  surfaceAlt: "#0e2535",
-  card: "#1a3a52",
-  inset: "#132d3f",
-  fg: "#F3F3E0",
-  fgSecondary: "#8ba8c4",
-  fgMuted: "#6889a8",
-  fgLight: "#c4d4e0",
-  fgPlaceholder: "#4a7099",
-  edge: "#2a4a6b",
-  edgeHover: "#3d6089",
-  accent: "#DDA853",
-  accentHover: "#c4913a",
-  primary: "#27548A",
-  success: "#3daa78",
+  surface:        "#161a1e",
+  surfaceAlt:     "#111417",
+  card:           "#1e2228",
+  inset:          "#131619",
+  fg:             "#e4e2dd",
+  fgSecondary:    "#9ca3ab",
+  fgMuted:        "#636b75",
+  fgLight:        "#b3b9c1",
+  fgInverse:      "#f9fafb",
+  edge:           "#282e36",
+  edgeHover:      "#3a424e",
+  accent:         "#22c55e",
+  accentHover:    "#16a34a",
+  success:        "#22c55e",
+  danger:         "#f87171",
+  caution:        "#fbbf24",
+  send:           "#34d399",
+  sendSurface:    "#0d3d24",
+  attempt:        "#fbbf24",
+  attemptSurface: "#3d2100",
 } as const;
 
-// ─── Light theme (future) ────────────────────────────────
-// Uncomment the `.theme-light` block in globals.css to activate.
+// ─── Light theme canvas values ───────────────────────────────
 export const light = {
-  surface: "#f8f7f0",
-  surfaceAlt: "#F3F3E0",
-  card: "#ffffff",
-  inset: "#edecd8",
-  fg: "#183B4E",
-  fgSecondary: "#4a6170",
-  fgMuted: "#7a8e9a",
-  fgLight: "#5a7080",
-  fgPlaceholder: "#a0b0b8",
-  edge: "#c8cdd0",
-  edgeHover: "#a0aab0",
-  accent: "#DDA853",
-  accentHover: "#c4913a",
-  primary: "#27548A",
-  success: "#3daa78",
+  surface:        "#f3f2ee",
+  surfaceAlt:     "#eae9e4",
+  card:           "#ffffff",
+  inset:          "#e5e4de",
+  fg:             "#1a1d21",
+  fgSecondary:    "#4a5060",
+  fgMuted:        "#7a8290",
+  fgLight:        "#5a6270",
+  fgInverse:      "#ffffff",
+  edge:           "#d0d3d8",
+  edgeHover:      "#a8aeb6",
+  accent:         "#16a34a",
+  accentHover:    "#15803d",
+  success:        "#16a34a",
+  danger:         "#dc2626",
+  caution:        "#b45309",
+  send:           "#059669",
+  sendSurface:    "#d1fae5",
+  attempt:        "#b45309",
+  attemptSurface: "#fef3c7",
 } as const;
+
+export type Theme = typeof dark;
+

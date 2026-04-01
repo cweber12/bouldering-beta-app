@@ -323,7 +323,7 @@ export default function PublicProfilePage() {
                 {isFollowing ? (
                   <button
                     onClick={handleUnfollow}
-                    className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-red-400 hover:text-red-400"
+                    className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
                   >
                     Unfollow
                   </button>
@@ -494,8 +494,8 @@ export default function PublicProfilePage() {
                           className={[
                             "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
                             c.runType === "send"
-                              ? "bg-emerald-500/80 text-white"
-                              : "bg-amber-500/80 text-white",
+                              ? "bg-send/80 text-fg-inverse"
+                              : "bg-attempt/80 text-fg-inverse",
                           ].join(" ")}
                         >
                           {c.runType}
@@ -559,7 +559,7 @@ export default function PublicProfilePage() {
 
       {/* ---- Loading detail spinner ---- */}
       {loadingDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
         </div>
       )}
