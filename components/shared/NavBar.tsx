@@ -125,6 +125,12 @@ export default function NavBar() {
   const tabs = user ? AUTH_TABS : PUBLIC_TABS;
   const helpSections = HELP_CONTENT[path] ?? [];
   const helpOpen = helpOpenPath === path;
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [prevPath, setPrevPath] = useState(path);
+  if (path !== prevPath) {
+    setPrevPath(path);
+    setMobileOpen(false);
+  }
 
   // Close on outside click
   useEffect(() => {
@@ -144,89 +150,171 @@ export default function NavBar() {
 
   return (
     <nav
-      className="sticky top-0 z-50 border-b border-edge bg-surface-alt/95 backdrop-blur"
+      className="sticky top-0 z-50 border-b border-edge/60 bg-surface-alt/90 backdrop-blur-xl"
       aria-label="Main navigation"
     >
-      <div ref={helpRef} className="relative mx-auto max-w-4xl px-6">
-        <div className="flex items-center gap-1">
-          <span className="mr-6 py-3 text-sm font-semibold text-fg tracking-tight">
-            Route Renderer
-          </span>
-
-          {tabs.map(tab => {
-            const active =
-              tab.href === "/"
-                ? path === "/"
-                : path === tab.href || path.startsWith(tab.href + "/");
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={[
-                  "border-b-2 px-3 py-3 text-sm transition",
-                  active
-                    ? "border-accent font-medium text-fg"
-                    : "border-transparent text-fg-muted hover:text-fg-light",
-                ].join(" ")}
-                aria-current={active ? "page" : undefined}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
-
-          {/* Help tab — shown when the current page has help content */}
-          {helpSections.length > 0 && (
-            <button
-              onClick={() => setHelpOpenPath(old => old === path ? null : path)}
-              className={[
-                "flex items-center gap-1 border-b-2 px-3 py-3 text-sm transition",
-                helpOpen
-                  ? "border-accent font-medium text-fg"
-                  : "border-transparent text-fg-muted hover:text-fg-light",
-              ].join(" ")}
-              aria-expanded={helpOpen}
-            >
-              Help
-              <svg
-                className={["h-3 w-3 transition-transform duration-200", helpOpen ? "rotate-180" : ""].join(" ")}
-                fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+      <div ref={helpRef} className="relative mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="flex h-12 items-center gap-1">
+          {/* Brand */}
+          <Link href="/" className="mr-4 flex items-center gap-2 py-2 sm:mr-6">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-accent/15 text-accent">
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z" />
               </svg>
-            </button>
-          )}
+            </span>
+            <span className="text-sm font-semibold tracking-tight text-fg">
+              Bouldering&nbsp;Beta
+            </span>
+          </Link>
 
+          {/* Desktop tabs */}
+          <div className="hidden items-center gap-0.5 md:flex">
+            {tabs.map(tab => {
+              const active =
+                tab.href === "/"
+                  ? path === "/"
+                  : path === tab.href || path.startsWith(tab.href + "/");
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={[
+                    "relative px-3 py-1.5 text-[13px] font-medium rounded-lg transition-colors duration-150",
+                    active
+                      ? "text-fg bg-card/60"
+                      : "text-fg-muted hover:text-fg hover:bg-card/40",
+                  ].join(" ")}
+                  aria-current={active ? "page" : undefined}
+                >
+                  {tab.label}
+                  {active && (
+                    <span className="absolute inset-x-3 -bottom-[13px] h-[2px] rounded-full bg-accent" />
+                  )}
+                </Link>
+              );
+            })}
+
+            {/* Help tab -- desktop */}
+            {helpSections.length > 0 && (
+              <button
+                onClick={() => setHelpOpenPath(old => old === path ? null : path)}
+                className={[
+                  "flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium rounded-lg transition-colors duration-150",
+                  helpOpen
+                    ? "text-fg bg-card/60"
+                    : "text-fg-muted hover:text-fg hover:bg-card/40",
+                ].join(" ")}
+                aria-expanded={helpOpen}
+              >
+                Help
+                <svg
+                  className={["h-3 w-3 transition-transform duration-200", helpOpen ? "rotate-180" : ""].join(" ")}
+                  fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Right side — auth + mobile hamburger */}
           <div className="ml-auto flex items-center gap-2">
             {!loading && !user && (
               <Link
                 href="/login"
-                className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                className="hidden rounded-lg bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20 sm:inline-flex"
               >
                 Sign in
               </Link>
             )}
             {!loading && user && (
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-fg-muted truncate max-w-[160px]">
+              <div className="hidden items-center gap-2 sm:flex">
+                <span className="truncate max-w-[140px] text-xs text-fg-muted">
                   {user.email}
                 </span>
                 <button
                   onClick={handleSignOut}
-                  className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                  className="rounded-lg bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
                 >
                   Sign out
                 </button>
               </div>
             )}
+
+            {/* Mobile hamburger */}
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted transition hover:bg-card/40 hover:text-fg md:hidden"
+              onClick={() => setMobileOpen(v => !v)}
+              aria-label="Toggle menu"
+              aria-expanded={mobileOpen}
+            >
+              {mobileOpen ? (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+                </svg>
+              )}
+            </button>
           </div>
         </div>
 
+        {/* Mobile menu */}
+        {mobileOpen && (
+          <div className="animate-fade-in flex flex-col gap-1 border-t border-edge/40 pb-4 pt-2 md:hidden">
+            {tabs.map(tab => {
+              const active =
+                tab.href === "/"
+                  ? path === "/"
+                  : path === tab.href || path.startsWith(tab.href + "/");
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={[
+                    "rounded-lg px-3 py-2 text-sm font-medium transition",
+                    active
+                      ? "bg-card/60 text-fg"
+                      : "text-fg-muted hover:bg-card/40 hover:text-fg",
+                  ].join(" ")}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
+            {helpSections.length > 0 && (
+              <button
+                onClick={() => { setHelpOpenPath(old => old === path ? null : path); setMobileOpen(false); }}
+                className="rounded-lg px-3 py-2 text-left text-sm font-medium text-fg-muted transition hover:bg-card/40 hover:text-fg"
+              >
+                Help
+              </button>
+            )}
+            <div className="mt-2 border-t border-edge/40 pt-2">
+              {!loading && !user && (
+                <Link href="/login" className="block rounded-lg bg-accent/10 px-3 py-2 text-center text-sm font-medium text-accent transition hover:bg-accent/20">
+                  Sign in
+                </Link>
+              )}
+              {!loading && user && (
+                <div className="flex flex-col gap-2">
+                  <span className="truncate px-3 text-xs text-fg-muted">{user.email}</span>
+                  <button onClick={handleSignOut} className="rounded-lg bg-card/60 px-3 py-2 text-sm font-medium text-fg-secondary transition hover:bg-card hover:text-fg">
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Help panel dropdown */}
         {helpOpen && helpSections.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-40 border-b border-edge bg-surface-alt shadow-xl">
-            <div className="px-6 py-5 flex flex-col gap-3">
+          <div className="animate-fade-in absolute left-0 right-0 top-full z-40 border-b border-edge/60 bg-surface-alt/95 backdrop-blur-xl shadow-2xl">
+            <div className="px-4 py-5 sm:px-6 flex flex-col gap-3">
               {helpSections.map(section => (
                 <InfoDropdown key={section.title} title={section.title}>
                   <ul className="flex flex-col gap-1.5 pl-4 list-disc">

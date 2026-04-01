@@ -213,7 +213,7 @@ export default function SkeletonStylePanel({
     <div ref={panelRef} className={`relative ${className}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="rounded-lg border border-edge bg-card px-4 py-2 text-sm font-medium text-fg-muted transition hover:border-edge-hover hover:text-fg-light"
+        className="rounded-lg border border-edge/50 bg-card/60 px-4 py-2 text-sm font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg"
         aria-expanded={open}
         aria-haspopup="dialog"
       >
@@ -231,7 +231,7 @@ export default function SkeletonStylePanel({
           <label className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-xs text-fg-secondary">
               <span>Line width</span>
-              <span className="tabular-nums text-fg-light">{lineWidth.toFixed(1)} px</span>
+              <span className="tabular-nums text-fg">{lineWidth.toFixed(1)} px</span>
             </div>
             <input type="range" min="0.5" max="8" step="0.5" value={lineWidth}
               onChange={e => setLineWidth(parseFloat(e.target.value))}
@@ -240,7 +240,7 @@ export default function SkeletonStylePanel({
           <label className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-xs text-fg-secondary">
               <span>Point radius</span>
-              <span className="tabular-nums text-fg-light">{pointRadius} px</span>
+              <span className="tabular-nums text-fg">{pointRadius} px</span>
             </div>
             <input type="range" min="1" max="12" step="1" value={pointRadius}
               onChange={e => setPointRadius(parseInt(e.target.value, 10))}

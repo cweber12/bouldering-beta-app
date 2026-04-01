@@ -243,13 +243,13 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     return (
       <div
         className={[
-          "flex items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 py-10",
+          "flex items-center justify-center rounded-xl border border-edge/50 bg-card/60 py-10",
           className,
         ]
           .filter(Boolean)
           .join(" ")}
       >
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-zinc-300" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-edge border-t-fg" />
       </div>
     );
   }
@@ -257,7 +257,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   return (
     <div
       className={[
-        "flex flex-col gap-0 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900",
+        "flex flex-col gap-0 overflow-hidden rounded-xl border border-edge/50 bg-surface",
         className,
       ]
         .filter(Boolean)
@@ -265,11 +265,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     >
       <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
 
-      <div className="flex items-center gap-3 bg-zinc-950/80 px-3 py-2">
+      <div className="flex items-center gap-3 bg-surface-alt/80 backdrop-blur-sm px-3 py-2">
         {!hidePlayButton && (
           <button
             onClick={togglePlay}
-            className="flex h-7 w-7 items-center justify-center rounded-full text-zinc-300 transition hover:text-zinc-100"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition hover:text-fg"
             aria-label={playing ? "Pause" : "Play"}
           >
             {playing ? (
@@ -291,11 +291,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
           step={0.01}
           value={displayTime}
           onChange={handleSeek}
-          className="h-1 flex-1 cursor-pointer accent-zinc-400"
+          className="h-1 flex-1 cursor-pointer accent-accent"
           aria-label="Seek"
         />
 
-        <span className="select-none whitespace-nowrap text-xs tabular-nums text-zinc-500">
+        <span className="select-none whitespace-nowrap text-xs tabular-nums text-fg-muted">
           {formatTime(displayTime)} / {formatTime(duration)}
         </span>
       </div>

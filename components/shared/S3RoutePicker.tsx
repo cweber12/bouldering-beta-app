@@ -142,7 +142,7 @@ function RouteAnalysisGraph({
                   "rounded px-2.5 py-1 text-xs font-medium capitalize transition",
                   activeTab === tab
                     ? "bg-inset text-fg"
-                    : "text-fg-muted hover:text-fg-light",
+                    : "text-fg-muted hover:text-fg",
                 ].join(" ")}
               >
                 {tab}
@@ -655,7 +655,7 @@ export default function S3RoutePicker({
               )}
               {/* Route image upload */}
               {selectedRoute && userPrefix && (
-                <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs text-fg-muted hover:text-fg-light transition">
+                <label className="flex cursor-pointer items-center gap-1.5 self-start text-xs text-fg-muted hover:text-fg transition">
                   {routeImageUploading ? (
                     <span className="animate-pulse">Saving&#8230;</span>
                   ) : (

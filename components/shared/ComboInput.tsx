@@ -88,7 +88,7 @@ export default function ComboInput({
           placeholder={placeholder}
           disabled={disabled}
           autoComplete="off"
-          className="w-full rounded-lg border border-edge bg-inset px-3 py-2 pr-7 text-sm text-fg placeholder-fg-placeholder outline-none transition focus:border-accent/60 disabled:opacity-50"
+          className="w-full rounded-xl border border-edge/50 bg-inset px-3 py-2 pr-7 text-sm text-fg placeholder-fg-placeholder outline-none transition focus:border-accent/60 disabled:opacity-50"
         />
         {suggestions.length > 0 && !disabled && (
           <button
@@ -96,7 +96,7 @@ export default function ComboInput({
             tabIndex={-1}
             onMouseDown={handleChevron}
             aria-label="Toggle suggestions"
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg-light"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
           >
             <svg
               className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
@@ -114,7 +114,7 @@ export default function ComboInput({
       {open && visible.length > 0 && (
         <ul
           onMouseDown={e => e.preventDefault()}
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-edge bg-card py-1 shadow-xl"
+          className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-48 overflow-y-auto rounded-xl border border-edge/50 bg-card/95 py-1 shadow-2xl backdrop-blur-xl"
         >
           {visible.map(s => (
             <li key={s}>
@@ -122,7 +122,7 @@ export default function ComboInput({
                 type="button"
                 onClick={() => handleSelect(s)}
                 className={`w-full px-3 py-2 text-left text-sm transition hover:bg-inset ${
-                  s === value ? "font-medium text-fg" : "text-fg-light"
+                  s === value ? "font-medium text-fg" : "text-fg-secondary"
                 }`}
               >
                 {s}

@@ -2,28 +2,30 @@
 
 @theme inline {
   /* ─── Surfaces ─────────────────────────── */
-  --color-surface: #183B4E;
-  --color-surface-alt: #0e2535;
-  --color-card: #1a3a52;
-  --color-inset: #132d3f;
+  --color-surface: #12303f;
+  --color-surface-alt: #0b2230;
+  --color-card: #17384c;
+  --color-card-hover: #1c405a;
+  --color-inset: #0f2836;
 
   /* ─── Foreground / text ────────────────── */
-  --color-fg: #F3F3E0;
-  --color-fg-secondary: #8ba8c4;
-  --color-fg-muted: #6889a8;
-  --color-fg-light: #c4d4e0;
-  --color-fg-placeholder: #4a7099;
+  --color-fg: #F0F0DC;
+  --color-fg-secondary: #8dacc8;
+  --color-fg-muted: #5e8aad;
+  --color-fg-light: #c0d1e0;
+  --color-fg-placeholder: #3f6a90;
 
   /* ─── Borders ──────────────────────────── */
-  --color-edge: #2a4a6b;
-  --color-edge-hover: #3d6089;
+  --color-edge: #243f58;
+  --color-edge-hover: #3a5e7e;
 
   /* ─── Accent (CTA / interactive) ───────── */
   --color-accent: #DDA853;
   --color-accent-hover: #c4913a;
+  --color-accent-muted: #8a6a35;
 
   /* ─── Primary (interactive sections) ───── */
-  --color-primary: #27548A;
+  --color-primary: #1e4670;
 
   /* ─── Semantic ─────────────────────────── */
   --color-success: #3daa78;
@@ -39,8 +41,9 @@
   --color-surface: #f8f7f0;
   --color-surface-alt: #F3F3E0;
   --color-card: #ffffff;
+  --color-card-hover: #f4f4f0;
   --color-inset: #edecd8;
-  --color-fg: #183B4E;
+  --color-fg: #12303f;
   --color-fg-secondary: #4a6170;
   --color-fg-muted: #7a8e9a;
   --color-fg-light: #5a7080;
@@ -49,21 +52,146 @@
   --color-edge-hover: #a0aab0;
   --color-accent: #DDA853;
   --color-accent-hover: #c4913a;
+  --color-accent-muted: #c4a56a;
   --color-primary: #27548A;
   --color-success: #3daa78;
 }
 
+/* ─── Base styles ────────────────── */
+
 body {
   background: var(--color-surface);
   color: var(--color-fg);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
 }
 
-/* ─── Bottom sheet slide-up animation ── */
+/* ─── Subtle background texture ─── */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(30, 70, 112, 0.25), transparent),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(221, 168, 83, 0.06), transparent),
+    var(--color-surface);
+  pointer-events: none;
+}
+
+/* ─── Scrollbar — subtle and themed ─── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-edge-hover);
+}
+
+/* ─── Focus rings — consistent and accessible ─── */
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── Range input — cross-browser accent ─── */
+
+input[type="range"] {
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-edge);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  margin-top: -5px;
+  border: 2px solid var(--color-surface);
+  transition: transform 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-edge);
+}
+input[type="range"]::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  border: 2px solid var(--color-surface);
+}
+
+/* ─── Checkbox accent override ─── */
+
+input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+/* ─── Selection ─── */
+
+::selection {
+  background: rgba(221, 168, 83, 0.3);
+  color: var(--color-fg);
+}
+
+/* ─── Animations ─────────────────── */
+
 @keyframes slideUp {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
+  from { transform: translateY(100%); opacity: 0.8; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 .animate-slide-up {
-  animation: slideUp 0.3s ease-out both;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.animate-fade-in {
+  animation: fadeIn 0.2s ease-out both;
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.animate-scale-in {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-inset) 0%,
+    var(--color-edge) 50%,
+    var(--color-inset) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
 }

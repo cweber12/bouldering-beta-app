@@ -253,13 +253,13 @@ function MatchPageInner() {
   }
 
   return (
-    <div className="flex-1 bg-surface">
-    <div className="mx-auto w-full max-w-3xl px-6 py-10 flex flex-col gap-8">
+    <div className="flex-1">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold tracking-tight text-fg">Route Matching</h1>
-          <p className="text-sm text-fg-secondary">
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Matching</h1>
+          <p className="text-[13px] text-fg-secondary leading-relaxed">
             Upload a photo of the route and we&apos;ll overlay your recorded skeleton onto it using
             the ORB reference features extracted on the Upload page.
           </p>
@@ -268,7 +268,7 @@ function MatchPageInner() {
 
 
       {/* Climb data section — collapsible after a climb is selected */}
-      <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-4">
+      <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4 flex flex-col gap-4">
         {pickerCollapsed && hasAttempt ? (
           <>
             {/* Collapsed summary — click to expand */}
@@ -278,7 +278,7 @@ function MatchPageInner() {
               className="flex items-center justify-between w-full text-left"
             >
               <div className="flex items-center gap-3">
-                <p className="text-sm font-medium text-fg-light">
+                <p className="text-sm font-medium text-fg">
                   {[attempt.area, attempt.route].filter(Boolean).join(" \u203a ")}
                 </p>
                 {attempt.state && (
@@ -293,7 +293,7 @@ function MatchPageInner() {
                   {attempt.runType ?? "attempt"}
                 </span>
                 {attempt.rating && (
-                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-inset text-fg-light">
+                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-inset text-fg">
                     {attempt.rating}
                   </span>
                 )}
@@ -307,12 +307,12 @@ function MatchPageInner() {
           <>
             {/* Expanded — full picker + attempt details */}
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-fg-light">Climbs</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Climbs</p>
               {hasAttempt && (
                 <button
                   type="button"
                   onClick={() => setPickerCollapsed(true)}
-                  className="text-xs text-fg-muted hover:text-fg-light transition"
+                  className="text-xs text-fg-muted hover:text-fg transition"
                 >
                   <svg className="h-4 w-4 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -329,7 +329,7 @@ function MatchPageInner() {
 
             {hasAttempt && (
               <div className="flex flex-col gap-3">
-                <div className="rounded-lg border border-edge bg-inset px-4 py-4">
+                <div className="rounded-xl border border-edge/40 bg-inset/80 px-4 py-4">
                   {/* Thumbnail image */}
                   {attempt.thumbnail && (
                     <div className="mb-3 overflow-hidden rounded-lg">
@@ -337,7 +337,7 @@ function MatchPageInner() {
                       <img
                         src={attempt.thumbnail}
                         alt={`${attempt.route ?? "Climb"} thumbnail`}
-                        className="w-full max-h-48 object-contain rounded-lg"
+                        className="w-full max-h-48 object-contain rounded-xl"
                       />
                     </div>
                   )}
@@ -364,7 +364,7 @@ function MatchPageInner() {
                         {attempt.runType ?? "attempt"}
                       </span>
                       {attempt.rating && (
-                        <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-card text-fg-light">
+                        <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-card text-fg">
                           {attempt.rating}
                         </span>
                       )}
@@ -382,9 +382,9 @@ function MatchPageInner() {
                 </div>
 
                 {attempt.notes && (
-                  <div className="rounded-lg border border-edge bg-inset/50 px-4 py-2.5">
+                  <div className="rounded-xl border border-edge/40 bg-inset/50 px-4 py-2.5">
                     <p className="text-xs font-medium text-fg-muted mb-0.5">Notes</p>
-                    <p className="text-sm text-fg-light">{attempt.notes}</p>
+                    <p className="text-sm text-fg">{attempt.notes}</p>
                   </div>
                 )}
               </div>
@@ -396,7 +396,7 @@ function MatchPageInner() {
       {/* Skeleton style */}
       {hasAttempt && (
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Skeleton style</span>
           <SkeletonStylePanel onChange={setSkeletonStyle} />
         </div>
       )}
@@ -407,17 +407,17 @@ function MatchPageInner() {
           {/* Select from file */}
           <label
             className={[
-              "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+              "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
-                ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
-                : "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg animate-pulse border-accent/30",
+                ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
+                : "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
             ].join(" ")}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
             </svg>
             <span className="font-medium text-fg">Select a photo</span>
-            <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+            <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
             <input type="file" accept="image/*" className="hidden" disabled={isMatching} onChange={handleImageChange} />
           </label>
 
@@ -427,10 +427,10 @@ function MatchPageInner() {
             onClick={() => setShowCamera(true)}
             disabled={isMatching}
             className={[
-              "flex flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
+              "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
-                ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
-                : "cursor-pointer bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg animate-pulse border-accent/30",
+                ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
+                : "cursor-pointer bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
             ].join(" ")}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -438,7 +438,7 @@ function MatchPageInner() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
             </svg>
             <span className="font-medium text-fg">Take a photo</span>
-            <span className="text-xs text-fg-light">Opens camera</span>
+            <span className="text-xs text-fg-muted">Opens camera</span>
           </button>
         </div>
       )}
@@ -450,7 +450,7 @@ function MatchPageInner() {
               <p className="text-xs text-fg-secondary">
                 Adjust the crop region then click &ldquo;Apply &amp; View&rdquo;.
               </p>
-              <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg-light transition">
+              <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
                 Change photo
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </label>
@@ -460,7 +460,7 @@ function MatchPageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo preview"
-                className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
+                className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
               />
               <CropBoxOverlay
                 box={imageCrop}
@@ -471,7 +471,7 @@ function MatchPageInner() {
             <button
               onClick={handleApplyAndMatch}
               disabled={!hasAttempt}
-              className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse"
+              className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
             >
               Apply &amp; View
             </button>
@@ -490,8 +490,8 @@ function MatchPageInner() {
 
       {/* Match stats */}
       {isMatchDone && matchResult && (
-        <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-1">
-          <p className="text-sm font-medium text-fg-light">View statistics</p>
+        <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Match statistics</p>
           <div className="mt-2 grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
@@ -517,7 +517,7 @@ function MatchPageInner() {
       {/* Pose overlay — instant frame-by-frame player (no video encoding) */}
       {isFrameReady && imageFile && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-fg-light">Pose overlay</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Pose overlay</p>
           <FramePlayer
             imageFile={imageFile}
             layers={[{ frames: skeletonData.frames, style: topoStyle }]}
@@ -542,7 +542,7 @@ function MatchPageInner() {
           ) : (
             <button
               onClick={handleExportVideo}
-              className="flex items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-light transition hover:border-edge-hover hover:text-fg"
+              className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -552,7 +552,7 @@ function MatchPageInner() {
           )}
 
           {/* Change route photo */}
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg">
+          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
             </svg>

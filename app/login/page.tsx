@@ -59,13 +59,13 @@ export default function LoginPage() {
   );
 
   return (
-    <main className="flex flex-1 items-center justify-center px-6 py-16">
+    <main className="flex flex-1 items-center justify-center px-4 py-12 sm:px-6 sm:py-16">
       <div className="w-full max-w-sm flex flex-col gap-6">
         <div className="flex flex-col items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-fg">
+          <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">
             {mode === "login" ? "Sign in" : "Create account"}
           </h1>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-[13px] text-fg-secondary leading-relaxed text-center">
             {mode === "login"
               ? "Sign in to access your climbing data."
               : "Create a free account to get started."}
@@ -73,7 +73,7 @@ export default function LoginPage() {
         </div>
 
         {signupSuccess && (
-          <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm text-emerald-300">
+          <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-300">
             Account created! Check your email for a confirmation link, then sign in.
           </div>
         )}
@@ -90,7 +90,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="rounded-lg border border-edge bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+              className="rounded-xl border border-edge/50 bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
               placeholder="you@example.com"
             />
           </div>
@@ -107,7 +107,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="rounded-lg border border-edge bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+              className="rounded-xl border border-edge/50 bg-inset px-3 py-2.5 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
               placeholder={mode === "signup" ? "At least 6 characters" : ""}
             />
           </div>
@@ -121,7 +121,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={submitting || authLoading}
-            className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none active:scale-[0.98]"
           >
             {submitting
               ? "Please wait\u2026"
@@ -137,7 +137,7 @@ export default function LoginPage() {
               Don&apos;t have an account?{" "}
               <button
                 onClick={() => { setMode("signup"); setError(null); setSignupSuccess(false); }}
-                className="font-medium text-fg-light hover:text-fg transition"
+                className="font-medium text-accent hover:text-accent-hover transition"
               >
                 Sign up
               </button>
@@ -147,7 +147,7 @@ export default function LoginPage() {
               Already have an account?{" "}
               <button
                 onClick={() => { setMode("login"); setError(null); setSignupSuccess(false); }}
-                className="font-medium text-fg-light hover:text-fg transition"
+                className="font-medium text-accent hover:text-accent-hover transition"
               >
                 Sign in
               </button>

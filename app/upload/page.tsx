@@ -677,19 +677,18 @@ function UploadPageInner() {
         {/* Choose existing file */}
         <label
           className={[
-            "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-sm transition-all",
-            "bg-primary",
+            "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
             isProcessing
-              ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
+              ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-muted"
               : [
-                  "border-edge text-fg-secondary",
-                  "hover:border-accent/60 hover:bg-inset hover:text-fg",
-                  !pendingFile ? "animate-pulse border-accent/30" : "",
+                  "border-edge/50 bg-card/50 text-fg-secondary",
+                  "hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                  !pendingFile ? "border-accent/25" : "",
                 ].join(" "),
           ].join(" ")}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-inset">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10">
+            <svg className="h-5 w-5 text-accent" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
             </svg>
           </div>
@@ -706,25 +705,24 @@ function UploadPageInner() {
           />
         </label>
 
-        {/* Record with camera — opens getUserMedia modal (works on all devices) */}
+        {/* Record with camera */}
         <button
           type="button"
           onClick={() => setShowCamera(true)}
           disabled={isProcessing}
           className={[
-            "flex flex-col items-center gap-3 rounded-2xl border px-4 py-6 text-sm transition-all",
-            "bg-primary",
+            "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
             isProcessing
-              ? "cursor-not-allowed border-inset opacity-40 text-fg-secondary"
+              ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-muted"
               : [
-                  "cursor-pointer border-edge text-fg-secondary",
-                  "hover:border-accent/60 hover:bg-inset hover:text-fg",
-                  !pendingFile ? "animate-pulse border-accent/30" : "",
+                  "cursor-pointer border-edge/50 bg-card/50 text-fg-secondary",
+                  "hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                  !pendingFile ? "border-accent/25" : "",
                 ].join(" "),
           ].join(" ")}
         >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-inset">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/10">
+            <svg className="h-5 w-5 text-accent" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
             </svg>
           </div>
@@ -807,7 +805,7 @@ function UploadPageInner() {
                     </svg>
                   </button>
                   {showConditionsDropdown && (
-                    <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-edge bg-card p-3 shadow-xl">
+                    <div className="absolute right-0 top-full z-20 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
                       <p className="mb-2 text-xs font-semibold text-fg">Shooting conditions</p>
                       <div className="flex flex-col gap-2">
                         {FRAME_CONDITIONS.map(c => (
@@ -838,7 +836,7 @@ function UploadPageInner() {
           </div>
 
           {/* Video with crop overlay on top */}
-          <div className="relative w-full overflow-hidden rounded-xl border border-edge bg-surface">
+          <div className="relative w-full overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10">
             <video
               ref={cropVideoRef}
               src={videoPreviewUrl}
@@ -862,7 +860,7 @@ function UploadPageInner() {
 
           {/* Video controls — below the overlay so they are never covered */}
           {hasCropFrame && (
-            <div className="flex items-center gap-3 rounded-xl border border-inset bg-card px-3 py-2">
+            <div className="flex items-center gap-3 rounded-xl border border-edge/40 bg-card/70 px-3 py-2">
               <button
                 onClick={handleVideoPlayPause}
                 className="shrink-0 rounded p-1 text-fg-secondary transition hover:text-fg"
@@ -896,7 +894,7 @@ function UploadPageInner() {
           )}
 
           {/* Model variant + Frame step */}
-          <div className="flex flex-col gap-3 rounded-xl border border-inset bg-card px-4 py-3">
+          <div className="flex flex-col gap-3 rounded-xl border border-edge/40 bg-card/60 px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <label className="text-xs font-medium text-fg-secondary">Pose model</label>
               <select
@@ -933,7 +931,7 @@ function UploadPageInner() {
           <button
             onClick={handleProcess}
             disabled={!model || !cv}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none active:scale-[0.98]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
@@ -979,12 +977,12 @@ function UploadPageInner() {
   );
 
   return (
-    <div className="flex-1 bg-surface">
-      <div className="mx-auto w-full max-w-2xl px-6 py-10 flex flex-col gap-8">
+    <div className="flex-1">
+      <div className="mx-auto w-full max-w-2xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Video Analysis</h1>
-        <p className="text-sm text-fg-secondary">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Video Analysis</h1>
+        <p className="text-[13px] text-fg-secondary leading-relaxed">
           Upload or record a climbing video to extract skeleton poses and wall reference features.
         </p>
       </div>
@@ -1020,9 +1018,9 @@ function UploadPageInner() {
       {/* Result actions — results phase: landmark preview + action buttons */}
       {showResults && activeAttemptId && activeAttempt && phase === "results" && (
         <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-success/25 bg-success/5 px-5 py-4">
+          <div className="rounded-2xl border border-success/20 bg-success/5 px-5 py-4 shadow-sm shadow-success/5">
             <p className="text-sm font-semibold text-success">Analysis complete</p>
-            <p className="mt-0.5 text-xs text-success/70">
+            <p className="mt-1 text-xs text-success/70 leading-relaxed">
               {activeAttempt.frames.length} pose frames &middot;{" "}
               {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points extracted
               {activeAttempt.state && ` \u2014 ${activeAttempt.state}`}
@@ -1033,14 +1031,14 @@ function UploadPageInner() {
 
           {/* Animated first-frame landmark preview */}
           <div className="flex flex-col gap-2">
-            <p className="text-sm font-medium text-fg-light">Recorded pose landmarks</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Recorded pose landmarks</p>
             {firstFrameFile && firstFrameSkeletonData ? (
               <FramePlayer
                 imageFile={firstFrameFile}
                 layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                 duration={firstFrameSkeletonData.duration}
                 autoPlay
-                className="w-full rounded-xl border border-edge"
+                className="w-full rounded-xl border border-edge/50"
               />
             ) : (
               <p className="text-xs text-fg-muted text-center">Loading preview&hellip;</p>
@@ -1049,14 +1047,14 @@ function UploadPageInner() {
 
           {/* Skeleton style */}
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+            <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Skeleton style</span>
             <SkeletonStylePanel onChange={setSkeletonStyle} />
           </div>
 
           {/* View on route photo — opens file picker (requires ORB features) */}
           {orbReady && (
           <label
-            className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover"
+            className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 active:scale-[0.98]"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
@@ -1082,7 +1080,7 @@ function UploadPageInner() {
           {/* Edit climb — go back to pre-process state */}
           <button
             onClick={handleEditClimb}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
@@ -1093,7 +1091,7 @@ function UploadPageInner() {
           {/* Save buttons — open bottom sheet for metadata entry */}
           <button
             onClick={handleOpenSaveSheet}
-            className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1104,7 +1102,7 @@ function UploadPageInner() {
           {savedRouteDirHandle && (
             <button
               onClick={handleDeleteFromDevice}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-red-900/50 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition hover:border-red-700 hover:text-red-300"
+              className="flex items-center justify-center gap-2 rounded-xl border border-red-900/40 bg-red-950/20 px-6 py-3 text-sm text-red-400 transition-all duration-200 hover:border-red-700 hover:bg-red-950/30 hover:text-red-300"
             >
               Delete from device
             </button>
@@ -1136,7 +1134,7 @@ function UploadPageInner() {
           {/* Back to results */}
           <button
             onClick={handleBackToResults}
-            className="self-start flex items-center gap-1.5 rounded-xl border border-edge bg-card px-4 py-2 text-xs font-medium text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+            className="self-start flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition-all duration-200 hover:border-accent/40 hover:bg-card hover:text-fg"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -1148,13 +1146,13 @@ function UploadPageInner() {
           {!routePhotoFile && (
             <div className="grid grid-cols-2 gap-3">
               <label
-                className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-edge bg-primary px-4 py-6 text-sm text-fg-light transition hover:border-accent/60 hover:text-fg animate-pulse border-accent/30"
+                className="flex cursor-pointer flex-col items-center gap-3 rounded-2xl border border-edge/50 bg-card/50 px-4 py-5 text-sm text-fg-secondary transition-all duration-200 hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25"
               >
                 <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
                 </svg>
                 <span className="font-medium text-fg">Select a photo</span>
-                <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+                <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
               </label>
             </div>
@@ -1167,7 +1165,7 @@ function UploadPageInner() {
                 <p className="text-xs text-fg-secondary">
                   Adjust the crop region for wall texture matching then click &ldquo;Apply &amp; View&rdquo;.
                 </p>
-                <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg-light transition">
+                <label className="shrink-0 cursor-pointer text-xs text-fg-muted hover:text-fg transition">
                   Change photo
                   <input type="file" accept="image/*" className="hidden" onChange={handleRoutePhotoSelect} />
                 </label>
@@ -1177,7 +1175,7 @@ function UploadPageInner() {
                 <img
                   src={routePhotoPreviewUrl}
                   alt="Route photo preview"
-                  className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
+                  className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
                 />
                 <CropBoxOverlay
                   box={routePhotoCrop}
@@ -1186,7 +1184,7 @@ function UploadPageInner() {
               </div>
               <button
                 onClick={handleApplyRouteMatch}
-                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse"
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
               >
                 Apply &amp; View
               </button>
@@ -1200,7 +1198,7 @@ function UploadPageInner() {
               <img
                 src={routePhotoPreviewUrl}
                 alt="Route photo preview"
-                className="max-h-80 w-full rounded-xl border border-edge bg-card object-contain"
+                className="max-h-80 w-full rounded-xl border border-edge/50 bg-card/70 object-contain"
               />
               {isMatching && (
                 <p className="text-center text-sm text-fg-secondary">Matching features&hellip;</p>
@@ -1210,8 +1208,8 @@ function UploadPageInner() {
 
           {/* Match statistics */}
           {matchStatus === "done" && matchResult && (
-            <div className="rounded-lg border border-edge bg-card px-5 py-4 flex flex-col gap-1">
-              <p className="text-sm font-medium text-fg-light">Match statistics</p>
+            <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Match statistics</p>
               <div className="mt-2 grid grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
@@ -1237,7 +1235,7 @@ function UploadPageInner() {
           {/* Skeleton style */}
           {routeMatchTriggered && (
             <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-fg-light">Skeleton style</span>
+              <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Skeleton style</span>
               <SkeletonStylePanel onChange={setSkeletonStyle} />
             </div>
           )}
@@ -1245,7 +1243,7 @@ function UploadPageInner() {
           {/* Pose overlay — FramePlayer */}
           {isFrameReady && routePhotoFile && (
             <div className="flex flex-col gap-3">
-              <p className="text-sm font-medium text-fg-light">Pose overlay</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Pose overlay</p>
               <FramePlayer
                 imageFile={routePhotoFile}
                 layers={[{ frames: skeletonData.frames, style: topoStyle }]}
@@ -1270,7 +1268,7 @@ function UploadPageInner() {
               ) : (
                 <button
                   onClick={handleExportUploadVideo}
-                  className="flex items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-light transition hover:border-edge-hover hover:text-fg"
+                  className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
                 >
                   <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1280,7 +1278,7 @@ function UploadPageInner() {
               )}
 
               {/* Change route photo */}
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg">
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg">
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
                 </svg>
@@ -1291,10 +1289,10 @@ function UploadPageInner() {
           )}
 
           {/* Save buttons in overlay phase */}
-          <div className="flex flex-col gap-3 pt-2 border-t border-edge">
+          <div className="flex flex-col gap-3 pt-3 border-t border-edge/30">
             <button
               onClick={handleOpenSaveSheet}
-              className="flex items-center justify-center gap-2 rounded-2xl border border-edge bg-card px-6 py-3 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+              className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -1347,8 +1345,8 @@ function UploadPageInner() {
 
       {/* Map picker modal */}
       {showMapPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
-          <div className="w-full max-w-2xl rounded-2xl border border-edge bg-surface p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
+          <div className="w-full max-w-2xl rounded-2xl border border-edge/50 bg-surface p-5 shadow-2xl animate-scale-in">
             <h2 className="mb-3 text-sm font-semibold text-fg">Pick climb location on map</h2>
             <MapPicker
               initialLat={coordinates?.lat}
@@ -1367,10 +1365,10 @@ function UploadPageInner() {
       {showBottomSheet && (
         <div className="fixed inset-0 z-50 flex items-end justify-center">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/50" onClick={() => setShowBottomSheet(false)} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBottomSheet(false)} />
 
           {/* Sheet */}
-          <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge/50 bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
             {/* Close / drag handle */}
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-fg">
@@ -1517,7 +1515,7 @@ function UploadPageInner() {
               <button
                 onClick={bottomSheetAction === "save" ? handleSaveToDevice : handleSaveToS3}
                 disabled={bottomSheetAction === "upload" && s3Status === "loading"}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-accent px-6 py-3.5 text-sm font-semibold text-fg shadow-lg shadow-accent/20 transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
               >
                 {bottomSheetAction === "save" ? (
                   <>

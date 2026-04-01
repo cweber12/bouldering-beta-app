@@ -138,7 +138,7 @@ function CompareSlot({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-xl border border-edge bg-card p-4"
+      className="flex flex-col gap-3 rounded-2xl border border-edge/50 bg-card/60 p-4"
       style={{ borderTopColor: limbColor, borderTopWidth: 2 }}
     >
       <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ function CompareSlot({
           className="h-2 w-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: limbColor }}
         />
-        <span className="text-xs font-medium text-fg-light">Climb {slotIndex + 1}</span>
+        <span className="text-xs font-medium text-fg">Climb {slotIndex + 1}</span>
         {attempt && (
           <span className={[
             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
@@ -158,7 +158,7 @@ function CompareSlot({
           </span>
         )}
         {attempt?.rating && (
-          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg-light">
+          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg">
             {attempt.rating}
           </span>
         )}
@@ -210,7 +210,7 @@ function CompareSlot({
           ) : (
             <button
               onClick={handleDownload}
-              className="text-center text-xs text-fg-muted hover:text-fg-light transition"
+              className="text-center text-xs text-fg-muted hover:text-fg transition"
             >
               Download .webm
             </button>
@@ -359,7 +359,7 @@ function OverlayPlayer({
       ) : (
         <button
           onClick={handleDownload}
-          className="text-center text-xs text-fg-muted hover:text-fg-light transition"
+          className="text-center text-xs text-fg-muted hover:text-fg transition"
         >
           Download .webm
         </button>
@@ -559,12 +559,12 @@ function ComparePageInner() {
   const anyLoaded = activeSlots > 0;
 
   return (
-    <div className="flex-1 bg-surface">
-    <div className="mx-auto w-full max-w-4xl px-6 py-10 flex flex-col gap-8">
+    <div className="flex-1">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-fg">Compare Climbs</h1>
-        <p className="text-sm text-fg-secondary">
+      <div className="flex flex-col gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Compare Climbs</h1>
+        <p className="text-[13px] text-fg-secondary leading-relaxed">
           Select a route, then toggle climbs to compare them side by side or overlaid on the same route photo.
         </p>
       </div>
@@ -584,7 +584,7 @@ function ComparePageInner() {
 
       {/* Route photo */}
       <div className="flex flex-col gap-3">
-        <p className="text-sm font-medium text-fg-light">Route photo</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Route photo</p>
 
         {imageFile && imagePreviewUrl ? (
           /* Image exists — show preview with update button in corner */
@@ -594,7 +594,7 @@ function ComparePageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo"
-                className="max-h-[32rem] w-full rounded-xl border border-edge bg-card object-contain"
+                className="max-h-[32rem] w-full rounded-2xl border border-edge/50 bg-card/70 object-contain"
               />
               {!cropConfirmed && <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />}
 
@@ -602,7 +602,7 @@ function ComparePageInner() {
               <div ref={updateMenuRef} className="absolute top-2 right-2">
                 <button
                   onClick={() => setShowUpdateMenu(v => !v)}
-                  className="flex items-center gap-1.5 rounded-lg bg-surface/80 backdrop-blur px-3 py-1.5 text-xs font-medium text-fg-light border border-edge hover:bg-surface hover:text-fg transition shadow-sm"
+                  className="flex items-center gap-1.5 rounded-lg bg-surface/80 backdrop-blur-xl px-3 py-1.5 text-xs font-medium text-fg border border-edge/50 hover:bg-surface hover:text-fg transition shadow-sm"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
@@ -610,8 +610,8 @@ function ComparePageInner() {
                   Update photo
                 </button>
                 {showUpdateMenu && (
-                  <div className="absolute right-0 mt-1 w-44 rounded-lg border border-edge bg-card shadow-lg overflow-hidden z-10">
-                    <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-light hover:bg-inset transition">
+                  <div className="absolute right-0 mt-1 w-44 rounded-xl border border-edge/50 bg-card/95 shadow-2xl overflow-hidden z-10 backdrop-blur-xl animate-fade-in">
+                    <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary hover:bg-inset hover:text-fg transition">
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
                       </svg>
@@ -620,7 +620,7 @@ function ComparePageInner() {
                     </label>
                     <button
                       onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
-                      className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-light hover:bg-inset transition"
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary hover:bg-inset hover:text-fg transition"
                     >
                       <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
@@ -643,8 +643,8 @@ function ComparePageInner() {
                   onClick={handleApplyAndMatch}
                   disabled={!anyLoaded}
                   className={[
-                    "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50",
-                    anyLoaded ? "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface animate-pulse" : "",
+                    "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]",
+                    anyLoaded ? "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface" : "",
                   ].join(" ")}
                 >
                   Apply &amp; View
@@ -660,16 +660,16 @@ function ComparePageInner() {
           <div className="grid grid-cols-2 gap-3">
             <label
               className={[
-                "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-                "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
-                "animate-pulse border-accent/30",
+                "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
+                "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                "border-accent/25",
               ].join(" ")}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
               </svg>
               <span className="font-medium text-fg">Select route photo</span>
-              <span className="text-xs text-fg-light">JPG, PNG, WebP</span>
+              <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
               <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
             </label>
 
@@ -677,9 +677,9 @@ function ComparePageInner() {
               type="button"
               onClick={() => setShowCamera(true)}
               className={[
-                "flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-4 py-6 text-sm transition",
-                "bg-primary border-edge text-fg-light hover:border-accent/60 hover:text-fg",
-                "animate-pulse border-accent/30",
+                "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
+                "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                "border-accent/25",
               ].join(" ")}
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -687,7 +687,7 @@ function ComparePageInner() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
               </svg>
               <span className="font-medium text-fg">Take a photo</span>
-              <span className="text-xs text-fg-light">Opens camera</span>
+              <span className="text-xs text-fg-muted">Opens camera</span>
             </button>
           </div>
         )}
@@ -701,10 +701,10 @@ function ComparePageInner() {
               key={mode}
               onClick={() => setViewMode(mode)}
               className={[
-                "rounded-lg border px-4 py-2 text-sm font-medium transition",
+                "rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200",
                 viewMode === mode
-                  ? "border-accent/60 bg-card text-fg"
-                  : "border-edge bg-card text-fg-muted hover:border-edge-hover hover:text-fg-light",
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-edge/50 bg-card/60 text-fg-muted hover:border-edge-hover hover:text-fg",
               ].join(" ")}
             >
               {mode === "sidebyside" ? "Side by side" : "Overlay"}
@@ -735,7 +735,7 @@ function ComparePageInner() {
                   }
                 }
               }}
-              className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-4 py-2 text-sm font-medium text-fg-muted transition hover:border-edge-hover hover:text-fg-light"
+              className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-4 py-2 text-sm font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg"
               aria-label={masterPlaying ? "Pause all" : "Play all"}
             >
               {masterPlaying ? (
@@ -806,7 +806,7 @@ function ComparePageInner() {
       {/* Overlay mode result */}
       {viewMode === "overlay" && imageFile && anyLoaded && (
         <div className="flex flex-col gap-3">
-          <p className="text-sm font-medium text-fg-light">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">
             Overlay (all skeletons simultaneously)
           </p>
           {/* Color legend */}
