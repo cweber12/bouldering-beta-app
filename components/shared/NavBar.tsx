@@ -8,12 +8,10 @@ import InfoDropdown from "@/components/shared/InfoDropdown";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 
 const PUBLIC_TABS = [
-  { href: "/", label: "Home" },
   { href: "/docs", label: "Docs" },
 ] as const;
 
 const AUTH_TABS = [
-  { href: "/", label: "Home" },
   { href: "/upload", label: "Scan" },
   { href: "/match", label: "View" },
   { href: "/compare", label: "Compare" },
@@ -172,9 +170,7 @@ export default function NavBar() {
           <div className="hidden items-center gap-0.5 md:flex">
             {tabs.map(tab => {
               const active =
-                tab.href === "/"
-                  ? path === "/"
-                  : path === tab.href || path.startsWith(tab.href + "/");
+                path === tab.href || path.startsWith(tab.href + "/");
               return (
                 <Link
                   key={tab.href}
@@ -270,9 +266,7 @@ export default function NavBar() {
           <div className="animate-fade-in flex flex-col gap-1 border-t border-edge/40 pb-4 pt-2 md:hidden">
             {tabs.map(tab => {
               const active =
-                tab.href === "/"
-                  ? path === "/"
-                  : path === tab.href || path.startsWith(tab.href + "/");
+                path === tab.href || path.startsWith(tab.href + "/");
               return (
                 <Link
                   key={tab.href}

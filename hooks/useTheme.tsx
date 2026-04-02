@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -44,12 +45,26 @@ function applyTheme(theme: Theme): void {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Initialise from the already-applied class (set by the inline script in
-  // layout.tsx before React hydrates), so there is no flash.
-  const [theme, setTheme] = useState<Theme>(readAppliedTheme);
+  // SSR-safe initial state. The FOUC inline script in layout.tsx applies the
+  // correct class before React hydrates, but readAppliedTheme() returns "dark"
+  // during SSR (document is undefined), so React preserves "dark" through
+  // hydration. The mount effect below corrects the mismatch without overwriting
+  // the FOUC-applied class in the meantime.
+  const [theme, setTheme] = useState<Theme>("dark");
 
-  // Keep the DOM class in sync whenever the state changes.
+  // On first client render, sync React state to whatever the FOUC script
+  // applied (localStorage value → system preference → dark). This is the
+  // standard React pattern for reading from an external store on mount.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setTheme(readAppliedTheme()); }, []);
+
+  // Propagate state changes to the DOM. Skip the very first run produced by
+  // the initial render (theme="dark" from SSR) so we don't overwrite the class
+  // that FOUC correctly set before React hydrated. After the mount sync above
+  // updates state, subsequent runs are user-initiated and should apply normally.
+  const syncDone = useRef(false);
   useEffect(() => {
+    if (!syncDone.current) { syncDone.current = true; return; }
     applyTheme(theme);
   }, [theme]);
 

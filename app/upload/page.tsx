@@ -936,7 +936,7 @@ function UploadPageInner() {
 
           {/* Viewport-fit video container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
           <div
-            className="relative overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10"
+            className="relative overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10 mx-auto"
             style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
           >
             <video
@@ -1287,7 +1287,7 @@ function UploadPageInner() {
               </div>
               {/* Viewport-fit image container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
               <div
-                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10"
+                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10 mx-auto"
                 style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1319,7 +1319,7 @@ function UploadPageInner() {
           {routePhotoPreviewUrl && routeMatchTriggered && (isMatching || !isFrameReady) && (
             <div className="flex flex-col gap-2">
               <div
-                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70"
+                className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 mx-auto"
                 style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
