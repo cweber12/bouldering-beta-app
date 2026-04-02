@@ -12,6 +12,10 @@ import LocationAutocomplete from "@/components/shared/LocationAutocomplete";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
+import ComboInput from "@/components/shared/ComboInput";
+import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
+import { useS3Storage } from "@/hooks/useS3Storage";
+import { sanitizeDirName } from "@/utils/fsHelpers";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 
@@ -69,6 +73,7 @@ export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const { request: geoRequest, loading: geoLoading } = useGeolocation();
   const { reverseGeocode } = useGeocoding();
+  const { listPrefixes, userPrefix } = useS3Storage();
 
   // View / edit mode
   const [editing, setEditing] = useState(false);
@@ -91,7 +96,10 @@ export default function ProfilePage() {
   const [filterState, setFilterState] = useState("");
   const [filterArea, setFilterArea] = useState("");
   const [filterRoute, setFilterRoute] = useState("");
-  const [filterRating, setFilterRating] = useState("");
+  // Filter suggestions (from S3 prefix listing)
+  const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
+  const [areaSuggestions, setAreaSuggestions] = useState<string[]>([]);
+  const [routeSuggestions, setRouteSuggestions] = useState<string[]>([]);
 
   // Map / list toggle
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
@@ -153,7 +161,6 @@ export default function ProfilePage() {
     if (filterState) params.set("state", filterState);
     if (filterArea) params.set("area", filterArea);
     if (filterRoute) params.set("route", filterRoute);
-    if (filterRating) params.set("rating", filterRating);
 
     (async () => {
       try {
@@ -172,7 +179,7 @@ export default function ProfilePage() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute, filterRating]);
+  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute]);
 
   // ------ Load pins when map mode is active --------------------------------
 
@@ -251,6 +258,13 @@ export default function ProfilePage() {
 
     return () => { cancelled = true; };
   }, [following]);
+
+  // ------ Load state suggestions from S3 prefix list ----------------------
+
+  useEffect(() => {
+    if (!userPrefix) return;
+    listPrefixes(`${userPrefix}/`).then(setStateSuggestions).catch(() => {});
+  }, [userPrefix, listPrefixes]);
 
   // ------ Save profile ----------------------------------------------------
 
@@ -389,7 +403,30 @@ export default function ProfilePage() {
 
   // ------ Filter helpers --------------------------------------------------
 
-  const applyFilters = useCallback(() => {
+  const handleFilterStateChange = useCallback((val: string) => {
+    setFilterState(val);
+    setFilterArea("");
+    setFilterRoute("");
+    setAreaSuggestions([]);
+    setRouteSuggestions([]);
+    setClimbPage(1);
+    if (val.trim() && userPrefix) {
+      listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
+    }
+  }, [listPrefixes, userPrefix]);
+
+  const handleFilterAreaChange = useCallback((val: string) => {
+    setFilterArea(val);
+    setFilterRoute("");
+    setRouteSuggestions([]);
+    setClimbPage(1);
+    if (filterState.trim() && val.trim() && userPrefix) {
+      listPrefixes(`${userPrefix}/${sanitizeDirName(filterState)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
+    }
+  }, [listPrefixes, userPrefix, filterState]);
+
+  const handleFilterRouteChange = useCallback((val: string) => {
+    setFilterRoute(val);
     setClimbPage(1);
   }, []);
 
@@ -397,7 +434,8 @@ export default function ProfilePage() {
     setFilterState("");
     setFilterArea("");
     setFilterRoute("");
-    setFilterRating("");
+    setAreaSuggestions([]);
+    setRouteSuggestions([]);
     setClimbPage(1);
   }, []);
 
@@ -405,8 +443,7 @@ export default function ProfilePage() {
 
   // ------ Render ----------------------------------------------------------
 
-  if (authLoading || loadingProfile) {
-    return (
+  if (authLoading || loadingProfile) {    return (
       <main className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex flex-col items-center gap-4 py-20">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
@@ -672,45 +709,18 @@ export default function ProfilePage() {
   // VIEW MODE (default)
   // =========================================================================
 
-  const displayName = profile.displayName || user?.email || "User";
-
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      {/* ---- Profile header (read-only) ---- */}
-      <section className="mb-8 flex items-center gap-6">
-        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
-          {profile.profilePicture ? (
-            <NextImage
-              src={profile.profilePicture}
-              alt={`${displayName}'s avatar`}
-              width={80}
-              height={80}
-              unoptimized
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xl text-fg-muted">
-              {displayName[0]?.toUpperCase() ?? "?"}
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-fg">{displayName}</h1>
-          {profile.location && (
-            <p className="text-xs text-fg-muted">{profile.location}</p>
-          )}
-          {profile.bio && (
-            <p className="mt-1 text-sm text-fg-secondary">{profile.bio}</p>
-          )}
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="mt-2 w-fit rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-accent"
-          >
-            Edit profile
-          </button>
-        </div>
+      {/* ---- Page heading ---- */}
+      <section className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-semibold text-fg">Saved Climbs</h1>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-xs text-fg-muted transition hover:text-accent"
+        >
+          Edit profile
+        </button>
       </section>
 
       <hr className="mb-6 border-edge" />
@@ -718,55 +728,40 @@ export default function ProfilePage() {
       {/* ---- Filters ---- */}
       <section className="mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State</label>
-            <input
-              type="text"
+          <div className="w-32">
+            <ComboInput
+              label="State"
               value={filterState}
-              onChange={(e) => setFilterState(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              onChange={handleFilterStateChange}
+              suggestions={stateSuggestions}
               placeholder="Any"
-              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
-            <input
-              type="text"
+          <div className="w-32">
+            <ComboInput
+              label="Area"
               value={filterArea}
-              onChange={(e) => setFilterArea(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              onChange={handleFilterAreaChange}
+              suggestions={areaSuggestions}
               placeholder="Any"
-              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              disabled={!filterState}
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Route</label>
-            <input
-              type="text"
+          <div className="w-32">
+            <ComboInput
+              label="Route"
               value={filterRoute}
-              onChange={(e) => setFilterRoute(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+              onChange={handleFilterRouteChange}
+              suggestions={routeSuggestions}
               placeholder="Any"
-              className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              disabled={!filterArea}
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Rating</label>
-            <input
-              type="text"
-              value={filterRating}
-              onChange={(e) => setFilterRating(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-              placeholder="Any"
-              className="w-24 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
-            />
-          </div>
-          {(filterState || filterArea || filterRoute || filterRating) && (
+          {(filterState || filterArea || filterRoute) && (
             <button
               type="button"
               onClick={clearFilters}
-              className="rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+              className="mb-0.5 self-end rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
             >
               Clear
             </button>
@@ -833,10 +828,10 @@ export default function ProfilePage() {
                   <div
                     key={c.key}
                     onClick={() => handleCardClick(c)}
-                    className="group relative cursor-pointer overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                    className="group relative cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
                   >
                     {/* Thumbnail or placeholder */}
-                    <div className="relative aspect-square w-full bg-inset">
+                    <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
                       {c.thumbnail ? (
                         <NextImage
                           src={c.thumbnail}
@@ -866,19 +861,24 @@ export default function ProfilePage() {
                       </span>
                     </div>
 
-                    {/* Info overlay */}
-                    <div className="px-3 py-2.5">
-                      <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-                      <p className="truncate text-[10px] text-fg-muted">
-                        {c.area} &middot; {c.state}
-                      </p>
-                      <div className="mt-1 flex items-center justify-between">
-                        <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
-                        {c.rating && (
-                          <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
-                            {c.rating}
-                          </span>
-                        )}
+                    {/* Info + options */}
+                    <div className="flex items-start gap-1 px-2 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                        <p className="truncate text-[10px] text-fg-muted">
+                          {c.area} &middot; {c.state}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                          {c.rating && (
+                            <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                              {c.rating}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                        <ClimbOptionsDropdown climbKey={c.key} />
                       </div>
                     </div>
                   </div>

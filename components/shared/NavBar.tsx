@@ -14,7 +14,7 @@ const PUBLIC_TABS = [
 const AUTH_TABS = [
   { href: "/upload", label: "Scan" },
   { href: "/compare", label: "Compare" },
-  { href: "/profile", label: "Profile" },
+  { href: "/profile", label: "Saved" },
   { href: "/docs", label: "Docs" },
 ] as const;
 

@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
+import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 
@@ -469,10 +470,10 @@ export default function PublicProfilePage() {
                     <div
                       key={c.key}
                       onClick={() => handleCardClick(c)}
-                      className="group relative cursor-pointer overflow-hidden rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                      className="group relative cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
                     >
                       {/* Thumbnail or placeholder */}
-                      <div className="relative aspect-square w-full bg-inset">
+                      <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
                         {c.thumbnail ? (
                           <Image
                             src={c.thumbnail}
@@ -502,19 +503,24 @@ export default function PublicProfilePage() {
                         </span>
                       </div>
 
-                      {/* Info overlay */}
-                      <div className="px-3 py-2.5">
-                        <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-                        <p className="truncate text-[10px] text-fg-muted">
-                          {c.area} &middot; {c.state}
-                        </p>
-                        <div className="mt-1 flex items-center justify-between">
-                          <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
-                          {c.rating && (
-                            <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
-                              {c.rating}
-                            </span>
-                          )}
+                      {/* Info + options */}
+                      <div className="flex items-start gap-1 px-2 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                          <p className="truncate text-[10px] text-fg-muted">
+                            {c.area} &middot; {c.state}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                            {c.rating && (
+                              <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                                {c.rating}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                          <ClimbOptionsDropdown climbKey={c.key} />
                         </div>
                       </div>
                     </div>

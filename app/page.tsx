@@ -33,10 +33,6 @@ export default function Home() {
     <main className="flex flex-1 flex-col items-center px-4 py-12 sm:px-6 sm:py-20">
       {/* Hero section */}
       <div className="flex flex-col items-center gap-5 text-center max-w-xl">
-        <div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/5 px-3.5 py-1.5 text-xs font-medium text-accent backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          All processing runs locally in your browser
-        </div>
         <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-5xl">
           Route Scanner
         </h1>
