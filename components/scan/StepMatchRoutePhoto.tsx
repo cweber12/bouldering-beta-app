@@ -284,7 +284,7 @@ export default function StepMatchRoutePhoto({
                   setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
                 }}
               />
-              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} />
+              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="0.75rem" />
             </div>
           </div>
         )}
@@ -400,7 +400,7 @@ export default function StepMatchRoutePhoto({
                 className="absolute inset-0 w-full h-full"
                 style={{ objectFit: "fill" }}
               />
-              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} />
+              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="0.75rem" />
             </div>
           </div>
 

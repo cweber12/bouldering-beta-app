@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
@@ -13,10 +14,11 @@ import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { buildMultiSkeletonFrames } from "@/pipeline/skeletonRenderer";
 import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
-import { getAttempt } from "@/storage/sessionStore";
+import { getAttempt, saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { getTopology } from "@/utils/poseConstants";
+import { useS3Storage } from "@/hooks/useS3Storage";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -386,6 +388,9 @@ async function dataUrlToFile(dataUrl: string, filename = "route-image.jpg"): Pro
 
 function ComparePageInner() {
   const { cv } = useOpenCV();
+  const params = useSearchParams();
+  const urlClimbKey = params.get("key") ?? "";
+  const { downloadAttempt } = useS3Storage();
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
@@ -434,6 +439,23 @@ function ComparePageInner() {
     Array.from({ length: MAX_SLOTS }, () => null),
   );
   const [masterPlaying, setMasterPlaying] = useState(false);
+
+  // Pre-load climb from ?key= URL param into the first slot.
+  useEffect(() => {
+    if (!urlClimbKey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const loaded = await downloadAttempt(urlClimbKey);
+        if (cancelled) return;
+        saveAttempt(loaded);
+        setAttempts(prev => { const n = [...prev]; n[0] = loaded; return n; });
+        setSlotKeys(prev => { const n = [...prev]; n[0] = urlClimbKey; return n; });
+      } catch { /* ignore — user can still select manually */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlClimbKey]);
 
   // Close update menu on outside click.
   useEffect(() => {

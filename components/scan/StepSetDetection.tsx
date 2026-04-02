@@ -112,6 +112,7 @@ export default function StepSetDetection({
   const [fsVideoCurrentTime,   setFsVideoCurrentTime]   = useState(0);
   const [fsIsPlaying,          setFsIsPlaying]          = useState(false);
   const [showConditionsDropdown, setShowConditionsDropdown] = useState(false);
+  const [showDetectionDropdown,  setShowDetectionDropdown]  = useState(false);
   const [showCropWarning,      setShowCropWarning]      = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────
@@ -240,7 +241,7 @@ export default function StepSetDetection({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setShowConditionsDropdown(p => !p)}
+              onClick={() => { setShowConditionsDropdown(p => !p); setShowDetectionDropdown(false); }}
               className={[
                 "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 showConditionsDropdown
@@ -279,6 +280,61 @@ export default function StepSetDetection({
                       </span>
                     </label>
                   ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Detection settings dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => { setShowDetectionDropdown(p => !p); setShowConditionsDropdown(false); }}
+              className={[
+                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                showDetectionDropdown
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+              ].join(" ")}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+              </svg>
+              Detection
+              <svg
+                className={["h-3 w-3 transition-transform", showDetectionDropdown ? "rotate-180" : ""].join(" ")}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showDetectionDropdown && (
+              <div className="absolute left-0 top-full z-20 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs font-medium text-fg-secondary">Pose model</label>
+                    <select
+                      value={modelVariant}
+                      onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
+                      className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
+                    >
+                      <option value="lite">Lite (fast)</option>
+                      <option value="full">Full (balanced)</option>
+                      <option value="heavy">Heavy (accurate)</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-fg-secondary">Detection frequency</span>
+                    <span className="font-mono text-fg">every {frameStep} frames</span>
+                  </label>
+                  <input
+                    type="range" min={1} max={30} value={frameStep}
+                    onChange={e => onFrameStepChange(Number(e.target.value))}
+                    className="w-full accent-accent" aria-label="Frame step"
+                  />
+                  <p className="text-xs text-fg-muted">
+                    1 = every frame (slowest, most accurate) &mdash; 30 = every 30th frame (fastest, more interpolation)
+                  </p>
                 </div>
               </div>
             )}
@@ -326,6 +382,7 @@ export default function StepSetDetection({
             <CropBoxOverlay
               box={activeCropMode === "climber" ? climberCrop : orbCrop}
               onChange={activeCropMode === "climber" ? onClimberCropChange : onOrbCropChange}
+              borderRadius="1rem"
             />
           )}
           <canvas ref={cropCanvasRef} className="hidden" />
@@ -359,34 +416,6 @@ export default function StepSetDetection({
             </span>
           </div>
         )}
-
-        {/* Model variant + Frame step */}
-        <div className="flex flex-col gap-3 rounded-xl border border-edge/40 bg-card/60 px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <label className="text-xs font-medium text-fg-secondary">Pose model</label>
-            <select
-              value={modelVariant}
-              onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
-              className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
-            >
-              <option value="lite">Lite (fast)</option>
-              <option value="full">Full (balanced)</option>
-              <option value="heavy">Heavy (accurate)</option>
-            </select>
-          </div>
-          <label className="flex items-center justify-between text-xs">
-            <span className="font-medium text-fg-secondary">Pose detection frequency</span>
-            <span className="font-mono text-fg">every {frameStep} frames</span>
-          </label>
-          <input
-            type="range" min={1} max={30} value={frameStep}
-            onChange={e => onFrameStepChange(Number(e.target.value))}
-            className="w-full accent-accent" aria-label="Frame step"
-          />
-          <p className="text-xs text-fg-muted">
-            1 = every frame (slowest, most accurate) \u2014 30 = every 30th frame (fastest, more interpolation between detections)
-          </p>
-        </div>
 
         {/* Scan button */}
         <button
@@ -503,6 +532,7 @@ export default function StepSetDetection({
                 <CropBoxOverlay
                   box={activeCropMode === "climber" ? climberCrop : orbCrop}
                   onChange={activeCropMode === "climber" ? onClimberCropChange : onOrbCropChange}
+                  borderRadius="0.75rem"
                 />
               )}
             </div>

@@ -143,6 +143,8 @@ export interface SkeletonStylePanelProps {
   /** Label for the trigger button. Defaults to "Style ▾". */
   label?: string;
   className?: string;
+  /** "sm" renders a compact toolbar-height button (px-3 py-1.5 text-xs). Default is "md". */
+  size?: "sm" | "md";
 }
 
 /**
@@ -158,6 +160,7 @@ export default function SkeletonStylePanel({
   onChange,
   label = "Style ▾",
   className = "",
+  size = "md",
 }: SkeletonStylePanelProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -213,7 +216,12 @@ export default function SkeletonStylePanel({
     <div ref={panelRef} className={`relative ${className}`}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="rounded-lg border border-edge/50 bg-card/60 px-4 py-2 text-sm font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg"
+        className={[
+          "rounded-lg border border-edge/50 bg-card/60 font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg",
+          size === "sm"
+            ? "px-3 py-1.5 text-xs"
+            : "px-4 py-2 text-sm",
+        ].join(" ")}
         aria-expanded={open}
         aria-haspopup="dialog"
       >

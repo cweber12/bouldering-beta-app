@@ -526,6 +526,7 @@ function MatchPageInner() {
                 box={imageCrop}
                 onChange={setImageCrop}
                 disabled={!hasAttempt}
+                borderRadius="0.75rem"
               />
             </div>
             <button
@@ -682,6 +683,7 @@ function MatchPageInner() {
                 box={imageCrop}
                 onChange={setImageCrop}
                 disabled={!hasAttempt}
+                borderRadius="0.75rem"
               />
             </div>
           </div>

@@ -77,7 +77,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
           <span
             className={[
               "absolute top-3 left-3 rounded px-2 py-1 text-xs font-bold uppercase tracking-wider",
-              isSend ? "bg-emerald-500/80 text-white" : "bg-amber-500/80 text-white",
+              isSend ? "bg-send/80 text-fg-inverse" : "bg-attempt/80 text-fg-inverse",
             ].join(" ")}
           >
             {climb.runType}
@@ -116,6 +116,15 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
             View on route photo
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </Link>
+          <Link
+            href={`/compare?key=${encodeURIComponent(climb.key)}`}
+            className="mt-2 flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-5 py-2.5 text-sm font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
+          >
+            Compare
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
             </svg>
           </Link>
         </div>

@@ -111,19 +111,12 @@ function UploadPageInner() {
   const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
 
-  // Restore prior attempt from session so users can return from the match page.
-  const [restoredAttempt] = useState<RouteAttempt | null>(() => {
-    if (typeof window === "undefined") return null;
-    const id = window.sessionStorage.getItem(SESSION_KEY);
-    return id ? (getAttempt(id) ?? null) : null;
-  });
-
-  const [state, setState] = useState(() => restoredAttempt?.state ?? "");
-  const [area,  setArea]  = useState(() => restoredAttempt?.area  ?? "");
-  const [route, setRoute] = useState(() => restoredAttempt?.route ?? "");
-  const [runType, setRunType] = useState<RunType>(() => restoredAttempt?.runType ?? "attempt");
-  const [rating, setRating] = useState(() => restoredAttempt?.rating ?? "");
-  const [notes, setNotes] = useState(() => restoredAttempt?.notes ?? "");
+  const [state, setState] = useState("");
+  const [area,  setArea]  = useState("");
+  const [route, setRoute] = useState("");
+  const [runType, setRunType] = useState<RunType>("attempt");
+  const [rating, setRating] = useState("");
+  const [notes, setNotes] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
   const [frameStep, setFrameStep] = useState(5);
@@ -135,8 +128,8 @@ function UploadPageInner() {
   const [showCamera, setShowCamera] = useState(false);
   const previewUrlRef = useRef<string | null>(cachedVideoUrl);
 
-  // Step-based navigation (replaces old phase + newFileSelected)
-  const [step, setStep] = useState<ScanStep>(() => restoredAttempt ? "landmarks" : "pick");
+  // Step-based navigation — always start fresh
+  const [step, setStep] = useState<ScanStep>("pick");
 
   // First-frame image for animated landmark preview (FramePlayer background)
   const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
@@ -167,7 +160,7 @@ function UploadPageInner() {
   const [bottomSheetAction, setBottomSheetAction] = useState<"save" | "upload">("save");
 
   // Derive topology-aware skeleton style
-  const activeAttemptId0 = (status === "done") ? attemptId : restoredAttempt?.id ?? null;
+  const activeAttemptId0 = (status === "done") ? attemptId : null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
   const topoStyle: SkeletonStyle = useMemo(() => {
     const backend = activeAttempt0?.poseBackend ?? "mediapipe";
@@ -183,9 +176,7 @@ function UploadPageInner() {
     useSkeletonFrames(cv, activeAttemptId0 || null, matchResult);
 
   // GPS coordinate tagging
-  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(
-    () => restoredAttempt?.coordinates ?? null,
-  );
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
   const [showMapPicker, setShowMapPicker] = useState(false);
   const { request: geoRequest, loading: geoLoading } = useGeolocation();
   const { reverseGeocode } = useGeocoding();
@@ -259,26 +250,22 @@ function UploadPageInner() {
   const isDone = status === "done";
   const orbReady = orbStatus === "ready";
 
-  // Persist the attempt id into session so user can return from match page.
-  const activeAttemptId = isDone ? attemptId : restoredAttempt?.id ?? null;
+  // Active attempt — only from the current scan session
+  const activeAttemptId = isDone ? attemptId : null;
   const activeAttempt   = activeAttemptId ? (getAttempt(activeAttemptId) ?? null) : null;
 
-  useEffect(() => {
-    if (isDone && attemptId) {
-      try { window.sessionStorage.setItem(SESSION_KEY, attemptId); } catch { /* quota */ }
-    }
-  }, [isDone, attemptId]);
-
-  // Cache file and URL in module scope so state survives navigation.
+  // Cache file and URL in module scope so state survives re-renders.
   useEffect(() => { cachedPendingFile = pendingFile; }, [pendingFile]);
   useEffect(() => { cachedVideoUrl = videoPreviewUrl; }, [videoPreviewUrl]);
 
-  // Only revoke the video preview URL when a new file is loaded (handled in
-  // loadVideoFile), NOT on unmount � we want it to survive navigation.
-
+  // Cleanup on unmount — clear session and cached state so the next visit starts fresh.
   useEffect(() => {
     return () => {
+      try { window.sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      cachedPendingFile = null;
+      cachedVideoUrl = null;
       if (routePhotoPreviewUrlRef.current) URL.revokeObjectURL(routePhotoPreviewUrlRef.current);
+      if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
     };
   }, []);
 
@@ -626,6 +613,8 @@ function UploadPageInner() {
           orbReady={orbReady}
           onViewOnRoutePhoto={handleViewOnRoutePhoto}
           onEditClimb={handleEditClimb}
+          onChooseVideo={handleSelectFile}
+          onTakeVideo={() => setShowCamera(true)}
           onSaveToDevice={handleOpenSaveSheet}
           onUpload={handleOpenUploadSheet}
           s3Saved={s3Saved}

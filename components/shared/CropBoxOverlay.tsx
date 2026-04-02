@@ -25,6 +25,12 @@ interface CropBoxOverlayProps {
   box: CropFraction;
   onChange: (box: CropFraction) => void;
   disabled?: boolean;
+  /**
+   * Border-radius applied to the crop-window border so it matches the
+   * containing media element's rounded corners (e.g. "0.75rem" for rounded-xl).
+   * Defaults to "4px" for a subtle modern rounding.
+   */
+  borderRadius?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -48,13 +54,44 @@ const CURSOR_MAP: Record<HandleId, string> = {
 /** Minimum size of the crop box as a fraction of the container. */
 const MIN_SIZE = 0.05;
 
-const HANDLE_PX = 15;
-
 /** Invisible hit area around each handle for easier touch interaction. */
 const HIT_AREA_PX = 36;
 
+/** Length of each line-segment handle arm in px. */
+const SEG_LEN = 14;
+/** Thickness of handle line segments in px. */
+const SEG_W = 3;
+/** Dark handle color — visible against light and dark media. */
+const HANDLE_COLOR = "rgba(0,0,0,0.85)";
+/** Light halo around handles for contrast against dark media. */
+const HANDLE_SHADOW = "0 0 0 1px rgba(255,255,255,0.5)";
+
 /** Default crop box: slight inset from edges. */
 export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
+
+/** Returns the inline style for the visible handle knob based on handle id. */
+function getHandleKnobStyle(id: HandleId): React.CSSProperties {
+  const base: React.CSSProperties = {
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
+    pointerEvents: "none",
+    boxSizing: "border-box",
+  };
+  const thick = `${SEG_W}px solid ${HANDLE_COLOR}`;
+  switch (id) {
+    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick, boxShadow: HANDLE_SHADOW };
+    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick, boxShadow: HANDLE_SHADOW };
+    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick, boxShadow: HANDLE_SHADOW };
+    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick, boxShadow: HANDLE_SHADOW };
+    case "n":  return { ...base, width: SEG_LEN, height: SEG_W, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
+    case "s":  return { ...base, width: SEG_LEN, height: SEG_W, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
+    case "e":  return { ...base, width: SEG_W, height: SEG_LEN, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
+    case "w":  return { ...base, width: SEG_W, height: SEG_LEN, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
+    default: return base;
+  }
+}
 
 interface DragState {
   handle: HandleId;
@@ -81,6 +118,7 @@ export default function CropBoxOverlay({
   box,
   onChange,
   disabled = false,
+  borderRadius = "4px",
 }: CropBoxOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -189,18 +227,18 @@ export default function CropBoxOverlay({
       {/* Top strip */}
       <div
         className="absolute left-0 right-0 top-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.62)", height: pct(y) }}
+        style={{ background: "rgba(0,0,0,0.52)", height: pct(y) }}
       />
       {/* Bottom strip */}
       <div
         className="absolute left-0 right-0 bottom-0 pointer-events-none"
-        style={{ background: "rgba(0,0,0,0.62)", top: pct(y + h) }}
+        style={{ background: "rgba(0,0,0,0.52)", top: pct(y + h) }}
       />
       {/* Left strip */}
       <div
         className="absolute pointer-events-none"
         style={{
-          background: "rgba(0,0,0,0.62)",
+          background: "rgba(0,0,0,0.52)",
           top: pct(y),
           left: 0,
           width: pct(x),
@@ -211,7 +249,7 @@ export default function CropBoxOverlay({
       <div
         className="absolute pointer-events-none"
         style={{
-          background: "rgba(0,0,0,0.62)",
+          background: "rgba(0,0,0,0.52)",
           top: pct(y),
           left: pct(x + w),
           right: 0,
@@ -227,15 +265,15 @@ export default function CropBoxOverlay({
           top: pct(y),
           width: pct(w),
           height: pct(h),
-          border: "2px solid rgba(255,255,255,0.85)",
-          borderRadius: 4,
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.5)",
+          border: "2px solid rgba(0,0,0,0.8)",
+          borderRadius,
+          boxShadow: "0 0 0 1px rgba(255,255,255,0.42), inset 0 0 0 1px rgba(255,255,255,0.12)",
           cursor: disabled ? "default" : CURSOR_MAP["move"],
         }}
         onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}
       />
 
-      {/* Resize handles — large invisible hit area wrapping visible knob */}
+      {/* Resize handles — large invisible hit area wrapping visible line-segment knob */}
       {!disabled &&
         handles.map(([id, lx, ly]) => (
           <div
@@ -252,22 +290,8 @@ export default function CropBoxOverlay({
             }}
             onPointerDown={(e) => startDrag(e, id)}
           >
-            {/* Visible handle knob (centred inside the hit area) */}
-            <div
-              className="pointer-events-none"
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                width: HANDLE_PX,
-                height: HANDLE_PX,
-                transform: "translate(-50%, -50%)",
-                background: "#fff",
-                border: "2px solid #000",
-                borderRadius: "50%",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
-              }}
-            />
+            {/* Visible handle knob — line-segment style */}
+            <div style={getHandleKnobStyle(id)} />
           </div>
         ))}
     </div>
