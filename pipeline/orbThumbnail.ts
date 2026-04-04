@@ -11,7 +11,7 @@ const THUMB_MAX_WIDTH = 320;
 
 /** Color and width for the ORB crop bounding box overlay. */
 const BOX_COLOR = "#00ff44";
-const BOX_LINE_WIDTH = 2;
+const BOX_LINE_WIDTH = 1;
 
 /**
  * Draw the ORB detection bounding box onto an ImageData and return a

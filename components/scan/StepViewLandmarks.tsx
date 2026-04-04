@@ -4,17 +4,12 @@ import { useRef, useState } from "react";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
+import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
-export interface SkeletonFrameData {
-  frames: RenderedSkeletonFrame[];
-  duration: number;
-}
-
 export interface StepViewLandmarksProps {
   // Processing status
   isProcessing: boolean;

@@ -88,7 +88,7 @@ export default function ClimbOptionsDropdown({ climbKey, trigger }: ClimbOptions
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute bottom-full left-0 z-[60] mb-2 w-44 overflow-hidden rounded-xl border border-edge bg-surface shadow-xl">
+        <div className="absolute top-full left-0 z-60 mt-2 w-44 overflow-hidden rounded-xl border border-edge bg-surface shadow-xl">
           {/* View / Compare toggle */}
           <div className="m-2 flex gap-1 rounded-lg bg-inset p-1">
             <button

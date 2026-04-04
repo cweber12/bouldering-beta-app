@@ -5,15 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 function DemoPreview() {
   return (
-    <div className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-edge/60 bg-card shadow-2xl shadow-black/20">
-      {/* Faint scan-line overlay */}
-      <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
-        <div className="animate-scan-sweep h-full w-1/3 bg-gradient-to-r from-transparent via-accent/5 to-transparent" />
-      </div>
-      <div className="flex items-center justify-between border-b border-edge/40 bg-inset/60 px-4 py-2">
-        <span className="text-xs font-mono text-fg-muted tracking-wide">pose-overlay.webm</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-      </div>
+    <div className="relative w-full max-w-sm overflow-hidden rounded-1xl border border-edge/60 bg-card shadow-2xl shadow-black/20">
       <video
         src="/run-1774824194693-pose-overlay.webm"
         autoPlay

@@ -321,7 +321,7 @@ function UploadPageInner() {
         f.keypoints.map(kp => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }])
       ),
     }));
-    return { frames: renderedFrames, duration };
+    return { frames: renderedFrames, duration, fps: videoMeta.fps ?? 30 };
   }, [activeAttempt]);
 
   function toggleCondition(id: string) {

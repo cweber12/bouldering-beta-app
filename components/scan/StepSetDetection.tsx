@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CropBoxOverlay, { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
+import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // Frame-condition options (same set as the legacy page)
@@ -26,18 +27,6 @@ const FRAME_CONDITIONS: FrameCondition[] = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function mediaContainerStyle(w: number, h: number): React.CSSProperties {
-  const ratio = (w / h).toFixed(6);
-  const maxH = "calc(100dvh - var(--nav-h) - 8rem)";
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
-}
-
-function fsMediaContainerStyle(w: number, h: number): React.CSSProperties {
-  const ratio = (w / h).toFixed(6);
-  const maxH = "calc(100dvh - 8rem)";
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
-}
-
 function isCropDefault(crop: CropFraction): boolean {
   return (
     Math.abs(crop.x - DEFAULT_CROP.x) < 0.001 &&
@@ -363,7 +352,7 @@ export default function StepSetDetection({
         {/* Viewport-fit video container */}
         <div
           className="relative overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10 mx-auto"
-          style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
+          style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h, "8rem")}
         >
           <video
             ref={cropVideoRef}

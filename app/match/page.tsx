@@ -19,6 +19,8 @@ import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { getTopology } from "@/utils/poseConstants";
 import { sanitizeDirName } from "@/utils/fsHelpers";
+import { compressImageToDataUrl, dataUrlToFile } from "@/utils/imageHelpers";
+import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // Inner component (needs useSearchParams)
@@ -27,35 +29,6 @@ import { sanitizeDirName } from "@/utils/fsHelpers";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Resize & JPEG-compress an image File to a data URL (max 1280×960, 82 % quality). */
-async function compressImageToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const MAX_W = 1280, MAX_H = 960;
-      const scale = Math.min(1, MAX_W / img.naturalWidth, MAX_H / img.naturalHeight);
-      const canvas = document.createElement("canvas");
-      canvas.width  = Math.round(img.naturalWidth  * scale);
-      canvas.height = Math.round(img.naturalHeight * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/jpeg", 0.82));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
-    img.src = url;
-  });
-}
-
-/** Convert a data URL string to a File object (for auto-populating imageFile from S3 route image). */
-async function dataUrlToFile(dataUrl: string, filename = "route-image.jpg"): Promise<File> {
-  const res = await fetch(dataUrl);
-  const blob = await res.blob();
-  return new File([blob], filename, { type: blob.type });
-}
 
 function MatchPageInner() {
   const params = useSearchParams();
@@ -266,30 +239,6 @@ function MatchPageInner() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [imageFullscreen]);
-
-  // Compute viewport-fit container style for a media element with known natural dimensions.
-  // The container fills as much horizontal space as available while never exceeding viewport
-  // height (minus nav bar and a small buffer), preserving aspect ratio exactly so that
-  // CropBoxOverlay fraction coordinates always map 1-to-1 with the visible media area.
-  function mediaContainerStyle(w: number, h: number): React.CSSProperties {
-    const ratio = (w / h).toFixed(6);
-    const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
-    return {
-      width: `min(100%, calc(${maxH} * ${ratio}))`,
-      maxHeight: maxH,
-      aspectRatio: `${w} / ${h}`,
-    };
-  }
-
-  function fsMediaContainerStyle(w: number, h: number): React.CSSProperties {
-    const ratio = (w / h).toFixed(6);
-    const maxH = "calc(100dvh - 8rem)";
-    return {
-      width: `min(100%, calc(${maxH} * ${ratio}))`,
-      maxHeight: maxH,
-      aspectRatio: `${w} / ${h}`,
-    };
-  }
 
   return (
     <div className="flex-1">

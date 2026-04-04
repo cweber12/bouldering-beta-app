@@ -9,21 +9,7 @@ import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function mediaContainerStyle(w: number, h: number): React.CSSProperties {
-  const ratio = (w / h).toFixed(6);
-  const maxH = "calc(100dvh - var(--nav-h) - 8rem)";
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
-}
-
-function fsMediaContainerStyle(w: number, h: number): React.CSSProperties {
-  const ratio = (w / h).toFixed(6);
-  const maxH = "calc(100dvh - 8rem)";
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
-}
+import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -271,7 +257,7 @@ export default function StepMatchRoutePhoto({
             {/* Viewport-fit image with crop overlay */}
             <div
               className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10 mx-auto"
-              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "8rem")}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -294,7 +280,7 @@ export default function StepMatchRoutePhoto({
           <div className="flex flex-col gap-2">
             <div
               className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 mx-auto"
-              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "8rem")}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
