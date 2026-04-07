@@ -154,6 +154,19 @@ function MatchPageInner() {
     setShowCamera(false);
   }
 
+  // Persist the route image (and optionally the crop box) to S3.
+  function saveRouteImageToS3(dataUrl: string, crop?: { x: number; y: number; w: number; h: number }) {
+    if (!attempt || !userPrefix) return;
+    const key = `${userPrefix}/${sanitizeDirName(attempt.state || "Unknown")}/${sanitizeDirName(attempt.area || "Unknown")}/${sanitizeDirName(attempt.route || "Unknown")}/route-image.json`;
+    const payload: Record<string, unknown> = { dataUrl };
+    if (crop) payload.cropBox = crop;
+    fetch("/api/s3/put", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, body: JSON.stringify(payload) }),
+    }).catch(() => { /* fire-and-forget */ });
+  }
+
   // Save the selected file and, when a climb is loaded, persist the image to S3 as the route photo.
   function handleImageFileSet(file: File) {
     setImageFileWithPreview(file);
@@ -162,12 +175,7 @@ function MatchPageInner() {
     setMatchTriggered(false);
     if (attempt && userPrefix) {
       compressImageToDataUrl(file).then(dataUrl => {
-        const key = `${userPrefix}/${sanitizeDirName(attempt.state || "Unknown")}/${sanitizeDirName(attempt.area || "Unknown")}/${sanitizeDirName(attempt.route || "Unknown")}/route-image.json`;
-        fetch("/api/s3/put", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key, body: JSON.stringify({ dataUrl }) }),
-        }).catch(() => { /* fire-and-forget */ });
+        saveRouteImageToS3(dataUrl);
       }).catch(() => { /* ignore */ });
     }
   }
@@ -183,10 +191,26 @@ function MatchPageInner() {
       .finally(() => { routeImageConvertingRef.current = false; });
   }, [userPickedImage]);
 
+  // Restore saved crop box when a route image with crop metadata loads from S3.
+  const handleRouteImageCropLoaded = useCallback((crop: { x: number; y: number; w: number; h: number } | null) => {
+    if (crop && !userPickedImage) {
+      setImageCrop(crop as CropFraction);
+    }
+  }, [userPickedImage]);
+
   function handleApplyAndMatch() {
     if (!imageFile || !cv || !attemptId) return;
     setMatchTriggered(true);
     matchImage(imageFile, attemptId, cv, imageCrop);
+    // Persist the crop box alongside the route image so future loads
+    // can automatically reuse it without requiring manual cropping.
+    if (attempt && userPrefix && imageFile) {
+      compressImageToDataUrl(imageFile).then(dataUrl => {
+        const crop = imageCrop.x === 0 && imageCrop.y === 0 && imageCrop.w === 1 && imageCrop.h === 1
+          ? undefined : imageCrop;
+        saveRouteImageToS3(dataUrl, crop);
+      }).catch(() => { /* ignore */ });
+    }
   }
 
   const isMatching = matchStatus === "matching";
@@ -312,6 +336,7 @@ function MatchPageInner() {
             <S3RoutePicker
               onLoad={handleLoadAttempt}
               onRouteImageLoaded={handleRouteImageLoaded}
+              onRouteImageCropLoaded={handleRouteImageCropLoaded}
               alwaysOpen
             />
 

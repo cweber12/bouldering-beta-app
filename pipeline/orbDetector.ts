@@ -167,6 +167,173 @@ export function extractFeaturesFromCrop(
   return { ...features, keypoints: adjustedKp, cropBox };
 }
 
+// ---------------------------------------------------------------------------
+// Climber exclusion mask
+// ---------------------------------------------------------------------------
+
+/** Dilation radius (pixels) around the climber convex hull. */
+const CLIMBER_MASK_DILATION = 30;
+
+/**
+ * Normalised landmark point used for mask generation.
+ * Coordinates are in [0, 1] relative to the image dimensions.
+ */
+export interface NormalizedPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * Build an inverted binary mask that excludes the climber region.
+ *
+ * Uses the convex hull of the supplied pose landmarks (in normalised [0,1]
+ * space), dilated by {@link CLIMBER_MASK_DILATION} pixels, to produce a mask
+ * where the climber region is black (0 = exclude) and the rest is white
+ * (255 = include). This can be passed as the `mask` parameter to
+ * `ORB.detectAndCompute` so keypoints are only detected on the wall surface.
+ *
+ * All OpenCV allocations are freed before returning except the result Mat,
+ * which the caller MUST delete when done.
+ *
+ * @param cv        - Initialised OpenCV runtime.
+ * @param width     - Image width in pixels.
+ * @param height    - Image height in pixels.
+ * @param landmarks - Pose landmarks in normalised [0,1] coordinates.
+ * @returns An 8-bit single-channel Mat (CV_8UC1) with the exclusion mask.
+ */
+export function buildClimberExclusionMask(
+  cv: CV,
+  width: number,
+  height: number,
+  landmarks: NormalizedPoint[],
+): ReturnType<typeof Object> {
+  // Need at least 3 points for a meaningful convex hull.
+  if (landmarks.length < 3) {
+    // Return a fully white mask (no exclusion).
+    const allWhite = new cv.Mat(height, width, cv.CV_8UC1, new cv.Scalar(255));
+    return allWhite;
+  }
+
+  let points = null;
+  let hull = null;
+  let maskBlack = null;
+  let dilateKernel = null;
+  let dilated = null;
+
+  try {
+    // Convert normalised landmarks to pixel coordinates.
+    const pixelCoords: number[] = [];
+    for (const lm of landmarks) {
+      pixelCoords.push(
+        Math.round(lm.x * width),
+        Math.round(lm.y * height),
+      );
+    }
+
+    points = cv.matFromArray(landmarks.length, 1, cv.CV_32SC2, pixelCoords);
+    hull = new cv.Mat();
+    cv.convexHull(points, hull, false, true);
+
+    // Draw filled convex hull on a black canvas (white = climber area).
+    maskBlack = new cv.Mat.zeros(height, width, cv.CV_8UC1);
+    const hullContour = new cv.MatVector();
+    hullContour.push_back(hull);
+    cv.drawContours(maskBlack, hullContour, 0, new cv.Scalar(255), cv.FILLED);
+    hullContour.delete();
+
+    // Dilate the climber region to cover limbs & edges.
+    dilateKernel = cv.getStructuringElement(
+      cv.MORPH_ELLIPSE,
+      new cv.Size(CLIMBER_MASK_DILATION * 2 + 1, CLIMBER_MASK_DILATION * 2 + 1),
+    );
+    dilated = new cv.Mat();
+    cv.dilate(maskBlack, dilated, dilateKernel);
+
+    // Invert: white = wall (detect here), black = climber (exclude).
+    const result = new cv.Mat();
+    cv.bitwise_not(dilated, result);
+    return result;
+  } finally {
+    dilated?.delete();
+    dilateKernel?.delete();
+    maskBlack?.delete();
+    hull?.delete();
+    points?.delete();
+  }
+}
+
+/**
+ * Extract ORB features while excluding the climber region.
+ *
+ * Works like {@link extractFeatures} but accepts an array of normalised pose
+ * landmarks used to build an exclusion mask. Keypoints on the climber body
+ * are suppressed so the resulting features focus on the wall/route surface.
+ *
+ * Falls back to standard extraction when no landmarks are provided.
+ */
+export function extractFeaturesExcludingClimber(
+  cv: CV,
+  imageData: ImageData,
+  landmarks: NormalizedPoint[],
+  normalizePixels = true,
+): OrbFeatures {
+  if (landmarks.length < 3) {
+    return extractFeatures(cv, imageData, normalizePixels);
+  }
+
+  let src = null,
+    gray = null,
+    normalized = null,
+    climberMask = null,
+    keypoints = null,
+    descriptors = null,
+    orb = null;
+
+  try {
+    src = cv.matFromImageData(imageData);
+
+    gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    if (normalizePixels) {
+      normalized = new cv.Mat();
+      cv.equalizeHist(gray, normalized);
+    }
+
+    climberMask = buildClimberExclusionMask(cv, imageData.width, imageData.height, landmarks);
+
+    keypoints = new cv.KeyPointVector();
+    descriptors = new cv.Mat();
+    orb = new cv.ORB(ORB_FEATURES);
+
+    const detect = normalized ?? gray;
+    orb.detectAndCompute(detect, climberMask, keypoints, descriptors);
+
+    const kpArray: OrbKeypoint[] = [];
+    for (let i = 0; i < keypoints.size(); i++) {
+      const kp = keypoints.get(i);
+      kpArray.push({
+        pt: { x: kp.pt.x, y: kp.pt.y },
+        size: kp.size,
+        angle: kp.angle,
+        response: kp.response,
+        octave: kp.octave,
+      });
+    }
+
+    const descCopy = new Uint8Array(descriptors.data);
+    return { keypoints: kpArray, descriptors: descCopy };
+  } finally {
+    orb?.delete();
+    descriptors?.delete();
+    keypoints?.delete();
+    climberMask?.delete();
+    normalized?.delete();
+    gray?.delete();
+    src?.delete();
+  }
+}
+
 /**
  * Match two sets of ORB descriptors using BFMatcher (NORM_HAMMING) with
  * Lowe ratio test (k=2, ratio=0.75). Runs synchronously on the main thread.

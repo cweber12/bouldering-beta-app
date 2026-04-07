@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures } from "@/pipeline/orbDetector";
-import type { OrbFeatures, OrbCropBox } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, buildClimberExclusionMask, extractFeaturesExcludingClimber } from "@/pipeline/orbDetector";
+import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/orbDetector";
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -320,5 +320,146 @@ describe("extractFeaturesFromCrop", () => {
     const cropBox: OrbCropBox = { x: 0, y: 0, width: 4, height: 4, srcWidth: 4, srcHeight: 4 };
     const result = extractFeaturesFromCrop(cv, fakeImageData(), cropBox);
     expect(result.descriptors).toEqual(descData);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildClimberExclusionMask
+// ---------------------------------------------------------------------------
+
+/** Extend the base mock cv with convex hull / dilate / bitwise_not support. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeMaskCv(): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const cv = makeMockCv() as Record<string, any>;
+
+  const resultMat = makeMockMat();
+  const zerosMat = makeMockMat();
+
+  // Additional constructors/functions needed by buildClimberExclusionMask.
+  cv.CV_32SC2 = 14;
+  cv.MORPH_ELLIPSE = 2;
+  cv.FILLED = -1;
+  cv.Scalar = vi.fn().mockImplementation(function (v: number) { return { val: v }; });
+  cv.Size = vi.fn().mockImplementation(function (w: number, h: number) { return { width: w, height: h }; });
+
+  // Mat.zeros is called with `new` in source — must use `function` keyword.
+  cv.Mat.zeros = vi.fn().mockImplementation(function () { return zerosMat; });
+
+  // MatVector used for drawContours.
+  cv.MatVector = vi.fn().mockImplementation(function () {
+    return { push_back: vi.fn(), delete: vi.fn() };
+  });
+
+  cv.convexHull = vi.fn();
+  cv.drawContours = vi.fn();
+  cv.getStructuringElement = vi.fn().mockReturnValue(makeMockMat());
+  cv.dilate = vi.fn();
+  cv.bitwise_not = vi.fn();
+
+  // These are the mats we can inspect for cleanup.
+  cv._resultMat = resultMat;
+  cv._zerosMat = zerosMat;
+
+  return cv;
+}
+
+describe("buildClimberExclusionMask", () => {
+  it("returns a white mask when fewer than 3 landmarks", () => {
+    const cv = makeMaskCv();
+    const twoLandmarks: NormalizedPoint[] = [{ x: 0.5, y: 0.5 }, { x: 0.6, y: 0.6 }];
+    const mask = buildClimberExclusionMask(cv, 100, 100, twoLandmarks);
+    // Should construct a white-filled Mat via Scalar(255), not use convexHull.
+    expect(cv.convexHull).not.toHaveBeenCalled();
+    expect(mask).toBeDefined();
+    mask.delete();
+  });
+
+  it("builds a convex hull from ≥ 3 landmarks and inverts via bitwise_not", () => {
+    const cv = makeMaskCv();
+    const landmarks: NormalizedPoint[] = [
+      { x: 0.1, y: 0.2 },
+      { x: 0.5, y: 0.8 },
+      { x: 0.9, y: 0.3 },
+    ];
+    buildClimberExclusionMask(cv, 200, 200, landmarks);
+    expect(cv.convexHull).toHaveBeenCalledOnce();
+    expect(cv.drawContours).toHaveBeenCalledOnce();
+    expect(cv.dilate).toHaveBeenCalledOnce();
+    expect(cv.bitwise_not).toHaveBeenCalledOnce();
+  });
+
+  it("converts normalised landmarks to integer pixel coordinates", () => {
+    const cv = makeMaskCv();
+    const landmarks: NormalizedPoint[] = [
+      { x: 0.25, y: 0.5 },
+      { x: 0.75, y: 0.1 },
+      { x: 0.5, y: 0.9 },
+    ];
+    buildClimberExclusionMask(cv, 400, 200, landmarks);
+    // matFromArray should receive pixel ints: [100, 100, 300, 20, 200, 180]
+    const call = cv.matFromArray.mock.calls[0];
+    expect(call[0]).toBe(3); // nRows
+    expect(call[3]).toEqual([100, 100, 300, 20, 200, 180]);
+  });
+
+  it("frees intermediate Mats (hull, points, dilateKernel) in finally", () => {
+    const cv = makeMaskCv();
+    const landmarks: NormalizedPoint[] = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.5, y: 0.5 },
+      { x: 0.9, y: 0.1 },
+    ];
+    buildClimberExclusionMask(cv, 100, 100, landmarks);
+    // matFromArray creates 'points' — freed in finally.
+    const pointsMat = cv.matFromArray.mock.results[0].value as ReturnType<typeof makeMockMat>;
+    expect(pointsMat.delete).toHaveBeenCalled();
+    // getStructuringElement creates dilateKernel — freed in finally.
+    const dilateKernel = cv.getStructuringElement.mock.results[0].value as ReturnType<typeof makeMockMat>;
+    expect(dilateKernel.delete).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractFeaturesExcludingClimber
+// ---------------------------------------------------------------------------
+
+describe("extractFeaturesExcludingClimber", () => {
+  it("falls back to standard extractFeatures when landmarks < 3", () => {
+    const cv = makeMockCv({ keypoints: [{ x: 5, y: 10 }] });
+    const landmarks: NormalizedPoint[] = [{ x: 0.5, y: 0.5 }];
+    const result = extractFeaturesExcludingClimber(cv, fakeImageData(), landmarks);
+    // Should produce results from the standard extractFeatures path.
+    expect(result.keypoints).toHaveLength(1);
+    expect(result.keypoints[0].pt).toEqual({ x: 5, y: 10 });
+  });
+
+  it("uses a climber mask when ≥ 3 landmarks are provided", () => {
+    const cv = makeMaskCv();
+    const landmarks: NormalizedPoint[] = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.5, y: 0.8 },
+      { x: 0.9, y: 0.2 },
+    ];
+    const result = extractFeaturesExcludingClimber(cv, fakeImageData(), landmarks);
+    expect(result.keypoints).toBeDefined();
+    // buildClimberExclusionMask should have been invoked.
+    expect(cv.convexHull).toHaveBeenCalledOnce();
+  });
+
+  it("frees climber mask and all allocations", () => {
+    const cv = makeMaskCv();
+    const landmarks: NormalizedPoint[] = [
+      { x: 0.2, y: 0.2 },
+      { x: 0.5, y: 0.5 },
+      { x: 0.8, y: 0.8 },
+    ];
+    extractFeaturesExcludingClimber(cv, fakeImageData(), landmarks);
+    // ORB, keypoints, srcMat etc. should all be deleted.
+    expect(cv._orb.delete).toHaveBeenCalled();
+    expect(cv._kpVec.delete).toHaveBeenCalled();
+    for (const m of cv._matInstances) {
+      expect(m.delete).toHaveBeenCalled();
+    }
   });
 });

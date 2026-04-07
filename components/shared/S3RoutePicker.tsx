@@ -18,6 +18,8 @@ interface S3RoutePickerProps {
   onLoad: (attempt: RouteAttempt, entryKey?: string) => void;
   /** Called when the route image changes (fetched from S3 or newly uploaded). Null when no image. */
   onRouteImageLoaded?: (dataUrl: string | null) => void;
+  /** Called with the saved crop-box metadata from route-image.json, if present. */
+  onRouteImageCropLoaded?: (crop: { x: number; y: number; w: number; h: number } | null) => void;
   /** Button label. */
   label?: string;
   /** When true shows a compact inline layout. */
@@ -54,6 +56,7 @@ interface S3RoutePickerProps {
 export default function S3RoutePicker({
   onLoad,
   onRouteImageLoaded,
+  onRouteImageCropLoaded,
   label = "Load from S3",
   compact = false,
   defaultState,
@@ -98,11 +101,15 @@ export default function S3RoutePicker({
   const onRouteImageLoadedRef = useRef(onRouteImageLoaded);
   useEffect(() => { onRouteImageLoadedRef.current = onRouteImageLoaded; });
 
+  const onRouteImageCropLoadedRef = useRef(onRouteImageCropLoaded);
+  useEffect(() => { onRouteImageCropLoadedRef.current = onRouteImageCropLoaded; });
+
   // Fetch route image whenever the selected route changes.
   useEffect(() => {
     if (!selectedRoute || !userPrefix || !selectedState || !selectedArea) {
       setRouteImageDataUrl(null);
       onRouteImageLoadedRef.current?.(null);
+      onRouteImageCropLoadedRef.current?.(null);
       return;
     }
     const key = `${userPrefix}/${selectedState}/${selectedArea}/${selectedRoute}/route-image.json`;
@@ -110,15 +117,20 @@ export default function S3RoutePicker({
     async function fetchImage() {
       try {
         const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
-        if (!res.ok) { if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); } return; }
+        if (!res.ok) { if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); onRouteImageCropLoadedRef.current?.(null); } return; }
         const raw = await res.json() as Record<string, unknown>;
         const url = typeof raw.dataUrl === "string" ? raw.dataUrl : null;
+        // Extract saved crop-box metadata if present.
+        const savedCrop = (raw.cropBox && typeof raw.cropBox === "object")
+          ? raw.cropBox as { x: number; y: number; w: number; h: number }
+          : null;
         if (!cancelled) {
           setRouteImageDataUrl(url);
           onRouteImageLoadedRef.current?.(url);
+          onRouteImageCropLoadedRef.current?.(savedCrop);
         }
       } catch {
-        if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); }
+        if (!cancelled) { setRouteImageDataUrl(null); onRouteImageLoadedRef.current?.(null); onRouteImageCropLoadedRef.current?.(null); }
       }
     }
     fetchImage();

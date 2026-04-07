@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { estimateFrameUnified, type PoseFrame } from "@/pipeline/poseDetection";
-import { extractFeatures, extractFeaturesFromCrop } from "@/pipeline/orbDetector";
+import { estimateFrameWithRetry, type PoseFrame } from "@/pipeline/poseDetection";
+import { extractFeatures, extractFeaturesFromCrop, extractFeaturesExcludingClimber, type NormalizedPoint } from "@/pipeline/orbDetector";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
 import {
@@ -254,13 +254,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
             }
 
-            const frame = await estimateFrameUnified(
+            const frame = estimateFrameWithRetry(
               detector, poseCanvas,
               mpTimestampBase + video.currentTime, // monotonically increasing for MediaPipe
-              backend,
             );
             if (frame) {
-              // Restore actual video timestamp (estimateFrameUnified stored the
+              // Restore actual video timestamp (estimateFrameWithRetry stored the
               // offset-adjusted value, but downstream interpolation / playback
               // need the real video time).
               frame.timestamp = video.currentTime;
@@ -285,6 +284,75 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           }
 
           setCurrentFrame(i + 1);
+        }
+
+        // ---------------------------------------------------------------
+        // Gap recovery pass: if large gaps exist between detections,
+        // seek back and process every frame through the gap until pose
+        // is recovered. Bounded to prevent runaway loops.
+        // ---------------------------------------------------------------
+        const GAP_RECOVERY_THRESHOLD = 3 * frameStep; // frames in allTimestamps
+        const MAX_RECOVERY_FRAMES = 30; // cap per gap to prevent runaway processing
+
+        if (detected.length >= 2 && !abortRef.current) {
+          // Sort detected by timestamp (should already be sorted, but defensive).
+          detected.sort((a, b) => a.timestamp - b.timestamp);
+
+          // Build a timestamp→index lookup for allTimestamps.
+          const tsToIdx = new Map<number, number>();
+          allTimestamps.forEach((ts, idx) => tsToIdx.set(ts, idx));
+
+          // Find gaps between consecutive detections.
+          const gaps: Array<{ afterIdx: number; gapStart: number; gapEnd: number }> = [];
+          for (let d = 1; d < detected.length; d++) {
+            const prevTs = detected[d - 1].timestamp;
+            const currTs = detected[d].timestamp;
+            const prevIdx = tsToIdx.get(prevTs) ?? 0;
+            const currIdx = tsToIdx.get(currTs) ?? 0;
+            const gapSize = currIdx - prevIdx;
+            if (gapSize > GAP_RECOVERY_THRESHOLD) {
+              gaps.push({ afterIdx: prevIdx, gapStart: prevIdx + 1, gapEnd: currIdx - 1 });
+            }
+          }
+
+          for (const gap of gaps) {
+            if (abortRef.current) break;
+            const framesToProcess = Math.min(gap.gapEnd - gap.gapStart + 1, MAX_RECOVERY_FRAMES);
+
+            for (let g = 0; g < framesToProcess; g++) {
+              if (abortRef.current) break;
+              const tsIdx = gap.gapStart + g;
+              if (tsIdx >= allTimestamps.length) break;
+              const seekTime = allTimestamps[tsIdx];
+
+              await new Promise<void>((resolve, reject) => {
+                video.onseeked = () => resolve();
+                video.onerror = () => reject(new Error(`Recovery seek failed at ${seekTime}s`));
+                video.currentTime = Math.min(seekTime, duration);
+              });
+
+              ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
+
+              // Use the full frame for recovery (no hip-tracking crop to avoid
+              // compounding position errors from the gap).
+              const recoveryFrame = estimateFrameWithRetry(
+                detector, canvas,
+                mpTimestampBase + video.currentTime,
+              );
+              if (recoveryFrame) {
+                recoveryFrame.timestamp = video.currentTime;
+                detected.push(recoveryFrame);
+                lastHipCenter = extractHipCenter(recoveryFrame.keypoints) ?? lastHipCenter;
+                // Pose recovered — stop dense processing for this gap.
+                break;
+              }
+            }
+          }
+
+          // Re-sort after recovery insertions.
+          if (gaps.length > 0) {
+            detected.sort((a, b) => a.timestamp - b.timestamp);
+          }
         }
 
         // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
@@ -321,6 +389,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         await new Promise<void>(r => setTimeout(r, 0));
 
         // ORB extraction: use user-defined orbCrop when provided.
+        // When no crop is set, exclude the climber region using pose landmarks
+        // from the first detected frame so features focus on wall texture.
         if (referenceImageData) {
           setOrbStatus("extracting");
           try {
@@ -336,7 +406,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 srcHeight: videoHeight,
               });
             } else {
-              orbFeatures = extractFeatures(cv, referenceImageData);
+              // Use pose landmarks from the first detected frame as a climber mask.
+              const firstPose = detected.length > 0 ? detected[0] : null;
+              const poseLandmarks: NormalizedPoint[] = firstPose
+                ? firstPose.keypoints.map(kp => ({ x: kp.x, y: kp.y }))
+                : [];
+              orbFeatures = poseLandmarks.length >= 3
+                ? extractFeaturesExcludingClimber(cv, referenceImageData, poseLandmarks)
+                : extractFeatures(cv, referenceImageData);
             }
             // Generate thumbnail: draw ORB crop bounding box on the middle frame.
             const thumbSource = middleFrameImageData ?? referenceImageData;
