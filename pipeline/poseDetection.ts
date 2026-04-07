@@ -174,12 +174,16 @@ export function estimateFrameWithRetry(
     retryCanvas.height = srcH;
     retryCtx!.drawImage(canvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
 
-    const retryResult = estimateFrameMediaPipe(detector, retryCanvas, timestamp, minScore);
+    // Each retry must advance the timestamp by at least 1 ms to satisfy
+    // MediaPipe's strict monotonic timestamp requirement for VIDEO mode.
+    const retryTs = timestamp + r * 0.001;
+    const retryResult = estimateFrameMediaPipe(detector, retryCanvas, retryTs, minScore);
     if (!retryResult) continue;
 
-    // Remap keypoints from retry-crop coordinates back to original canvas space.
+    // Remap keypoints and restore the *original* timestamp so callers always
+    // see the real video time, not the mediapipe-offset value.
     const remapped: PoseFrame = {
-      timestamp: retryResult.timestamp,
+      timestamp: timestamp,
       keypoints: retryResult.keypoints.map(kp => ({
         ...kp,
         x: (kp.x * srcW + srcX) / canvas.width,

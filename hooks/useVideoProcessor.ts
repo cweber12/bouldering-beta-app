@@ -179,6 +179,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const mpTimestampBase = nextMpTimestampSec;
         nextMpTimestampSec += duration + 2;
 
+        // Tracks the most-recently used MediaPipe base timestamp so that every
+        // subsequent call — including gap-recovery seeks that go backwards in
+        // video time — remains strictly greater than the last call.
+        // The margin (5 ms) exceeds the maximum per-retry offset used inside
+        // estimateFrameWithRetry (1 ms × DEFAULT_MAX_RETRIES = 2 ms), ensuring
+        // the *next* outer call is always newer than the last retry's timestamp.
+        let lastMpTs = mpTimestampBase;
+
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
 
@@ -254,14 +262,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
             }
 
-            const frame = estimateFrameWithRetry(
-              detector, poseCanvas,
-              mpTimestampBase + video.currentTime, // monotonically increasing for MediaPipe
-            );
+            const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
+            lastMpTs = mpTs;
+            const frame = estimateFrameWithRetry(detector, poseCanvas, mpTs);
             if (frame) {
-              // Restore actual video timestamp (estimateFrameWithRetry stored the
-              // offset-adjusted value, but downstream interpolation / playback
-              // need the real video time).
+              // Restore actual video timestamp — downstream interpolation and
+              // playback need the real video time, not the MediaPipe offset.
               frame.timestamp = video.currentTime;
 
               const poseFrame: PoseFrame = appliedCropBox
@@ -335,10 +341,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               // Use the full frame for recovery (no hip-tracking crop to avoid
               // compounding position errors from the gap).
-              const recoveryFrame = estimateFrameWithRetry(
-                detector, canvas,
-                mpTimestampBase + video.currentTime,
-              );
+              // Use max(lastMpTs + margin, ...) so we never pass a timestamp that
+              // MediaPipe has already consumed, even though video.currentTime
+              // is rewind into an earlier part of the clip.
+              const recMpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
+              lastMpTs = recMpTs;
+              const recoveryFrame = estimateFrameWithRetry(detector, canvas, recMpTs);
               if (recoveryFrame) {
                 recoveryFrame.timestamp = video.currentTime;
                 detected.push(recoveryFrame);
