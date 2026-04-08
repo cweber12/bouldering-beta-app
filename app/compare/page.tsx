@@ -42,6 +42,12 @@ function ComparePageInner() {
   const { cv } = useOpenCV();
   const params = useSearchParams();
   const urlClimbKey = params.get("key") ?? "";
+  // Optional route-lock params — when provided the S3RoutePicker is pre-filled
+  // and the user can only select climbs from the same state/area/route.
+  const urlState = params.get("state") ?? undefined;
+  const urlArea  = params.get("area")  ?? undefined;
+  const urlRoute = params.get("route") ?? undefined;
+  const routeLocked = !!(urlState && urlArea && urlRoute);
   const { downloadAttempt } = useS3Storage();
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
@@ -245,6 +251,11 @@ function ComparePageInner() {
 
       {/* Single shared route picker with selectable climb entries */}
       <div className="flex flex-col gap-3">
+        {routeLocked && (
+          <p className="text-[11px] text-fg-muted">
+            Showing climbs from <span className="font-medium text-fg">{urlRoute}</span> &middot; {urlArea} &middot; {urlState}
+          </p>
+        )}
         <S3RoutePicker
           label="Select Route"
           alwaysOpen
@@ -253,6 +264,9 @@ function ComparePageInner() {
           onLoad={handleSelectAttempt}
           onDeselect={handleDeselectAttempt}
           onRouteImageLoaded={handleRouteImageLoaded}
+          defaultState={urlState}
+          defaultArea={urlArea}
+          defaultRoute={urlRoute}
         />
       </div>
 
@@ -268,7 +282,7 @@ function ComparePageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo"
-                className="max-h-[32rem] w-full rounded-2xl border border-edge/50 bg-card/70 object-contain"
+                className="max-h-128 w-full rounded-2xl border border-edge/50 bg-card/70 object-contain"
               />
               {!cropConfirmed && <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />}
 

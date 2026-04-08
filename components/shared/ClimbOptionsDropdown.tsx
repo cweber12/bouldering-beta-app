@@ -8,8 +8,12 @@ import { useRouter } from "next/navigation";
 // ---------------------------------------------------------------------------
 
 interface ClimbOptionsDropdownProps {
-  /** S3 key of the climb run (used to build match / compare URLs). */
+  /** S3 key of the climb run (used to build view / compare URLs). */
   climbKey: string;
+  /** Route context — when provided, compare navigation locks to this route. */
+  state?: string;
+  area?: string;
+  route?: string;
   /**
    * Optional custom trigger element. When provided, the default icon button is
    * replaced with this node and a click on it toggles the dropdown.
@@ -28,7 +32,7 @@ interface ClimbOptionsDropdownProps {
 // Opens upward from the trigger. Closes on outside click.
 // ---------------------------------------------------------------------------
 
-export default function ClimbOptionsDropdown({ climbKey, trigger }: ClimbOptionsDropdownProps) {
+export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger }: ClimbOptionsDropdownProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"view" | "compare">("view");
@@ -48,10 +52,19 @@ export default function ClimbOptionsDropdown({ climbKey, trigger }: ClimbOptions
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const destination =
-    mode === "view"
-      ? `/match?key=${encodeURIComponent(climbKey)}`
-      : `/compare?key=${encodeURIComponent(climbKey)}`;
+  // Build destination URLs. View always goes to /view; compare passes route
+  // context so the Compare page can lock the picker to the same route.
+  const viewUrl = `/view?key=${encodeURIComponent(climbKey)}`;
+  const compareUrl = (() => {
+    const base = `/compare?key=${encodeURIComponent(climbKey)}`;
+    const parts: string[] = [base];
+    if (state) parts.push(`state=${encodeURIComponent(state)}`);
+    if (area)  parts.push(`area=${encodeURIComponent(area)}`);
+    if (route) parts.push(`route=${encodeURIComponent(route)}`);
+    return parts.join("&");
+  })();
+
+  const destination = mode === "view" ? viewUrl : compareUrl;
 
   const navigate = () => {
     setOpen(false);

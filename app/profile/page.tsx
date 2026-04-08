@@ -106,6 +106,11 @@ export default function ProfilePage() {
   const [pins, setPins] = useState<ClimbPin[]>([]);
   const [loadingPins, setLoadingPins] = useState(false);
 
+  // Quick text search (client-side filter on current page)
+  const [searchText, setSearchText] = useState("");
+  // Filter panel visibility
+  const [filterOpen, setFilterOpen] = useState(false);
+
   // Search & follow
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -709,8 +714,23 @@ export default function ProfilePage() {
   // VIEW MODE (default)
   // =========================================================================
 
+  // Client-side text filter applied on top of server-side paginated results.
+  const displayedClimbs = searchText.trim()
+    ? climbs.filter((c) => {
+        const q = searchText.toLowerCase();
+        return (
+          c.route.toLowerCase().includes(q) ||
+          c.area.toLowerCase().includes(q) ||
+          c.state.toLowerCase().includes(q) ||
+          (c.notes?.toLowerCase().includes(q) ?? false)
+        );
+      })
+    : climbs;
+
+  const hasActiveFilters = !!(filterState || filterArea || filterRoute);
+
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
+    <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
       {/* ---- Page heading ---- */}
       <section className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold text-fg">Saved Climbs</h1>
@@ -725,72 +745,126 @@ export default function ProfilePage() {
 
       <hr className="mb-6 border-edge" />
 
-      {/* ---- Filters ---- */}
-      <section className="mb-4">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-32">
-            <ComboInput
-              label="State"
-              value={filterState}
-              onChange={handleFilterStateChange}
-              suggestions={stateSuggestions}
-              placeholder="Any"
-            />
-          </div>
-          <div className="w-32">
-            <ComboInput
-              label="Area"
-              value={filterArea}
-              onChange={handleFilterAreaChange}
-              suggestions={areaSuggestions}
-              placeholder="Any"
-              disabled={!filterState}
-            />
-          </div>
-          <div className="w-32">
-            <ComboInput
-              label="Route"
-              value={filterRoute}
-              onChange={handleFilterRouteChange}
-              suggestions={routeSuggestions}
-              placeholder="Any"
-              disabled={!filterArea}
-            />
-          </div>
-          {(filterState || filterArea || filterRoute) && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mb-0.5 self-end rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
-            >
-              Clear
-            </button>
-          )}
+      {/* ---- Search + Filter + View toggle toolbar ---- */}
+      <section className="mb-3 flex items-center gap-2">
+        {/* Search input */}
+        <div className="relative min-w-0 flex-1">
+          <svg
+            className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+          </svg>
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Search routes, areas&#8230;"
+            className="w-full rounded-lg border border-edge bg-inset py-1.5 pl-8 pr-3 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+          />
         </div>
-      </section>
 
-      {/* ---- List / Map toggle ---- */}
-      <section className="mb-6 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-fg">
-          Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
-        </h2>
+        {/* Filter toggle button */}
+        <button
+          type="button"
+          onClick={() => setFilterOpen((o) => !o)}
+          className={[
+            "relative flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
+            filterOpen
+              ? "border-accent/60 bg-accent/10 text-accent"
+              : hasActiveFilters
+              ? "border-accent/30 bg-accent/5 text-accent"
+              : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg",
+          ].join(" ")}
+          title="Toggle filters"
+          aria-label="Toggle filters"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
+          </svg>
+          <span className="hidden sm:inline">Filter</span>
+          {hasActiveFilters && (
+            <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-accent" />
+          )}
+        </button>
+
+        {/* List / Map toggle */}
         <div className="flex rounded-lg border border-edge text-xs">
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`px-3 py-1.5 transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            className={`px-3 py-1.5 rounded-l-lg transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
           >
             List
           </button>
           <button
             type="button"
             onClick={() => setViewMode("map")}
-            className={`px-3 py-1.5 transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            className={`px-3 py-1.5 rounded-r-lg transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
           >
             Map
           </button>
         </div>
       </section>
+
+      {/* ---- Collapsible filter panel ---- */}
+      {filterOpen && (
+        <section className="mb-4 rounded-xl border border-edge bg-card/60 px-4 py-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-36">
+              <ComboInput
+                label="State"
+                value={filterState}
+                onChange={handleFilterStateChange}
+                suggestions={stateSuggestions}
+                placeholder="Any"
+              />
+            </div>
+            <div className="w-36">
+              <ComboInput
+                label="Area"
+                value={filterArea}
+                onChange={handleFilterAreaChange}
+                suggestions={areaSuggestions}
+                placeholder="Any"
+                disabled={!filterState}
+              />
+            </div>
+            <div className="w-36">
+              <ComboInput
+                label="Route"
+                value={filterRoute}
+                onChange={handleFilterRouteChange}
+                suggestions={routeSuggestions}
+                placeholder="Any"
+                disabled={!filterArea}
+              />
+            </div>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="self-end rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ---- Count row ---- */}
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm font-medium text-fg">
+          {climbTotal > 0 && (
+            <span className="text-fg-muted font-normal text-xs">({climbTotal} climbs)</span>
+          )}
+        </p>
+      </div>
 
       {/* ---- Map view ---- */}
       {viewMode === "map" && (
@@ -809,7 +883,7 @@ export default function ProfilePage() {
         </section>
       )}
 
-      {/* ---- Climb grid (4×4) ---- */}
+      {/* ---- Climb grid ---- */}
       {viewMode === "list" && (
         <section className="mb-8">
           {loadingClimbs ? (
@@ -817,20 +891,24 @@ export default function ProfilePage() {
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
               <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
             </div>
-          ) : climbs.length === 0 ? (
+          ) : displayedClimbs.length === 0 ? (
             <p className="py-8 text-center text-xs text-fg-muted">
-              {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
+              {climbTotal === 0
+                ? "No climbs recorded yet."
+                : searchText.trim()
+                ? "No climbs match your search."
+                : "No climbs match the current filters."}
             </p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {climbs.map((c) => (
+                {displayedClimbs.map((c) => (
                   <div
                     key={c.key}
                     onClick={() => handleCardClick(c)}
-                    className="group relative cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                    className="group cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
                   >
-                    {/* Thumbnail or placeholder */}
+                    {/* Thumbnail — no badge overlay */}
                     <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
                       {c.thumbnail ? (
                         <NextImage
@@ -838,27 +916,15 @@ export default function ProfilePage() {
                           alt={`${c.route} climb`}
                           fill
                           unoptimized
-                          className="object-cover"
+                          className="object-contain"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
+                        <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
                           <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                           </svg>
                         </div>
                       )}
-
-                      {/* Run type badge */}
-                      <span
-                        className={[
-                          "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                          c.runType === "send"
-                            ? "bg-send/80 text-fg-inverse"
-                            : "bg-attempt/80 text-fg-inverse",
-                        ].join(" ")}
-                      >
-                        {c.runType}
-                      </span>
                     </div>
 
                     {/* Info + options */}
@@ -866,19 +932,35 @@ export default function ProfilePage() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-medium text-fg">{c.route}</p>
                         <p className="truncate text-[10px] text-fg-muted">
-                          {c.area} &middot; {c.state}
+                          {c.area}&nbsp;&middot;&nbsp;{c.state}
                         </p>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                          {/* Run type badge — subtle, inline with metadata */}
+                          <span
+                            className={[
+                              "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
+                              c.runType === "send"
+                                ? "bg-send-surface text-send"
+                                : "bg-attempt-surface text-attempt",
+                            ].join(" ")}
+                          >
+                            {c.runType}
+                          </span>
                           {c.rating && (
-                            <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                            <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
                               {c.rating}
                             </span>
                           )}
+                          <span className="text-[9px] text-fg-muted">{c.timestamp}</span>
                         </div>
                       </div>
                       <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
-                        <ClimbOptionsDropdown climbKey={c.key} />
+                        <ClimbOptionsDropdown
+                          climbKey={c.key}
+                          state={c.state}
+                          area={c.area}
+                          route={c.route}
+                        />
                       </div>
                     </div>
                   </div>

@@ -82,6 +82,9 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
 
           <ClimbOptionsDropdown
             climbKey={climb.key}
+            state={climb.state}
+            area={climb.area}
+            route={climb.route}
             trigger={
               <div className="mt-4 flex w-full items-center justify-between gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-accent-hover">
                 <span>Options</span>

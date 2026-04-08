@@ -87,6 +87,17 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
       ],
     },
   ],
+  "/view": [
+    {
+      title: "Viewing a saved climb",
+      bullets: [
+        "The route photo and saved crop region are loaded automatically from your S3 storage.",
+        "Click 'View Climb' to run ORB matching and overlay your skeleton onto the photo.",
+        "If no route photo is saved for this route yet, you can select one from your device.",
+        "Use 'Export video' to download a .webm animation of the skeleton overlay.",
+      ],
+    },
+  ],
   "/compare": [
     {
       title: "Comparing multiple climbs",
