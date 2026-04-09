@@ -15,7 +15,6 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm flex flex-col gap-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-fg">Route Scanner</h1>
           <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
             Upload or record a climbing video to extract skeleton pose data.
           </p>
@@ -41,8 +40,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
               </svg>
             </div>
             <div className="flex flex-col items-center gap-0.5 text-center">
-              <span className="font-semibold text-fg">Choose a video</span>
-              <span className="text-xs text-fg-muted">MP4, MOV, WebM</span>
+              <span className="font-semibold text-fg">Upload</span>
             </div>
             <input
               type="file"
@@ -75,8 +73,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
               </svg>
             </div>
             <div className="flex flex-col items-center gap-0.5 text-center">
-              <span className="font-semibold text-fg">Record a video</span>
-              <span className="text-xs text-fg-muted">Opens camera</span>
+              <span className="font-semibold text-fg">Record</span>
             </div>
           </button>
         </div>

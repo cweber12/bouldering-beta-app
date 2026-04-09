@@ -12,7 +12,7 @@ const PUBLIC_TABS = [
 ] as const;
 
 const AUTH_TABS = [
-  { href: "/upload", label: "Scan" },
+  { href: "/scan", label: "Scan" },
   { href: "/compare", label: "Compare" },
   { href: "/profile", label: "Saved" },
   { href: "/docs", label: "Docs" },
@@ -28,7 +28,7 @@ interface HelpSection {
 }
 
 const HELP_CONTENT: Record<string, HelpSection[]> = {
-  "/upload": [
+  "/scan": [
     {
       title: "What this page does",
       bullets: [

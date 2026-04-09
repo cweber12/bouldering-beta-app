@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
+import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -77,7 +78,6 @@ export default function StepViewLandmarks({
   const newVideoInputRef   = useRef<HTMLInputElement>(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showInfoDropdown,    setShowInfoDropdown]    = useState(false);
-  const [showSaveDropdown,    setShowSaveDropdown]    = useState(false);
 
   function handleRoutePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -98,7 +98,6 @@ export default function StepViewLandmarks({
   function closeAllDropdowns() {
     setShowActionsDropdown(false);
     setShowInfoDropdown(false);
-    setShowSaveDropdown(false);
   }
 
   const showResults = !isProcessing && !!activeAttempt &&
@@ -119,7 +118,7 @@ export default function StepViewLandmarks({
             </div>
             <p className="text-center text-xs text-fg-secondary">
               Analysing frame {currentFrame} of {totalFrames} ({progressPct}%)
-              <span className="ml-1.5 text-fg-muted">\u2014 pose every {frameStep} frames</span>
+              <span className="ml-1.5 text-fg-muted">&mdash; pose every {frameStep} frames</span>
             </p>
           </div>
         )}
@@ -129,7 +128,7 @@ export default function StepViewLandmarks({
         )}
         {!isProcessing && orbStatus === "failed" && (
           <p className="text-center text-sm text-caution">
-            Feature extraction failed \u2014 image matching will be unavailable.
+            Feature extraction failed &mdash; image matching will be unavailable.
           </p>
         )}
 
@@ -141,7 +140,7 @@ export default function StepViewLandmarks({
             <div className="relative">
               <button
                 type="button"
-                onClick={() => { setShowActionsDropdown(p => !p); setShowSaveDropdown(false); setShowInfoDropdown(false); }}
+                onClick={() => { setShowActionsDropdown(p => !p); setShowInfoDropdown(false); }}
                 className={[
                   "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                   showActionsDropdown
@@ -220,7 +219,7 @@ export default function StepViewLandmarks({
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => { setShowInfoDropdown(p => !p); setShowActionsDropdown(false); setShowSaveDropdown(false); }}
+                  onClick={() => { setShowInfoDropdown(p => !p); setShowActionsDropdown(false); }}
                   className={[
                     "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                     showInfoDropdown
@@ -256,66 +255,15 @@ export default function StepViewLandmarks({
             )}
 
             {/* Save dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => { setShowSaveDropdown(p => !p); setShowActionsDropdown(false); setShowInfoDropdown(false); }}
-                className={[
-                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                  showSaveDropdown
-                    ? "border-accent/60 bg-accent/10 text-accent"
-                    : s3Saved
-                    ? "border-send/30 bg-send-surface text-send"
-                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                ].join(" ")}
-              >
-                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                </svg>
-                {s3Saved ? "Saved" : "Save"}
-                <svg
-                  className={["h-3 w-3 transition-transform", showSaveDropdown ? "rotate-180" : ""].join(" ")}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {showSaveDropdown && (
-                <div className="absolute left-0 top-full z-20 mt-1.5 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in">
-                  <button
-                    onClick={() => { setShowSaveDropdown(false); onUpload(); }}
-                    disabled={s3Loading}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg disabled:opacity-50"
-                  >
-                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
-                    </svg>
-                    {s3Saved ? "Uploaded" : "Upload"}
-                  </button>
-                  <button
-                    onClick={() => { setShowSaveDropdown(false); onSaveToDevice(); }}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
-                  >
-                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                    </svg>
-                    Download to Device
-                  </button>
-                  {savedRouteDirHandle && (
-                    <button
-                      onClick={() => { setShowSaveDropdown(false); onDeleteFromDevice(); }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger-surface"
-                    >
-                      <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                      </svg>
-                      Delete from device
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            <SaveDropdown
+              s3Saved={s3Saved}
+              s3Loading={s3Loading}
+              savedRouteDirHandle={savedRouteDirHandle}
+              onUpload={onUpload}
+              onSaveToDevice={onSaveToDevice}
+              onDeleteFromDevice={onDeleteFromDevice}
+              onOpen={() => { setShowActionsDropdown(false); setShowInfoDropdown(false); }}
+            />
 
             {/* Skeleton style — compact size to match toolbar height */}
             <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" />

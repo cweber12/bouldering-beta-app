@@ -39,7 +39,7 @@ skeletons render correctly. The match page exposes a style panel
 |---|---|---|
 | `/` | Landing page — choose Indoor or Outdoor mode | No |
 | `/login` | Sign in / sign up with email & password | No |
-| `/upload` | Upload & process a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
+| `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
 | `/match` | Load a saved climb, match a route photo and view/download the pose overlay | Yes |
 | `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
 | `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes |

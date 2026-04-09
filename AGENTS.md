@@ -107,7 +107,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - Auth uses `@supabase/ssr` with cookie-based sessions (no localStorage tokens).
 - `utils/supabase/client.ts` — browser client (`createBrowserClient`).
 - `utils/supabase/server.ts` — server client (`createServerClient` with cookie jar from `next/headers`).
-- `proxy.ts` refreshes the session on every request and protects `/upload`, `/match`, `/compare`, `/profile` routes (redirect to `/login`).
+- `proxy.ts` refreshes the session on every request and protects `/scan`, `/match`, `/compare`, `/profile` routes (redirect to `/login`).
 - `hooks/useAuth.tsx` provides `AuthProvider` context + `useAuth()` hook. **File must stay `.tsx`** — it contains JSX.
 - All S3 API routes call `getAuthUserId()` and return 401 when unauthenticated.
 - `isValidKey()` and `isValidPrefix()` enforce that every S3 key is scoped to the authenticated user: `RouteData/{userId}/...`.
@@ -152,7 +152,7 @@ When adding or changing code, verify the following:
 - **User-scoped data** — Every S3 key or prefix must include the authenticated user ID. Server-side API routes must call `isValidKey(key, userId)` / `isValidPrefix(prefix, userId)` before any S3 operation.
 - **Input length limits** — User-supplied strings (state, area, route names, notes) must be length-limited before storage. S3 keys must not exceed 1024 bytes.
 - **Error sanitisation** — AWS/infrastructure error details must not be returned to the client in production. Use `awsErrorMessage()` which logs details server-side and returns a generic message.
-- **Auth gating** — Protected routes (`/upload`, `/match`, `/compare`, `/profile`) must be guarded by `proxy.ts`. API routes must call `getAuthUserId()` and return 401 when null.
+- **Auth gating** — Protected routes (`/scan`, `/match`, `/compare`, `/profile`) must be guarded by `proxy.ts`. API routes must call `getAuthUserId()` and return 401 when null.
 - **File extensions** — Any file containing JSX must use `.tsx` (not `.ts`). Verify after renaming or creating hook/component files.
 - **Cookie security** — Supabase cookies use `SameSite` and `Secure` attributes. Never store tokens in `localStorage`.
 - **No secrets in client code** — Only `NEXT_PUBLIC_*` env vars may be referenced in client components. AWS credentials and `SUPABASE_SERVICE_ROLE_KEY` must stay server-side.

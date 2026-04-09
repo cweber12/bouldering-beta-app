@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
-import StepMatchRoutePhoto from "@/components/scan/StepMatchRoutePhoto";
+import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";

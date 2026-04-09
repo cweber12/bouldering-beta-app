@@ -56,7 +56,7 @@ export default function Home() {
         )}
         {!loading && user && (
           <Link
-            href="/upload"
+            href="/scan"
             className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/25 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/35 active:scale-[0.97]"
           >
             Get started

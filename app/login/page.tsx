@@ -10,10 +10,10 @@ export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Validate redirect to prevent open-redirect attacks (OWASP A01:2021).
-  const rawRedirect = searchParams.get("redirect") ?? "/upload";
+  const rawRedirect = searchParams.get("redirect") ?? "/scan";
   const redirect = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("://")
     ? rawRedirect
-    : "/upload";
+    : "/scan";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");

@@ -141,7 +141,7 @@ export default function DocsPage() {
               <p className="text-sm font-semibold text-fg">3. Upload and process the video</p>
               <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
                 On the{" "}
-                <Link href="/upload" className="text-fg hover:underline">
+                <Link href="/scan" className="text-fg hover:underline">
                   Scan page
                 </Link>
                 , click the upload area and select your video. Processing begins automatically.
