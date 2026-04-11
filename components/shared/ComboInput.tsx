@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { cn } from "@/utils/cn";
 
 interface ComboInputProps {
   label: string;
@@ -99,7 +100,7 @@ export default function ComboInput({
             className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg"
           >
             <svg
-              className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-180" : ""}`}
+              className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")}
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"
@@ -121,9 +122,10 @@ export default function ComboInput({
               <button
                 type="button"
                 onClick={() => handleSelect(s)}
-                className={`w-full px-3 py-2 text-left text-sm transition hover:bg-inset ${
-                  s === value ? "font-medium text-fg" : "text-fg-secondary"
-                }`}
+                className={cn(
+                  "w-full px-3 py-2 text-left text-sm transition hover:bg-inset",
+                  s === value ? "font-medium text-fg" : "text-fg-secondary",
+                )}
               >
                 {s}
               </button>

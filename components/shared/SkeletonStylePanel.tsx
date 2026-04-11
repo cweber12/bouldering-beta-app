@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Joint / limb group definitions (MediaPipe 33-keypoint topology)
@@ -213,15 +214,15 @@ export default function SkeletonStylePanel({
   }
 
   return (
-    <div ref={panelRef} className={`relative ${className}`}>
+    <div ref={panelRef} className={cn("relative", className)}>
       <button
         onClick={() => setOpen(o => !o)}
-        className={[
+        className={cn(
           "rounded-lg border border-edge/50 bg-card/60 font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg",
           size === "sm"
             ? "px-3 py-1.5 text-xs"
             : "px-4 py-2 text-sm",
-        ].join(" ")}
+        )}
         aria-expanded={open}
         aria-haspopup="dialog"
       >

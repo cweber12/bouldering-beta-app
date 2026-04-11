@@ -213,8 +213,7 @@ export default function StepMatchRoutePhoto({
               <img
                 src={routePhotoPreviewUrl}
                 alt="Route photo preview"
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
@@ -236,8 +235,7 @@ export default function StepMatchRoutePhoto({
               <img
                 src={routePhotoPreviewUrl}
                 alt="Route photo preview"
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
               />
             </div>
             {isMatching && (
@@ -249,7 +247,7 @@ export default function StepMatchRoutePhoto({
         {/* Match statistics */}
         {matchStatus === "done" && matchResult && (
           <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Match statistics</p>
+            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Match statistics</p>
             <div className="mt-2 grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
@@ -275,7 +273,7 @@ export default function StepMatchRoutePhoto({
         {/* Pose overlay */}
         {isFrameReady && skeletonData && (
           <div className="flex flex-col gap-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Pose overlay</p>
+            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Pose overlay</p>
             <FramePlayer
               imageFile={routePhotoFile}
               layers={[{ frames: skeletonData.frames, style: topoStyle }]}
@@ -305,7 +303,7 @@ export default function StepMatchRoutePhoto({
       {/* ── Route photo fullscreen portal ── */}
       {routePhotoFullscreen && createPortal(
         <div
-          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          className="fixed inset-0 z-fullscreen flex flex-col bg-surface"
           role="dialog"
           aria-modal="true"
           aria-label="Route photo crop \u2014 fullscreen"
@@ -333,8 +331,7 @@ export default function StepMatchRoutePhoto({
               <img
                 src={routePhotoPreviewUrl}
                 alt="Route photo preview"
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
               />
               <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="0.75rem" />
             </div>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
@@ -80,7 +80,7 @@ export default function Home() {
 
       {/* Demo */}
       <div className="mt-16 flex flex-col items-center gap-4 sm:mt-20">
-        <p className="text-[11px] font-semibold text-fg-muted uppercase tracking-[0.15em]">Live Demo</p>
+        <p className="text-label font-semibold text-fg-muted uppercase tracking-label">Live Demo</p>
         <DemoPreview />
         <p className="text-xs text-fg-muted max-w-xs text-center">
           Skeleton overlay video &#8212; an example of what Route Scanner produces
@@ -89,7 +89,7 @@ export default function Home() {
 
       {/* How it works */}
       <div className="mt-20 w-full max-w-3xl sm:mt-24">
-        <p className="mb-8 text-center text-[11px] font-semibold text-fg-muted uppercase tracking-[0.15em]">
+        <p className="mb-8 text-center text-label font-semibold text-fg-muted uppercase tracking-label">
           How it works
         </p>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
@@ -118,7 +118,7 @@ export default function Home() {
                 {step}
               </div>
               <p className="text-sm font-semibold text-fg">{title}</p>
-              <p className="text-[13px] text-fg-secondary leading-relaxed">{body}</p>
+              <p className="text-body-sm text-fg-secondary leading-relaxed">{body}</p>
             </div>
           ))}
         </div>

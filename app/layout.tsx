@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import NavBar from "@/components/shared/NavBar";
 import Preloader from "@/components/shared/Preloader";
 import Providers from "@/components/shared/Providers";
+import { cn } from "@/utils/cn";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +30,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={cn(geistSans.variable, geistMono.variable, "h-full antialiased")}
       suppressHydrationWarning
     >
       <head>

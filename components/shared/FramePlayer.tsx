@@ -3,6 +3,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
+import { cn } from "@/utils/cn";
 
 /** A single layer of pre-computed skeleton data with optional visual style. */
 export interface FramePlayerLayer {
@@ -242,12 +243,10 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   if (!ready) {
     return (
       <div
-        className={[
+        className={cn(
           "flex items-center justify-center rounded-xl border border-edge/50 bg-card/60 py-10",
           className,
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        )}
       >
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-edge border-t-fg" />
       </div>
@@ -256,14 +255,12 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 
   return (
     <div
-      className={[
+      className={cn(
         "flex flex-col gap-0 overflow-hidden rounded-xl border border-edge/50 bg-surface",
         className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      )}
     >
-      <canvas ref={canvasRef} className="w-full" style={{ display: "block" }} />
+      <canvas ref={canvasRef} className="w-full block" />
 
       <div className="flex items-center gap-3 bg-surface-alt/80 backdrop-blur-sm px-3 py-2">
         {!hidePlayButton && (

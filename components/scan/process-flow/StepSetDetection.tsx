@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/utils/cn";
 import CropBoxOverlay, { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
@@ -203,25 +204,25 @@ export default function StepSetDetection({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setActiveCropMode("climber")}
-            className={[
+            className={cn(
               "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
               activeCropMode === "climber"
                 ? "border-accent/60 bg-accent/10 text-accent"
                 : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              isCropDefault(climberCrop) ? "animate-pulse" : "",
-            ].join(" ")}
+              isCropDefault(climberCrop) && "animate-pulse",
+            )}
           >
             Climber crop
           </button>
           <button
             onClick={() => setActiveCropMode("route")}
-            className={[
+            className={cn(
               "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
               activeCropMode === "route"
                 ? "border-success/60 bg-success/10 text-success"
                 : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              isCropDefault(orbCrop) ? "animate-pulse" : "",
-            ].join(" ")}
+              isCropDefault(orbCrop) && "animate-pulse",
+            )}
           >
             Wall texture crop
           </button>
@@ -231,12 +232,12 @@ export default function StepSetDetection({
             <button
               type="button"
               onClick={() => { setShowConditionsDropdown(p => !p); setShowDetectionDropdown(false); }}
-              className={[
+              className={cn(
                 "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 showConditionsDropdown
                   ? "border-accent/60 bg-accent/10 text-accent"
                   : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               Conditions
               {conditions.size > 0 && (
@@ -245,7 +246,7 @@ export default function StepSetDetection({
                 </span>
               )}
               <svg
-                className={["h-3 w-3 transition-transform", showConditionsDropdown ? "rotate-180" : ""].join(" ")}
+                className={cn("h-3 w-3 transition-transform", showConditionsDropdown && "rotate-180")}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -279,19 +280,19 @@ export default function StepSetDetection({
             <button
               type="button"
               onClick={() => { setShowDetectionDropdown(p => !p); setShowConditionsDropdown(false); }}
-              className={[
+              className={cn(
                 "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 showDetectionDropdown
                   ? "border-accent/60 bg-accent/10 text-accent"
                   : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
               </svg>
               Detection
               <svg
-                className={["h-3 w-3 transition-transform", showDetectionDropdown ? "rotate-180" : ""].join(" ")}
+                className={cn("h-3 w-3 transition-transform", showDetectionDropdown && "rotate-180")}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
               >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -327,7 +328,26 @@ export default function StepSetDetection({
                 </div>
               </div>
             )}
+           
           </div>
+          {/* Scan button */}
+            <button
+              onClick={handleScanClick}
+              disabled={!canScan}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                showDetectionDropdown
+                  ? "border-accent/60 bg-accent text-bg"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+              )}            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+              </svg>
+              Scan video
+              {videoCurrentTime > 0 && (
+                <span className="text-xs font-normal opacity-75">from {formatVideoTime(videoCurrentTime)}</span>
+              )}
+            </button>
 
           {/* Expand to fullscreen */}
           <button
@@ -364,8 +384,7 @@ export default function StepSetDetection({
             onPause={() => setIsPlaying(false)}
             onTimeUpdate={() => setVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0)}
             onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
-            className="absolute inset-0 w-full h-full"
-            style={{ objectFit: "fill" }}
+            className="absolute inset-0 w-full h-full object-fill"
           />
           {hasCropFrame && (
             <CropBoxOverlay
@@ -406,21 +425,6 @@ export default function StepSetDetection({
           </div>
         )}
 
-        {/* Scan button */}
-        <button
-          onClick={handleScanClick}
-          disabled={!canScan}
-          className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none active:scale-[0.98]"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
-          </svg>
-          Scan video
-          {videoCurrentTime > 0 && (
-            <span className="text-xs font-normal opacity-75">from {formatVideoTime(videoCurrentTime)}</span>
-          )}
-        </button>
-
         {/* Crop-default warning */}
         {showCropWarning && (
           <div className="rounded-lg border border-caution-border bg-caution-surface px-5 py-4 flex flex-col gap-3">
@@ -454,7 +458,7 @@ export default function StepSetDetection({
       {/* ── Video fullscreen portal ── */}
       {videoFullscreen && createPortal(
         <div
-          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          className="fixed inset-0 z-fullscreen flex flex-col bg-surface"
           role="dialog"
           aria-modal="true"
           aria-label="Video crop \u2014 fullscreen"
@@ -463,23 +467,23 @@ export default function StepSetDetection({
           <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
             <button
               onClick={() => setActiveCropMode("climber")}
-              className={[
+              className={cn(
                 "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 activeCropMode === "climber"
                   ? "border-accent/60 bg-accent/10 text-accent"
                   : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               Climber crop
             </button>
             <button
               onClick={() => setActiveCropMode("route")}
-              className={[
+              className={cn(
                 "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                 activeCropMode === "route"
                   ? "border-success/60 bg-success/10 text-success"
                   : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               Wall texture crop
             </button>
@@ -514,8 +518,7 @@ export default function StepSetDetection({
                 onPlay={() => setFsIsPlaying(true)}
                 onPause={() => setFsIsPlaying(false)}
                 onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
               />
               {hasCropFrame && (
                 <CropBoxOverlay

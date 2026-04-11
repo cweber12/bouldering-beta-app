@@ -15,7 +15,7 @@ export default function DocsPage() {
         <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">
           Documentation
         </h1>
-        <p className="mt-3 text-[13px] text-fg-secondary leading-relaxed">
+        <p className="mt-3 text-body-sm text-fg-secondary leading-relaxed">
           Route Scanner analyses a climbing video by extracting skeleton poses frame-by-frame,
           then overlays the movement onto a route photo using computer vision. Processed runs
           can be saved to Amazon S3 for access across devices, or exported as local JSON files.

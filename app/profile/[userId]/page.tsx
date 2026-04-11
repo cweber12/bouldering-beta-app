@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
+import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
@@ -420,14 +421,14 @@ export default function PublicProfilePage() {
             <button
               type="button"
               onClick={() => setViewMode("list")}
-              className={`px-3 py-1.5 transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+              className={cn("px-3 py-1.5 transition", viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
             >
               List
             </button>
             <button
               type="button"
               onClick={() => setViewMode("map")}
-              className={`px-3 py-1.5 transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+              className={cn("px-3 py-1.5 transition", viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
             >
               Map
             </button>
@@ -492,12 +493,12 @@ export default function PublicProfilePage() {
 
                         {/* Run type badge */}
                         <span
-                          className={[
-                            "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                            c.runType === "send"
-                              ? "bg-send/80 text-fg-inverse"
-                              : "bg-attempt/80 text-fg-inverse",
-                          ].join(" ")}
+                            className={cn(
+                              "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                              c.runType === "send"
+                                ? "bg-send/80 text-fg-inverse"
+                                : "bg-attempt/80 text-fg-inverse",
+                            )}
                         >
                           {c.runType}
                         </span>

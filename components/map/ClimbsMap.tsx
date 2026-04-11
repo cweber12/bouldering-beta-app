@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap, MarkerClusterGroup } from "leaflet";
+import { cn } from "@/utils/cn";
 
 // Leaflet CSS — imported once at the client component boundary.
 import "leaflet/dist/leaflet.css";
@@ -215,7 +216,7 @@ export default function ClimbsMap({
     <div
       ref={containerRef}
       style={{ height }}
-      className={`w-full rounded-xl border border-edge overflow-hidden ${className}`}
+      className={cn("w-full rounded-xl border border-edge overflow-hidden", className)}
     />
   );
 }

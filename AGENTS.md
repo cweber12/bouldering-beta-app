@@ -123,7 +123,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 ### Media previews with crop overlays
 - **Never** display media with `object-contain` CSS when a `CropBoxOverlay` is involved — letterboxing causes crop fractions to map to the container rather than the actual media bounds.
-- Use an aspect-ratio-constrained container with `objectFit: "fill"` on the media element so the container IS the media bounds. Crop fractions then map 1:1 to media pixels.
+- Use an aspect-ratio-constrained container with `object-fill` class on the media element so the container IS the media bounds. Crop fractions then map 1:1 to media pixels.
 - CSS variable `--nav-h: 3rem` (NavBar height) is defined in `app/globals.css` `:root`.
 - **Viewport-fit pattern** (inline preview):
   ```tsx
@@ -132,11 +132,11 @@ workers/         Legacy Web Worker files (keep, do not delete)
     const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
     return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
   }
-  // Media element: className="absolute inset-0 w-full h-full" style={{ objectFit: "fill" }}
+  // Media element: className="absolute inset-0 w-full h-full object-fill"
   ```
 - **Fullscreen pattern**: `fsMediaContainerStyle` uses `maxHeight: calc(100dvh - 8rem)`.
 - Detect natural size: `onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}` for images; `setSize({ w: video.videoWidth || 16, h: video.videoHeight || 9 })` in the `onLoadedData`/`canplay` handler for videos. Default to `{ w: 4, h: 3 }` or `{ w: 16, h: 9 }` before load.
-- Every media container with a crop overlay must have an **Expand** button that opens a fullscreen portal: `createPortal(<div className="fixed inset-0 z-[60] flex flex-col bg-surface" role="dialog" aria-modal="true">…</div>, document.body)`.
+- Every media container with a crop overlay must have an **Expand** button that opens a fullscreen portal: `createPortal(<div className="fixed inset-0 z-fullscreen flex flex-col bg-surface" role="dialog" aria-modal="true">…</div>, document.body)`.
 - Add an ESC key `useEffect` that closes the fullscreen when `useEffect([…], [fsState])` is active.
 - **Video previews**: show crop-mode buttons (Climber / Wall texture) in a `<div className="flex items-center gap-2 flex-wrap">` toolbar **above** the video container.
 - **Image previews**: no crop-mode toolbar — only the single `CropBoxOverlay` crop box is shown.

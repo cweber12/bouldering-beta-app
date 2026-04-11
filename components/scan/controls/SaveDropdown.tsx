@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Shared save / device-storage dropdown used in the Scan step toolbars.
@@ -41,18 +42,18 @@ export default function SaveDropdown({
   }
 
   return (
-    <div className={`relative ${containerClassName}`}>
+    <div className={cn("relative", containerClassName)}>
       <button
         type="button"
         onClick={toggle}
-        className={[
+        className={cn(
           "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
           open
             ? "border-accent/60 bg-accent/10 text-accent"
             : s3Saved
             ? "border-send/30 bg-send-surface text-send"
             : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-        ].join(" ")}
+        )}
       >
         <svg
           className="h-3.5 w-3.5 shrink-0"
@@ -70,7 +71,7 @@ export default function SaveDropdown({
         </svg>
         {s3Saved ? "Saved" : "Save"}
         <svg
-          className={["h-3 w-3 transition-transform", open ? "rotate-180" : ""].join(" ")}
+          className={cn("h-3 w-3 transition-transform", open && "rotate-180")}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -82,10 +83,10 @@ export default function SaveDropdown({
 
       {open && (
         <div
-          className={[
+          className={cn(
             "absolute top-full z-20 mt-1.5 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in",
             dropdownAlign === "right" ? "right-0" : "left-0",
-          ].join(" ")}
+          )}
         >
           <button
             onClick={() => { setOpen(false); onUpload(); }}

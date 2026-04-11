@@ -65,7 +65,7 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">
             {mode === "login" ? "Sign in" : "Create account"}
           </h1>
-          <p className="text-[13px] text-fg-secondary leading-relaxed text-center">
+          <p className="text-body-sm text-fg-secondary leading-relaxed text-center">
             {mode === "login"
               ? "Sign in to access your climbing data."
               : "Create a free account to get started."}

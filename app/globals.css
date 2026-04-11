@@ -53,8 +53,15 @@
   --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
 
   /* ─── Fonts ──────────────────────────────────────────── */
+  /* ─── Fonts ──────────────────────────────────────────── */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* ─── Design-system extensions ──────────────────────── */
+  --font-size-label: 11px;
+  --font-size-body-sm: 13px;
+  --letter-spacing-label: 0.15em;
+  --z-index-fullscreen: 60;
 }
 
 /* ─── Dark mode explicit class (default theme, class kept for symmetry) ── */
@@ -281,32 +288,7 @@ input[type="checkbox"] {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-@keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position: 200% 0; }
-}
-.animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--color-inset) 0%,
-    var(--color-edge) 50%,
-    var(--color-inset) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
-}
-
 /* ─── Scanner animations ─────────── */
-
-@keyframes scanSweep {
-  0%   { transform: translateX(-100%); opacity: 0; }
-  10%  { opacity: 1; }
-  90%  { opacity: 1; }
-  100% { transform: translateX(100%); opacity: 0; }
-}
-.animate-scan-sweep {
-  animation: scanSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
 
 @keyframes scanPulse {
   0%, 100% { box-shadow: 0 0 0 0 var(--color-glow); }
@@ -314,12 +296,4 @@ input[type="checkbox"] {
 }
 .animate-scan-pulse {
   animation: scanPulse 3s ease-in-out infinite;
-}
-
-@keyframes beamGlow {
-  0%, 100% { opacity: 0.4; }
-  50%      { opacity: 1; }
-}
-.animate-beam-glow {
-  animation: beamGlow 2s ease-in-out infinite;
 }

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -115,10 +116,10 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
 
           {/* Run type badge */}
           <span
-            className={[
+            className={cn(
               "absolute top-3 left-3 rounded px-2 py-1 text-xs font-bold uppercase tracking-wider",
               isSend ? "bg-send/80 text-fg-inverse" : "bg-attempt/80 text-fg-inverse",
-            ].join(" ")}
+            )}
           >
             {climb.runType}
           </span>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { cn } from "@/utils/cn";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import type { S3AttemptEntry } from "@/hooks/useS3Storage";
 import { attemptTimestampLabel, loadAttemptFromJson, parseRunType } from "@/utils/fsHelpers";
@@ -378,10 +379,10 @@ export default function S3RoutePicker({
         {!alwaysOpen && (
           <button
             onClick={handleOpen}
-            className={[
+            className={cn(
               "flex items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg",
-              pulseButtons && !open ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : "",
-            ].join(" ")}
+              pulseButtons && !open && "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse",
+            )}
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
@@ -390,10 +391,10 @@ export default function S3RoutePicker({
           </button>
         )}
 
-        <label className={[
+        <label className={cn(
           "flex cursor-pointer items-center gap-2 rounded-lg border border-edge px-3 py-2 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg",
-          !alwaysOpen && pulseButtons && !open ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : "",
-        ].join(" ")}>
+          !alwaysOpen && pulseButtons && !open && "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse",
+        )}>
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
           </svg>
@@ -416,21 +417,21 @@ export default function S3RoutePicker({
             <div className={compact ? "grid grid-cols-3 gap-2" : "grid grid-cols-1 gap-3 sm:grid-cols-3"}>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">State / Region</label>
-                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={[selectClass, !selectedState ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                <select value={selectedState} onChange={e => handleStateChange(e.target.value)} className={cn(selectClass, !selectedState && "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse")}>
                   <option value="">— select —</option>
                   {stateNames.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">Area</label>
-                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={[selectClass, selectedState && !selectedArea ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                <select value={selectedArea} onChange={e => handleAreaChange(e.target.value)} disabled={!areaNames.length} className={cn(selectClass, selectedState && !selectedArea && "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse")}>
                   <option value="">— select —</option>
                   {areaNames.map(a => <option key={a} value={a}>{a}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-fg-secondary">Route</label>
-                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={[selectClass, selectedArea && !selectedRoute ? "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse" : ""].join(" ")}>
+                <select value={selectedRoute} onChange={e => handleRouteChange(e.target.value)} disabled={!routeNames.length} className={cn(selectClass, selectedArea && !selectedRoute && "ring-2 ring-accent/50 ring-offset-1 ring-offset-surface animate-pulse")}>
                   <option value="">— select —</option>
                   {routeNames.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
@@ -506,14 +507,14 @@ export default function S3RoutePicker({
                   return (
                     <div
                       key={entry.key}
-                      className={[
+                      className={cn(
                         "flex flex-col transition",
-                        selectable && selectedKeys?.has(entry.key) ? "ring-1 ring-accent/40" : "",
+                        selectable && selectedKeys?.has(entry.key) && "ring-1 ring-accent/40",
                         isSend
                           ? "bg-emerald-950/20 text-emerald-300"
                           : "bg-amber-950/20 text-amber-300",
-                        isPendingDelete ? "bg-red-950/30 border-red-800/40" : "",
-                      ].join(" ")}
+                        isPendingDelete && "bg-red-950/30 border-red-800/40",
+                      )}
                     >
                       <div className="flex items-center justify-between px-4 py-2.5 text-sm">
                         <button
@@ -531,12 +532,12 @@ export default function S3RoutePicker({
                             />
                           )}
                           <span>{attemptTimestampLabel(fileName)}</span>
-                          <span className={[
+                          <span className={cn(
                             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
                             isSend
                               ? "bg-emerald-900/40 text-emerald-400"
                               : "bg-amber-900/40 text-amber-400",
-                          ].join(" ")}>
+                          )}>
                             {rType}
                           </span>
                           {meta?.duration != null && (
@@ -559,10 +560,10 @@ export default function S3RoutePicker({
                             <button
                               onClick={() => handleAttemptSelect(entry)}
                               disabled={status === "loading" || isPendingDelete}
-                              className={[
+                              className={cn(
                                 "rounded px-3 py-1.5 text-xs font-semibold bg-accent text-surface hover:opacity-90 transition disabled:opacity-40",
-                                pulseButtons && !isExpanded ? "animate-pulse" : "",
-                              ].join(" ")}
+                                pulseButtons && !isExpanded && "animate-pulse",
+                              )}
                             >
                               {selectable ? "Select" : "Load"}
                             </button>

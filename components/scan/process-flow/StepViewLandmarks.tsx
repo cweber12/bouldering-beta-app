@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { cn } from "@/utils/cn";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
@@ -141,19 +142,19 @@ export default function StepViewLandmarks({
               <button
                 type="button"
                 onClick={() => { setShowActionsDropdown(p => !p); setShowInfoDropdown(false); }}
-                className={[
+                className={cn(
                   "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                   showActionsDropdown
                     ? "border-accent/60 bg-accent/10 text-accent"
                     : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                ].join(" ")}
+                )}
               >
                 <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                 </svg>
                 Actions
                 <svg
-                  className={["h-3 w-3 transition-transform", showActionsDropdown ? "rotate-180" : ""].join(" ")}
+                  className={cn("h-3 w-3 transition-transform", showActionsDropdown && "rotate-180")}
                   fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -191,7 +192,7 @@ export default function StepViewLandmarks({
                     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
                     </svg>
-                    Choose a Video
+                    Choose Another Video
                     <input
                       ref={newVideoInputRef}
                       type="file"
@@ -208,7 +209,7 @@ export default function StepViewLandmarks({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
                     </svg>
-                    Take a Video
+                    Take Another Video
                   </button>
                 </div>
               )}
@@ -220,19 +221,19 @@ export default function StepViewLandmarks({
                 <button
                   type="button"
                   onClick={() => { setShowInfoDropdown(p => !p); setShowActionsDropdown(false); }}
-                  className={[
+                  className={cn(
                     "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                     showInfoDropdown
                       ? "border-send/50 bg-send-surface text-send"
                       : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  ].join(" ")}
+                  )}
                 >
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   Info
                   <svg
-                    className={["h-3 w-3 transition-transform", showInfoDropdown ? "rotate-180" : ""].join(" ")}
+                    className={cn("h-3 w-3 transition-transform", showInfoDropdown && "rotate-180")}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
                   >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -277,7 +278,7 @@ export default function StepViewLandmarks({
         {/* ── Animated first-frame landmark preview ── */}
         {showResults && (
           <div className="flex flex-col gap-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Recorded pose landmarks</p>
+            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Recorded pose landmarks</p>
             {firstFrameFile && firstFrameSkeletonData ? (
               <FramePlayer
                 imageFile={firstFrameFile}

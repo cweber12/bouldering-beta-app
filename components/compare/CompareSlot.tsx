@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Ref } from "react";
 import FramePlayer, { type FramePlayerHandle } from "@/components/shared/FramePlayer";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -135,12 +136,12 @@ export default function CompareSlot({
         />
         <span className="text-xs font-medium text-fg">Climb {slotIndex + 1}</span>
         {attempt && (
-          <span className={[
+          <span className={cn(
             "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
             attempt.runType === "send"
               ? "bg-send-surface text-send"
               : "bg-attempt-surface text-attempt",
-          ].join(" ")}>
+          )}>
             {attempt.runType ?? "attempt"}
           </span>
         )}

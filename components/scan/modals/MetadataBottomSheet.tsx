@@ -2,6 +2,7 @@
 
 import { createPortal } from "react-dom";
 import ComboInput from "@/components/shared/ComboInput";
+import { cn } from "@/utils/cn";
 import type { RunType } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
@@ -211,14 +212,14 @@ export default function MetadataBottomSheet({
                 <button
                   key={t}
                   onClick={() => actions.onRunTypeChange(t)}
-                  className={[
+                  className={cn(
                     "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
                     runDetails.runType === t
                       ? t === "send"
                         ? "border-send/60 bg-send-surface text-send"
                         : "border-attempt/60 bg-attempt-surface text-attempt"
                       : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
-                  ].join(" ")}
+                  )}
                 >
                   {t}
                 </button>

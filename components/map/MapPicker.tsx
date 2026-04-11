@@ -130,8 +130,7 @@ export default function MapPicker({
       </p>
       <div
         ref={containerRef}
-        style={{ height: 380 }}
-        className="w-full rounded-xl border border-edge overflow-hidden"
+        className="h-[380px] w-full rounded-xl border border-edge overflow-hidden"
       />
       {pickedLat != null && pickedLng != null && (
         <p className="text-xs text-fg-muted text-center">

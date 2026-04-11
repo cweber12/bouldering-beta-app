@@ -135,7 +135,7 @@ export default function ImageCropper({
                 src={imgSrc}
                 alt="Crop preview"
                 onLoad={onImageLoad}
-                style={{ maxHeight: "400px", maxWidth: "100%", display: "block" }}
+                className="block max-h-[400px] max-w-full"
               />
             </ReactCrop>
           </div>

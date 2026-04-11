@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useGeocoding, type GeocodeResult } from "@/hooks/useGeocoding";
+import { cn } from "@/utils/cn";
 
 export interface LocationAutocompleteProps {
   value: string;
@@ -83,7 +84,7 @@ export default function LocationAutocomplete({
           onChange={handleChange}
           onFocus={() => setOpen(suggestions.length > 0)}
           placeholder={placeholder}
-          className={`w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none ${className}`}
+          className={cn("w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none", className)}
           autoComplete="off"
         />
         {loading && (

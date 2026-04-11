@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import NextImage from "next/image";
 import dynamic from "next/dynamic";
+import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -598,7 +599,7 @@ export default function ProfilePage() {
             </button>
             {saveMsg && (
               <span
-                className={`text-xs ${saveMsg === "Profile saved." ? "text-success" : "text-danger"}`}
+                className={cn("text-xs", saveMsg === "Profile saved." ? "text-success" : "text-danger")}
               >
                 {saveMsg}
               </span>
@@ -772,14 +773,14 @@ export default function ProfilePage() {
         <button
           type="button"
           onClick={() => setFilterOpen((o) => !o)}
-          className={[
+          className={cn(
             "relative flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
             filterOpen
               ? "border-accent/60 bg-accent/10 text-accent"
               : hasActiveFilters
               ? "border-accent/30 bg-accent/5 text-accent"
               : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg",
-          ].join(" ")}
+          )}
           title="Toggle filters"
           aria-label="Toggle filters"
         >
@@ -797,14 +798,14 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={`px-3 py-1.5 rounded-l-lg transition ${viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            className={cn("px-3 py-1.5 rounded-l-lg transition", viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
           >
             List
           </button>
           <button
             type="button"
             onClick={() => setViewMode("map")}
-            className={`px-3 py-1.5 rounded-r-lg transition ${viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg"}`}
+            className={cn("px-3 py-1.5 rounded-r-lg transition", viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
           >
             Map
           </button>
@@ -937,12 +938,12 @@ export default function ProfilePage() {
                         <div className="mt-1.5 flex flex-wrap items-center gap-1">
                           {/* Run type badge — subtle, inline with metadata */}
                           <span
-                            className={[
+                            className={cn(
                               "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
                               c.runType === "send"
                                 ? "bg-send-surface text-send"
                                 : "bg-attempt-surface text-attempt",
-                            ].join(" ")}
+                            )}
                           >
                             {c.runType}
                           </span>

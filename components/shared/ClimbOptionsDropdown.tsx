@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -107,24 +108,24 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
             <button
               type="button"
               onClick={() => setMode("view")}
-              className={[
+              className={cn(
                 "flex-1 rounded py-1 text-xs font-medium transition",
                 mode === "view"
                   ? "bg-surface text-fg shadow-sm"
                   : "text-fg-muted hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               View
             </button>
             <button
               type="button"
               onClick={() => setMode("compare")}
-              className={[
+              className={cn(
                 "flex-1 rounded py-1 text-xs font-medium transition",
                 mode === "compare"
                   ? "bg-surface text-fg shadow-sm"
                   : "text-fg-muted hover:text-fg-secondary",
-              ].join(" ")}
+              )}
             >
               Compare
             </button>

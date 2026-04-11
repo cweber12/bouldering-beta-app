@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
+import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
@@ -271,7 +272,7 @@ function MatchPageInner() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Overlay</h1>
-          <p className="text-[13px] text-fg-secondary leading-relaxed">
+          <p className="text-body-sm text-fg-secondary leading-relaxed">
             Upload a photo of the route and we&apos;ll overlay your recorded skeleton onto it using
             the ORB reference features extracted on the Upload page.
           </p>
@@ -296,12 +297,12 @@ function MatchPageInner() {
                 {attempt.state && (
                   <span className="text-xs text-fg-muted">{attempt.state}</span>
                 )}
-                <span className={[
+                <span className={cn(
                   "rounded-full px-2 py-0.5 text-xs font-semibold capitalize",
                   attempt.runType === "send"
                     ? "bg-send-surface text-send"
                     : "bg-attempt-surface text-attempt",
-                ].join(" ")}>
+                )}>
                   {attempt.runType ?? "attempt"}
                 </span>
                 {attempt.rating && (
@@ -319,7 +320,7 @@ function MatchPageInner() {
           <>
             {/* Expanded — full picker + attempt details */}
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Climbs</p>
+              <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Climbs</p>
               {hasAttempt && (
                 <button
                   type="button"
@@ -368,12 +369,12 @@ function MatchPageInner() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={[
+                      <span className={cn(
                         "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
                         attempt.runType === "send"
                           ? "bg-send-surface text-send"
                           : "bg-attempt-surface text-attempt",
-                      ].join(" ")}>
+                      )}>
                         {attempt.runType ?? "attempt"}
                       </span>
                       {attempt.rating && (
@@ -409,7 +410,7 @@ function MatchPageInner() {
       {/* Skeleton style */}
       {hasAttempt && (
         <div className="flex items-center gap-3">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Skeleton style</span>
+          <span className="text-label font-semibold uppercase tracking-label text-fg-muted">Skeleton style</span>
           <SkeletonStylePanel onChange={setSkeletonStyle} />
         </div>
       )}
@@ -419,12 +420,12 @@ function MatchPageInner() {
         <div className="grid grid-cols-2 gap-3">
           {/* Select from file */}
           <label
-            className={[
+            className={cn(
               "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
                 ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
                 : "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
-            ].join(" ")}
+            )}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
@@ -439,12 +440,12 @@ function MatchPageInner() {
             type="button"
             onClick={() => setShowCamera(true)}
             disabled={isMatching}
-            className={[
+            className={cn(
               "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
                 ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
                 : "cursor-pointer bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
-            ].join(" ")}
+            )}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
@@ -489,8 +490,7 @@ function MatchPageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo preview"
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
                 onLoad={(e) => {
                   const img = e.currentTarget;
                   setImageNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
@@ -523,8 +523,7 @@ function MatchPageInner() {
             <img
               src={imagePreviewUrl}
               alt="Route photo preview"
-              className="absolute inset-0 w-full h-full"
-              style={{ objectFit: "fill" }}
+              className="absolute inset-0 w-full h-full object-fill"
             />
           </div>
         )}
@@ -532,7 +531,7 @@ function MatchPageInner() {
       {/* Match stats */}
       {isMatchDone && matchResult && (
         <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Match statistics</p>
+          <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Match statistics</p>
           <div className="mt-2 grid grid-cols-3 gap-4 text-center">
             <div>
               <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
@@ -558,7 +557,7 @@ function MatchPageInner() {
       {/* Pose overlay — instant frame-by-frame player (no video encoding) */}
       {isFrameReady && imageFile && (
         <div className="flex flex-col gap-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-fg-muted">Pose overlay</p>
+          <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Pose overlay</p>
           <FramePlayer
             imageFile={imageFile}
             layers={[{ frames: skeletonData.frames, style: topoStyle }]}
@@ -620,7 +619,7 @@ function MatchPageInner() {
       {/* ── Image crop fullscreen portal ── */}
       {imageFullscreen && imagePreviewUrl && createPortal(
         <div
-          className="fixed inset-0 z-[60] flex flex-col bg-surface"
+          className="fixed inset-0 z-fullscreen flex flex-col bg-surface"
           role="dialog"
           aria-modal="true"
           aria-label="Route photo crop — fullscreen"
@@ -650,8 +649,7 @@ function MatchPageInner() {
               <img
                 src={imagePreviewUrl}
                 alt="Route photo preview"
-                className="absolute inset-0 w-full h-full"
-                style={{ objectFit: "fill" }}
+                className="absolute inset-0 w-full h-full object-fill"
               />
               <CropBoxOverlay
                 box={imageCrop}
