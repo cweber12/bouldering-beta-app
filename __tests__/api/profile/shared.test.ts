@@ -6,12 +6,13 @@ vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class MockS3Client {},
 }));
 
-vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({}),
+vi.mock("@/utils/firebase/admin", () => ({
+  getAdminAuth: () => ({}),
 }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     getAll: () => [],
+    get: () => undefined,
     set: () => {},
   }),
 }));

@@ -6,13 +6,14 @@ vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class MockS3Client {},
 }));
 
-// Mock Supabase SSR + next/headers so getAuthUserId doesn't hit real infra.
-vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({}),
+// Mock Firebase Admin + next/headers so getAuthUserId doesn't hit real infra.
+vi.mock("@/utils/firebase/admin", () => ({
+  getAdminAuth: () => ({}),
 }));
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     getAll: () => [],
+    get: () => undefined,
     set: () => {},
   }),
 }));

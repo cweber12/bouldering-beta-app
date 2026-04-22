@@ -125,18 +125,22 @@ workers/             Legacy — keep, do not delete
 - Profile text fields capped at `PROFILE_TEXT_LIMIT` (500 chars); profile picture must be a `data:image/` URL.
 - `ClimbDetailModal` (`components/shared/ClimbDetailModal.tsx`) — reusable modal showing full climb info + thumbnail image. Used from both profile pages.
 - `ClimbsMap` (`components/map/ClimbsMap.tsx`) — accepts optional `onPinClick` callback and `key` field on pins for navigation.
-- `utils/supabase/service.ts` validates that `SUPABASE_SERVICE_ROLE_KEY` ref matches `NEXT_PUBLIC_SUPABASE_ANON_KEY` ref at startup, logging a mismatch warning.
+- `utils/supabase/service.ts` is removed. Profile and following data now live in S3 under the `ProfileData/` prefix in the same bucket as route data.
 
-### Authentication (Supabase)
-- Auth uses `@supabase/ssr` with cookie-based sessions (no localStorage tokens).
-- `utils/supabase/client.ts` — browser client (`createBrowserClient`).
-- `utils/supabase/server.ts` — server client (`createServerClient` with cookie jar from `next/headers`).
-- `proxy.ts` refreshes the session on every request and protects `/scan`, `/match`, `/compare`, `/profile` routes (redirect to `/login`).
+### Authentication (Firebase)
+- Auth uses Firebase Auth (email/password) with HTTP-only session cookies.
+- `utils/firebase/client.ts` — browser Firebase app + auth (`getFirebaseApp`, `getFirebaseAuth`).
+- `utils/firebase/admin.ts` — Firebase Admin SDK (`getAdminAuth`). Server-side only, never import in client bundles.
+- `utils/firebase/constants.ts` — shared constants (`SESSION_COOKIE_NAME`, `SESSION_COOKIE_MAX_AGE_MS`). Safe for Edge runtime (no firebase-admin import).
+- `app/api/auth/session/route.ts` — POST creates session cookie from ID token; DELETE clears it.
+- `proxy.ts` checks for the `__session` cookie (presence only, Edge-compatible UX guard). Full verification happens in Route Handlers via `getAdminAuth().verifySessionCookie()`.
 - `hooks/useAuth.tsx` provides `AuthProvider` context + `useAuth()` hook. **File must stay `.tsx`** — it contains JSX.
-- All S3 API routes call `getAuthUserId()` and return 401 when unauthenticated.
+- All S3 API routes call `getAuthUserId()` and return 401 when unauthenticated. `getAuthUserId()` verifies the session cookie with Firebase Admin.
+- Firebase `User.uid` is the user identifier (not `user.id`). Use `user.uid` in all client components.
 - `isValidKey()` and `isValidPrefix()` enforce that every S3 key is scoped to the authenticated user: `RouteData/{userId}/...`.
 - `hooks/useS3Storage.ts` derives user-scoped keys via `deriveS3Key(userId, attempt)`.
 - `components/shared/NavBar.tsx` shows `PUBLIC_TABS` (Home, Docs) for unauthenticated users and `AUTH_TABS` (all tabs) for authenticated users.
+- **No secrets in client code** — Only `NEXT_PUBLIC_*` env vars may be referenced in client components. `FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`, and AWS credentials must stay server-side.
 
 ---
 
@@ -150,8 +154,8 @@ When adding or changing code, verify the following:
 - **Error sanitisation** — AWS/infrastructure error details must not be returned to the client in production. Use `awsErrorMessage()` which logs details server-side and returns a generic message.
 - **Auth gating** — Protected routes (`/scan`, `/match`, `/compare`, `/profile`) must be guarded by `proxy.ts`. API routes must call `getAuthUserId()` and return 401 when null.
 - **File extensions** — Any file containing JSX must use `.tsx` (not `.ts`). Verify after renaming or creating hook/component files.
-- **Cookie security** — Supabase cookies use `SameSite` and `Secure` attributes. Never store tokens in `localStorage`.
-- **No secrets in client code** — Only `NEXT_PUBLIC_*` env vars may be referenced in client components. AWS credentials and `SUPABASE_SERVICE_ROLE_KEY` must stay server-side.
+- **Cookie security** — Firebase session cookies use `HttpOnly`, `SameSite: strict`, and `Secure` (production) attributes. Never store tokens in `localStorage`.
+- **No secrets in client code** — Only `NEXT_PUBLIC_*` env vars may be referenced in client components. AWS credentials and `FIREBASE_PRIVATE_KEY` must stay server-side.
 
 ---
 

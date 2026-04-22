@@ -82,7 +82,7 @@ export default function PublicProfilePage() {
   const [loadingPins, setLoadingPins] = useState(false);
 
   const [following, setFollowing] = useState<string[]>([]);
-  const isOwnProfile = user?.id === userId;
+  const isOwnProfile = user?.uid === userId;
   const isFollowing = following.includes(userId);
 
   // Climb detail modal

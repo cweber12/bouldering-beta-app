@@ -1,40 +1,18 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { SESSION_COOKIE_NAME } from "@/utils/firebase/constants";
 
 /**
- * Proxy — refreshes the Supabase session on every request and
- * redirects unauthenticated users away from protected routes.
+ * Proxy — checks the Firebase session cookie on every request and redirects
+ * unauthenticated users away from protected routes.
+ *
+ * NOTE: Full session verification (signature + revocation) is performed by
+ * Firebase Admin SDK inside Route Handlers (Node.js runtime). Middleware runs
+ * in Edge runtime where firebase-admin is unavailable, so this guard is a UX
+ * convenience layer only. API routes enforce authentication independently.
  */
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
-
-  // IMPORTANT: Do not remove this getUser() call — it refreshes the auth
-  // token and keeps the cookie in sync. The data is used for route protection
-  // below, but even for public routes, the session refresh is essential.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const isAuthenticated = Boolean(sessionCookie);
 
   // Protected routes — redirect to login when not authenticated.
   const protectedPaths = ["/scan", "/match", "/view", "/compare", "/profile"];
@@ -42,7 +20,7 @@ export async function proxy(request: NextRequest) {
     (p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + "/"),
   );
 
-  if (!user && isProtected) {
+  if (!isAuthenticated && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.searchParams.set("redirect", request.nextUrl.pathname);
@@ -50,13 +28,13 @@ export async function proxy(request: NextRequest) {
   }
 
   // Redirect already-authenticated users away from the login page.
-  if (user && request.nextUrl.pathname === "/login") {
+  if (isAuthenticated && request.nextUrl.pathname === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/scan";
     return NextResponse.redirect(url);
   }
 
-  return supabaseResponse;
+  return NextResponse.next({ request });
 }
 
 export const config = {
@@ -71,3 +49,4 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|js|wasm)$).*)",
   ],
 };
+

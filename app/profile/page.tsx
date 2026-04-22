@@ -170,7 +170,7 @@ export default function ProfilePage() {
 
     (async () => {
       try {
-        const res = await fetch(`/api/profile/${user.id}/climbs/page?${params}`);
+        const res = await fetch(`/api/profile/${user.uid}/climbs/page?${params}`);
         if (!res.ok) throw new Error("Failed to load climbs.");
         const data = (await res.json()) as ClimbPageResponse;
         if (!cancelled) {
@@ -196,7 +196,7 @@ export default function ProfilePage() {
 
     (async () => {
       try {
-        const res = await fetch(`/api/profile/${user.id}/pins`);
+        const res = await fetch(`/api/profile/${user.uid}/pins`);
         if (!res.ok) return;
         const data = (await res.json()) as { pins?: Array<{ key: string; lat: number; lng: number; route: string; area: string; state: string; runType: string; timestamp?: string }> };
         if (!cancelled && Array.isArray(data.pins)) {
@@ -321,7 +321,7 @@ export default function ProfilePage() {
     setLoadingDetail(true);
     try {
       const res = await fetch(
-        `/api/profile/${user.id}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
+        `/api/profile/${user.uid}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
       );
       if (!res.ok) return;
       const data = (await res.json()) as ClimbDetailData;

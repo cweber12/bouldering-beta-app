@@ -20,20 +20,15 @@ vi.mock("@aws-sdk/client-s3", () => ({
   },
 }));
 
-vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({}),
+vi.mock("@/utils/firebase/admin", () => ({
+  getAdminAuth: () => ({}),
 }));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     getAll: () => [],
+    get: () => undefined,
     set: () => {},
-  }),
-}));
-
-vi.mock("@/utils/supabase/service", () => ({
-  createServiceClient: () => ({
-    storage: { from: () => ({ download: vi.fn(), upload: vi.fn(), list: vi.fn() }) },
   }),
 }));
 

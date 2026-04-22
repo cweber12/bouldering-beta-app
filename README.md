@@ -70,14 +70,16 @@ is unaffected.
 
 ## Authentication
 
-User accounts are managed by **Supabase Auth** with cookie-based sessions via
-`@supabase/ssr`. Unauthenticated visitors can view the home page and docs;
-upload, match, compare, and profile pages require sign-in. The proxy
-(`proxy.ts`) refreshes the session on every request and redirects
-unauthenticated users to `/login`.
+User accounts are managed by **Firebase Auth** (email/password). After signing
+in the client exchanges the Firebase ID token for an HTTP-only session cookie
+via `POST /api/auth/session`. Unauthenticated visitors can view the home page
+and docs; upload, match, compare, and profile pages require sign-in. The proxy
+(`proxy.ts`) checks for the session cookie on every request and redirects
+unauthenticated users to `/login`. Route Handlers verify the session cookie
+against the Firebase Admin SDK before executing any protected operation.
 
-All stored data is scoped per user — S3 keys include the user ID, and every API
-route validates that the requesting user owns the data they access.
+All stored data is scoped per user — S3 keys include the Firebase UID, and every
+API route validates that the requesting user owns the data they access.
 
 ## Cloud storage (S3)
 
@@ -88,13 +90,11 @@ list existing states → areas → routes → runs directly from the bucket.
 Attempts are highlighted in amber and sends in emerald throughout the UI.
 Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
 
-Profile data is stored in a **Supabase Storage** bucket (`user_data`) under
-the path `ProfileData/{userId}/profile.json` (display name, bio, location,
+Profile data is stored in the **same S3 bucket** as route data, under the
+prefix `ProfileData/{userId}/profile.json` (display name, bio, location,
 profile picture as base64 data URL). A searchable index entry at
 `ProfileData/_index/{userId}.json` enables user search by name or email.
 Following relationships are stored at `ProfileData/{userId}/following.json`.
-Access is mediated by a server-side **service role** client that bypasses RLS
-(`SUPABASE_SERVICE_ROLE_KEY` required in `.env.local`).
 
 Each saved run may include a scaled-down PNG thumbnail of the middle video frame
 with ORB keypoints drawn as green dots. The thumbnail is stored as a data URL in
@@ -133,9 +133,15 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 
 | Variable | Purpose | Example |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | `https://xyz.supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key | — |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (server-side only) | — |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web API key | — |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain | `project.firebaseapp.com` |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID | `route-scanner-xxxxx` |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket | `project.firebasestorage.app` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID | — |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID | — |
+| `FIREBASE_PROJECT_ID` | Firebase project ID (Admin SDK, server-side) | — |
+| `FIREBASE_CLIENT_EMAIL` | Service account client email (server-side) | — |
+| `FIREBASE_PRIVATE_KEY` | Service account private key (server-side) | — |
 | `AWS_REGION` | S3 bucket region | `us-east-2` |
 | `AWS_ACCESS_KEY_ID` | IAM access key | — |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key | — |
@@ -143,6 +149,9 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 | `S3_KEY_PREFIX` | Key prefix (default `RouteData`) | `RouteData` |
 
 Create a `.env.local` file with these values. **Never commit credentials.**
+
+The Firebase Admin private key can be downloaded from the Firebase console:
+**Project Settings → Service Accounts → Generate new private key**.
 
 ### API routes
 
@@ -152,6 +161,7 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | `/api/s3/get` | GET | Download run JSON by key |
 | `/api/s3/list` | GET | List objects/prefixes (pagination, delimiter) |
 | `/api/s3/delete` | DELETE | Remove a run |
+| `/api/auth/session` | POST/DELETE | Create/destroy Firebase session cookie |
 | `/api/profile` | GET/PUT | Read/update own profile |
 | `/api/profile/[userId]` | GET | Read any user's public profile |
 | `/api/profile/[userId]/climbs` | GET | List any user's climbs (raw S3 keys) |
@@ -168,6 +178,7 @@ Create a `.env.local` file with these values. **Never commit credentials.**
 | Framework | Next.js 16 App Router |
 | Language | TypeScript (strict) |
 | Styling | Tailwind CSS v4 |
+| Authentication | Firebase Auth (email/password, session cookies) |
 | Pose detection | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate) |
 | Computer vision | OpenCV.js 4.12 (WASM, main thread) |
 | Video encoding | MediaRecorder API (WebM) |

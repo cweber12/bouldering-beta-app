@@ -1,42 +1,43 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, type Mock } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mocks — must be set up BEFORE dynamic imports
 // ---------------------------------------------------------------------------
 
+let mockS3Send: Mock;
+
 vi.mock("@aws-sdk/client-s3", () => ({
-  S3Client: class MockS3Client {},
-  GetObjectCommand: vi.fn(),
-  ListObjectsV2Command: vi.fn(),
+  S3Client: class MockS3Client {
+    send = (...args: unknown[]) => mockS3Send(...args);
+  },
+  GetObjectCommand: vi.fn(function(this: unknown, opts: unknown) {
+    Object.assign(this as object, { _type: "GetObjectCommand" }, Object(opts));
+  }),
+  PutObjectCommand: vi.fn(function(this: unknown, opts: unknown) {
+    Object.assign(this as object, { _type: "PutObjectCommand" }, Object(opts));
+  }),
+  ListObjectsV2Command: vi.fn(function(this: unknown, opts: unknown) {
+    Object.assign(this as object, { _type: "ListObjectsV2Command" }, Object(opts));
+  }),
 }));
 
-vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({}),
+vi.mock("@/utils/firebase/admin", () => ({
+  getAdminAuth: () => ({}),
 }));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     getAll: () => [],
+    get: () => undefined,
     set: () => {},
   }),
 }));
 
-// Mock createServiceClient to return a fake Supabase client.
-const mockDownload = vi.fn();
-const mockUpload = vi.fn();
-const mockList = vi.fn();
+// Set S3_BUCKET_NAME so getBucket() returns a non-null value.
+vi.stubEnv("S3_BUCKET_NAME", "test-bucket");
 
-vi.mock("@/utils/supabase/service", () => ({
-  createServiceClient: () => ({
-    storage: {
-      from: () => ({
-        download: mockDownload,
-        upload: mockUpload,
-        list: mockList,
-      }),
-    },
-  }),
-}));
+// Initialise the send mock before module import.
+mockS3Send = vi.fn();
 
 // Dynamically import after mocks.
 const {
@@ -146,35 +147,37 @@ describe("readProfileStorage", () => {
     vi.clearAllMocks();
   });
 
-  it("parses and returns JSON from Supabase Storage", async () => {
+  it("parses and returns JSON from S3", async () => {
     const payload = { displayName: "Alice", location: "CO" };
-    const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-    mockDownload.mockResolvedValueOnce({ data: blob, error: null });
+    const body = {
+      [Symbol.asyncIterator]: async function* () {
+        yield Buffer.from(JSON.stringify(payload));
+      },
+    };
+    mockS3Send.mockResolvedValueOnce({ Body: body });
 
-    const result = await readProfileStorage<typeof payload>("some/path.json");
+    const result = await readProfileStorage<typeof payload>("ProfileData/user/profile.json");
     expect(result).toEqual(payload);
-    expect(mockDownload).toHaveBeenCalled();
+    expect(mockS3Send).toHaveBeenCalledOnce();
   });
 
-  it("returns null when the file is not found", async () => {
-    mockDownload.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Object not found" },
-    });
+  it("returns null when the key does not exist (NoSuchKey)", async () => {
+    const err = new Error("NoSuchKey");
+    err.name = "NoSuchKey";
+    mockS3Send.mockRejectedValueOnce(err);
 
-    const result = await readProfileStorage("missing/path.json");
+    const result = await readProfileStorage("ProfileData/user/missing.json");
     expect(result).toBeNull();
   });
 
-  it("throws on non-not-found errors", async () => {
-    mockDownload.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Permission denied" },
-    });
+  it("throws on non-NoSuchKey S3 errors", async () => {
+    const err = new Error("Permission denied");
+    err.name = "AccessDenied";
+    mockS3Send.mockRejectedValueOnce(err);
 
-    await expect(readProfileStorage("any/path.json")).rejects.toEqual({
-      message: "Permission denied",
-    });
+    await expect(readProfileStorage("ProfileData/user/profile.json")).rejects.toThrow(
+      "Permission denied",
+    );
   });
 });
 
@@ -187,23 +190,24 @@ describe("writeProfileStorage", () => {
     vi.clearAllMocks();
   });
 
-  it("uploads JSON with upsert", async () => {
-    mockUpload.mockResolvedValueOnce({ error: null });
+  it("sends a PutObjectCommand with JSON body", async () => {
+    mockS3Send.mockResolvedValueOnce({});
 
-    await writeProfileStorage("some/path.json", { foo: "bar" });
-    expect(mockUpload).toHaveBeenCalledWith(
-      "some/path.json",
-      expect.any(Blob),
-      { contentType: "application/json", upsert: true },
-    );
+    await writeProfileStorage("ProfileData/user/profile.json", { foo: "bar" });
+    expect(mockS3Send).toHaveBeenCalledOnce();
+    const cmd = mockS3Send.mock.calls[0][0] as Record<string, unknown>;
+    expect(cmd._type).toBe("PutObjectCommand");
+    expect(cmd.Body).toBe(JSON.stringify({ foo: "bar" }));
+    expect(cmd.ContentType).toBe("application/json");
   });
 
-  it("throws when upload fails", async () => {
-    mockUpload.mockResolvedValueOnce({ error: { message: "Quota exceeded" } });
+  it("propagates S3 errors", async () => {
+    const err = new Error("Quota exceeded");
+    mockS3Send.mockRejectedValueOnce(err);
 
-    await expect(writeProfileStorage("path.json", {})).rejects.toEqual({
-      message: "Quota exceeded",
-    });
+    await expect(writeProfileStorage("ProfileData/user/profile.json", {})).rejects.toThrow(
+      "Quota exceeded",
+    );
   });
 });
 
@@ -216,31 +220,48 @@ describe("listProfileStorage", () => {
     vi.clearAllMocks();
   });
 
-  it("returns file names from the folder", async () => {
-    mockList.mockResolvedValueOnce({
-      data: [{ name: "a.json" }, { name: "b.json" }],
-      error: null,
+  it("returns file names under the folder", async () => {
+    mockS3Send.mockResolvedValueOnce({
+      Contents: [
+        { Key: "ProfileData/_index/a.json" },
+        { Key: "ProfileData/_index/b.json" },
+      ],
+      IsTruncated: false,
     });
 
-    const names = await listProfileStorage("some/folder");
+    const names = await listProfileStorage("ProfileData/_index");
     expect(names).toEqual(["a.json", "b.json"]);
   });
 
   it("returns empty array when folder is empty", async () => {
-    mockList.mockResolvedValueOnce({ data: [], error: null });
+    mockS3Send.mockResolvedValueOnce({ Contents: [], IsTruncated: false });
 
-    const names = await listProfileStorage("empty/folder");
+    const names = await listProfileStorage("ProfileData/_index");
     expect(names).toEqual([]);
   });
 
-  it("throws on error", async () => {
-    mockList.mockResolvedValueOnce({
-      data: null,
-      error: { message: "Bucket not found" },
-    });
+  it("handles pagination via continuation token", async () => {
+    mockS3Send
+      .mockResolvedValueOnce({
+        Contents: [{ Key: "ProfileData/_index/a.json" }],
+        IsTruncated: true,
+        NextContinuationToken: "token-123",
+      })
+      .mockResolvedValueOnce({
+        Contents: [{ Key: "ProfileData/_index/b.json" }],
+        IsTruncated: false,
+      });
 
-    await expect(listProfileStorage("bad/folder")).rejects.toEqual({
-      message: "Bucket not found",
-    });
+    const names = await listProfileStorage("ProfileData/_index");
+    expect(names).toEqual(["a.json", "b.json"]);
+    expect(mockS3Send).toHaveBeenCalledTimes(2);
+  });
+
+  it("propagates S3 errors", async () => {
+    const err = new Error("Bucket not found");
+    mockS3Send.mockRejectedValueOnce(err);
+
+    await expect(listProfileStorage("ProfileData/_index")).rejects.toThrow("Bucket not found");
   });
 });
+

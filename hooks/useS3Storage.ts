@@ -71,7 +71,7 @@ export function useS3Storage(): S3StorageResult {
     if (!user) throw new Error("Authentication required.");
     setStatus("loading");
     setErrorMessage(null);
-    const key = deriveS3Key(user.id, attempt);
+    const key = deriveS3Key(user.uid, attempt);
 
     const serializable = serializeAttemptForJson(attempt);
 
@@ -190,7 +190,7 @@ export function useS3Storage(): S3StorageResult {
     }
   }, []);
 
-  const userPrefix = user ? `${KEY_PREFIX}/${user.id}` : null;
+  const userPrefix = user ? `${KEY_PREFIX}/${user.uid}` : null;
 
   return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, listPrefixes, userPrefix, status, errorMessage };
 }

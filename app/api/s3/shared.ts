@@ -1,16 +1,19 @@
-import { S3Client } from "@aws-sdk/client-s3";
-import { createServerClient } from "@supabase/ssr";
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  ListObjectsV2Command,
+} from "@aws-sdk/client-s3";
 import { cookies } from "next/headers";
-import { createServiceClient } from "@/utils/supabase/service";
+import { getAdminAuth } from "@/utils/firebase/admin";
+import { SESSION_COOKIE_NAME } from "@/utils/firebase/constants";
+import type { Readable } from "stream";
 
 /** The S3 key prefix scoping all RouteData objects. */
 export const S3_PREFIX = process.env.S3_KEY_PREFIX ?? "RouteData";
 
 /** The S3 key prefix scoping all profile objects. */
 export const PROFILE_PREFIX = "ProfileData";
-
-/** Supabase Storage bucket for profile data. */
-const PROFILE_BUCKET = "user_data";
 
 /** Singleton S3 client — reuses the HTTP connection pool across requests. */
 export const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
@@ -20,57 +23,39 @@ export function getBucket(): string | null {
   return process.env.S3_BUCKET_NAME ?? null;
 }
 
-/**
- * Authenticate the current request via Supabase cookies.
- * Returns the user ID string, or `null` when unauthenticated.
- */
-export async function getAuthUserId(): Promise<string | null> {
+// ---------------------------------------------------------------------------
+// Internal helper — verify the Firebase session cookie from request cookies
+// ---------------------------------------------------------------------------
+
+async function verifySession(): Promise<{ uid: string; email: string } | null> {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            );
-          } catch { /* read-only in some contexts */ }
-        },
-      },
-    },
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (!sessionCookie) return null;
+  try {
+    const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
+    return { uid: decoded.uid, email: decoded.email ?? "" };
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Authenticate the current request via Supabase cookies.
+ * Authenticate the current request via the Firebase session cookie.
+ * Returns the Firebase UID string, or `null` when unauthenticated.
+ */
+export async function getAuthUserId(): Promise<string | null> {
+  const session = await verifySession();
+  return session?.uid ?? null;
+}
+
+/**
+ * Authenticate the current request via the Firebase session cookie.
  * Returns `{ id, email }` or `null` when unauthenticated.
  */
 export async function getAuthUser(): Promise<{ id: string; email: string } | null> {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll(); },
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            );
-          } catch { /* read-only in some contexts */ }
-        },
-      },
-    },
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  return { id: user.id, email: user.email ?? "" };
+  const session = await verifySession();
+  if (!session) return null;
+  return { id: session.uid, email: session.email };
 }
 
 /**
@@ -164,46 +149,80 @@ export function isValidRoutePrefix(prefix: string, targetUserId: string): boolea
 export const PROFILE_TEXT_LIMIT = 500;
 
 // ---------------------------------------------------------------------------
-// Supabase Storage helpers (profile data in `user_data` bucket)
+// Profile storage helpers — profile data lives in the same S3 bucket as
+// route data, under the ProfileData/ prefix.
 // ---------------------------------------------------------------------------
 
 /**
- * Read a JSON file from Supabase Storage `user_data` bucket.
- * Returns `null` when the file does not exist.
+ * Read a JSON object from S3 at the given key.
+ * Returns `null` when the object does not exist (NoSuchKey).
  */
-export async function readProfileStorage<T>(path: string): Promise<T | null> {
-  const sb = createServiceClient();
-  const { data, error } = await sb.storage.from(PROFILE_BUCKET).download(path);
-  if (error) {
-    // "Object not found" is the Supabase Storage equivalent of NoSuchKey.
-    if (error.message?.includes("not found") || error.message?.includes("Not Found")) {
-      return null;
+export async function readProfileStorage<T>(key: string): Promise<T | null> {
+  const bucket = getBucket();
+  if (!bucket) throw new Error("S3_BUCKET_NAME is not configured.");
+
+  try {
+    const cmd = new GetObjectCommand({ Bucket: bucket, Key: key });
+    const res = await s3.send(cmd);
+
+    const chunks: Uint8Array[] = [];
+    for await (const chunk of res.Body as Readable) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
     }
-    throw error;
+    const text = Buffer.concat(chunks).toString("utf-8");
+    return JSON.parse(text) as T;
+  } catch (err) {
+    const name = err instanceof Error ? (err as Error & { name?: string; Code?: string }).name ?? "" : "";
+    const code = err instanceof Error ? (err as Error & { Code?: string }).Code ?? "" : "";
+    if (name === "NoSuchKey" || code === "NoSuchKey") return null;
+    throw err;
   }
-  const text = await data.text();
-  return JSON.parse(text) as T;
 }
 
 /**
- * Write a JSON file to Supabase Storage `user_data` bucket (upsert).
+ * Write a JSON object to S3 at the given key (upsert).
  */
-export async function writeProfileStorage(path: string, body: unknown): Promise<void> {
-  const sb = createServiceClient();
-  const blob = new Blob([JSON.stringify(body)], { type: "application/json" });
-  const { error } = await sb.storage
-    .from(PROFILE_BUCKET)
-    .upload(path, blob, { contentType: "application/json", upsert: true });
-  if (error) throw error;
+export async function writeProfileStorage(key: string, body: unknown): Promise<void> {
+  const bucket = getBucket();
+  if (!bucket) throw new Error("S3_BUCKET_NAME is not configured.");
+
+  const cmd = new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: JSON.stringify(body),
+    ContentType: "application/json",
+  });
+  await s3.send(cmd);
 }
 
 /**
- * List file objects in a folder within Supabase Storage `user_data` bucket.
- * Returns file names (not full paths).
+ * List JSON file names (not full keys) under a given S3 prefix/folder.
+ * Returns bare file names (last path segment), e.g. `["u1.json", "u2.json"]`.
  */
 export async function listProfileStorage(folder: string): Promise<string[]> {
-  const sb = createServiceClient();
-  const { data, error } = await sb.storage.from(PROFILE_BUCKET).list(folder, { limit: 1000 });
-  if (error) throw error;
-  return (data ?? []).map((f) => f.name);
+  const bucket = getBucket();
+  if (!bucket) throw new Error("S3_BUCKET_NAME is not configured.");
+
+  const prefix = folder.endsWith("/") ? folder : `${folder}/`;
+  const objects: string[] = [];
+  let token: string | undefined;
+
+  do {
+    const cmd = new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: token,
+    });
+    const res = await s3.send(cmd);
+    for (const obj of res.Contents ?? []) {
+      if (obj.Key) {
+        // Return only the final segment (file name), e.g. "u1.json"
+        const name = obj.Key.slice(prefix.length);
+        if (name && !name.includes("/")) objects.push(name);
+      }
+    }
+    token = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (token);
+
+  return objects;
 }
