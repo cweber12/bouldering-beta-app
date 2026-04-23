@@ -4,7 +4,7 @@ import { describe, it, expect, vi, afterEach, type Mock } from "vitest";
 // Mocks — must be set up BEFORE dynamic imports
 // ---------------------------------------------------------------------------
 
-let mockS3Send: Mock;
+const mockS3Send: Mock = vi.fn();
 
 vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class MockS3Client {
@@ -35,9 +35,6 @@ vi.mock("next/headers", () => ({
 
 // Set S3_BUCKET_NAME so getBucket() returns a non-null value.
 vi.stubEnv("S3_BUCKET_NAME", "test-bucket");
-
-// Initialise the send mock before module import.
-mockS3Send = vi.fn();
 
 // Dynamically import after mocks.
 const {

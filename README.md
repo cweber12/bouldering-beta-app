@@ -224,6 +224,51 @@ See [docs](/docs) inside the running app for a full usage guide.
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Deployment is handled via **GitHub Actions** (`.github/workflows/ci.yml`). The
+workflow:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **CI job** — runs type-check (`tsc --noEmit`), Vitest, and ESLint on every
+   push and pull request.
+2. **Deploy job** — triggers only on pushes to `main`, only after CI passes.
+   Uses the Vercel CLI to build and deploy the production bundle.
+
+Vercel's native GitHub integration is **disabled** in `vercel.json` so that
+deploys are always gated by the CI pipeline.
+
+### Required GitHub repository secrets
+
+| Secret | Where to get it |
+|---|---|
+| `VERCEL_TOKEN` | Vercel dashboard → Account Settings → Tokens |
+| `VERCEL_ORG_ID` | Vercel dashboard → Team Settings → General (Team ID) or Personal Account Settings → General (Account ID) |
+
+The Vercel project ID (`prj_nE8XCXWkHCFmHZ1QZ4NBeeebKeX8`) is already set in
+the workflow file.
+
+### Required Vercel environment variables
+
+Set these in the Vercel dashboard (Project → Settings → Environment Variables)
+for the **Production** environment:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+NEXT_PUBLIC_FIREBASE_PROJECT_ID
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+NEXT_PUBLIC_FIREBASE_APP_ID
+FIREBASE_PROJECT_ID
+FIREBASE_CLIENT_EMAIL
+FIREBASE_PRIVATE_KEY
+AWS_REGION
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+S3_BUCKET_NAME
+```
+
+### opencv.js
+
+`public/opencv.js` is gitignored (large WASM binary). The `vercel.json`
+`buildCommand` runs `npm run setup:opencv` before `next build` so the file is
+always present in the deployed bundle.
+
