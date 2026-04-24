@@ -27,12 +27,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect already-authenticated users away from the login page.
-  if (isAuthenticated && request.nextUrl.pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/scan";
-    return NextResponse.redirect(url);
-  }
+  // NOTE: We intentionally do NOT redirect authenticated users away from /login.
+  // Middleware can only check cookie presence, not validity. A stale __session
+  // cookie (expired or revoked server-side) would cause a redirect to /scan
+  // where Firebase auth state resolves as null — the user sees a broken page
+  // with no nav tabs. The login page handles its own redirect after the
+  // Firebase sign-in completes and the server session is verified.
 
   return NextResponse.next({ request });
 }

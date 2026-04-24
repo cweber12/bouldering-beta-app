@@ -44,7 +44,12 @@ function LoginForm() {
           setError(err);
           setSubmitting(false);
         } else {
+          // router.push alone uses the App Router's client-side cache, which was
+          // populated before the __session cookie existed. router.refresh() forces
+          // Next.js to re-fetch all server components with the new cookie so the
+          // navigation completes correctly instead of stalling on a stale cache.
           router.push(redirect);
+          router.refresh();
         }
       } else {
         const err = await signUp(trimmedEmail, password);

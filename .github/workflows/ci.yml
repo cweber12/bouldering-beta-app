@@ -34,3 +34,9 @@ jobs:
 
       - name: Lint
         run: npx eslint .
+
+      - name: Copy opencv.js to public/
+        run: npm run setup:opencv
+
+      - name: Build
+        run: npx next build
