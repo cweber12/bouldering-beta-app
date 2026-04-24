@@ -1,8 +1,5 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run setup:opencv && next build",
-  "regions": ["iad1"],
-  "github": {
-    "enabled": false
-  }
+  "regions": ["iad1"]
 }

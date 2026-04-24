@@ -224,26 +224,12 @@ See [docs](/docs) inside the running app for a full usage guide.
 
 ## Deploy on Vercel
 
-Deployment is handled via **GitHub Actions** (`.github/workflows/ci.yml`). The
-workflow:
+Deployments are handled by **Vercel's native GitHub integration** — every push
+to `main` triggers a production deploy automatically.
 
-1. **CI job** — runs type-check (`tsc --noEmit`), Vitest, and ESLint on every
-   push and pull request.
-2. **Deploy job** — triggers only on pushes to `main`, only after CI passes.
-   Uses the Vercel CLI to build and deploy the production bundle.
-
-Vercel's native GitHub integration is **disabled** in `vercel.json` so that
-deploys are always gated by the CI pipeline.
-
-### Required GitHub repository secrets
-
-| Secret | Where to get it |
-|---|---|
-| `VERCEL_TOKEN` | Vercel dashboard → Account Settings → Tokens |
-| `VERCEL_ORG_ID` | Vercel dashboard → Team Settings → General (Team ID) or Personal Account Settings → General (Account ID) |
-
-The Vercel project ID (`prj_nE8XCXWkHCFmHZ1QZ4NBeeebKeX8`) is already set in
-the workflow file.
+The `buildCommand` in `vercel.json` runs `npm run setup:opencv` before
+`next build` so the gitignored `public/opencv.js` WASM file is always present
+in the production bundle.
 
 ### Required Vercel environment variables
 
@@ -266,9 +252,10 @@ AWS_SECRET_ACCESS_KEY
 S3_BUCKET_NAME
 ```
 
-### opencv.js
+### CI (GitHub Actions)
 
-`public/opencv.js` is gitignored (large WASM binary). The `vercel.json`
-`buildCommand` runs `npm run setup:opencv` before `next build` so the file is
-always present in the deployed bundle.
+`.github/workflows/ci.yml` runs type-check (`tsc --noEmit`), Vitest, and
+ESLint on every push and pull request. Vercel deploys in parallel — if CI
+fails, the deploy should be cancelled via the Vercel dashboard.
+
 
