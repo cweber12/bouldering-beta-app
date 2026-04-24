@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 
-export default function LoginPage() {
+// Inner component — isolated so useSearchParams() is inside a Suspense boundary
+// (required by Next.js App Router for static prerendering to succeed).
+function LoginForm() {
   const { signIn, signUp, loading: authLoading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -163,5 +165,13 @@ export default function LoginPage() {
         </Link>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
