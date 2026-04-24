@@ -321,20 +321,28 @@ function ScanPageInner() {
   }, [step, activeAttemptId, videoPreviewUrl]);
 
   // Build animated skeleton frames from all pose frames in video-pixel space.
+  // Start from the first frame that has detected keypoints so playback begins
+  // at the first real detection rather than showing a blank/frozen window for
+  // pre-detection timestamps (which now have empty keypoints after the
+  // poseInterpolator fix).
   const firstFrameSkeletonData = useMemo(() => {
     if (!activeAttempt) return null;
     const { frames, videoMeta } = activeAttempt;
     if (!frames.length) return null;
     const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
-    const firstTs = sorted[0].timestamp;
+    const firstDetected = sorted.find(f => f.keypoints.length > 0);
+    if (!firstDetected) return null;
+    const firstTs = firstDetected.timestamp;
     const lastTs  = sorted[sorted.length - 1].timestamp;
     const duration = Math.max(lastTs - firstTs, 0.1);
-    const renderedFrames: RenderedSkeletonFrame[] = sorted.map(f => ({
-      timestamp: f.timestamp - firstTs,
-      keypoints: Object.fromEntries(
-        f.keypoints.map(kp => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }])
-      ),
-    }));
+    const renderedFrames: RenderedSkeletonFrame[] = sorted
+      .filter(f => f.timestamp >= firstTs)
+      .map(f => ({
+        timestamp: f.timestamp - firstTs,
+        keypoints: Object.fromEntries(
+          f.keypoints.map(kp => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }])
+        ),
+      }));
     return { frames: renderedFrames, duration, fps: videoMeta.fps ?? 30 };
   }, [activeAttempt]);
 

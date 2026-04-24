@@ -30,6 +30,12 @@ interface FramePlayerProps {
   hidePlayButton?: boolean;
   /** When true, playback starts automatically once the image is loaded. */
   autoPlay?: boolean;
+  /**
+   * ORB reference keypoints drawn as bright-red background dots before the
+   * skeleton overlay. Coordinates must be in image-pixel space (matching the
+   * native resolution of `imageFile`). Half the configured joint point radius.
+   */
+  orbKeypoints?: { x: number; y: number }[];
   className?: string;
 }
 
@@ -93,11 +99,13 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   loop = true,
   hidePlayButton = false,
   autoPlay = false,
+  orbKeypoints,
   className,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const layersRef = useRef(layers);
+  const orbKeypointsRef = useRef<{ x: number; y: number }[]>([]);
   const timeRef = useRef(0);
   const playingRef = useRef(false);
   const animRef = useRef(0);
@@ -112,6 +120,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   useEffect(() => {
     layersRef.current = layers;
   }, [layers]);
+
+  // Keep ORB keypoints ref current.
+  useEffect(() => {
+    orbKeypointsRef.current = orbKeypoints ?? [];
+  }, [orbKeypoints]);
 
   // Load the image as an ImageBitmap.
   useEffect(() => {
@@ -149,6 +162,22 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     if (!ctx) return;
 
     ctx.drawImage(bmp, 0, 0);
+
+    // Draw ORB reference keypoints as bright-red background dots.
+    const orb = orbKeypointsRef.current;
+    if (orb.length > 0) {
+      const firstLayerStyle = layersRef.current[0]?.style;
+      const poseRadius = firstLayerStyle?.pointRadius ?? 5;
+      const orbRadius = Math.max(1, poseRadius / 2);
+      ctx.save();
+      ctx.fillStyle = "#ff2020";
+      for (const pt of orb) {
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, orbRadius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     for (const layer of layersRef.current) {
       const nearest = findNearest(layer.frames, t);

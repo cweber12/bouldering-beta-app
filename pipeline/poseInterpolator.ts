@@ -315,7 +315,15 @@ export function interpolatePoseFrames(
     }
 
     if (nextIdx === 0) {
-      return { timestamp, keypoints: processedFrames[0].keypoints };
+      const next = processedFrames[0];
+      if (next.timestamp > timestamp) {
+        // Timestamp precedes all detected frames — return empty rather than
+        // "holding" the first detected pose backward in time. FramePlayer will
+        // show no skeleton for these early frames.
+        return { timestamp, keypoints: [] };
+      }
+      // Exact match with the first detected frame.
+      return { timestamp, keypoints: next.keypoints };
     }
 
     const next = processedFrames[nextIdx];

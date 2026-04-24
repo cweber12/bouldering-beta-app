@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import FramePlayer from "@/components/shared/FramePlayer";
@@ -11,6 +11,7 @@ import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -87,6 +88,20 @@ export default function StepMatchRoutePhoto({
 }: StepMatchRoutePhotoProps) {
   const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
   const [routePhotoFullscreen,  setRoutePhotoFullscreen]  = useState(false);
+  const [showMatchStats,        setShowMatchStats]        = useState(false);
+  const matchStatsRef = useRef<HTMLDivElement>(null);
+
+  // Close match stats when clicking outside.
+  useEffect(() => {
+    if (!showMatchStats) return;
+    function handler(e: MouseEvent) {
+      if (matchStatsRef.current && !matchStatsRef.current.contains(e.target as Node)) {
+        setShowMatchStats(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMatchStats]);
 
   // ESC closes fullscreen
   useEffect(() => {
@@ -147,7 +162,52 @@ export default function StepMatchRoutePhoto({
 
           {/* Skeleton style — shown once a match is in progress or done */}
           {routeMatchTriggered && (
-            <SkeletonStylePanel onChange={onSkeletonStyleChange} />
+            <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" />
+          )}
+
+          {/* Match statistics dropdown */}
+          {matchStatus === "done" && matchResult && (
+            <div ref={matchStatsRef} className="relative">
+              <button
+                onClick={() => setShowMatchStats(p => !p)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                  showMatchStats
+                    ? "border-accent/60 bg-accent/10 text-accent"
+                    : "border-edge/50 bg-card/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
+                )}
+                aria-label="Match statistics"
+                aria-expanded={showMatchStats}
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                </svg>
+                Stats
+              </button>
+              {showMatchStats && (
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-xl border border-edge/50 bg-card/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
+                      <p className="text-xs text-fg-muted">matches</p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
+                      <p className="text-xs text-fg-muted">query pts</p>
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
+                      <p className="text-xs text-fg-muted">ref pts</p>
+                    </div>
+                  </div>
+                  {matchResult.matches.length < 10 && (
+                    <p className="mt-2 text-xs text-caution">
+                      Fewer than 10 matches &mdash; the homography may be unstable.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           {/* Save dropdown */}
@@ -244,36 +304,9 @@ export default function StepMatchRoutePhoto({
           </div>
         )}
 
-        {/* Match statistics */}
-        {matchStatus === "done" && matchResult && (
-          <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
-            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Match statistics</p>
-            <div className="mt-2 grid grid-cols-3 gap-4 text-center">
-              <div>
-                <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
-                <p className="text-xs text-fg-muted">good matches</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
-                <p className="text-xs text-fg-muted">query keypoints</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
-                <p className="text-xs text-fg-muted">reference keypoints</p>
-              </div>
-            </div>
-            {matchResult.matches.length < 10 && (
-              <p className="mt-3 text-xs text-caution">
-                Fewer than 10 matches &mdash; the homography may be unstable. Try a closer or better-lit photo of the same wall section.
-              </p>
-            )}
-          </div>
-        )}
-
         {/* Pose overlay */}
         {isFrameReady && skeletonData && (
           <div className="flex flex-col gap-3">
-            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Pose overlay</p>
             <FramePlayer
               imageFile={routePhotoFile}
               layers={[{ frames: skeletonData.frames, style: topoStyle }]}

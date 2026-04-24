@@ -278,13 +278,13 @@ export default function StepViewLandmarks({
         {/* ── Animated first-frame landmark preview ── */}
         {showResults && (
           <div className="flex flex-col gap-2">
-            <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Recorded pose landmarks</p>
             {firstFrameFile && firstFrameSkeletonData ? (
               <FramePlayer
                 imageFile={firstFrameFile}
                 layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                 duration={firstFrameSkeletonData.duration}
                 autoPlay
+                orbKeypoints={activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt)}
                 className="w-full rounded-xl border border-edge/50"
               />
             ) : (

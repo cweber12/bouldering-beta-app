@@ -172,7 +172,7 @@ export default function NavBar() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v4a1 1 0 01-1 1H3m18-5v4a1 1 0 001 1h-3M7 21v-4a1 1 0 00-1-1H3m18 5v-4a1 1 0 011-1h-3M12 8v8m-3-5l3-3 3 3" />
               </svg>
             </span>
-            <span className="text-sm font-semibold tracking-tight text-fg">
+            <span className="text-sm font-semibold tracking-tight text-fg uppercase">
               Beta&nbsp;Scanner
             </span>
           </Link>

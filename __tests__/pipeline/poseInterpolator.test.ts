@@ -62,12 +62,13 @@ describe("interpolatePoseFrames", () => {
     expect(result[1].keypoints[0].score).toBe(0.4);
   });
 
-  it("holds first pose for timestamps before the first detected frame", () => {
+  it("returns empty keypoints for timestamps before the first detected frame", () => {
     const processed = [frame(1.0, [["nose", 0.5, 0.1]])];
     const result = interpolatePoseFrames(processed, [0.0, 0.5, 1.0]);
-    // Timestamps 0.0 and 0.5 are before the first detection.
-    expect(result[0].keypoints[0]).toMatchObject({ x: 0.5, y: 0.1 });
-    expect(result[1].keypoints[0]).toMatchObject({ x: 0.5, y: 0.1 });
+    // Timestamps 0.0 and 0.5 are before the first detection — must be empty.
+    expect(result[0].keypoints).toEqual([]);
+    expect(result[1].keypoints).toEqual([]);
+    // Timestamp 1.0 exactly matches the detection — keypoints present.
     expect(result[2].keypoints[0]).toMatchObject({ x: 0.5, y: 0.1 });
   });
 
