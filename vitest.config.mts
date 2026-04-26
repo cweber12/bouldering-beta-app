@@ -14,6 +14,9 @@ export default defineConfig({
     globals: true,
     // Run setup file before each test suite.
     setupFiles: ["./vitest.setup.ts"],
+    // Prevent hangs from unmocked WASM/MediaPipe initialisation in tests.
+    testTimeout: 10_000,
+    hookTimeout: 10_000,
     coverage: {
       provider: "v8",
       // Only collect coverage for our source modules, not node_modules.
