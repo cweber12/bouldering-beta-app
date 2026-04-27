@@ -97,6 +97,8 @@ export default function ProfilePage() {
   const [filterState, setFilterState] = useState("");
   const [filterArea, setFilterArea] = useState("");
   const [filterRoute, setFilterRoute] = useState("");
+  const [filterRunType, setFilterRunType] = useState<"" | "send" | "attempt">("");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest" | "route">("newest");
   // Filter suggestions (from S3 prefix listing)
   const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
   const [areaSuggestions, setAreaSuggestions] = useState<string[]>([]);
@@ -106,9 +108,12 @@ export default function ProfilePage() {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [pins, setPins] = useState<ClimbPin[]>([]);
   const [loadingPins, setLoadingPins] = useState(false);
+  const pinsCacheRef = useRef<ClimbPin[] | null>(null);
 
-  // Quick text search (client-side filter on current page)
+  // Quick text search
   const [searchText, setSearchText] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Filter panel visibility
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -167,6 +172,9 @@ export default function ProfilePage() {
     if (filterState) params.set("state", filterState);
     if (filterArea) params.set("area", filterArea);
     if (filterRoute) params.set("route", filterRoute);
+    if (filterRunType) params.set("runType", filterRunType);
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (sortOrder !== "newest") params.set("sort", sortOrder);
 
     (async () => {
       try {
@@ -185,12 +193,17 @@ export default function ProfilePage() {
     })();
 
     return () => { cancelled = true; };
-  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute]);
+  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute, filterRunType, sortOrder, debouncedSearch]);
 
   // ------ Load pins when map mode is active --------------------------------
 
   useEffect(() => {
     if (viewMode !== "map" || authLoading || !user) return;
+    // Serve from cache to avoid re-fetch on each list↔map toggle.
+    if (pinsCacheRef.current) {
+      setPins(pinsCacheRef.current);
+      return;
+    }
     let cancelled = false;
     setLoadingPins(true);
 
@@ -200,14 +213,16 @@ export default function ProfilePage() {
         if (!res.ok) return;
         const data = (await res.json()) as { pins?: Array<{ key: string; lat: number; lng: number; route: string; area: string; state: string; runType: string; timestamp?: string }> };
         if (!cancelled && Array.isArray(data.pins)) {
-          setPins(data.pins.map((p) => ({
+          const mapped = data.pins.map((p) => ({
             key: p.key,
             lat: p.lat,
             lng: p.lng,
             label: `${p.route} — ${p.area}`,
             runType: p.runType,
             timestamp: p.timestamp,
-          })));
+          }));
+          pinsCacheRef.current = mapped;
+          setPins(mapped);
         }
       } catch { /* ignore */ }
       finally { if (!cancelled) setLoadingPins(false); }
@@ -440,6 +455,9 @@ export default function ProfilePage() {
     setFilterState("");
     setFilterArea("");
     setFilterRoute("");
+    setFilterRunType("");
+    setSearchText("");
+    setDebouncedSearch("");
     setAreaSuggestions([]);
     setRouteSuggestions([]);
     setClimbPage(1);
@@ -716,29 +734,45 @@ export default function ProfilePage() {
   // =========================================================================
 
   // Client-side text filter applied on top of server-side paginated results.
-  const displayedClimbs = searchText.trim()
-    ? climbs.filter((c) => {
-        const q = searchText.toLowerCase();
-        return (
-          c.route.toLowerCase().includes(q) ||
-          c.area.toLowerCase().includes(q) ||
-          c.state.toLowerCase().includes(q) ||
-          (c.notes?.toLowerCase().includes(q) ?? false)
-        );
-      })
-    : climbs;
+  const displayedClimbs = climbs;
 
-  const hasActiveFilters = !!(filterState || filterArea || filterRoute);
+  const hasActiveFilters = !!(filterState || filterArea || filterRoute || filterRunType || debouncedSearch);
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
-      {/* ---- Page heading ---- */}
-      <section className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-fg">Saved Climbs</h1>
+      {/* ---- Profile header ---- */}
+      <section className="mb-6 flex items-center gap-4">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
+          {profile.profilePicture ? (
+            <NextImage
+              src={profile.profilePicture}
+              alt="Profile"
+              width={64}
+              height={64}
+              unoptimized
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-2xl text-fg-muted">
+              {(profile.displayName || user?.email || "?")[0]?.toUpperCase()}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold text-fg">
+            {profile.displayName || user?.email || "Climber"}
+          </p>
+          {profile.location && (
+            <p className="truncate text-sm text-fg-muted">{profile.location}</p>
+          )}
+          {profile.bio && (
+            <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{profile.bio}</p>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs text-fg-muted transition hover:text-accent"
+          className="shrink-0 text-xs text-fg-muted transition hover:text-accent"
         >
           Edit profile
         </button>
@@ -763,7 +797,15 @@ export default function ProfilePage() {
           <input
             type="text"
             value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchText(val);
+              if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+              searchDebounceRef.current = setTimeout(() => {
+                setDebouncedSearch(val);
+                setClimbPage(1);
+              }, 350);
+            }}
             placeholder="Search routes, areas&#8230;"
             className="w-full rounded-lg border border-edge bg-inset py-1.5 pl-8 pr-3 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
           />
@@ -810,6 +852,40 @@ export default function ProfilePage() {
             Map
           </button>
         </div>
+      </section>
+
+      {/* ---- Run-type chips + sort row ---- */}
+      <section className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {(["", "send", "attempt"] as const).map((rt) => (
+            <button
+              key={rt || "all"}
+              type="button"
+              onClick={() => { setFilterRunType(rt); setClimbPage(1); }}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition",
+                filterRunType === rt
+                  ? rt === "send"
+                    ? "bg-send-surface text-send"
+                    : rt === "attempt"
+                    ? "bg-attempt-surface text-attempt"
+                    : "bg-primary text-fg"
+                  : "border border-edge text-fg-secondary hover:border-edge-hover hover:text-fg",
+              )}
+            >
+              {rt === "" ? "All" : rt === "send" ? "Sends" : "Attempts"}
+            </button>
+          ))}
+        </div>
+        <select
+          value={sortOrder}
+          onChange={(e) => { setSortOrder(e.target.value as "newest" | "oldest" | "route"); setClimbPage(1); }}
+          className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg focus:border-accent focus:outline-none"
+        >
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="route">Route A–Z</option>
+        </select>
       </section>
 
       {/* ---- Collapsible filter panel ---- */}
@@ -906,10 +982,13 @@ export default function ProfilePage() {
                 {displayedClimbs.map((c) => (
                   <div
                     key={c.key}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => handleCardClick(c)}
-                    className="group cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                    onKeyDown={(e) => e.key === "Enter" && handleCardClick(c)}
+                    className="group cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
-                    {/* Thumbnail — no badge overlay */}
+                    {/* Thumbnail */}
                     <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
                       {c.thumbnail ? (
                         <NextImage
@@ -917,15 +996,24 @@ export default function ProfilePage() {
                           alt={`${c.route} climb`}
                           fill
                           unoptimized
-                          className="object-contain"
+                          className="object-cover transition-transform duration-200 group-hover:scale-105"
                         />
                       ) : (
-                        <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-fg-muted/30">
                           <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                           </svg>
+                          <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">{c.route}</span>
                         </div>
                       )}
+                      {/* Play icon overlay — appears on hover */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 bg-black/25">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface/80 backdrop-blur-sm">
+                          <svg className="h-4 w-4 translate-x-0.5 text-fg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                            <path d="M5 3.5l9 4.5-9 4.5V3.5z" />
+                          </svg>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Info + options */}
@@ -961,6 +1049,7 @@ export default function ProfilePage() {
                           state={c.state}
                           area={c.area}
                           route={c.route}
+                          size="sm"
                         />
                       </div>
                     </div>

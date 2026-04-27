@@ -20,6 +20,8 @@ interface ClimbOptionsDropdownProps {
    * replaced with this node and a click on it toggles the dropdown.
    */
   trigger?: React.ReactNode;
+  /** "sm" uses a smaller 28px trigger; default uses 32px with better touch target. */
+  size?: "sm" | "default";
 }
 
 // ---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ interface ClimbOptionsDropdownProps {
 // Opens upward from the trigger. Closes on outside click.
 // ---------------------------------------------------------------------------
 
-export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger }: ClimbOptionsDropdownProps) {
+export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default" }: ClimbOptionsDropdownProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"view" | "compare">("view");
@@ -87,7 +89,10 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border border-edge/50 bg-surface/90 text-fg-secondary backdrop-blur-sm transition hover:bg-surface hover:text-fg"
+          className={cn(
+            "flex items-center justify-center rounded-lg border border-edge/50 bg-surface/90 text-fg-secondary backdrop-blur-sm transition hover:bg-surface hover:text-fg",
+            size === "sm" ? "h-7 w-7" : "h-8 w-8",
+          )}
           aria-label="Climb options"
           aria-expanded={open}
         >

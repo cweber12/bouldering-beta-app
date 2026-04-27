@@ -297,3 +297,20 @@ input[type="checkbox"] {
 .animate-scan-pulse {
   animation: scanPulse 3s ease-in-out infinite;
 }
+
+/* ─── Leaflet popup theme overrides ─────────────────── */
+
+.leaflet-popup-content-wrapper {
+  background-color: var(--color-card) !important;
+  border: 1px solid var(--color-edge) !important;
+  color: var(--color-fg) !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 12px !important;
+}
+.leaflet-popup-tip {
+  background-color: var(--color-card) !important;
+}
+.leaflet-popup-content {
+  margin: 10px 14px !important;
+  color: var(--color-fg) !important;
+}

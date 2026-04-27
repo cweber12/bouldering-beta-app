@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(grep -E \"\\\\.ts$\")",
+      "Bash(git add *)"
+    ]
+  }
+}

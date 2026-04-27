@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
 import { cn } from "@/utils/cn";
 
@@ -31,11 +32,27 @@ interface ClimbDetailModalProps {
 // ---------------------------------------------------------------------------
 
 export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalProps) {
+  const router = useRouter();
   const isSend = climb.runType === "send";
+
+  const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
+  const compareUrl = [
+    `/compare?key=${encodeURIComponent(climb.key)}`,
+    climb.state && `state=${encodeURIComponent(climb.state)}`,
+    climb.area && `area=${encodeURIComponent(climb.area)}`,
+    climb.route && `route=${encodeURIComponent(climb.route)}`,
+  ]
+    .filter(Boolean)
+    .join("&");
+
+  const go = (url: string) => {
+    onClose();
+    router.push(url);
+  };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -56,55 +73,15 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
           </svg>
         </button>
 
-        {/* Detail section */}
-        <div className="px-5 py-4">
-          <h2 className="text-base font-semibold text-fg">{climb.route}</h2>
-          <p className="mt-0.5 text-sm text-fg-muted">
-            {climb.area} &middot; {climb.state}
-          </p>
-
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <span className="text-xs text-fg-muted">{climb.timestamp}</span>
-            {climb.rating && (
-              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-xs font-medium text-accent">
-                {climb.rating}
-              </span>
-            )}
-            {climb.coordinates && (
-              <span className="text-xs text-fg-muted">
-                {climb.coordinates.lat.toFixed(4)}, {climb.coordinates.lng.toFixed(4)}
-              </span>
-            )}
-          </div>
-
-          {climb.notes && (
-            <p className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{climb.notes}</p>
-          )}
-
-          <ClimbOptionsDropdown
-            climbKey={climb.key}
-            state={climb.state}
-            area={climb.area}
-            route={climb.route}
-            trigger={
-              <div className="mt-4 flex w-full items-center justify-between gap-2 rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-fg transition hover:bg-accent-hover">
-                <span>Options</span>
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            }
-          />
-        </div>
-        {/* Image area */}
-        <div className="relative aspect-square w-full overflow-hidden rounded-t-2xl bg-inset">
+        {/* Image area — top of card (fixes rounded-t-2xl alignment) */}
+        <div className="relative aspect-video w-full overflow-hidden rounded-t-2xl bg-inset">
           {climb.thumbnail ? (
             <Image
               src={climb.thumbnail}
               alt={`${climb.route} climb`}
               fill
               unoptimized
-              className="object-contain"
+              className="object-cover"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
@@ -123,6 +100,70 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
           >
             {climb.runType}
           </span>
+
+          {/* Expand to full view button */}
+          <button
+            type="button"
+            onClick={() => go(viewUrl)}
+            className="absolute bottom-2 right-2 flex items-center gap-1 rounded-lg bg-surface/80 px-2.5 py-1 text-xs font-medium text-fg backdrop-blur-sm transition hover:bg-surface"
+            aria-label="View on route photo"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+            </svg>
+            View
+          </button>
+        </div>
+
+        {/* Detail section */}
+        <div className="px-5 py-4">
+          <h2 className="text-base font-semibold text-fg">{climb.route}</h2>
+          <p className="mt-0.5 text-sm text-fg-muted">
+            {climb.area} &middot; {climb.state}
+          </p>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-fg-muted">{climb.timestamp}</span>
+            {climb.rating && (
+              <span className="rounded bg-accent/20 px-1.5 py-0.5 text-xs font-medium text-accent">
+                {climb.rating}
+              </span>
+            )}
+            {climb.coordinates && (
+              <span className="text-xs text-fg-muted">
+                {climb.coordinates.lat.toFixed(4)}, {climb.coordinates.lng.toFixed(4)}
+              </span>
+            )}
+          </div>
+
+          {climb.notes && (
+            <p className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{climb.notes}</p>
+          )}
+
+          {/* Explicit action row — View, Compare, overflow options */}
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => go(viewUrl)}
+              className="flex-1 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover"
+            >
+              View on Photo
+            </button>
+            <button
+              type="button"
+              onClick={() => go(compareUrl)}
+              className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            >
+              Compare
+            </button>
+            {/* Overflow: photo selection + additional navigation */}
+            <ClimbOptionsDropdown
+              climbKey={climb.key}
+              state={climb.state}
+              area={climb.area}
+              route={climb.route}
+            />
+          </div>
         </div>
       </div>
     </div>

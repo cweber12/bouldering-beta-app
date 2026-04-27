@@ -81,6 +81,9 @@ export async function GET(
   const filterArea = request.nextUrl.searchParams.get("area")?.toLowerCase() ?? "";
   const filterRoute = request.nextUrl.searchParams.get("route")?.toLowerCase() ?? "";
   const filterRating = request.nextUrl.searchParams.get("rating")?.toLowerCase() ?? "";
+  const filterSearch = request.nextUrl.searchParams.get("search")?.toLowerCase() ?? "";
+  const filterRunType = request.nextUrl.searchParams.get("runType") ?? "";
+  const sortParam = request.nextUrl.searchParams.get("sort") ?? "newest";
 
   try {
     // 1. List all climb JSON keys for this user.
@@ -115,9 +118,27 @@ export async function GET(
     if (filterState) parsed = parsed.filter((p) => p.state.toLowerCase().includes(filterState));
     if (filterArea) parsed = parsed.filter((p) => p.area.toLowerCase().includes(filterArea));
     if (filterRoute) parsed = parsed.filter((p) => p.route.toLowerCase().includes(filterRoute));
+    if (filterSearch) {
+      parsed = parsed.filter(
+        (p) =>
+          p.state.toLowerCase().includes(filterSearch) ||
+          p.area.toLowerCase().includes(filterSearch) ||
+          p.route.toLowerCase().includes(filterSearch),
+      );
+    }
+    if (filterRunType === "send" || filterRunType === "attempt") {
+      parsed = parsed.filter((p) => parseRunType(p.filename) === filterRunType);
+    }
 
-    // 3. Sort newest first (timestamps are embedded in filenames).
-    parsed.sort((a, b) => b.key.localeCompare(a.key));
+    // 3. Sort.
+    if (sortParam === "oldest") {
+      parsed.sort((a, b) => a.key.localeCompare(b.key));
+    } else if (sortParam === "route") {
+      parsed.sort((a, b) => a.route.localeCompare(b.route) || b.key.localeCompare(a.key));
+    } else {
+      // newest (default)
+      parsed.sort((a, b) => b.key.localeCompare(a.key));
+    }
 
     // 4. If rating filter is set, we need to fetch JSONs to check rating.
     //    Otherwise we can paginate before fetching.

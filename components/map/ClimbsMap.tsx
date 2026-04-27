@@ -169,13 +169,13 @@ export default function ClimbsMap({
         const popupRows = group
           .map((p) => {
             const typeLabel = p.runType === "send" ? "✓ Send" : "Attempt";
-            const ts = p.timestamp ? `<br/><span style="color:#9ca3af;font-size:11px">${p.timestamp}</span>` : "";
+            const ts = p.timestamp ? `<br/><span style="color:var(--color-fg-muted);font-size:11px">${p.timestamp}</span>` : "";
             const clickable = p.key && onPinClick ? " style=\"cursor:pointer;text-decoration:underline\"" : "";
             return `<div style="margin-bottom:4px"><strong${clickable} data-climb-key="${p.key ?? ""}">${p.label}</strong> — ${typeLabel}${ts}</div>`;
           })
           .join("");
 
-        const popupContent = `<div style="font-family:sans-serif;font-size:13px;line-height:1.5;max-width:220px">${popupRows}</div>`;
+        const popupContent = `<div style="font-size:13px;line-height:1.5;max-width:220px;color:var(--color-fg)">${popupRows}</div>`;
 
         const marker = L.marker([lat, lng], { icon }).bindPopup(popupContent);
 
