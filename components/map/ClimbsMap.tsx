@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Map as LeafletMap, MarkerClusterGroup } from "leaflet";
+import type { Map as LeafletMap, MarkerClusterGroup, LayerGroup } from "leaflet";
 import { cn } from "@/utils/cn";
 
 // Leaflet CSS — imported once at the client component boundary.
@@ -36,7 +36,7 @@ const CARTO_TILE_URL =
 const CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-/** Build a custom SVG DivIcon for a climb pin. */
+/** Build a custom SVG DivIcon for a user's climb pin. */
 function buildIcon(
   L: typeof import("leaflet"),
   runType: string,
@@ -48,11 +48,87 @@ function buildIcon(
   </svg>`;
   return L.divIcon({
     html: svg,
-    className: "", // no default leaflet-div-icon styles
+    className: "",
     iconSize: [28, 36],
     iconAnchor: [14, 36],
     popupAnchor: [0, -36],
   });
+}
+
+/** Build a distinct DivIcon for OSM climbing features (crags, areas, gyms). */
+function buildOsmIcon(L: typeof import("leaflet")): import("leaflet").DivIcon {
+  // Indigo circle with a white mountain triangle — visually distinct from user pins.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+    <circle cx="13" cy="13" r="12" fill="#6366f1" stroke="white" stroke-width="1.5"/>
+    <path d="M6 19L13 6L20 19Z" fill="white" opacity="0.95"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: "",
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+    popupAnchor: [0, -14],
+  });
+}
+
+// ── Overpass API integration ────────────────────────────────────────────────
+
+const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+/** Minimum zoom level before issuing a crag query — prevents huge bbox requests. */
+const MIN_ZOOM_CRAGS = 9;
+
+interface OsmFeature {
+  id: number;
+  lat: number;
+  lng: number;
+  name: string;
+  featureType: "gym" | "crag" | "area" | "boulder" | "other";
+  website?: string;
+}
+
+interface OverpassElement {
+  type: "node" | "way" | "relation";
+  id: number;
+  lat?: number;
+  lon?: number;
+  center?: { lat: number; lon: number };
+  tags?: Record<string, string>;
+}
+
+function osmFeatureType(tags: Record<string, string>): OsmFeature["featureType"] {
+  if (tags.leisure === "sports_centre" || tags.building) return "gym";
+  if (tags.climbing === "area") return "area";
+  if (tags.climbing === "crag") return "crag";
+  if (tags.climbing === "boulder") return "boulder";
+  return "other";
+}
+
+async function fetchOsmClimbing(
+  south: number,
+  west: number,
+  north: number,
+  east: number,
+): Promise<OsmFeature[]> {
+  // nwr = node+way+relation; out center returns centroids for ways/relations.
+  const q = `[out:json][timeout:15];nwr["sport"="climbing"](${south.toFixed(4)},${west.toFixed(4)},${north.toFixed(4)},${east.toFixed(4)});out center;`;
+  const res = await fetch(`${OVERPASS_URL}?data=${encodeURIComponent(q)}`);
+  if (!res.ok) return [];
+  const json = (await res.json()) as { elements: OverpassElement[] };
+  return json.elements
+    .reduce<OsmFeature[]>((acc, el) => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!lat || !lon) return acc;
+      acc.push({
+        id: el.id,
+        lat,
+        lng: lon,
+        name: el.tags?.name ?? "Climbing site",
+        featureType: osmFeatureType(el.tags ?? {}),
+        website: el.tags?.website ?? el.tags?.url,
+      });
+      return acc;
+    }, []);
 }
 
 /**
@@ -69,8 +145,16 @@ export default function ClimbsMap({
 }: ClimbsMapProps) {
   const mapRef = useRef<LeafletMap | null>(null);
   const clusterRef = useRef<MarkerClusterGroup | null>(null);
+  const osmLayerRef = useRef<LayerGroup | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Debounce timer for Overpass queries triggered by map movement.
+  const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bounds key of the last successful Overpass query (skip repeat fetches).
+  const lastBoundsKeyRef = useRef<string | null>(null);
+
   const [ready, setReady] = useState(false);
+  const [showCrags, setShowCrags] = useState(false);
+  const [loadingCrags, setLoadingCrags] = useState(false);
 
   // Group pins by location so the popup can list all climbs at a spot.
   const grouped = useMemo(() => {
@@ -88,6 +172,8 @@ export default function ClimbsMap({
     if (!containerRef.current || mapRef.current) return;
 
     let aborted = false;
+    // Declared outside the IIFE so the cleanup closure can disconnect it.
+    let resizeObs: ResizeObserver | null = null;
 
     (async () => {
       // Dynamic imports keep Leaflet out of the SSR bundle.
@@ -121,7 +207,9 @@ export default function ClimbsMap({
         attribution: CARTO_ATTRIBUTION,
         subdomains: "abcd",
         maxZoom: 19,
-        opacity: 0.95,
+        detectRetina: true,    // substitute {r} → @2x on HiDPI displays
+        keepBuffer: 4,         // pre-load 4-tile buffer to reduce blank squares
+        updateWhenIdle: false, // stream tiles during pan, not only after settle
       }).addTo(map);
 
       // MarkerClusterGroup is added to L by the side-effect import above.
@@ -133,20 +221,34 @@ export default function ClimbsMap({
         animate: true,
       }) as MarkerClusterGroup;
 
+      // Separate layer group for the OSM crags overlay (not clustered).
+      const osmLayer = L.layerGroup();
+
       mapRef.current = map;
       clusterRef.current = cluster;
+      osmLayerRef.current = osmLayer;
       map.addLayer(cluster);
+      map.addLayer(osmLayer);
 
-      // Ensure tiles render fully (fixes partial tile issue on initial mount).
-      setTimeout(() => { map.invalidateSize(); }, 100);
+      // ResizeObserver replaces the unreliable setTimeout(invalidateSize, 100).
+      // It fires whenever the container's pixel dimensions change — including
+      // when the parent transitions from display:none to visible — ensuring
+      // tiles are re-requested at the correct container size.
+      resizeObs = new ResizeObserver(() => {
+        if (mapRef.current) mapRef.current.invalidateSize();
+      });
+      resizeObs.observe(containerRef.current);
+
       setReady(true);
     })();
 
     return () => {
       aborted = true;
+      resizeObs?.disconnect();
       mapRef.current?.remove();
       mapRef.current = null;
       clusterRef.current = null;
+      osmLayerRef.current = null;
     };
   }, []);
 
@@ -212,11 +314,123 @@ export default function ClimbsMap({
       }
     })();
   }, [ready, grouped, onPinClick]);
+
+  // ── OSM crags overlay ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!ready || !mapRef.current || !osmLayerRef.current) return;
+    const map = mapRef.current;
+    const osmLayer = osmLayerRef.current;
+
+    if (!showCrags) {
+      osmLayer.clearLayers();
+      lastBoundsKeyRef.current = null;
+      return;
+    }
+
+    const queryVisible = async () => {
+      if (!mapRef.current) return;
+      const zoom = map.getZoom();
+      if (zoom < MIN_ZOOM_CRAGS) {
+        osmLayer.clearLayers();
+        return;
+      }
+      const b = map.getBounds();
+      // Round bounds to 1 decimal degree (~11 km) — skip if we're within the
+      // same approximate area as the last successful query.
+      const key = `${b.getSouth().toFixed(1)},${b.getWest().toFixed(1)},${b.getNorth().toFixed(1)},${b.getEast().toFixed(1)}`;
+      if (key === lastBoundsKeyRef.current) return;
+      lastBoundsKeyRef.current = key;
+
+      setLoadingCrags(true);
+      try {
+        const L = (await import("leaflet")).default;
+        const features = await fetchOsmClimbing(
+          b.getSouth(), b.getWest(), b.getNorth(), b.getEast(),
+        );
+        if (!mapRef.current) return; // unmounted while fetching
+        osmLayer.clearLayers();
+        const icon = buildOsmIcon(L);
+        for (const f of features) {
+          const typeLabel =
+            f.featureType === "gym" ? "🏋 Climbing gym"
+            : f.featureType === "area" ? "🏔 Climbing area"
+            : f.featureType === "crag" ? "🪨 Crag"
+            : f.featureType === "boulder" ? "🪨 Boulder"
+            : "⛰ Climbing site";
+          const websiteRow = f.website
+            ? `<br/><a href="${f.website}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);font-size:11px">Website ↗</a>`
+            : "";
+          const popup = `<div style="font-size:13px;line-height:1.5;color:var(--color-fg);max-width:200px"><strong>${f.name}</strong><br/><span style="color:var(--color-fg-muted);font-size:11px">${typeLabel}</span>${websiteRow}</div>`;
+          L.marker([f.lat, f.lng], { icon }).bindPopup(popup).addTo(osmLayer);
+        }
+      } catch {
+        // Overpass request failed — silently skip, don't clear existing markers.
+        lastBoundsKeyRef.current = null;
+      } finally {
+        setLoadingCrags(false);
+      }
+    };
+
+    const onMoveEnd = () => {
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
+      // Debounce: wait 600ms after the last pan/zoom before querying.
+      moveTimerRef.current = setTimeout(queryVisible, 600);
+    };
+
+    map.on("moveend", onMoveEnd);
+    // Fire immediately for the current viewport.
+    queryVisible();
+
+    return () => {
+      map.off("moveend", onMoveEnd);
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
+    };
+  }, [ready, showCrags]);
+
   return (
-    <div
-      ref={containerRef}
-      style={{ height }}
-      className={cn("w-full rounded-xl border border-edge overflow-hidden", className)}
-    />
+    // Outer wrapper is position:relative so we can overlay React controls (toggle
+    // button, loading indicator) above the Leaflet canvas without being clipped.
+    <div className="relative w-full" style={{ height }}>
+      {/* Leaflet map canvas */}
+      <div
+        ref={containerRef}
+        className={cn("absolute inset-0 rounded-xl border border-edge overflow-hidden", className)}
+      />
+
+      {/* Nearby crags toggle — positioned top-right, z-index above Leaflet controls */}
+      {ready && (
+        <div className="absolute top-2 right-2 z-[400] flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowCrags((s) => !s)}
+            title={showCrags ? "Hide nearby climbing areas" : "Show nearby climbing areas from OpenStreetMap"}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-md transition",
+              "border bg-surface/90 backdrop-blur-sm",
+              showCrags
+                ? "border-accent/60 text-accent"
+                : "border-edge text-fg-secondary hover:border-edge-hover hover:text-fg",
+            )}
+          >
+            {loadingCrags ? (
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-muted border-t-accent" />
+            ) : (
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-9 4 6 3-4 5 7H3z" />
+              </svg>
+            )}
+            Nearby crags
+          </button>
+        </div>
+      )}
+
+      {/* Zoom-too-low hint shown when crags are toggled on but zoom < MIN_ZOOM_CRAGS */}
+      {ready && showCrags && mapRef.current && mapRef.current.getZoom() < MIN_ZOOM_CRAGS && (
+        <div className="absolute bottom-2 left-1/2 z-[400] -translate-x-1/2 rounded-lg bg-surface/90 px-3 py-1.5 text-xs text-fg-muted shadow backdrop-blur-sm">
+          Zoom in to see nearby crags
+        </div>
+      )}
+    </div>
   );
 }

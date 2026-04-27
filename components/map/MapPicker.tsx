@@ -12,11 +12,10 @@ export interface MapPickerProps {
   onCancel: () => void;
 }
 
-const TOPO_TILE_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-const TOPO_ATTRIBUTION =
-  'Map data © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
-  '<a href="http://viewfinderpanoramas.org">SRTM</a> | ' +
-  'Map style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)';
+const CARTO_TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /**
  * Full-screen-ish map that lets the user click to place a pin.
@@ -71,9 +70,13 @@ export default function MapPicker({
       const map = L.map(containerRef.current, { scrollWheelZoom: true });
       map.setView([initLat, initLng], initZoom);
 
-      L.tileLayer(TOPO_TILE_URL, {
-        attribution: TOPO_ATTRIBUTION,
-        maxZoom: 17,
+      L.tileLayer(CARTO_TILE_URL, {
+        attribution: CARTO_ATTRIBUTION,
+        subdomains: "abcd",
+        maxZoom: 19,
+        detectRetina: true,
+        keepBuffer: 4,
+        updateWhenIdle: false,
       }).addTo(map);
 
       // Place initial marker if coords provided.
