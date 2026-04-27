@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 /* CONSTANTS */
 import { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
@@ -116,9 +117,10 @@ async function saveAttemptToDevice(
 
 function ScanPageInner() {
   const { cv } = useOpenCV();
+  const router = useRouter();
 
   // Model selection state — MediaPipe only
-  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("lite");
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("full");
   const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
@@ -134,7 +136,7 @@ function ScanPageInner() {
   const [notes, setNotes]       = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
-  const [frameStep, setFrameStep] = useState(5);
+  const [frameStep, setFrameStep] = useState(10);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved]   = useState(false);
   const [locationWarning, setLocationWarning] = useState(false);
@@ -552,7 +554,7 @@ function ScanPageInner() {
       await uploadAttempt(attemptToUpload);
       setS3Saved(true);
       setLocationWarning(false);
-      handleSaveComplete();
+      setShowBottomSheet(false); // close sheet; success banner shown in StepViewLandmarks
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
     }
@@ -638,8 +640,7 @@ function ScanPageInner() {
           onFrameStepChange={setFrameStep}
           canScan={!!(model && cv)}
           onScan={handleScan}
-          editMode={editMode}
-          onBackToResults={handleBackToResults}
+          onBack={() => { setStep("pick"); setEditMode(false); }}
         />
       )}
 
@@ -657,18 +658,13 @@ function ScanPageInner() {
           firstFrameSkeletonData={firstFrameSkeletonData}
           topoStyle={topoStyle}
           onSkeletonStyleChange={setSkeletonStyle}
-          orbReady={orbReady}
-          onViewOnRoutePhoto={handleViewOnRoutePhoto}
           onEditClimb={handleEditClimb}
-          onChooseVideo={handleSelectFile}
-          onTakeVideo={() => setShowCamera(true)}
-          onSaveToDevice={handleOpenSaveSheet}
+          onScanAnother={handleSaveComplete}
           onUpload={handleOpenUploadSheet}
           s3Saved={s3Saved}
           s3Loading={s3Status === "loading"}
-          savedRouteDirHandle={savedRouteDirHandle}
-          onDeleteFromDevice={handleDeleteFromDevice}
           saveError={saveError}
+          onViewScans={() => router.push("/profile")}
         />
       )}
 

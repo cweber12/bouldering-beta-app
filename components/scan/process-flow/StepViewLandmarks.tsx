@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/utils/cn";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
-import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -26,24 +25,18 @@ export interface StepViewLandmarksProps {
   firstFrameFile: File | null;
   firstFrameSkeletonData: SkeletonFrameData | null;
   topoStyle: SkeletonStyle;
-  // Skeleton style
   onSkeletonStyleChange: (s: SkeletonStyle) => void;
   // Toolbar actions
-  orbReady: boolean;
-  onViewOnRoutePhoto: (file: File) => void;
   onEditClimb: () => void;
-  /** Called when the user chooses a new video via file picker. */
-  onChooseVideo: (file: File) => void;
-  /** Called when the user wants to record a new video. */
-  onTakeVideo: () => void;
-  // Save actions — open parent bottom sheet
-  onSaveToDevice: () => void;
+  /** Navigate back to video selection and start a fresh scan. */
+  onScanAnother: () => void;
+  // Save / upload
   onUpload: () => void;
   s3Saved: boolean;
   s3Loading: boolean;
-  savedRouteDirHandle: FileSystemDirectoryHandle | null;
-  onDeleteFromDevice: () => void;
   saveError: string | null;
+  /** Navigate to the user's saved scans after a successful upload. */
+  onViewScans: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,39 +55,16 @@ export default function StepViewLandmarks({
   firstFrameSkeletonData,
   topoStyle,
   onSkeletonStyleChange,
-  orbReady,
-  onViewOnRoutePhoto,
   onEditClimb,
-  onChooseVideo,
-  onTakeVideo,
-  onSaveToDevice,
+  onScanAnother,
   onUpload,
   s3Saved,
   s3Loading,
-  savedRouteDirHandle,
-  onDeleteFromDevice,
   saveError,
+  onViewScans,
 }: StepViewLandmarksProps) {
-  const routePhotoInputRef = useRef<HTMLInputElement>(null);
-  const newVideoInputRef   = useRef<HTMLInputElement>(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showInfoDropdown,    setShowInfoDropdown]    = useState(false);
-
-  function handleRoutePhotoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      onViewOnRoutePhoto(file);
-      e.target.value = "";
-    }
-  }
-
-  function handleNewVideoFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) {
-      onChooseVideo(file);
-      e.target.value = "";
-    }
-  }
 
   function closeAllDropdowns() {
     setShowActionsDropdown(false);
@@ -133,110 +103,100 @@ export default function StepViewLandmarks({
           </p>
         )}
 
-        {/* ── Toolbar (shown once results are ready) ── */}
-        {showResults && (
-          <div className="flex items-center gap-2 flex-wrap">
+        {/* ── Upload success banner ── */}
+        {showResults && s3Saved && (
+          <div className="rounded-xl border border-send/30 bg-send-surface px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex items-center gap-2 flex-1">
+              <svg className="h-4 w-4 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm font-medium text-send">Scan saved successfully</p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <button
+                onClick={onScanAnother}
+                className="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+              >
+                Scan another
+              </button>
+              <button
+                onClick={onViewScans}
+                className="rounded-lg border border-send/40 bg-send/10 px-3 py-1.5 text-xs font-medium text-send transition hover:bg-send/20"
+              >
+                View my scans
+              </button>
+            </div>
+          </div>
+        )}
 
-            {/* Actions dropdown */}
+        {/* ── Icon toolbar (shown once results are ready, hidden after upload) ── */}
+        {showResults && !s3Saved && (
+          <div className="flex items-center gap-1.5">
+
+            {/* Actions — three-dots options icon */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => { setShowActionsDropdown(p => !p); setShowInfoDropdown(false); }}
                 className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                  "rounded-lg border p-1.5 transition",
                   showActionsDropdown
                     ? "border-accent/60 bg-accent/10 text-accent"
-                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
                 )}
+                title="Actions"
+                aria-label="Actions"
               >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                </svg>
-                Actions
-                <svg
-                  className={cn("h-3 w-3 transition-transform", showActionsDropdown && "rotate-180")}
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                {/* Horizontal three-dots */}
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="5"  cy="12" r="1.5" />
+                  <circle cx="12" cy="12" r="1.5" />
+                  <circle cx="19" cy="12" r="1.5" />
                 </svg>
               </button>
 
               {showActionsDropdown && (
-                <div className="absolute left-0 top-full z-20 mt-1.5 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in">
-                  {orbReady && (
-                    <label className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-accent/10 hover:text-fg">
-                      <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18" />
-                      </svg>
-                      View on Route Photo
-                      <input
-                        ref={routePhotoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handleRoutePhotoFile}
-                      />
-                    </label>
-                  )}
+                <div className="absolute left-0 top-full z-20 mt-1.5 w-48 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in">
                   <button
                     onClick={() => { closeAllDropdowns(); onEditClimb(); }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
                   >
                     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                     </svg>
-                    Edit Climb
+                    Edit climb
                   </button>
-                  <label className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg">
-                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                    Choose Another Video
-                    <input
-                      ref={newVideoInputRef}
-                      type="file"
-                      accept="video/*"
-                      className="hidden"
-                      onChange={handleNewVideoFile}
-                    />
-                  </label>
                   <button
-                    onClick={() => { closeAllDropdowns(); onTakeVideo(); }}
+                    onClick={() => { closeAllDropdowns(); onScanAnother(); }}
                     className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
                   >
                     <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
                     </svg>
-                    Take Another Video
+                    Scan another beta
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Info dropdown — analysis complete stats */}
+            {/* Info / metrics icon */}
             {activeAttempt && (
               <div className="relative">
                 <button
                   type="button"
                   onClick={() => { setShowInfoDropdown(p => !p); setShowActionsDropdown(false); }}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                    "rounded-lg border p-1.5 transition",
                     showInfoDropdown
                       ? "border-send/50 bg-send-surface text-send"
-                      : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+                      : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
                   )}
+                  title="Scan metrics"
+                  aria-label="Scan metrics"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Info
-                  <svg
-                    className={cn("h-3 w-3 transition-transform", showInfoDropdown && "rotate-180")}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  {/* Chart bar icon */}
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                   </svg>
                 </button>
 
@@ -246,28 +206,44 @@ export default function StepViewLandmarks({
                     <p className="text-xs text-fg-secondary leading-relaxed">
                       {activeAttempt.frames.length} pose frames &middot;{" "}
                       {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points
-                      {activeAttempt.state && ` \u2014 ${activeAttempt.state}`}
-                      {activeAttempt.area  && ` \u203a ${activeAttempt.area}`}
-                      {activeAttempt.route && ` \u203a ${activeAttempt.route}`}
+                      {activeAttempt.state && ` — ${activeAttempt.state}`}
+                      {activeAttempt.area  && ` › ${activeAttempt.area}`}
+                      {activeAttempt.route && ` › ${activeAttempt.route}`}
                     </p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Save dropdown */}
-            <SaveDropdown
-              s3Saved={s3Saved}
-              s3Loading={s3Loading}
-              savedRouteDirHandle={savedRouteDirHandle}
-              onUpload={onUpload}
-              onSaveToDevice={onSaveToDevice}
-              onDeleteFromDevice={onDeleteFromDevice}
-              onOpen={() => { setShowActionsDropdown(false); setShowInfoDropdown(false); }}
-            />
+            {/* Save / upload icon */}
+            <button
+              type="button"
+              onClick={() => { closeAllDropdowns(); onUpload(); }}
+              disabled={s3Loading}
+              className={cn(
+                "rounded-lg border p-1.5 transition",
+                s3Loading
+                  ? "border-edge bg-card text-fg-muted cursor-not-allowed opacity-60"
+                  : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+              )}
+              title="Save scan to cloud"
+              aria-label="Save scan to cloud"
+            >
+              {s3Loading ? (
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                /* Cloud upload icon */
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+                </svg>
+              )}
+            </button>
 
-            {/* Skeleton style — compact size to match toolbar height */}
-            <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" />
+            {/* Skeleton style — icon only */}
+            <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" />
 
             {saveError && (
               <p className="w-full text-xs text-danger">{saveError}</p>

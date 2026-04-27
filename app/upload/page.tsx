@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { cn } from "@/utils/cn";
@@ -102,9 +103,10 @@ let cachedVideoUrl: string | null = null;
 
 function UploadPageInner() {
   const { cv } = useOpenCV();
+  const router = useRouter();
 
-  // Model selection state � MediaPipe only
-  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("lite");
+  // Model selection state� MediaPipe only
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("full");
   const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
@@ -533,7 +535,7 @@ function UploadPageInner() {
       await uploadAttempt(attemptToUpload);
       setS3Saved(true);
       setLocationWarning(false);
-      handleSaveComplete();
+      setShowBottomSheet(false);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "S3 upload failed.");
     }
@@ -592,8 +594,7 @@ function UploadPageInner() {
           onFrameStepChange={setFrameStep}
           canScan={!!(model && cv)}
           onScan={handleScan}
-          editMode={editMode}
-          onBackToResults={handleBackToResults}
+          onBack={() => { setStep("pick"); setEditMode(false); }}
         />
       )}
 
@@ -611,18 +612,13 @@ function UploadPageInner() {
           firstFrameSkeletonData={firstFrameSkeletonData}
           topoStyle={topoStyle}
           onSkeletonStyleChange={setSkeletonStyle}
-          orbReady={orbReady}
-          onViewOnRoutePhoto={handleViewOnRoutePhoto}
           onEditClimb={handleEditClimb}
-          onChooseVideo={handleSelectFile}
-          onTakeVideo={() => setShowCamera(true)}
-          onSaveToDevice={handleOpenSaveSheet}
+          onScanAnother={handleSaveComplete}
           onUpload={handleOpenUploadSheet}
           s3Saved={s3Saved}
           s3Loading={s3Status === "loading"}
-          savedRouteDirHandle={savedRouteDirHandle}
-          onDeleteFromDevice={handleDeleteFromDevice}
           saveError={saveError}
+          onViewScans={() => router.push("/profile")}
         />
       )}
 
