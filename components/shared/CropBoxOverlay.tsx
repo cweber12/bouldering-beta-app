@@ -70,7 +70,7 @@ const HANDLE_SHADOW = "0 0 0 1.5px rgba(0,0,0,0.75), 0 1px 5px rgba(0,0,0,0.5)";
 export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
 
 /** Returns the inline style for the visible handle knob based on handle id. */
-function getHandleKnobStyle(id: HandleId): React.CSSProperties {
+function getHandleKnobStyle(id: HandleId, cr: string): React.CSSProperties {
   const base: React.CSSProperties = {
     position: "absolute",
     left: "50%",
@@ -81,10 +81,10 @@ function getHandleKnobStyle(id: HandleId): React.CSSProperties {
   };
   const thick = `${SEG_W}px solid ${HANDLE_COLOR}`;
   switch (id) {
-    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick, boxShadow: HANDLE_SHADOW };
-    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick, boxShadow: HANDLE_SHADOW };
-    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick, boxShadow: HANDLE_SHADOW };
-    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick, boxShadow: HANDLE_SHADOW };
+    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick, borderTopLeftRadius: cr, boxShadow: HANDLE_SHADOW };
+    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick, borderTopRightRadius: cr, boxShadow: HANDLE_SHADOW };
+    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick, borderBottomLeftRadius: cr, boxShadow: HANDLE_SHADOW };
+    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick, borderBottomRightRadius: cr, boxShadow: HANDLE_SHADOW };
     case "n":  return { ...base, width: SEG_LEN, height: SEG_W, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
     case "s":  return { ...base, width: SEG_LEN, height: SEG_W, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
     case "e":  return { ...base, width: SEG_W, height: SEG_LEN, background: HANDLE_COLOR, boxShadow: "0 0 0 0.5px rgba(255,255,255,0.5)" };
@@ -291,7 +291,7 @@ export default function CropBoxOverlay({
             onPointerDown={(e) => startDrag(e, id)}
           >
             {/* Visible handle knob — line-segment style */}
-            <div style={getHandleKnobStyle(id)} />
+            <div style={getHandleKnobStyle(id, borderRadius)} />
           </div>
         ))}
     </div>
