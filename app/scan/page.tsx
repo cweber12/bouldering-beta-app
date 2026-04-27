@@ -318,7 +318,10 @@ function ScanPageInner() {
 
     video.addEventListener("seeked", onSeeked);
     video.addEventListener("loadeddata", () => {
-      video.currentTime = 0;
+      // Seek to a tiny non-zero offset so the seeked event always fires.
+      // Setting currentTime = 0 when the video is already at 0 is a no-op
+      // on many browsers and never fires seeked, leaving the preview blank.
+      video.currentTime = 0.001;
     }, { once: true });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps

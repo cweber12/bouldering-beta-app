@@ -17,8 +17,8 @@ import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
 import { applyHomographyMatrix } from "@/pipeline/homography";
 
 const JOINT_RADIUS = 5;
-const JOINT_COLOR = "rgba(255, 220, 0, 0.92)";
-const LIMB_COLOR = "rgba(0, 220, 120, 0.85)";
+const JOINT_COLOR = "rgba(34, 197, 94, 0.95)";   // accent green — theme cohesive
+const LIMB_COLOR  = "rgba(34, 197, 94, 0.65)";   // accent green, lower opacity for limbs
 const LIMB_WIDTH = 2.5;
 
 /**

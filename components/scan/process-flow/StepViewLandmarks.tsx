@@ -271,7 +271,7 @@ export default function StepViewLandmarks({
               {/* Skeleton style */}
               <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" />
 
-              {/* Save to cloud */}
+              {/* Save to cloud — accented as primary action */}
               <button
                 type="button"
                 onClick={onUpload}
@@ -280,7 +280,7 @@ export default function StepViewLandmarks({
                   "ml-auto flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
                   s3Loading
                     ? "border-edge bg-card text-fg-muted cursor-not-allowed opacity-60"
-                    : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+                    : "border-accent/40 bg-accent text-fg-inverse shadow-sm shadow-accent/20 hover:bg-accent/90",
                 )}
                 title="Save scan to cloud"
               >
@@ -319,11 +319,11 @@ export default function StepViewLandmarks({
                 <p className="text-xs text-fg-muted text-center">Loading preview&#8230;</p>
               )}
 
-              {/* Primary CTA — overlay on wall photo (shown when ORB features are ready) */}
+              {/* Optional overlay action — secondary style since saving is the primary CTA */}
               {orbReady && (
                 <>
                   <p className="text-xs text-fg-muted text-center">
-                    Scan complete &mdash; upload a route photo to overlay your beta
+                    Optional: upload a route photo to overlay your beta on the wall
                   </p>
                   <input
                     ref={routePhotoInputRef}
@@ -339,7 +339,7 @@ export default function StepViewLandmarks({
                   <button
                     type="button"
                     onClick={() => routePhotoInputRef.current?.click()}
-                    className="flex items-center justify-center gap-2 w-full rounded-xl bg-accent px-4 py-3.5 text-sm font-semibold text-fg-inverse shadow-lg shadow-accent/25 transition hover:bg-accent/90 active:scale-[0.98]"
+                    className="flex items-center justify-center gap-2 w-full rounded-xl border border-edge bg-card px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
                   >
                     <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />

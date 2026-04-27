@@ -8,6 +8,14 @@ import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
+// Crop box colors — climber is white, wall texture is sky-blue
+// ---------------------------------------------------------------------------
+const CLIMBER_COLOR      = "rgba(255,255,255,0.90)";
+const WALL_COLOR         = "rgba(125,211,252,0.88)";
+const CLIMBER_GHOST_COLOR = "rgba(255,255,255,0.22)";
+const WALL_GHOST_COLOR    = "rgba(125,211,252,0.22)";
+
+// ---------------------------------------------------------------------------
 // Frame-condition options
 // ---------------------------------------------------------------------------
 interface FrameCondition {
@@ -90,72 +98,60 @@ function CropToolbar({
 
   return (
     <>
-      {/* Step 1 — Climber crop */}
-      <button
-        onClick={onSetClimber}
-        className={cn(
-          "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-          activeCropMode === "climber"
-            ? "border-accent/60 bg-accent/10 text-accent"
-            : climberCropMoved
-            ? "border-send/40 bg-send-surface text-send"
-            : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
-        )}
-        title={climberCropMoved ? "Climber crop set ✓" : "Draw a box around the climber"}
-      >
-        {/* Step badge */}
-        <span className={cn(
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
-          activeCropMode === "climber"
-            ? "bg-accent/20 text-accent"
-            : climberCropMoved
-            ? "bg-send/20 text-send"
-            : "bg-edge text-fg-muted",
-        )}>1</span>
-        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-        </svg>
-        Climber
-        {climberCropMoved && (
-          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+      {/* Segmented crop mode toggle — shows which box is being drawn.
+          Active segment: slightly elevated bg. Checkmark: only when box is set. */}
+      <div className="flex items-center rounded-lg border border-edge overflow-hidden shrink-0">
+        {/* Climber segment */}
+        <button
+          onClick={onSetClimber}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+            activeCropMode === "climber"
+              ? "bg-card-hover text-fg"
+              : "bg-card text-fg-secondary hover:bg-card-hover hover:text-fg",
+          )}
+          title={climberCropMoved ? "Climber crop set ✓" : "Draw a box around the climber"}
+        >
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
           </svg>
-        )}
-      </button>
+          Climber
+          {climberCropMoved && (
+            <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          )}
+        </button>
 
-      {/* Step 2 — Wall texture crop */}
-      <button
-        onClick={onSetRoute}
-        className={cn(
-          "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-          activeCropMode === "route"
-            ? "border-accent/60 bg-accent/10 text-accent"
-            : orbCropMoved
-            ? "border-send/40 bg-send-surface text-send"
-            : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
-        )}
-        title={orbCropMoved ? "Wall texture crop set ✓" : "Draw a box over a region of wall texture"}
-      >
-        <span className={cn(
-          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
-          activeCropMode === "route"
-            ? "bg-accent/20 text-accent"
-            : orbCropMoved
-            ? "bg-send/20 text-send"
-            : "bg-edge text-fg-muted",
-        )}>2</span>
-        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-        </svg>
-        Wall texture
-        {orbCropMoved && (
-          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        {/* Divider */}
+        <div className="w-px self-stretch bg-edge shrink-0" />
+
+        {/* Wall texture segment */}
+        <button
+          onClick={onSetRoute}
+          className={cn(
+            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+            activeCropMode === "route"
+              ? "bg-card-hover text-fg"
+              : "bg-card text-fg-secondary hover:bg-card-hover hover:text-fg",
+          )}
+          title={orbCropMoved ? "Wall texture crop set ✓" : "Draw a box over a region of wall texture"}
+        >
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
           </svg>
-        )}
-      </button>
+          Wall
+          {orbCropMoved && (
+            <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          )}
+        </button>
+      </div>
 
-      {/* Merged settings dropdown */}
+      {/* Merged settings dropdown.
+          The parent toolbar wrapper carries relative z-10 so this dropdown
+          always paints above the video area regardless of backdrop-filter. */}
       <div ref={settingsRef} className="relative">
         <button
           type="button"
@@ -298,9 +294,13 @@ export interface StepSetDetectionProps {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers — ghost box overlay (shows the inactive crop region as a dashed guide)
+// GhostBox — shows the inactive crop region as a dashed guide
 // ---------------------------------------------------------------------------
-function GhostBox({ box, borderRadius = "0.75rem" }: { box: CropFraction; borderRadius?: string }) {
+function GhostBox({ box, borderRadius = "0.75rem", color = "rgba(255,255,255,0.22)" }: {
+  box: CropFraction;
+  borderRadius?: string;
+  color?: string;
+}) {
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   return (
     <div
@@ -310,9 +310,9 @@ function GhostBox({ box, borderRadius = "0.75rem" }: { box: CropFraction; border
         top: pct(box.y),
         width: pct(box.w),
         height: pct(box.h),
-        border: "2px dashed rgba(255,255,255,0.28)",
+        border: `2px dashed ${color}`,
         borderRadius,
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
+        boxShadow: "0 0 0 1px rgba(0,0,0,0.20)",
       }}
     />
   );
@@ -373,7 +373,6 @@ export default function StepSetDetection({
     setOrbCropMoved(true);
     setShowCropWarning(false);
     onOrbCropChange(c);
-    // Auto-advance to climber mode after wall texture is set so user sees both are done
   }
 
   function handleCropVideoLoaded() {
@@ -467,8 +466,12 @@ export default function StepSetDetection({
 
   // ── Instruction hint for the active crop mode ─────────────────────────
   const cropHint = activeCropMode === "climber"
-    ? "Drag the box to fit tightly around the climber"
-    : "Drag the box over a section of bare wall texture";
+    ? "Drag the white box to fit tightly around the climber"
+    : "Drag the blue box over a section of bare wall texture";
+
+  // ── Active/ghost crop box colors driven by mode ───────────────────────
+  const activeColor = activeCropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR;
+  const ghostColor  = activeCropMode === "climber" ? WALL_GHOST_COLOR : CLIMBER_GHOST_COLOR;
 
   // ── Scan footer: crop warning + CTA ───────────────────────────────────
   const scanFooter = (
@@ -538,8 +541,9 @@ export default function StepSetDetection({
       {/* Inline fallback view — normally hidden behind the fullscreen portal */}
       <div className="mx-auto w-full max-w-2xl px-4 py-4 flex flex-col gap-4 sm:px-6 pb-8">
 
-        {/* Inline toolbar */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Inline toolbar — relative z-10 ensures the settings dropdown paints
+            above the video container below, even when backdrop-filter is present. */}
+        <div className="relative z-10 flex items-center gap-2 flex-wrap">
           <CropToolbar {...cropToolbarProps} />
           {/* Expand to fullscreen */}
           <button
@@ -578,16 +582,18 @@ export default function StepSetDetection({
           />
           {hasCropFrame && (
             <>
-              {/* Ghost box for the inactive crop region */}
+              {/* Ghost box for the inactive crop region — tinted for its crop type */}
               <GhostBox
                 box={activeCropMode === "climber" ? orbCrop : climberCrop}
                 borderRadius="0.75rem"
+                color={ghostColor}
               />
-              {/* Active crop overlay */}
+              {/* Active crop overlay — colored by crop type */}
               <CropBoxOverlay
                 box={activeCropMode === "climber" ? climberCrop : orbCrop}
                 onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
                 borderRadius="1rem"
+                color={activeColor}
               />
             </>
           )}
@@ -635,8 +641,11 @@ export default function StepSetDetection({
           aria-modal="true"
           aria-label="Set detection — fullscreen"
         >
-          {/* Toolbar */}
-          <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
+          {/* Toolbar — relative z-10 lifts this stacking context above the video
+              area below. backdrop-blur creates its own stacking context; without an
+              explicit z-index the toolbar's context would paint behind the video div
+              (later in DOM order = higher default paint order). */}
+          <div className="relative z-10 flex items-center gap-2 flex-wrap px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
             <CropToolbar {...cropToolbarProps} />
 
             {/* Hint text */}
@@ -673,16 +682,16 @@ export default function StepSetDetection({
               />
               {hasCropFrame && (
                 <>
-                  {/* Ghost box for the inactive crop region */}
                   <GhostBox
                     box={activeCropMode === "climber" ? orbCrop : climberCrop}
                     borderRadius="0.75rem"
+                    color={ghostColor}
                   />
-                  {/* Active crop overlay */}
                   <CropBoxOverlay
                     box={activeCropMode === "climber" ? climberCrop : orbCrop}
                     onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
                     borderRadius="0.75rem"
+                    color={activeColor}
                   />
                 </>
               )}
