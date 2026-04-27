@@ -660,6 +660,8 @@ function ScanPageInner() {
           onSkeletonStyleChange={setSkeletonStyle}
           onEditClimb={handleEditClimb}
           onScanAnother={handleSaveComplete}
+          orbReady={orbReady}
+          onViewOnRoutePhoto={handleViewOnRoutePhoto}
           onUpload={handleOpenUploadSheet}
           s3Saved={s3Saved}
           s3Loading={s3Status === "loading"}

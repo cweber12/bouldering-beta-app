@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
-import CropBoxOverlay, { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
+import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
@@ -28,25 +28,16 @@ const FRAME_CONDITIONS: FrameCondition[] = [
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-function isCropDefault(crop: CropFraction): boolean {
-  return (
-    Math.abs(crop.x - DEFAULT_CROP.x) < 0.001 &&
-    Math.abs(crop.y - DEFAULT_CROP.y) < 0.001 &&
-    Math.abs(crop.w - DEFAULT_CROP.w) < 0.001 &&
-    Math.abs(crop.h - DEFAULT_CROP.h) < 0.001
-  );
-}
-
 function formatVideoTime(secs: number): string {
   const m = Math.floor(secs / 60);
   const s = Math.floor(secs % 60);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Returns class string for a crop button based on its state. */
-function cropBtnClass(isActive: boolean, isCropped: boolean): string {
-  if (isActive)   return "border-accent/60 bg-accent/10 text-accent";
-  if (isCropped)  return "border-send/30 bg-send-surface text-send";
+/** Styles a crop button based on its active / moved state. */
+function cropBtnClass(isActive: boolean, isMoved: boolean): string {
+  if (isActive)  return "border-accent/60 bg-accent/10 text-accent";
+  if (isMoved)   return "border-send/30 bg-send-surface text-send";
   return "border-caution-border bg-caution-surface text-caution";
 }
 
@@ -108,13 +99,28 @@ export default function StepSetDetection({
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
   const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
 
+  // Crop move tracking — unchecked until user drags the box
+  const [climberCropMoved, setClimberCropMoved] = useState(false);
+  const [orbCropMoved,     setOrbCropMoved]     = useState(false);
+  const [showCropWarning,  setShowCropWarning]  = useState(false);
+
   // Merged settings dropdown
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
   const [settingsTab,          setSettingsTab]          = useState<"detection" | "conditions">("detection");
 
-  const bothCropsDone = !isCropDefault(climberCrop) && !isCropDefault(orbCrop);
-
   // ── Handlers ──────────────────────────────────────────────────────────
+  function handleClimberCropChange(c: CropFraction) {
+    setClimberCropMoved(true);
+    setShowCropWarning(false);
+    onClimberCropChange(c);
+  }
+
+  function handleOrbCropChange(c: CropFraction) {
+    setOrbCropMoved(true);
+    setShowCropWarning(false);
+    onOrbCropChange(c);
+  }
+
   function handleCropVideoLoaded() {
     const video  = cropVideoRef.current;
     const canvas = cropCanvasRef.current;
@@ -154,12 +160,21 @@ export default function StepSetDetection({
     video.currentTime = Number(e.target.value);
   }
 
-  function handleScanClick() {
+  function doScan() {
+    setShowCropWarning(false);
     const t = (videoFullscreen ? fullscreenVideoRef.current?.currentTime : cropVideoRef.current?.currentTime) ?? 0;
     onScan(t > 0 ? t : 0);
   }
 
-  // ESC key closes fullscreen → navigates back (per exit-button intent)
+  function handleScanClick() {
+    if (!climberCropMoved || !orbCropMoved) {
+      setShowCropWarning(true);
+      return;
+    }
+    doScan();
+  }
+
+  // ESC key closes fullscreen → navigates back
   useEffect(() => {
     if (!videoFullscreen) return;
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onBack(); }
@@ -167,32 +182,48 @@ export default function StepSetDetection({
     return () => window.removeEventListener("keydown", onKey);
   }, [videoFullscreen, onBack]);
 
-  // ── Shared crop toolbar (used in both inline and fullscreen) ──────────
+  // ── Shared crop toolbar (inline + fullscreen) ─────────────────────────
   function CropToolbar({ fullscreen = false }: { fullscreen?: boolean }) {
     return (
       <>
         {/* Climber crop button */}
         <button
-          onClick={() => setActiveCropMode("climber")}
+          onClick={() => { setActiveCropMode("climber"); setShowCropWarning(false); }}
           className={cn(
-            "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-            cropBtnClass(activeCropMode === "climber", !isCropDefault(climberCrop)),
+            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            cropBtnClass(activeCropMode === "climber", climberCropMoved),
           )}
-          title={isCropDefault(climberCrop) ? "Crop around the climber" : "Climber crop set ✓"}
+          title={climberCropMoved ? "Climber crop set ✓" : "Crop around the climber"}
         >
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+          </svg>
           Climber
+          {climberCropMoved && (
+            <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          )}
         </button>
 
         {/* Wall texture crop button */}
         <button
-          onClick={() => setActiveCropMode("route")}
+          onClick={() => { setActiveCropMode("route"); setShowCropWarning(false); }}
           className={cn(
-            "rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-            cropBtnClass(activeCropMode === "route", !isCropDefault(orbCrop)),
+            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            cropBtnClass(activeCropMode === "route", orbCropMoved),
           )}
-          title={isCropDefault(orbCrop) ? "Crop a wall texture region" : "Wall texture crop set ✓"}
+          title={orbCropMoved ? "Wall texture crop set ✓" : "Crop a wall texture region"}
         >
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
           Wall texture
+          {orbCropMoved && (
+            <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          )}
         </button>
 
         {/* Merged settings dropdown */}
@@ -201,7 +232,7 @@ export default function StepSetDetection({
             type="button"
             onClick={() => setShowSettingsDropdown(p => !p)}
             className={cn(
-              "flex items-center gap-1 rounded-lg border p-1.5 transition",
+              "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
               showSettingsDropdown
                 ? "border-accent/60 bg-accent/10 text-accent"
                 : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
@@ -209,11 +240,11 @@ export default function StepSetDetection({
             title="Detection & conditions settings"
             aria-label="Settings"
           >
-            {/* Cog / settings icon */}
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
+            Settings
             {conditions.size > 0 && (
               <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
                 {conditions.size}
@@ -312,36 +343,69 @@ export default function StepSetDetection({
             </div>
           )}
         </div>
-
-        {/* Scan button — only once both crops are set */}
-        {bothCropsDone && (
-          <button
-            onClick={handleScanClick}
-            disabled={!canScan}
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-              canScan
-                ? "border-accent/40 bg-accent/10 text-accent hover:bg-accent/20"
-                : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
-            )}
-            title={canScan ? "Start pose detection" : "Loading model…"}
-          >
-            {canScan ? (
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
-              </svg>
-            ) : (
-              <svg className="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-            )}
-            Scan video
-          </button>
-        )}
       </>
     );
   }
+
+  // ── Scan footer: crop warning + full-width scan CTA ───────────────────
+  const scanFooter = (
+    <div className="flex flex-col gap-2">
+      {showCropWarning && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-caution-border bg-caution-surface px-3 py-2.5">
+          <svg className="h-4 w-4 shrink-0 text-caution mt-0.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <p className="text-xs font-medium text-caution">
+              {!climberCropMoved && !orbCropMoved
+                ? "Neither crop area is set — the scan will use the full frame."
+                : !climberCropMoved
+                ? "Climber crop not set — pose detection may be less accurate."
+                : "Wall texture crop not set — image matching will be unavailable."}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCropWarning(false)}
+                className="flex-1 rounded-lg border border-caution-border px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/10"
+              >
+                Set crops
+              </button>
+              <button
+                onClick={doScan}
+                className="flex-1 rounded-lg border border-caution/40 bg-caution/10 px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/20"
+              >
+                Scan anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={handleScanClick}
+        disabled={!canScan}
+        className={cn(
+          "w-full flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition",
+          canScan
+            ? "border-accent/40 bg-accent text-fg-inverse hover:bg-accent/90"
+            : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
+        )}
+        title={canScan ? "Start pose detection" : "Loading model…"}
+      >
+        {canScan ? (
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        )}
+        {canScan ? "Scan video" : "Loading model…"}
+      </button>
+    </div>
+  );
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -385,7 +449,7 @@ export default function StepSetDetection({
           {hasCropFrame && (
             <CropBoxOverlay
               box={activeCropMode === "climber" ? climberCrop : orbCrop}
-              onChange={activeCropMode === "climber" ? onClimberCropChange : onOrbCropChange}
+              onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
               borderRadius="1rem"
             />
           )}
@@ -420,6 +484,9 @@ export default function StepSetDetection({
             </span>
           </div>
         )}
+
+        {/* Inline scan footer */}
+        {scanFooter}
       </div>
 
       {/* ── Fullscreen portal (default/primary view) ── */}
@@ -473,41 +540,47 @@ export default function StepSetDetection({
               {hasCropFrame && (
                 <CropBoxOverlay
                   box={activeCropMode === "climber" ? climberCrop : orbCrop}
-                  onChange={activeCropMode === "climber" ? onClimberCropChange : onOrbCropChange}
+                  onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
                   borderRadius="0.75rem"
                 />
               )}
             </div>
           </div>
 
-          {/* Fullscreen video controls */}
-          {hasCropFrame && (
-            <div className="flex items-center gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
-              <button
-                onClick={handleFsPlayPause}
-                className="shrink-0 rounded p-1 text-fg-secondary transition hover:text-fg"
-                aria-label={fsIsPlaying ? "Pause" : "Play"}
-              >
-                {fsIsPlaying ? (
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                )}
-              </button>
-              <input
-                type="range" min={0} max={videoDuration || 1} step={0.01} value={fsVideoCurrentTime}
-                onChange={handleFsSeek}
-                className="flex-1 accent-accent" aria-label="Video progress"
-              />
-              <span className="shrink-0 font-mono text-xs text-fg-secondary">
-                {formatVideoTime(fsVideoCurrentTime)} / {formatVideoTime(videoDuration)}
-              </span>
-            </div>
-          )}
+          {/* Fullscreen footer */}
+          <div className="flex flex-col gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
+            {/* Video controls */}
+            {hasCropFrame && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleFsPlayPause}
+                  className="shrink-0 rounded p-1 text-fg-secondary transition hover:text-fg"
+                  aria-label={fsIsPlaying ? "Pause" : "Play"}
+                >
+                  {fsIsPlaying ? (
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  )}
+                </button>
+                <input
+                  type="range" min={0} max={videoDuration || 1} step={0.01} value={fsVideoCurrentTime}
+                  onChange={handleFsSeek}
+                  className="flex-1 accent-accent" aria-label="Video progress"
+                />
+                <span className="shrink-0 font-mono text-xs text-fg-secondary">
+                  {formatVideoTime(fsVideoCurrentTime)} / {formatVideoTime(videoDuration)}
+                </span>
+              </div>
+            )}
+
+            {/* Scan CTA */}
+            {scanFooter}
+          </div>
         </div>,
         document.body,
       )}
