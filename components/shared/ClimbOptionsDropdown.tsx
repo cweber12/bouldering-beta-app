@@ -22,6 +22,11 @@ interface ClimbOptionsDropdownProps {
   trigger?: React.ReactNode;
   /** "sm" uses a smaller 28px trigger; default uses 32px with better touch target. */
   size?: "sm" | "default";
+  /**
+   * When provided, clicking any compare action calls this instead of
+   * navigating directly to /compare. The parent opens the CompareSelectSheet.
+   */
+  onCompare?: (climbKey: string, state?: string, area?: string, route?: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -35,7 +40,7 @@ interface ClimbOptionsDropdownProps {
 // Opens upward from the trigger. Closes on outside click.
 // ---------------------------------------------------------------------------
 
-export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default" }: ClimbOptionsDropdownProps) {
+export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default", onCompare }: ClimbOptionsDropdownProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"view" | "compare">("view");
@@ -55,23 +60,22 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Build destination URLs. View always goes to /view; compare passes route
-  // context so the Compare page can lock the picker to the same route.
+  // Build destination URL (view only — compare actions delegate to onCompare).
   const viewUrl = `/view?key=${encodeURIComponent(climbKey)}`;
-  const compareUrl = (() => {
-    const base = `/compare?key=${encodeURIComponent(climbKey)}`;
-    const parts: string[] = [base];
-    if (state) parts.push(`state=${encodeURIComponent(state)}`);
-    if (area)  parts.push(`area=${encodeURIComponent(area)}`);
-    if (route) parts.push(`route=${encodeURIComponent(route)}`);
-    return parts.join("&");
-  })();
-
-  const destination = mode === "view" ? viewUrl : compareUrl;
 
   const navigate = () => {
     setOpen(false);
-    router.push(destination);
+    router.push(viewUrl);
+  };
+
+  /** Handles any action button click based on the current mode. */
+  const handleAction = () => {
+    setOpen(false);
+    if (mode === "compare" && onCompare) {
+      onCompare(climbKey, state, area, route);
+    } else {
+      router.push(viewUrl);
+    }
   };
 
   return (
@@ -163,7 +167,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
               type="file"
               accept="image/*"
               className="sr-only"
-              onChange={navigate}
+              onChange={handleAction}
             />
 
             {/* Take a Photo */}
@@ -191,13 +195,13 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
               accept="image/*"
               capture="environment"
               className="sr-only"
-              onChange={navigate}
+              onChange={handleAction}
             />
 
             {/* Use Route Image */}
             <button
               type="button"
-              onClick={navigate}
+              onClick={handleAction}
               className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset hover:text-fg"
             >
               <svg

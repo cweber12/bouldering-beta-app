@@ -1,11 +1,10 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
-import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import CompareSlot from "@/components/compare/CompareSlot";
@@ -16,7 +15,7 @@ import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { FramePlayerHandle } from "@/components/shared/FramePlayer";
-import { dataUrlToFile } from "@/utils/imageHelpers";
+import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -42,35 +41,32 @@ const MAX_SLOTS = 4;
 function ComparePageInner() {
   const { cv } = useOpenCV();
   const params = useSearchParams();
-  const urlClimbKey = params.get("key") ?? "";
-  // Optional route-lock params — when provided the S3RoutePicker is pre-filled
-  // and the user can only select climbs from the same state/area/route.
+  // Accept ?keys=<csv> (new multi-climb entry point) with ?key= backward-compat.
+  const urlClimbKeys: string[] = (() => {
+    const csv = params.get("keys");
+    if (csv) return csv.split(",").map(k => k.trim()).filter(Boolean);
+    const single = params.get("key");
+    return single ? [single] : [];
+  })();
+  // Route context — used for the page header and route-photo auto-load.
   const urlState = params.get("state") ?? undefined;
   const urlArea  = params.get("area")  ?? undefined;
   const urlRoute = params.get("route") ?? undefined;
-  const routeLocked = !!(urlState && urlArea && urlRoute);
   const { downloadAttempt } = useS3Storage();
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  // Natural dimensions of the loaded route photo (needed for the aspect-ratio container).
+  const [imageSize, setImageSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
   const [showCamera, setShowCamera] = useState(false);
+  // True once the user has manually supplied a photo — suppresses the S3 auto-load.
   const [userPickedImage, setUserPickedImage] = useState(false);
-  const routeImageConvertingRef = useRef(false);
   const imagePreviewUrlRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("sidebyside");
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
-  );
-
-  // Track which S3 entry key is loaded in each slot for toggle-select.
-  const [slotKeys, setSlotKeys] = useState<(string | null)[]>(
-    () => Array.from({ length: MAX_SLOTS }, () => null),
-  );
-  const selectedKeys = useMemo(
-    () => new Set(slotKeys.filter((k): k is string => k !== null)),
-    [slotKeys],
   );
 
   // One hex limb color per slot; pre-populated from defaults so each slot
@@ -99,22 +95,49 @@ function ComparePageInner() {
   );
   const [masterPlaying, setMasterPlaying] = useState(false);
 
-  // Pre-load climb from ?key= URL param into the first slot.
+  // Pre-load climbs from URL params into slots (concurrent).
   useEffect(() => {
-    if (!urlClimbKey) return;
+    if (urlClimbKeys.length === 0) return;
     let cancelled = false;
     (async () => {
-      try {
-        const loaded = await downloadAttempt(urlClimbKey);
-        if (cancelled) return;
-        saveAttempt(loaded);
-        setAttempts(prev => { const n = [...prev]; n[0] = loaded; return n; });
-        setSlotKeys(prev => { const n = [...prev]; n[0] = urlClimbKey; return n; });
-      } catch { /* ignore — user can still select manually */ }
+      const results = await Promise.allSettled(
+        urlClimbKeys.slice(0, MAX_SLOTS).map(key => downloadAttempt(key).then(a => ({ key, a })))
+      );
+      if (cancelled) return;
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          const { a } = r.value;
+          saveAttempt(a);
+          setAttempts(prev => { const n = [...prev]; n[i] = a; return n; });
+        }
+      });
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlClimbKey]);
+  }, []);  // intentionally run once on mount
+
+  // Auto-load route photo from S3 when route context is provided in the URL.
+  // The user can always manually override by uploading their own photo.
+  useEffect(() => {
+    if (!urlState || !urlArea || !urlRoute || userPickedImage) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const key = `RouteData/_/${encodeURIComponent(urlState)}/${encodeURIComponent(urlArea)}/${encodeURIComponent(urlRoute)}/route-image.json`;
+        const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { dataUrl?: string };
+        if (!data.dataUrl || cancelled) return;
+        // Convert the data URL to a File so the existing imageFile pipeline works.
+        const blob = await fetch(data.dataUrl).then(r => r.blob());
+        const file = new File([blob], "route-image.jpg", { type: blob.type || "image/jpeg" });
+        if (cancelled) return;
+        setImageFileWithPreview(file);
+      } catch { /* silently skip — user can still upload manually */ }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlState, urlArea, urlRoute]); // userPickedImage intentionally omitted — only run when route changes
 
   // Close update menu on outside click.
   useEffect(() => {
@@ -156,42 +179,6 @@ function ComparePageInner() {
     });
   }, []);
 
-  function handleSelectAttempt(attempt: RouteAttempt, entryKey?: string) {
-    const idx = attempts.findIndex(a => a === null);
-    if (idx === -1) return; // all slots full
-
-    setAttempts(prev => {
-      const next = [...prev];
-      next[idx] = attempt;
-      return next;
-    });
-    if (entryKey) {
-      setSlotKeys(prev => {
-        const next = [...prev];
-        next[idx] = entryKey;
-        return next;
-      });
-    }
-    // Clear stale match result for this slot.
-    setMatchResults(prev => {
-      const next = [...prev];
-      next[idx] = null;
-      return next;
-    });
-    // Bump trigger so the CompareSlot effect re-fires matching.
-    if (imageFile && cropConfirmed) {
-      setMatchTrigger(t => t + 1);
-    }
-  }
-
-  function handleDeselectAttempt(entryKey: string) {
-    const idx = slotKeys.indexOf(entryKey);
-    if (idx === -1) return;
-    setAttempts(prev => { const n = [...prev]; n[idx] = null; return n; });
-    setSlotKeys(prev => { const n = [...prev]; n[idx] = null; return n; });
-    setMatchResults(prev => { const n = [...prev]; n[idx] = null; return n; });
-  }
-
   function handleColorChange(idx: number, hex: string) {
     setSlotColors((prev) => {
       const next = [...prev];
@@ -221,16 +208,6 @@ function ComparePageInner() {
     setShowUpdateMenu(false);
   }
 
-  // Auto-populate route image from S3 when route has a route photo.
-  const handleRouteImageLoaded = useCallback((dataUrl: string | null) => {
-    if (!dataUrl || userPickedImage || routeImageConvertingRef.current) return;
-    routeImageConvertingRef.current = true;
-    dataUrlToFile(dataUrl)
-      .then(file => { setImageFileWithPreview(file); })
-      .catch(() => { /* ignore */ })
-      .finally(() => { routeImageConvertingRef.current = false; });
-  }, [userPickedImage]);
-
   function handleApplyAndMatch() {
     setCropConfirmed(true);
     setMatchTrigger(t => t + 1);
@@ -245,30 +222,17 @@ function ComparePageInner() {
       {/* Header */}
       <div className="flex flex-col gap-1.5">
         <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Compare Runs</h1>
-        <p className="text-body-sm text-fg-secondary leading-relaxed">
-          Select a route, then toggle climbs to compare them side by side or overlaid on the same route photo.
-        </p>
-      </div>
-
-      {/* Single shared route picker with selectable climb entries */}
-      <div className="flex flex-col gap-3">
-        {routeLocked && (
-          <p className="text-label text-fg-muted">
-            Showing climbs from <span className="font-medium text-fg">{urlRoute}</span> &middot; {urlArea} &middot; {urlState}
+        {urlRoute ? (
+          <p className="text-body-sm text-fg-secondary leading-relaxed">
+            Comparing climbs on <span className="font-medium text-fg">{urlRoute}</span>
+            {urlArea && <> &middot; {urlArea}</>}
+            {urlState && <> &middot; {urlState}</>}
+          </p>
+        ) : (
+          <p className="text-body-sm text-fg-secondary leading-relaxed">
+            Select a route photo below, then compare climbs side by side or overlaid.
           </p>
         )}
-        <S3RoutePicker
-          label="Select Route"
-          alwaysOpen
-          selectable
-          selectedKeys={selectedKeys}
-          onLoad={handleSelectAttempt}
-          onDeselect={handleDeselectAttempt}
-          onRouteImageLoaded={handleRouteImageLoaded}
-          defaultState={urlState}
-          defaultArea={urlArea}
-          defaultRoute={urlRoute}
-        />
       </div>
 
       {/* Route photo */}
@@ -278,12 +242,18 @@ function ComparePageInner() {
         {imageFile && imagePreviewUrl ? (
           /* Image exists — show preview with update button in corner */
           <div className="flex flex-col gap-3">
-            <div className="relative w-full">
+            {/* Aspect-ratio-constrained container so CropBoxOverlay fractions
+                map 1:1 to actual image pixels (object-fill, never letterboxed). */}
+            <div className="relative" style={mediaContainerStyle(imageSize.w, imageSize.h)}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imagePreviewUrl}
                 alt="Route photo"
-                className="max-h-128 w-full rounded-2xl border border-edge/50 bg-card/70 object-contain"
+                className="absolute inset-0 h-full w-full rounded-2xl border border-edge/50 bg-card/70 object-fill"
+                onLoad={(e) => {
+                  const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                  if (w && h) setImageSize({ w, h });
+                }}
               />
               {!cropConfirmed && <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />}
 

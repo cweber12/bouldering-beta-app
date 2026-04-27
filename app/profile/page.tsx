@@ -15,6 +15,7 @@ import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
 import ComboInput from "@/components/shared/ComboInput";
 import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
+import CompareSelectSheet from "@/components/shared/CompareSelectSheet";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { sanitizeDirName } from "@/utils/fsHelpers";
 
@@ -128,6 +129,14 @@ export default function ProfilePage() {
   // Climb detail modal
   const [selectedClimb, setSelectedClimb] = useState<ClimbDetailData | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Compare-select sheet — opened when user clicks "Compare" on a climb
+  const [compareMode, setCompareMode] = useState<{
+    state: string;
+    area: string;
+    route: string;
+    originKey: string;
+  } | null>(null);
 
   // ------ Load profile on mount -------------------------------------------
 
@@ -322,6 +331,11 @@ export default function ProfilePage() {
 
   const handleCardClick = useCallback((climb: ClimbSummary) => {
     setSelectedClimb(climb);
+  }, []);
+
+  const handleOpenCompare = useCallback((climbKey: string, state?: string, area?: string, route?: string) => {
+    if (!state || !area || !route) return; // need full route context
+    setCompareMode({ state, area, route, originKey: climbKey });
   }, []);
 
   const handlePinClick = useCallback(async (climbKey: string) => {
@@ -1044,6 +1058,7 @@ export default function ProfilePage() {
                           area={c.area}
                           route={c.route}
                           size="sm"
+                          onCompare={handleOpenCompare}
                         />
                       </div>
                     </div>
@@ -1082,7 +1097,16 @@ export default function ProfilePage() {
 
       {/* ---- Climb detail modal ---- */}
       {selectedClimb && (
-        <ClimbDetailModal climb={selectedClimb} onClose={() => setSelectedClimb(null)} />
+        <ClimbDetailModal
+          climb={selectedClimb}
+          onClose={() => setSelectedClimb(null)}
+          onCompare={() => handleOpenCompare(
+            selectedClimb.key,
+            selectedClimb.state,
+            selectedClimb.area,
+            selectedClimb.route,
+          )}
+        />
       )}
 
       {/* ---- Loading detail spinner ---- */}
@@ -1090,6 +1114,18 @@ export default function ProfilePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
         </div>
+      )}
+
+      {/* ---- Compare select sheet ---- */}
+      {compareMode && user && (
+        <CompareSelectSheet
+          state={compareMode.state}
+          area={compareMode.area}
+          route={compareMode.route}
+          originKey={compareMode.originKey}
+          userId={user.uid}
+          onClose={() => setCompareMode(null)}
+        />
       )}
     </main>
   );

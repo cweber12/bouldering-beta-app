@@ -14,7 +14,6 @@ const PUBLIC_TABS = [
 
 const AUTH_TABS = [
   { href: "/scan", label: "Scan" },
-  { href: "/compare", label: "Compare" },
   { href: "/profile", label: "Saved" },
   { href: "/docs", label: "Docs" },
 ] as const;
@@ -103,19 +102,19 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
     {
       title: "Comparing multiple climbs",
       bullets: [
-        "Load up to 4 climbs and overlay their skeletons onto the same route photo to compare movement and timing.",
+        "Open the Compare sheet from any saved climb on the Saved page — click the three-dot menu or the Compare button in the climb detail view.",
+        "The sheet shows all of your climbs for the same route so you can pick 2–4 to compare.",
         "Side by side mode shows every climb in its own panel — use Play all to sync playback simultaneously.",
         "Overlay mode composites all skeletons onto a single image so you can directly compare body positions frame-by-frame.",
-        "Each climb gets a unique colour; adjust using the colour picker next to each slot.",
       ],
     },
     {
-      title: "Loading climbs and matching",
+      title: "Route photo and matching",
       bullets: [
-        "First select a route photo, then load each climb slot from your saved S3 data.",
+        "The route photo for your climb is loaded automatically from your S3 storage when available.",
         "Crop the route photo to focus on the wall texture before clicking Apply & View.",
         "All loaded climbs are matched against the same photo — you only need to crop and apply once.",
-        "Download individual .webm videos per climb, or a composite overlay video in overlay mode.",
+        "Each climb gets a unique colour; adjust using the colour picker next to each slot.",
       ],
     },
   ],

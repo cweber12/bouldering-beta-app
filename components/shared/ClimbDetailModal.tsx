@@ -26,6 +26,12 @@ export interface ClimbDetailData {
 interface ClimbDetailModalProps {
   climb: ClimbDetailData;
   onClose: () => void;
+  /**
+   * When provided, the Compare button calls this instead of navigating
+   * directly to /compare. The parent (profile page) is responsible for
+   * opening the CompareSelectSheet.
+   */
+  onCompare?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +43,7 @@ interface ClimbDetailModalProps {
 // lives in the DOM.
 // ---------------------------------------------------------------------------
 
-export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalProps) {
+export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDetailModalProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -48,14 +54,6 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
   const isSend = climb.runType === "send";
 
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
-  const compareUrl = [
-    `/compare?key=${encodeURIComponent(climb.key)}`,
-    climb.state && `state=${encodeURIComponent(climb.state)}`,
-    climb.area && `area=${encodeURIComponent(climb.area)}`,
-    climb.route && `route=${encodeURIComponent(climb.route)}`,
-  ]
-    .filter(Boolean)
-    .join("&");
 
   const go = (url: string) => {
     onClose();
@@ -178,8 +176,14 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
               {/* Tertiary: compare to another climb of the same route */}
               <button
                 type="button"
-                onClick={() => go(compareUrl)}
-                className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                onClick={() => {
+                  if (onCompare) {
+                    onClose();
+                    onCompare();
+                  }
+                }}
+                disabled={!onCompare}
+                className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Compare
               </button>
