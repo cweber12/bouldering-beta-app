@@ -58,13 +58,13 @@ const MIN_SIZE = 0.05;
 const HIT_AREA_PX = 36;
 
 /** Length of each line-segment handle arm in px. */
-const SEG_LEN = 14;
+const SEG_LEN = 18;
 /** Thickness of handle line segments in px. */
 const SEG_W = 3;
-/** Dark handle color — visible against light and dark media. */
-const HANDLE_COLOR = "rgba(0,0,0,0.85)";
-/** Light halo around handles for contrast against dark media. */
-const HANDLE_SHADOW = "0 0 0 1px rgba(255,255,255,0.5)";
+/** White handle color — visible on dark and bright media alike. */
+const HANDLE_COLOR = "rgba(255,255,255,0.95)";
+/** Dark outer ring around white handles for contrast on light media. */
+const HANDLE_SHADOW = "0 0 0 1.5px rgba(0,0,0,0.75), 0 1px 5px rgba(0,0,0,0.5)";
 
 /** Default crop box: slight inset from edges. */
 export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
@@ -265,9 +265,9 @@ export default function CropBoxOverlay({
           top: pct(y),
           width: pct(w),
           height: pct(h),
-          border: "2px solid rgba(0,0,0,0.8)",
+          border: "2px solid rgba(255,255,255,0.88)",
           borderRadius,
-          boxShadow: "0 0 0 1px rgba(255,255,255,0.42), inset 0 0 0 1px rgba(255,255,255,0.12)",
+          boxShadow: "0 0 0 1.5px rgba(0,0,0,0.55)",
           cursor: disabled ? "default" : CURSOR_MAP["move"],
         }}
         onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}

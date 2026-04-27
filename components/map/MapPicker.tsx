@@ -41,15 +41,13 @@ export default function MapPicker({
     (async () => {
       const L = (await import("leaflet")).default;
 
-      // Fix default icon paths.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (L.Icon.Default.prototype as any)["_getIconUrl"];
-      L.Icon.Default.mergeOptions({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl:
-          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl:
-          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      // CSS-based custom marker — no CDN images required
+      const pinIcon = L.divIcon({
+        className: "",
+        html: `<div style="width:22px;height:22px;background:var(--color-accent,#6366f1);border-radius:50%;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.35);transform:translate(-50%,-50%);position:relative;left:50%;top:50%"></div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+        popupAnchor: [0, -14],
       });
 
       if (!containerRef.current) return;
@@ -67,7 +65,9 @@ export default function MapPicker({
       const initLng = initialLng ?? -98;
       const initZoom = initialLat != null ? 13 : 4;
 
-      const map = L.map(containerRef.current, { scrollWheelZoom: true });
+      // tap:false prevents Leaflet's own tap handler conflicting with drag on iOS
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const map = L.map(containerRef.current, { scrollWheelZoom: true, tap: false, dragging: true } as any);
       map.setView([initLat, initLng], initZoom);
 
       L.tileLayer(CARTO_TILE_URL, {
@@ -81,7 +81,7 @@ export default function MapPicker({
 
       // Place initial marker if coords provided.
       if (initialLat != null && initialLng != null) {
-        const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
+        const marker = L.marker([initialLat, initialLng], { draggable: true, icon: pinIcon }).addTo(map);
         marker.on("dragend", () => {
           const pos = marker.getLatLng();
           setPickedLat(pos.lat);
@@ -98,7 +98,7 @@ export default function MapPicker({
         if (markerRef.current) {
           markerRef.current.setLatLng([lat, lng]);
         } else {
-          const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+          const marker = L.marker([lat, lng], { draggable: true, icon: pinIcon }).addTo(map);
           marker.on("dragend", () => {
             const pos = marker.getLatLng();
             setPickedLat(pos.lat);
@@ -128,18 +128,34 @@ export default function MapPicker({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-fg-muted">
-        Click on the map to place a pin at the climb location. Drag the pin to adjust.
-      </p>
-      <div
-        ref={containerRef}
-        className="h-[380px] w-full rounded-xl border border-edge overflow-hidden"
-      />
-      {pickedLat != null && pickedLng != null && (
-        <p className="text-xs text-fg-muted text-center">
-          {pickedLat.toFixed(5)}, {pickedLng.toFixed(5)}
-        </p>
-      )}
+      {/* Map container */}
+      <div className="relative">
+        <div
+          ref={containerRef}
+          className="h-95 w-full rounded-xl border border-edge overflow-hidden"
+        />
+        {/* Tap-to-place hint — shown until user places a pin */}
+        {pickedLat == null && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl">
+            <div className="rounded-lg bg-surface/80 backdrop-blur-sm border border-edge/50 px-3 py-2 text-xs text-fg-secondary shadow-lg">
+              Tap to place a pin
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Coordinates readout */}
+      <div className="flex items-center justify-between min-h-6">
+        {pickedLat != null && pickedLng != null ? (
+          <span className="font-mono text-xs text-send bg-send-surface border border-send/30 rounded-lg px-2.5 py-1">
+            {pickedLat.toFixed(5)},&nbsp;{pickedLng.toFixed(5)}
+          </span>
+        ) : (
+          <span className="text-xs text-fg-muted">No location selected</span>
+        )}
+        <p className="text-xs text-fg-muted">Drag pin to adjust</p>
+      </div>
+
       <div className="flex justify-end gap-3">
         <button
           type="button"

@@ -34,11 +34,244 @@ function formatVideoTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-/** Styles a crop button based on its active / moved state. */
-function cropBtnClass(isActive: boolean, isMoved: boolean): string {
-  if (isActive)  return "border-accent/60 bg-accent/10 text-accent";
-  if (isMoved)   return "border-send/30 bg-send-surface text-send";
-  return "border-caution-border bg-caution-surface text-caution";
+// ---------------------------------------------------------------------------
+// CropToolbar — module-level so React never remounts it on parent re-render
+// ---------------------------------------------------------------------------
+interface CropToolbarProps {
+  activeCropMode: "climber" | "route";
+  climberCropMoved: boolean;
+  orbCropMoved: boolean;
+  showSettingsDropdown: boolean;
+  settingsTab: "detection" | "conditions";
+  conditions: Set<string>;
+  modelVariant: MediaPipeVariant;
+  frameStep: number;
+  onSetClimber: () => void;
+  onSetRoute: () => void;
+  onToggleSettings: () => void;
+  onCloseSettings: () => void;
+  onSettingsTabChange: (tab: "detection" | "conditions") => void;
+  onModelVariantChange: (v: MediaPipeVariant) => void;
+  onFrameStepChange: (n: number) => void;
+  onConditionToggle: (id: string) => void;
+}
+
+function CropToolbar({
+  activeCropMode,
+  climberCropMoved,
+  orbCropMoved,
+  showSettingsDropdown,
+  settingsTab,
+  conditions,
+  modelVariant,
+  frameStep,
+  onSetClimber,
+  onSetRoute,
+  onToggleSettings,
+  onCloseSettings,
+  onSettingsTabChange,
+  onModelVariantChange,
+  onFrameStepChange,
+  onConditionToggle,
+}: CropToolbarProps) {
+  const settingsRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!showSettingsDropdown) return;
+    function handler(e: MouseEvent) {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        onCloseSettings();
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSettingsDropdown, onCloseSettings]);
+
+  return (
+    <>
+      {/* Step 1 — Climber crop */}
+      <button
+        onClick={onSetClimber}
+        className={cn(
+          "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+          activeCropMode === "climber"
+            ? "border-accent/60 bg-accent/10 text-accent"
+            : climberCropMoved
+            ? "border-send/40 bg-send-surface text-send"
+            : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+        )}
+        title={climberCropMoved ? "Climber crop set ✓" : "Draw a box around the climber"}
+      >
+        {/* Step badge */}
+        <span className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
+          activeCropMode === "climber"
+            ? "bg-accent/20 text-accent"
+            : climberCropMoved
+            ? "bg-send/20 text-send"
+            : "bg-edge text-fg-muted",
+        )}>1</span>
+        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        Climber
+        {climberCropMoved && (
+          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        )}
+      </button>
+
+      {/* Step 2 — Wall texture crop */}
+      <button
+        onClick={onSetRoute}
+        className={cn(
+          "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+          activeCropMode === "route"
+            ? "border-accent/60 bg-accent/10 text-accent"
+            : orbCropMoved
+            ? "border-send/40 bg-send-surface text-send"
+            : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+        )}
+        title={orbCropMoved ? "Wall texture crop set ✓" : "Draw a box over a region of wall texture"}
+      >
+        <span className={cn(
+          "flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold",
+          activeCropMode === "route"
+            ? "bg-accent/20 text-accent"
+            : orbCropMoved
+            ? "bg-send/20 text-send"
+            : "bg-edge text-fg-muted",
+        )}>2</span>
+        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+        </svg>
+        Wall texture
+        {orbCropMoved && (
+          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        )}
+      </button>
+
+      {/* Merged settings dropdown */}
+      <div ref={settingsRef} className="relative">
+        <button
+          type="button"
+          onClick={onToggleSettings}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+            showSettingsDropdown
+              ? "border-accent/60 bg-accent/10 text-accent"
+              : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+          )}
+          title="Detection &amp; conditions settings"
+          aria-label="Settings"
+          aria-expanded={showSettingsDropdown}
+        >
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Settings
+          {conditions.size > 0 && (
+            <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
+              {conditions.size}
+            </span>
+          )}
+        </button>
+
+        {showSettingsDropdown && (
+          <div className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
+            {/* Tab bar */}
+            <div className="flex gap-1 mb-3 pb-2 border-b border-edge/30">
+              <button
+                onClick={() => onSettingsTabChange("detection")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
+                  settingsTab === "detection" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
+                )}
+              >
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+                </svg>
+                Detection
+              </button>
+              <button
+                onClick={() => onSettingsTabChange("conditions")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
+                  settingsTab === "conditions" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
+                )}
+              >
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                </svg>
+                Conditions
+                {conditions.size > 0 && (
+                  <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
+                    {conditions.size}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Detection tab */}
+            {settingsTab === "detection" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-medium text-fg-secondary">Pose model</label>
+                  <select
+                    value={modelVariant}
+                    onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
+                    className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
+                  >
+                    <option value="lite">Lite (fast)</option>
+                    <option value="full">Full (balanced)</option>
+                    <option value="heavy">Heavy (accurate)</option>
+                  </select>
+                </div>
+                <label className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-fg-secondary">Detection frequency</span>
+                  <span className="font-mono text-fg">every {frameStep} frames</span>
+                </label>
+                <input
+                  type="range" min={1} max={30} value={frameStep}
+                  onChange={e => onFrameStepChange(Number(e.target.value))}
+                  className="w-full accent-accent" aria-label="Frame step"
+                />
+                <p className="text-xs text-fg-muted">
+                  1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
+                </p>
+              </div>
+            )}
+
+            {/* Conditions tab */}
+            {settingsTab === "conditions" && (
+              <div className="flex flex-col gap-2">
+                <p className="mb-1 text-xs font-semibold text-fg">Shooting conditions</p>
+                {FRAME_CONDITIONS.map(c => (
+                  <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={conditions.has(c.id)}
+                      onChange={() => onConditionToggle(c.id)}
+                      className="mt-0.5 h-3.5 w-3.5 accent-accent cursor-pointer"
+                    />
+                    <span className="flex flex-col gap-0.5">
+                      <span className="text-xs font-medium text-fg group-hover:text-accent transition">{c.label}</span>
+                      <span className="text-xs text-fg-muted">{c.description}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +295,27 @@ export interface StepSetDetectionProps {
   onScan: (startTime: number) => void;
   /** Navigates back to StepPickVideo (exit button in fullscreen). */
   onBack: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — ghost box overlay (shows the inactive crop region as a dashed guide)
+// ---------------------------------------------------------------------------
+function GhostBox({ box, borderRadius = "0.75rem" }: { box: CropFraction; borderRadius?: string }) {
+  const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
+  return (
+    <div
+      className="absolute pointer-events-none box-border"
+      style={{
+        left: pct(box.x),
+        top: pct(box.y),
+        width: pct(box.w),
+        height: pct(box.h),
+        border: "2px dashed rgba(255,255,255,0.28)",
+        borderRadius,
+        boxShadow: "0 0 0 1px rgba(0,0,0,0.25)",
+      }}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +373,7 @@ export default function StepSetDetection({
     setOrbCropMoved(true);
     setShowCropWarning(false);
     onOrbCropChange(c);
+    // Auto-advance to climber mode after wall texture is set so user sees both are done
   }
 
   function handleCropVideoLoaded() {
@@ -182,174 +437,42 @@ export default function StepSetDetection({
     return () => window.removeEventListener("keydown", onKey);
   }, [videoFullscreen, onBack]);
 
-  // ── Shared crop toolbar (inline + fullscreen) ─────────────────────────
-  function CropToolbar({ fullscreen = false }: { fullscreen?: boolean }) {
-    return (
-      <>
-        {/* Climber crop button */}
-        <button
-          onClick={() => { setActiveCropMode("climber"); setShowCropWarning(false); }}
-          className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-            cropBtnClass(activeCropMode === "climber", climberCropMoved),
-          )}
-          title={climberCropMoved ? "Climber crop set ✓" : "Crop around the climber"}
-        >
-          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-          </svg>
-          Climber
-          {climberCropMoved && (
-            <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          )}
-        </button>
+  // Auto-advance crop mode: when climber is first moved, advance to wall texture
+  useEffect(() => {
+    if (climberCropMoved && !orbCropMoved && activeCropMode === "climber") {
+      setActiveCropMode("route");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [climberCropMoved]);
 
-        {/* Wall texture crop button */}
-        <button
-          onClick={() => { setActiveCropMode("route"); setShowCropWarning(false); }}
-          className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-            cropBtnClass(activeCropMode === "route", orbCropMoved),
-          )}
-          title={orbCropMoved ? "Wall texture crop set ✓" : "Crop a wall texture region"}
-        >
-          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-          </svg>
-          Wall texture
-          {orbCropMoved && (
-            <svg className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          )}
-        </button>
+  // ── Shared crop toolbar props ──────────────────────────────────────────
+  const cropToolbarProps: CropToolbarProps = {
+    activeCropMode,
+    climberCropMoved,
+    orbCropMoved,
+    showSettingsDropdown,
+    settingsTab,
+    conditions,
+    modelVariant,
+    frameStep,
+    onSetClimber: () => { setActiveCropMode("climber"); setShowCropWarning(false); },
+    onSetRoute:   () => { setActiveCropMode("route");   setShowCropWarning(false); },
+    onToggleSettings: () => setShowSettingsDropdown(p => !p),
+    onCloseSettings:  () => setShowSettingsDropdown(false),
+    onSettingsTabChange: setSettingsTab,
+    onModelVariantChange,
+    onFrameStepChange,
+    onConditionToggle,
+  };
 
-        {/* Merged settings dropdown */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowSettingsDropdown(p => !p)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-              showSettingsDropdown
-                ? "border-accent/60 bg-accent/10 text-accent"
-                : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
-            )}
-            title="Detection & conditions settings"
-            aria-label="Settings"
-          >
-            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Settings
-            {conditions.size > 0 && (
-              <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
-                {conditions.size}
-              </span>
-            )}
-          </button>
+  // ── Instruction hint for the active crop mode ─────────────────────────
+  const cropHint = activeCropMode === "climber"
+    ? "Drag the box to fit tightly around the climber"
+    : "Drag the box over a section of bare wall texture";
 
-          {showSettingsDropdown && (
-            <div className={cn(
-              "absolute z-30 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in",
-              fullscreen ? "left-0 top-full" : "left-0 top-full",
-            )}>
-              {/* Tab bar */}
-              <div className="flex gap-1 mb-3 pb-2 border-b border-edge/30">
-                <button
-                  onClick={() => setSettingsTab("detection")}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
-                    settingsTab === "detection" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
-                  )}
-                >
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                  </svg>
-                  Detection
-                </button>
-                <button
-                  onClick={() => setSettingsTab("conditions")}
-                  className={cn(
-                    "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
-                    settingsTab === "conditions" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
-                  )}
-                >
-                  <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                  </svg>
-                  Conditions
-                  {conditions.size > 0 && (
-                    <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
-                      {conditions.size}
-                    </span>
-                  )}
-                </button>
-              </div>
-
-              {/* Detection tab */}
-              {settingsTab === "detection" && (
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-xs font-medium text-fg-secondary">Pose model</label>
-                    <select
-                      value={modelVariant}
-                      onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
-                      className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
-                    >
-                      <option value="lite">Lite (fast)</option>
-                      <option value="full">Full (balanced)</option>
-                      <option value="heavy">Heavy (accurate)</option>
-                    </select>
-                  </div>
-                  <label className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-fg-secondary">Detection frequency</span>
-                    <span className="font-mono text-fg">every {frameStep} frames</span>
-                  </label>
-                  <input
-                    type="range" min={1} max={30} value={frameStep}
-                    onChange={e => onFrameStepChange(Number(e.target.value))}
-                    className="w-full accent-accent" aria-label="Frame step"
-                  />
-                  <p className="text-xs text-fg-muted">
-                    1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
-                  </p>
-                </div>
-              )}
-
-              {/* Conditions tab */}
-              {settingsTab === "conditions" && (
-                <div className="flex flex-col gap-2">
-                  <p className="mb-1 text-xs font-semibold text-fg">Shooting conditions</p>
-                  {FRAME_CONDITIONS.map(c => (
-                    <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
-                      <input
-                        type="checkbox"
-                        checked={conditions.has(c.id)}
-                        onChange={() => onConditionToggle(c.id)}
-                        className="mt-0.5 h-3.5 w-3.5 accent-accent cursor-pointer"
-                      />
-                      <span className="flex flex-col gap-0.5">
-                        <span className="text-xs font-medium text-fg group-hover:text-accent transition">{c.label}</span>
-                        <span className="text-xs text-fg-muted">{c.description}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </>
-    );
-  }
-
-  // ── Scan footer: crop warning + full-width scan CTA ───────────────────
+  // ── Scan footer: crop warning + CTA ───────────────────────────────────
   const scanFooter = (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5">
       {showCropWarning && (
         <div className="flex items-start gap-2.5 rounded-xl border border-caution-border bg-caution-surface px-3 py-2.5">
           <svg className="h-4 w-4 shrink-0 text-caution mt-0.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -358,7 +481,7 @@ export default function StepSetDetection({
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <p className="text-xs font-medium text-caution">
               {!climberCropMoved && !orbCropMoved
-                ? "Neither crop area is set — the scan will use the full frame."
+                ? "Neither crop area has been set — the scan will use the full frame."
                 : !climberCropMoved
                 ? "Climber crop not set — pose detection may be less accurate."
                 : "Wall texture crop not set — image matching will be unavailable."}
@@ -381,29 +504,31 @@ export default function StepSetDetection({
         </div>
       )}
 
-      <button
-        onClick={handleScanClick}
-        disabled={!canScan}
-        className={cn(
-          "w-full flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition",
-          canScan
-            ? "border-accent/40 bg-accent text-fg-inverse hover:bg-accent/90"
-            : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
-        )}
-        title={canScan ? "Start pose detection" : "Loading model…"}
-      >
-        {canScan ? (
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
-          </svg>
-        ) : (
-          <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        )}
-        {canScan ? "Scan video" : "Loading model…"}
-      </button>
+      <div className="flex justify-center">
+        <button
+          onClick={handleScanClick}
+          disabled={!canScan}
+          className={cn(
+            "flex items-center justify-center gap-2 rounded-xl border px-10 py-3 text-sm font-semibold transition",
+            canScan
+              ? "border-accent/40 bg-accent text-fg-inverse shadow-lg shadow-accent/30 hover:bg-accent/90 hover:shadow-accent/40 active:scale-[0.98]"
+              : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
+          )}
+          title={canScan ? "Start pose detection" : "Loading model…"}
+        >
+          {canScan ? (
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
+          {canScan ? "Scan video" : "Loading model…"}
+        </button>
+      </div>
     </div>
   );
 
@@ -415,7 +540,7 @@ export default function StepSetDetection({
 
         {/* Inline toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
-          <CropToolbar />
+          <CropToolbar {...cropToolbarProps} />
           {/* Expand to fullscreen */}
           <button
             onClick={() => setVideoFullscreen(true)}
@@ -428,6 +553,11 @@ export default function StepSetDetection({
             </svg>
           </button>
         </div>
+
+        {/* Inline hint */}
+        {hasCropFrame && (
+          <p className="text-xs text-fg-muted -mt-1">{cropHint}</p>
+        )}
 
         {/* Viewport-fit video container */}
         <div
@@ -447,11 +577,19 @@ export default function StepSetDetection({
             className="absolute inset-0 w-full h-full object-fill"
           />
           {hasCropFrame && (
-            <CropBoxOverlay
-              box={activeCropMode === "climber" ? climberCrop : orbCrop}
-              onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
-              borderRadius="1rem"
-            />
+            <>
+              {/* Ghost box for the inactive crop region */}
+              <GhostBox
+                box={activeCropMode === "climber" ? orbCrop : climberCrop}
+                borderRadius="0.75rem"
+              />
+              {/* Active crop overlay */}
+              <CropBoxOverlay
+                box={activeCropMode === "climber" ? climberCrop : orbCrop}
+                onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
+                borderRadius="1rem"
+              />
+            </>
           )}
           <canvas ref={cropCanvasRef} className="hidden" />
         </div>
@@ -499,14 +637,10 @@ export default function StepSetDetection({
         >
           {/* Toolbar */}
           <div className="flex items-center gap-2 flex-wrap px-4 py-3 border-b border-edge/40 bg-surface-alt/80 backdrop-blur">
-            <CropToolbar fullscreen />
+            <CropToolbar {...cropToolbarProps} />
 
             {/* Hint text */}
-            <p className="hidden sm:block text-xs text-fg-muted ml-1">
-              {activeCropMode === "climber"
-                ? "Drag handles to fit around the climber"
-                : "Drag to select a region of wall texture"}
-            </p>
+            <p className="hidden sm:block text-xs text-fg-muted ml-1">{cropHint}</p>
 
             {/* Exit — back to StepPickVideo */}
             <button
@@ -538,11 +672,19 @@ export default function StepSetDetection({
                 className="absolute inset-0 w-full h-full object-fill"
               />
               {hasCropFrame && (
-                <CropBoxOverlay
-                  box={activeCropMode === "climber" ? climberCrop : orbCrop}
-                  onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
-                  borderRadius="0.75rem"
-                />
+                <>
+                  {/* Ghost box for the inactive crop region */}
+                  <GhostBox
+                    box={activeCropMode === "climber" ? orbCrop : climberCrop}
+                    borderRadius="0.75rem"
+                  />
+                  {/* Active crop overlay */}
+                  <CropBoxOverlay
+                    box={activeCropMode === "climber" ? climberCrop : orbCrop}
+                    onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
+                    borderRadius="0.75rem"
+                  />
+                </>
               )}
             </div>
           </div>

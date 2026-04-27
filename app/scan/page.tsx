@@ -175,6 +175,8 @@ function ScanPageInner() {
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [bottomSheetAction, setBottomSheetAction] = useState<"save" | "upload">("save");
+  // Persists the action so we can re-open the sheet after the map picker closes
+  const bottomSheetActionRef = useRef<"save" | "upload">("save");
 
   // Derive topology-aware skeleton style
   const activeAttemptId0 = (status === "done") ? attemptId : null;
@@ -563,12 +565,14 @@ function ScanPageInner() {
   function handleOpenSaveSheet() {
     setSaveError(null);
     setBottomSheetAction("save");
+    bottomSheetActionRef.current = "save";
     setShowBottomSheet(true);
   }
 
   function handleOpenUploadSheet() {
     setSaveError(null);
     setBottomSheetAction("upload");
+    bottomSheetActionRef.current = "upload";
     setShowBottomSheet(true);
   }
 
@@ -721,8 +725,8 @@ function ScanPageInner() {
         open={showMapPicker}
         initialLat={coordinates?.lat}
         initialLng={coordinates?.lng}
-        onConfirm={(lat, lng) => { setCoordinates({ lat, lng }); setShowMapPicker(false); }}
-        onClose={() => setShowMapPicker(false)}
+        onConfirm={(lat, lng) => { setCoordinates({ lat, lng }); setShowMapPicker(false); setBottomSheetAction(bottomSheetActionRef.current); setShowBottomSheet(true); }}
+        onClose={() => { setShowMapPicker(false); setBottomSheetAction(bottomSheetActionRef.current); setShowBottomSheet(true); }}
       />
 
       {/* Metadata bottom sheet — for save / upload */}
