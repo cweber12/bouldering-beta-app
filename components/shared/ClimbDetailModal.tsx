@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
 import { cn } from "@/utils/cn";
 
 // ---------------------------------------------------------------------------
@@ -28,11 +29,22 @@ interface ClimbDetailModalProps {
 }
 
 // ---------------------------------------------------------------------------
-// ClimbDetailModal — full-screen overlay showing climb info + image
+// ClimbDetailModal — full-screen overlay showing climb info + image.
+//
+// Rendered via createPortal directly on document.body so it always sits above
+// Leaflet's internal pane z-indices (which reach ~800).  z-[1001] ensures the
+// modal paints on top of every map layer regardless of where the trigger
+// lives in the DOM.
 // ---------------------------------------------------------------------------
 
 export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Guard against SSR — createPortal needs document.body.
+  useEffect(() => setMounted(true), []);
+
   const isSend = climb.runType === "send";
 
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
@@ -50,9 +62,11 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
     router.push(url);
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
+      className="fixed inset-0 z-[1001] flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -73,7 +87,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
           </svg>
         </button>
 
-        {/* Image area — top of card (fixes rounded-t-2xl alignment) */}
+        {/* Image area — object-contain so the full climbing pose is always visible */}
         <div className="relative aspect-video w-full overflow-hidden rounded-t-2xl bg-inset">
           {climb.thumbnail ? (
             <Image
@@ -81,7 +95,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
               alt={`${climb.route} climb`}
               fill
               unoptimized
-              className="object-cover"
+              className="object-contain"
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
@@ -101,18 +115,6 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
             {climb.runType}
           </span>
 
-          {/* Expand to full view button */}
-          <button
-            type="button"
-            onClick={() => go(viewUrl)}
-            className="absolute bottom-2 right-2 flex items-center gap-1 rounded-lg bg-surface/80 px-2.5 py-1 text-xs font-medium text-fg backdrop-blur-sm transition hover:bg-surface"
-            aria-label="View on route photo"
-          >
-            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-            </svg>
-            View
-          </button>
         </div>
 
         {/* Detail section */}
@@ -140,32 +142,52 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
             <p className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{climb.notes}</p>
           )}
 
-          {/* Explicit action row — View, Compare, overflow options */}
-          <div className="mt-4 flex items-center gap-2">
+          {/* Action row — exactly three distinct actions */}
+          <div className="mt-4 flex flex-col gap-2">
+            {/* Primary: view overlaid on a route photo */}
             <button
               type="button"
               onClick={() => go(viewUrl)}
-              className="flex-1 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover"
+              className="w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover"
             >
-              View on Photo
+              View on route photo
             </button>
-            <button
-              type="button"
-              onClick={() => go(compareUrl)}
-              className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
-            >
-              Compare
-            </button>
-            {/* Overflow: photo selection + additional navigation */}
-            <ClimbOptionsDropdown
-              climbKey={climb.key}
-              state={climb.state}
-              area={climb.area}
-              route={climb.route}
-            />
+
+            <div className="flex gap-2">
+              {/* Secondary: capture a new route photo on-device */}
+              <button
+                type="button"
+                onClick={() => cameraInputRef.current?.click()}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+              >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Take a photo
+              </button>
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                onChange={() => go(viewUrl)}
+              />
+
+              {/* Tertiary: compare to another climb of the same route */}
+              <button
+                type="button"
+                onClick={() => go(compareUrl)}
+                className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+              >
+                Compare
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

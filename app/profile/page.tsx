@@ -1006,14 +1006,8 @@ export default function ProfilePage() {
                           <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">{c.route}</span>
                         </div>
                       )}
-                      {/* Play icon overlay — appears on hover */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-150 group-hover:opacity-100 bg-black/25">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-surface/80 backdrop-blur-sm">
-                          <svg className="h-4 w-4 translate-x-0.5 text-fg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M5 3.5l9 4.5-9 4.5V3.5z" />
-                          </svg>
-                        </div>
-                      </div>
+                      {/* Subtle hover tint — communicates clickability without implying video playback */}
+                      <div className="absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 bg-surface/20" />
                     </div>
 
                     {/* Info + options */}

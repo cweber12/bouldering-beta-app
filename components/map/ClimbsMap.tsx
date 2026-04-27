@@ -31,11 +31,10 @@ export interface ClimbsMapProps {
   onPinClick?: (key: string) => void;
 }
 
-const TOPO_TILE_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-const TOPO_ATTRIBUTION =
-  'Map data © <a href="https://openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
-  '<a href="http://viewfinderpanoramas.org">SRTM</a> | ' +
-  'Map style © <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)';
+const CARTO_TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /** Build a custom SVG DivIcon for a climb pin. */
 function buildIcon(
@@ -57,7 +56,7 @@ function buildIcon(
 }
 
 /**
- * Renders a Leaflet map (OpenTopoMap tiles) with climb location pins.
+ * Renders a Leaflet map (CartoDB Voyager tiles) with climb location pins.
  * Pins with identical coordinates are clustered.
  *
  * Must only be used via `next/dynamic` with `{ ssr: false }`.
@@ -118,9 +117,10 @@ export default function ClimbsMap({
         zoomControl: true,
       });
 
-      L.tileLayer(TOPO_TILE_URL, {
-        attribution: TOPO_ATTRIBUTION,
-        maxZoom: 17,
+      L.tileLayer(CARTO_TILE_URL, {
+        attribution: CARTO_ATTRIBUTION,
+        subdomains: "abcd",
+        maxZoom: 19,
         opacity: 0.95,
       }).addTo(map);
 
