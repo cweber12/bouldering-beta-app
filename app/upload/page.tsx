@@ -155,7 +155,6 @@ function UploadPageInner() {
   const styleRef = useRef<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
-  const [orbCrop, setOrbCrop] = useState<CropFraction>(DEFAULT_CROP);
 
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
@@ -333,7 +332,6 @@ function UploadPageInner() {
     setVideoPreviewUrl(url);
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
-    setOrbCrop(DEFAULT_CROP);
     setS3Saved(false);
     setSaveError(null);
     setSavedRouteDirHandle(null);
@@ -389,7 +387,7 @@ function UploadPageInner() {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop, orbCrop }, startTime);
+    }, { climberCrop }, startTime);
     setStep("landmarks");
   }
 
@@ -575,8 +573,6 @@ function UploadPageInner() {
           videoPreviewUrl={videoPreviewUrl}
           climberCrop={climberCrop}
           onClimberCropChange={setClimberCrop}
-          orbCrop={orbCrop}
-          onOrbCropChange={setOrbCrop}
           modelVariant={modelVariant}
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}

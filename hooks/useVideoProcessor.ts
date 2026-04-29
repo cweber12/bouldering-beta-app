@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { estimateFrameWithRetry, type PoseFrame } from "@/pipeline/poseDetection";
-import { extractFeatures, extractFeaturesFromCrop, extractFeaturesExcludingClimber, type NormalizedPoint } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox } from "@/pipeline/orbDetector";
+import { cropImageData } from "@/utils/cvHelpers";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
 import { applyOrbPreprocessing, applyPosePreprocessing } from "@/pipeline/framePreprocessor";
@@ -46,6 +47,32 @@ const POSE_REANALYSIS_INTERVAL = 20;
  */
 let nextMpTimestampSec = 1;
 
+/**
+ * Derive an ORB extraction region from the user's climber crop.
+ *
+ * Expands the climber bounding box outward by `padFactor` on each side so that
+ * the surrounding wall texture is included. The result is clamped to the frame
+ * bounds. Combined with the climber exclusion mask in extractFeaturesExcludingClimber,
+ * this gives ORB features from the wall plane immediately around the climber
+ * without any user-drawn wall crop.
+ */
+function deriveWallRegion(
+  climberCrop: CropFraction,
+  frameW: number,
+  frameH: number,
+  padFactor = 0.35,
+): OrbCropBox {
+  const cx = climberCrop.x + climberCrop.w / 2;
+  const cy = climberCrop.y + climberCrop.h / 2;
+  const halfW = (climberCrop.w / 2) * (1 + padFactor);
+  const halfH = (climberCrop.h / 2) * (1 + padFactor);
+  const x = Math.max(0, Math.round((cx - halfW) * frameW));
+  const y = Math.max(0, Math.round((cy - halfH) * frameH));
+  const width  = Math.min(frameW - x, Math.round(halfW * 2 * frameW));
+  const height = Math.min(frameH - y, Math.round(halfH * 2 * frameH));
+  return { x, y, width, height, srcWidth: frameW, srcHeight: frameH };
+}
+
 export interface VideoProcessorResult {
   /**
    * Start processing the supplied video File.
@@ -72,7 +99,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction },
+    cropOptions?: { climberCrop?: CropFraction },
     startTime?: number,
     backend?: PoseBackend,
   ) => Promise<void>;
@@ -123,7 +150,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction } = {},
+      cropOptions: { climberCrop?: CropFraction } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
     ) => {
@@ -187,12 +214,11 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           height: Math.round(cropOptions.climberCrop.h * videoHeight),
         } : undefined;
 
-        const wallCropPx = cropOptions.orbCrop ? {
-          x: Math.round(cropOptions.orbCrop.x * videoWidth),
-          y: Math.round(cropOptions.orbCrop.y * videoHeight),
-          width: Math.round(cropOptions.orbCrop.w * videoWidth),
-          height: Math.round(cropOptions.orbCrop.h * videoHeight),
-        } : undefined;
+        // Auto-derive the wall analysis region from the climber crop (35 % padding).
+        // Used by analyzeFrame to compute wall-specific lighting stats.
+        const wallCropPx = cropOptions.climberCrop
+          ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
+          : undefined;
 
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
@@ -432,22 +458,41 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               processedOrbImageData = orbCtx.getImageData(0, 0, videoWidth, videoHeight);
             }
 
+            const firstPose = detected.length > 0 ? detected[0] : null;
+            const poseLandmarks: NormalizedPoint[] = firstPose
+              ? firstPose.keypoints.map(kp => ({ x: kp.x, y: kp.y }))
+              : [];
+
             let orbFeatures;
-            if (cropOptions.orbCrop) {
-              const oc = cropOptions.orbCrop;
-              orbFeatures = extractFeaturesFromCrop(cv, processedOrbImageData, {
-                x: Math.round(oc.x * videoWidth),
-                y: Math.round(oc.y * videoHeight),
-                width: Math.round(oc.w * videoWidth),
-                height: Math.round(oc.h * videoHeight),
-                srcWidth: videoWidth,
-                srcHeight: videoHeight,
-              }, false); // normalizePixels=false — preprocessing already applied
+            if (cropOptions.climberCrop) {
+              // Derive the ORB region by expanding the climber crop by 35 %.
+              // Then exclude the climber body via pose landmarks remapped to the
+              // crop-local coordinate space.
+              const wallBox = deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight);
+              const croppedData = cropImageData(processedOrbImageData, wallBox);
+
+              // Remap full-frame normalised landmarks into the crop-local space.
+              const remapped: NormalizedPoint[] = poseLandmarks
+                .map(lm => ({
+                  x: (lm.x * videoWidth  - wallBox.x) / wallBox.width,
+                  y: (lm.y * videoHeight - wallBox.y) / wallBox.height,
+                }))
+                .filter(lm => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
+
+              const croppedFeatures = remapped.length >= 3
+                ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
+                : extractFeatures(cv, croppedData, false);
+
+              // Offset keypoints back to full-frame pixel coordinates.
+              orbFeatures = {
+                ...croppedFeatures,
+                keypoints: croppedFeatures.keypoints.map(kp => ({
+                  ...kp,
+                  pt: { x: kp.pt.x + wallBox.x, y: kp.pt.y + wallBox.y },
+                })),
+                cropBox: wallBox,
+              };
             } else {
-              const firstPose = detected.length > 0 ? detected[0] : null;
-              const poseLandmarks: NormalizedPoint[] = firstPose
-                ? firstPose.keypoints.map(kp => ({ x: kp.x, y: kp.y }))
-                : [];
               orbFeatures = poseLandmarks.length >= 3
                 ? extractFeaturesExcludingClimber(cv, processedOrbImageData, poseLandmarks, false)
                 : extractFeatures(cv, processedOrbImageData, false);

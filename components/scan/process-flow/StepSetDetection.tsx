@@ -7,14 +7,7 @@ import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOv
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
-// ---------------------------------------------------------------------------
-// Crop box colors — climber is white, wall texture is sky-blue
-// ---------------------------------------------------------------------------
-const CLIMBER_COLOR      = "rgba(255,255,255,0.90)";
-const WALL_COLOR         = "rgba(125,211,252,0.88)";
-const CLIMBER_GHOST_COLOR = "rgba(255,255,255,0.22)";
-const WALL_GHOST_COLOR    = "rgba(125,211,252,0.22)";
-
+const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,14 +22,10 @@ function formatVideoTime(secs: number): string {
 // CropToolbar — module-level so React never remounts it on parent re-render
 // ---------------------------------------------------------------------------
 interface CropToolbarProps {
-  activeCropMode: "climber" | "route";
   climberCropMoved: boolean;
-  orbCropMoved: boolean;
   showSettingsDropdown: boolean;
   modelVariant: MediaPipeVariant;
   frameStep: number;
-  onSetClimber: () => void;
-  onSetRoute: () => void;
   onToggleSettings: () => void;
   onCloseSettings: () => void;
   onModelVariantChange: (v: MediaPipeVariant) => void;
@@ -44,14 +33,10 @@ interface CropToolbarProps {
 }
 
 function CropToolbar({
-  activeCropMode,
   climberCropMoved,
-  orbCropMoved,
   showSettingsDropdown,
   modelVariant,
   frameStep,
-  onSetClimber,
-  onSetRoute,
   onToggleSettings,
   onCloseSettings,
   onModelVariantChange,
@@ -73,54 +58,17 @@ function CropToolbar({
 
   return (
     <>
-      {/* Segmented crop mode toggle */}
-      <div className="flex items-center rounded-lg border border-edge overflow-hidden shrink-0">
-        {/* Climber segment */}
-        <button
-          onClick={onSetClimber}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-            activeCropMode === "climber"
-              ? "bg-card-hover text-fg"
-              : "bg-card text-fg-secondary hover:bg-card-hover hover:text-fg",
-          )}
-          title={climberCropMoved ? "Climber crop set ✓" : "Draw a box around the climber"}
-        >
-          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+      {/* Climber crop status indicator */}
+      <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-xs font-medium text-fg-secondary shrink-0">
+        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+        </svg>
+        Climber
+        {climberCropMoved && (
+          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
-          Climber
-          {climberCropMoved && (
-            <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          )}
-        </button>
-
-        {/* Divider */}
-        <div className="w-px self-stretch bg-edge shrink-0" />
-
-        {/* Wall texture segment */}
-        <button
-          onClick={onSetRoute}
-          className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-            activeCropMode === "route"
-              ? "bg-card-hover text-fg"
-              : "bg-card text-fg-secondary hover:bg-card-hover hover:text-fg",
-          )}
-          title={orbCropMoved ? "Wall texture crop set ✓" : "Draw a box over a region of wall texture"}
-        >
-          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-          </svg>
-          Wall
-          {orbCropMoved && (
-            <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          )}
-        </button>
+        )}
       </div>
 
       {/* Detection settings dropdown */}
@@ -187,8 +135,6 @@ export interface StepSetDetectionProps {
   videoPreviewUrl: string;
   climberCrop: CropFraction;
   onClimberCropChange: (c: CropFraction) => void;
-  orbCrop: CropFraction;
-  onOrbCropChange: (c: CropFraction) => void;
   modelVariant: MediaPipeVariant;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
@@ -202,39 +148,12 @@ export interface StepSetDetectionProps {
 }
 
 // ---------------------------------------------------------------------------
-// GhostBox — shows the inactive crop region as a dashed guide
-// ---------------------------------------------------------------------------
-function GhostBox({ box, borderRadius = "0.75rem", color = "rgba(255,255,255,0.22)" }: {
-  box: CropFraction;
-  borderRadius?: string;
-  color?: string;
-}) {
-  const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
-  return (
-    <div
-      className="absolute pointer-events-none box-border"
-      style={{
-        left: pct(box.x),
-        top: pct(box.y),
-        width: pct(box.w),
-        height: pct(box.h),
-        border: `2px dashed ${color}`,
-        borderRadius,
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.20)",
-      }}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 export default function StepSetDetection({
   videoPreviewUrl,
   climberCrop,
   onClimberCropChange,
-  orbCrop,
-  onOrbCropChange,
   modelVariant,
   onModelVariantChange,
   frameStep,
@@ -248,7 +167,6 @@ export default function StepSetDetection({
   const cropCanvasRef      = useRef<HTMLCanvasElement>(null);
   const fullscreenVideoRef = useRef<HTMLVideoElement>(null);
 
-  const [activeCropMode,     setActiveCropMode]     = useState<"climber" | "route">("climber");
   const [hasCropFrame,       setHasCropFrame]       = useState(false);
   const [isPlaying,          setIsPlaying]          = useState(false);
   const [videoCurrentTime,   setVideoCurrentTime]   = useState(0);
@@ -261,7 +179,6 @@ export default function StepSetDetection({
 
   // Crop move tracking — unchecked until user drags the box
   const [climberCropMoved, setClimberCropMoved] = useState(false);
-  const [orbCropMoved,     setOrbCropMoved]     = useState(false);
   const [showCropWarning,  setShowCropWarning]  = useState(false);
 
   // Settings dropdown
@@ -272,12 +189,6 @@ export default function StepSetDetection({
     setClimberCropMoved(true);
     setShowCropWarning(false);
     onClimberCropChange(c);
-  }
-
-  function handleOrbCropChange(c: CropFraction) {
-    setOrbCropMoved(true);
-    setShowCropWarning(false);
-    onOrbCropChange(c);
   }
 
   function handleCropVideoLoaded() {
@@ -326,7 +237,7 @@ export default function StepSetDetection({
   }
 
   function handleScanClick() {
-    if (!climberCropMoved || !orbCropMoved) {
+    if (!climberCropMoved) {
       setShowCropWarning(true);
       return;
     }
@@ -341,38 +252,20 @@ export default function StepSetDetection({
     return () => window.removeEventListener("keydown", onKey);
   }, [videoFullscreen, onBack]);
 
-  // Auto-advance crop mode: when climber is first moved, advance to wall texture
-  useEffect(() => {
-    if (climberCropMoved && !orbCropMoved && activeCropMode === "climber") {
-      setActiveCropMode("route");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [climberCropMoved]);
-
   // ── Shared crop toolbar props ──────────────────────────────────────────
   const cropToolbarProps: CropToolbarProps = {
-    activeCropMode,
     climberCropMoved,
-    orbCropMoved,
     showSettingsDropdown,
     modelVariant,
     frameStep,
-    onSetClimber: () => { setActiveCropMode("climber"); setShowCropWarning(false); },
-    onSetRoute:   () => { setActiveCropMode("route");   setShowCropWarning(false); },
     onToggleSettings: () => setShowSettingsDropdown(p => !p),
     onCloseSettings:  () => setShowSettingsDropdown(false),
     onModelVariantChange,
     onFrameStepChange,
   };
 
-  // ── Instruction hint for the active crop mode ─────────────────────────
-  const cropHint = activeCropMode === "climber"
-    ? "Drag the white box to fit tightly around the climber"
-    : "Drag the blue box over a section of bare wall texture";
-
-  // ── Active/ghost crop box colors driven by mode ───────────────────────
-  const activeColor = activeCropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR;
-  const ghostColor  = activeCropMode === "climber" ? WALL_GHOST_COLOR : CLIMBER_GHOST_COLOR;
+  // ── Instruction hint ──────────────────────────────────────────────────
+  const cropHint = "Drag the white box to fit tightly around the climber";
 
   // ── Scan footer: crop warning + CTA ───────────────────────────────────
   const scanFooter = (
@@ -384,11 +277,7 @@ export default function StepSetDetection({
           </svg>
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <p className="text-xs font-medium text-caution">
-              {!climberCropMoved && !orbCropMoved
-                ? "Neither crop area has been set — the scan will use the full frame."
-                : !climberCropMoved
-                ? "Climber crop not set — pose detection may be less accurate."
-                : "Wall texture crop not set — image matching will be unavailable."}
+              Climber crop not set — pose detection and image matching may be less accurate.
             </p>
             <div className="flex gap-2">
               <button
@@ -482,21 +371,12 @@ export default function StepSetDetection({
             className="absolute inset-0 w-full h-full object-fill"
           />
           {hasCropFrame && (
-            <>
-              {/* Ghost box for the inactive crop region — tinted for its crop type */}
-              <GhostBox
-                box={activeCropMode === "climber" ? orbCrop : climberCrop}
-                borderRadius="0.75rem"
-                color={ghostColor}
-              />
-              {/* Active crop overlay — colored by crop type */}
-              <CropBoxOverlay
-                box={activeCropMode === "climber" ? climberCrop : orbCrop}
-                onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
-                borderRadius="1rem"
-                color={activeColor}
-              />
-            </>
+            <CropBoxOverlay
+              box={climberCrop}
+              onChange={handleClimberCropChange}
+              borderRadius="1rem"
+              color={CLIMBER_COLOR}
+            />
           )}
           <canvas ref={cropCanvasRef} className="hidden" />
         </div>
@@ -582,19 +462,12 @@ export default function StepSetDetection({
                 className="absolute inset-0 w-full h-full object-fill"
               />
               {hasCropFrame && (
-                <>
-                  <GhostBox
-                    box={activeCropMode === "climber" ? orbCrop : climberCrop}
-                    borderRadius="0.75rem"
-                    color={ghostColor}
-                  />
-                  <CropBoxOverlay
-                    box={activeCropMode === "climber" ? climberCrop : orbCrop}
-                    onChange={activeCropMode === "climber" ? handleClimberCropChange : handleOrbCropChange}
-                    borderRadius="0.75rem"
-                    color={activeColor}
-                  />
-                </>
+                <CropBoxOverlay
+                  box={climberCrop}
+                  onChange={handleClimberCropChange}
+                  borderRadius="0.75rem"
+                  color={CLIMBER_COLOR}
+                />
               )}
             </div>
           </div>
