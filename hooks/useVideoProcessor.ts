@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { estimateFrameWithRetry, type PoseFrame } from "@/pipeline/poseDetection";
 import { extractFeatures, extractFeaturesFromCrop, extractFeaturesExcludingClimber, type NormalizedPoint } from "@/pipeline/orbDetector";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
-import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
+import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
+import { applyOrbPreprocessing, applyPosePreprocessing } from "@/pipeline/framePreprocessor";
 import {
   extractHipCenter,
   mapKeypointsToFullFrame,
@@ -30,6 +31,14 @@ export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 
 /**
+ * Re-analyse lighting every N pose-detection frames so preprocessing adapts
+ * to gradual changes in illumination as the climber moves through the scene.
+ * At the default frameStep=5 and frameIntervalMs=100 ms this means roughly
+ * every 10 seconds of video.
+ */
+const POSE_REANALYSIS_INTERVAL = 20;
+
+/**
  * Module-level monotonic counter (seconds) for MediaPipe timestamps.
  * Each run advances by the video duration + gap so detectForVideo()
  * always receives strictly increasing ms values that stay well within
@@ -41,8 +50,10 @@ export interface VideoProcessorResult {
   /**
    * Start processing the supplied video File.
    *
-   * All processing uses hip-crop tracking with configurable frame step,
-   * followed by landmark filtering, interpolation, and EMA smoothing.
+   * Lighting analysis runs automatically from the first frame and adapts
+   * every {@link POSE_REANALYSIS_INTERVAL} detection frames.  Pose and ORB
+   * preprocessing use independent, purpose-built pipelines — no user-supplied
+   * conditions are required.
    *
    * @param file      - The video to process.
    * @param detector  - Loaded MediaPipe PoseLandmarker instance.
@@ -51,7 +62,7 @@ export interface VideoProcessorResult {
    *                    Gaps are filled by filtering + linear interpolation.
    *                    Default: 5.
    * @param meta      - Optional location + classification metadata.
-   * @param cropOptions - Optional user-defined crop boxes and lighting hints.
+   * @param cropOptions - Optional user-defined crop boxes.
    * @param startTime - Optional start time in seconds.
    * @param backend   - Which pose backend is active. Default: "mediapipe".
    */
@@ -61,7 +72,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> },
+    cropOptions?: { climberCrop?: CropFraction; orbCrop?: CropFraction },
     startTime?: number,
     backend?: PoseBackend,
   ) => Promise<void>;
@@ -86,7 +97,12 @@ const DEFAULT_FRAME_STEP = 5;
  * N-th sampled frame with hip-centred cropping, then filters low-confidence
  * frames, interpolates across gaps, and applies EMA smoothing.
  *
- * ORB extraction runs on the first full frame after the seek loop completes.
+ * Lighting is analysed automatically from the first frame and re-analysed
+ * every {@link POSE_REANALYSIS_INTERVAL} detection frames.  Pose and ORB
+ * preprocessing are applied through independent pipelines:
+ *   - applyPosePreprocessing — adaptive gamma + optional equalisation blend
+ *   - applyOrbPreprocessing  — retinex LCN + equalisation for cross-condition
+ *                              descriptor stability
  *
  * @param frameIntervalMs - Seek step in milliseconds (default 100 ms).
  */
@@ -107,7 +123,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction; conditions?: ReadonlySet<string> } = {},
+      cropOptions: { climberCrop?: CropFraction; orbCrop?: CropFraction } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
     ) => {
@@ -162,9 +178,29 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         };
 
         const id = `run-${Date.now()}`;
+
+        // Pre-compute pixel-space crop boxes used by analyzeFrame
+        const climberCropPx = cropOptions.climberCrop ? {
+          x: Math.round(cropOptions.climberCrop.x * videoWidth),
+          y: Math.round(cropOptions.climberCrop.y * videoHeight),
+          width: Math.round(cropOptions.climberCrop.w * videoWidth),
+          height: Math.round(cropOptions.climberCrop.h * videoHeight),
+        } : undefined;
+
+        const wallCropPx = cropOptions.orbCrop ? {
+          x: Math.round(cropOptions.orbCrop.x * videoWidth),
+          y: Math.round(cropOptions.orbCrop.y * videoHeight),
+          width: Math.round(cropOptions.orbCrop.w * videoWidth),
+          height: Math.round(cropOptions.orbCrop.h * videoHeight),
+        } : undefined;
+
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
+
+        // Lighting analysis — seeded from frame 0, adapted at intervals
+        let currentAnalysis: FrameAnalysis | null = null;
+        let detectionFrameCount = 0;
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -172,19 +208,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const frameCaptures: FrameCapture[] = [];
         let lastHipCenter: HipCenter | null = null;
 
-        // Offset ensuring MediaPipe receives strictly increasing timestamps
-        // across runs without overflowing int32 (max ≈ 2 147 483 647 ms).
-        // A module-level counter advances by each video's duration + gap,
-        // keeping cumulative milliseconds well under the limit.
         const mpTimestampBase = nextMpTimestampSec;
         nextMpTimestampSec += duration + 2;
 
-        // Tracks the most-recently used MediaPipe base timestamp so that every
-        // subsequent call — including gap-recovery seeks that go backwards in
-        // video time — remains strictly greater than the last call.
-        // The margin (5 ms) exceeds the maximum per-retry offset used inside
-        // estimateFrameWithRetry (1 ms × DEFAULT_MAX_RETRIES = 2 ms), ensuring
-        // the *next* outer call is always newer than the last retry's timestamp.
         let lastMpTs = mpTimestampBase;
 
         for (let i = 0; i < frameCount; i++) {
@@ -200,16 +226,16 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-          // Always capture the first full frame for ORB reference.
           if (i === 0) {
+            // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+            currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
           }
-          // Capture the middle frame for the ORB thumbnail.
+
           if (i === middleIndex) {
             middleFrameImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
           }
 
-          // Collect every timestamp for the dense interpolation timeline.
           allTimestamps.push(video.currentTime);
 
           if (i % frameStep === 0) {
@@ -218,7 +244,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             let plannedCropBox: { x: number; y: number; width: number; height: number } | null = null;
 
             if (cropOptions.climberCrop && lastHipCenter !== null) {
-              // Subsequent frames: re-centre crop on last known hip.
               const cf = cropOptions.climberCrop;
               const boxW = Math.round(cf.w * videoWidth);
               const boxH = Math.round(cf.h * videoHeight);
@@ -231,7 +256,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 height: boxH,
               };
             } else if (cropOptions.climberCrop && lastHipCenter === null) {
-              // First frame with user crop: use the box at its original position.
               const cf = cropOptions.climberCrop;
               plannedCropBox = {
                 x: Math.round(cf.x * videoWidth),
@@ -256,18 +280,15 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               }
             }
 
-            // Apply lighting-condition preprocessing to the pose canvas before
-            // running the model. ORB canvas is left untouched.
-            if (cropOptions.conditions && cropOptions.conditions.size > 0) {
-              applyFramePreprocessing(cv, poseCanvas, cropOptions.conditions);
+            // Pose-specific preprocessing driven by the current lighting analysis.
+            if (currentAnalysis) {
+              applyPosePreprocessing(cv, poseCanvas, currentAnalysis);
             }
 
             const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
             lastMpTs = mpTs;
             const frame = estimateFrameWithRetry(detector, poseCanvas, mpTs);
             if (frame) {
-              // Restore actual video timestamp — downstream interpolation and
-              // playback need the real video time, not the MediaPipe offset.
               frame.timestamp = video.currentTime;
 
               const poseFrame: PoseFrame = appliedCropBox
@@ -287,28 +308,30 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             }
 
             frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: plannedCropBox });
+
+            // Periodically re-analyse lighting to adapt to scene changes.
+            detectionFrameCount++;
+            if (detectionFrameCount % POSE_REANALYSIS_INTERVAL === 0) {
+              const reData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+              currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
+            }
           }
 
           setCurrentFrame(i + 1);
         }
 
         // ---------------------------------------------------------------
-        // Gap recovery pass: if large gaps exist between detections,
-        // seek back and process every frame through the gap until pose
-        // is recovered. Bounded to prevent runaway loops.
+        // Gap recovery pass
         // ---------------------------------------------------------------
-        const GAP_RECOVERY_THRESHOLD = 3 * frameStep; // frames in allTimestamps
-        const MAX_RECOVERY_FRAMES = 30; // cap per gap to prevent runaway processing
+        const GAP_RECOVERY_THRESHOLD = 3 * frameStep;
+        const MAX_RECOVERY_FRAMES = 30;
 
         if (detected.length >= 2 && !abortRef.current) {
-          // Sort detected by timestamp (should already be sorted, but defensive).
           detected.sort((a, b) => a.timestamp - b.timestamp);
 
-          // Build a timestamp→index lookup for allTimestamps.
           const tsToIdx = new Map<number, number>();
           allTimestamps.forEach((ts, idx) => tsToIdx.set(ts, idx));
 
-          // Find gaps between consecutive detections.
           const gaps: Array<{ afterIdx: number; gapStart: number; gapEnd: number }> = [];
           for (let d = 1; d < detected.length; d++) {
             const prevTs = detected[d - 1].timestamp;
@@ -339,11 +362,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-              // Use the full frame for recovery (no hip-tracking crop to avoid
-              // compounding position errors from the gap).
-              // Use max(lastMpTs + margin, ...) so we never pass a timestamp that
-              // MediaPipe has already consumed, even though video.currentTime
-              // is rewind into an earlier part of the clip.
               const recMpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
               lastMpTs = recMpTs;
               const recoveryFrame = estimateFrameWithRetry(detector, canvas, recMpTs);
@@ -351,13 +369,11 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 recoveryFrame.timestamp = video.currentTime;
                 detected.push(recoveryFrame);
                 lastHipCenter = extractHipCenter(recoveryFrame.keypoints) ?? lastHipCenter;
-                // Pose recovered — stop dense processing for this gap.
                 break;
               }
             }
           }
 
-          // Re-sort after recovery insertions.
           if (gaps.length > 0) {
             detected.sort((a, b) => a.timestamp - b.timestamp);
           }
@@ -392,43 +408,56 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}`,
         );
 
-        // Yield to the React render cycle so the "done" status is painted
-        // before we block the main thread with WASM ORB extraction.
         await new Promise<void>(r => setTimeout(r, 0));
 
-        // ORB extraction: use user-defined orbCrop when provided.
-        // When no crop is set, exclude the climber region using pose landmarks
-        // from the first detected frame so features focus on wall texture.
+        // ORB extraction — apply ORB-specific preprocessing to the reference
+        // frame before descriptor extraction so features are stable across
+        // different lighting conditions (indoor vs outdoor, etc.).
         if (referenceImageData) {
           setOrbStatus("extracting");
           try {
+            // Draw reference frame onto a temporary canvas and apply ORB
+            // preprocessing (retinex LCN + equalisation).  extractFeatures
+            // then receives a locally-normalised grayscale image and skips
+            // its own equaliseHist pass (normalizePixels=false).
+            const orbCanvas = document.createElement("canvas");
+            orbCanvas.width  = videoWidth;
+            orbCanvas.height = videoHeight;
+            const orbCtx = orbCanvas.getContext("2d");
+
+            let processedOrbImageData = referenceImageData;
+            if (orbCtx && currentAnalysis) {
+              orbCtx.putImageData(referenceImageData, 0, 0);
+              applyOrbPreprocessing(cv, orbCanvas, currentAnalysis);
+              processedOrbImageData = orbCtx.getImageData(0, 0, videoWidth, videoHeight);
+            }
+
             let orbFeatures;
             if (cropOptions.orbCrop) {
               const oc = cropOptions.orbCrop;
-              orbFeatures = extractFeaturesFromCrop(cv, referenceImageData, {
+              orbFeatures = extractFeaturesFromCrop(cv, processedOrbImageData, {
                 x: Math.round(oc.x * videoWidth),
                 y: Math.round(oc.y * videoHeight),
                 width: Math.round(oc.w * videoWidth),
                 height: Math.round(oc.h * videoHeight),
                 srcWidth: videoWidth,
                 srcHeight: videoHeight,
-              });
+              }, false); // normalizePixels=false — preprocessing already applied
             } else {
-              // Use pose landmarks from the first detected frame as a climber mask.
               const firstPose = detected.length > 0 ? detected[0] : null;
               const poseLandmarks: NormalizedPoint[] = firstPose
                 ? firstPose.keypoints.map(kp => ({ x: kp.x, y: kp.y }))
                 : [];
               orbFeatures = poseLandmarks.length >= 3
-                ? extractFeaturesExcludingClimber(cv, referenceImageData, poseLandmarks)
-                : extractFeatures(cv, referenceImageData);
+                ? extractFeaturesExcludingClimber(cv, processedOrbImageData, poseLandmarks, false)
+                : extractFeatures(cv, processedOrbImageData, false);
             }
-            // Generate thumbnail: draw ORB crop bounding box on the middle frame.
+
             const thumbSource = middleFrameImageData ?? referenceImageData;
             const thumbnail = thumbSource
               ? generateOrbThumbnail(thumbSource, orbFeatures)
               : undefined;
-            middleFrameImageData = null; // allow GC
+            middleFrameImageData = null;
 
             saveAttempt({
               id,
@@ -446,7 +475,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               notes: meta.notes,
               thumbnail: thumbnail || undefined,
             });
-            referenceImageData = null; // allow GC
+            referenceImageData = null;
             setOrbStatus("ready");
             console.info(
               `[useVideoProcessor] ORB reference ready. keypoints=${orbFeatures.keypoints.length}`,
@@ -470,8 +499,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     [frameIntervalMs],
   );
 
-  // Abort processing when the component unmounts so background work does not
-  // continue silently (fixes the upload-page navigation bug).
   const resetRef = useRef(() => {
     abortRef.current = true;
   });
@@ -488,7 +515,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     }
   }, []);
 
-  // On unmount, abort any in-flight processing.
   useEffect(() => {
     mountedRef.current = true;
     const resetFn = resetRef.current;

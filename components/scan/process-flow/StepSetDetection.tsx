@@ -15,23 +15,6 @@ const WALL_COLOR         = "rgba(125,211,252,0.88)";
 const CLIMBER_GHOST_COLOR = "rgba(255,255,255,0.22)";
 const WALL_GHOST_COLOR    = "rgba(125,211,252,0.22)";
 
-// ---------------------------------------------------------------------------
-// Frame-condition options
-// ---------------------------------------------------------------------------
-interface FrameCondition {
-  id: string;
-  label: string;
-  description: string;
-}
-
-const FRAME_CONDITIONS: FrameCondition[] = [
-  { id: "washed_out",  label: "Washed out",       description: "Bright sun or strong artificial light overexposes the frame." },
-  { id: "backlit",     label: "Backlit",            description: "Light source is behind the climber, darkening the subject." },
-  { id: "shadows",     label: "Deep shadows",       description: "Sections of the wall are heavily shadowed." },
-  { id: "blends",      label: "Low contrast",       description: "Climber's clothing or skin blends with the wall colour." },
-  { id: "indoor_gym",  label: "Gym lighting",       description: "Indoor gym with uneven or fluorescent overhead lighting." },
-  { id: "dusty",       label: "Dusty / hazy lens",  description: "Lens fog, chalk dust, or condensation reduces sharpness." },
-];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -50,18 +33,14 @@ interface CropToolbarProps {
   climberCropMoved: boolean;
   orbCropMoved: boolean;
   showSettingsDropdown: boolean;
-  settingsTab: "detection" | "conditions";
-  conditions: Set<string>;
   modelVariant: MediaPipeVariant;
   frameStep: number;
   onSetClimber: () => void;
   onSetRoute: () => void;
   onToggleSettings: () => void;
   onCloseSettings: () => void;
-  onSettingsTabChange: (tab: "detection" | "conditions") => void;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   onFrameStepChange: (n: number) => void;
-  onConditionToggle: (id: string) => void;
 }
 
 function CropToolbar({
@@ -69,18 +48,14 @@ function CropToolbar({
   climberCropMoved,
   orbCropMoved,
   showSettingsDropdown,
-  settingsTab,
-  conditions,
   modelVariant,
   frameStep,
   onSetClimber,
   onSetRoute,
   onToggleSettings,
   onCloseSettings,
-  onSettingsTabChange,
   onModelVariantChange,
   onFrameStepChange,
-  onConditionToggle,
 }: CropToolbarProps) {
   const settingsRef = useRef<HTMLDivElement>(null);
 
@@ -98,8 +73,7 @@ function CropToolbar({
 
   return (
     <>
-      {/* Segmented crop mode toggle — shows which box is being drawn.
-          Active segment: slightly elevated bg. Checkmark: only when box is set. */}
+      {/* Segmented crop mode toggle */}
       <div className="flex items-center rounded-lg border border-edge overflow-hidden shrink-0">
         {/* Climber segment */}
         <button
@@ -149,9 +123,7 @@ function CropToolbar({
         </button>
       </div>
 
-      {/* Merged settings dropdown.
-          The parent toolbar wrapper carries relative z-10 so this dropdown
-          always paints above the video area regardless of backdrop-filter. */}
+      {/* Detection settings dropdown */}
       <div ref={settingsRef} className="relative">
         <button
           type="button"
@@ -162,7 +134,7 @@ function CropToolbar({
               ? "border-accent/60 bg-accent/10 text-accent"
               : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
           )}
-          title="Detection &amp; conditions settings"
+          title="Detection settings"
           aria-label="Settings"
           aria-expanded={showSettingsDropdown}
         >
@@ -171,98 +143,36 @@ function CropToolbar({
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           Settings
-          {conditions.size > 0 && (
-            <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
-              {conditions.size}
-            </span>
-          )}
         </button>
 
         {showSettingsDropdown && (
           <div className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
-            {/* Tab bar */}
-            <div className="flex gap-1 mb-3 pb-2 border-b border-edge/30">
-              <button
-                onClick={() => onSettingsTabChange("detection")}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
-                  settingsTab === "detection" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
-                )}
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-                </svg>
-                Detection
-              </button>
-              <button
-                onClick={() => onSettingsTabChange("conditions")}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-xs font-medium transition",
-                  settingsTab === "conditions" ? "bg-accent/10 text-accent" : "text-fg-secondary hover:text-fg",
-                )}
-              >
-                <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                </svg>
-                Conditions
-                {conditions.size > 0 && (
-                  <span className="rounded-full bg-caution/20 px-1 text-[9px] font-bold text-caution leading-none">
-                    {conditions.size}
-                  </span>
-                )}
-              </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-xs font-medium text-fg-secondary">Pose model</label>
+                <select
+                  value={modelVariant}
+                  onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
+                  className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
+                >
+                  <option value="lite">Lite (fast)</option>
+                  <option value="full">Full (balanced)</option>
+                  <option value="heavy">Heavy (accurate)</option>
+                </select>
+              </div>
+              <label className="flex items-center justify-between text-xs">
+                <span className="font-medium text-fg-secondary">Detection frequency</span>
+                <span className="font-mono text-fg">every {frameStep} frames</span>
+              </label>
+              <input
+                type="range" min={1} max={30} value={frameStep}
+                onChange={e => onFrameStepChange(Number(e.target.value))}
+                className="w-full accent-accent" aria-label="Frame step"
+              />
+              <p className="text-xs text-fg-muted">
+                1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
+              </p>
             </div>
-
-            {/* Detection tab */}
-            {settingsTab === "detection" && (
-              <div className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium text-fg-secondary">Pose model</label>
-                  <select
-                    value={modelVariant}
-                    onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
-                    className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
-                  >
-                    <option value="lite">Lite (fast)</option>
-                    <option value="full">Full (balanced)</option>
-                    <option value="heavy">Heavy (accurate)</option>
-                  </select>
-                </div>
-                <label className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-fg-secondary">Detection frequency</span>
-                  <span className="font-mono text-fg">every {frameStep} frames</span>
-                </label>
-                <input
-                  type="range" min={1} max={30} value={frameStep}
-                  onChange={e => onFrameStepChange(Number(e.target.value))}
-                  className="w-full accent-accent" aria-label="Frame step"
-                />
-                <p className="text-xs text-fg-muted">
-                  1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
-                </p>
-              </div>
-            )}
-
-            {/* Conditions tab */}
-            {settingsTab === "conditions" && (
-              <div className="flex flex-col gap-2">
-                <p className="mb-1 text-xs font-semibold text-fg">Shooting conditions</p>
-                {FRAME_CONDITIONS.map(c => (
-                  <label key={c.id} className="flex items-start gap-2.5 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={conditions.has(c.id)}
-                      onChange={() => onConditionToggle(c.id)}
-                      className="mt-0.5 h-3.5 w-3.5 accent-accent cursor-pointer"
-                    />
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-xs font-medium text-fg group-hover:text-accent transition">{c.label}</span>
-                      <span className="text-xs text-fg-muted">{c.description}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -279,8 +189,6 @@ export interface StepSetDetectionProps {
   onClimberCropChange: (c: CropFraction) => void;
   orbCrop: CropFraction;
   onOrbCropChange: (c: CropFraction) => void;
-  conditions: Set<string>;
-  onConditionToggle: (id: string) => void;
   modelVariant: MediaPipeVariant;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
@@ -327,8 +235,6 @@ export default function StepSetDetection({
   onClimberCropChange,
   orbCrop,
   onOrbCropChange,
-  conditions,
-  onConditionToggle,
   modelVariant,
   onModelVariantChange,
   frameStep,
@@ -358,9 +264,8 @@ export default function StepSetDetection({
   const [orbCropMoved,     setOrbCropMoved]     = useState(false);
   const [showCropWarning,  setShowCropWarning]  = useState(false);
 
-  // Merged settings dropdown
+  // Settings dropdown
   const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
-  const [settingsTab,          setSettingsTab]          = useState<"detection" | "conditions">("detection");
 
   // ── Handlers ──────────────────────────────────────────────────────────
   function handleClimberCropChange(c: CropFraction) {
@@ -450,18 +355,14 @@ export default function StepSetDetection({
     climberCropMoved,
     orbCropMoved,
     showSettingsDropdown,
-    settingsTab,
-    conditions,
     modelVariant,
     frameStep,
     onSetClimber: () => { setActiveCropMode("climber"); setShowCropWarning(false); },
     onSetRoute:   () => { setActiveCropMode("route");   setShowCropWarning(false); },
     onToggleSettings: () => setShowSettingsDropdown(p => !p),
     onCloseSettings:  () => setShowSettingsDropdown(false),
-    onSettingsTabChange: setSettingsTab,
     onModelVariantChange,
     onFrameStepChange,
-    onConditionToggle,
   };
 
   // ── Instruction hint for the active crop mode ─────────────────────────

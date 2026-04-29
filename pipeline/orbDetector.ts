@@ -157,9 +157,10 @@ export function extractFeaturesFromCrop(
   cv: CV,
   imageData: ImageData,
   cropBox: OrbCropBox,
+  normalizePixels = true,
 ): OrbFeatures {
   const cropped = cropImageData(imageData, cropBox);
-  const features = extractFeatures(cv, cropped);
+  const features = extractFeatures(cv, cropped, normalizePixels);
   const adjustedKp = features.keypoints.map(kp => ({
     ...kp,
     pt: { x: kp.pt.x + cropBox.x, y: kp.pt.y + cropBox.y },

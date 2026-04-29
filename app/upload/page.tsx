@@ -127,7 +127,6 @@ function UploadPageInner() {
   const [s3Saved, setS3Saved] = useState(false);
   const [locationWarning, setLocationWarning] = useState(false);
   const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
-  const [conditions, setConditions] = useState<Set<string>>(new Set());
   const [showCamera, setShowCamera] = useState(false);
   const previewUrlRef = useRef<string | null>(cachedVideoUrl);
 
@@ -327,14 +326,6 @@ function UploadPageInner() {
     return { frames: renderedFrames, duration, fps: videoMeta.fps ?? 30 };
   }, [activeAttempt]);
 
-  function toggleCondition(id: string) {
-    setConditions(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) { next.delete(id); } else { next.add(id); }
-      return next;
-    });
-  }
-
   function loadVideoFile(file: File) {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     const url = URL.createObjectURL(file);
@@ -398,7 +389,7 @@ function UploadPageInner() {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop, orbCrop, conditions }, startTime);
+    }, { climberCrop, orbCrop }, startTime);
     setStep("landmarks");
   }
 
@@ -586,8 +577,6 @@ function UploadPageInner() {
           onClimberCropChange={setClimberCrop}
           orbCrop={orbCrop}
           onOrbCropChange={setOrbCrop}
-          conditions={conditions}
-          onConditionToggle={toggleCondition}
           modelVariant={modelVariant}
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}
