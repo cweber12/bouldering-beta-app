@@ -27,9 +27,9 @@
     "firebase-admin": "^13.8.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "next": "16.2.1",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
+    "next": "16.2.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5",
     "react-image-crop": "^11.0.10",
     "react-leaflet": "^5.0.0",
     "tailwind-merge": "^3.5.0"
