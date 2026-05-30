@@ -63,11 +63,6 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
   // Build destination URL (view only — compare actions delegate to onCompare).
   const viewUrl = `/view?key=${encodeURIComponent(climbKey)}`;
 
-  const navigate = () => {
-    setOpen(false);
-    router.push(viewUrl);
-  };
-
   /** Handles any action button click based on the current mode. */
   const handleAction = () => {
     setOpen(false);

@@ -14,13 +14,6 @@ function makeImageData(w = 64, h = 64): ImageData {
   } as unknown as ImageData;
 }
 
-function makeMat(meanVal = 128, stdVal = 40, hfStdVal = 10) {
-  return {
-    data64F: new Float64Array([meanVal]),
-    delete: vi.fn(),
-  };
-}
-
 function makeCv(opts: { mean?: number; std?: number; hfStd?: number } = {}) {
   const { mean = 128, std = 40, hfStd = 10 } = opts;
   let meanStdDevCallCount = 0;

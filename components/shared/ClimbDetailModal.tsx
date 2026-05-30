@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
@@ -45,12 +45,14 @@ interface ClimbDetailModalProps {
 
 export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDetailModalProps) {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const mounted = useSyncExternalStore(
+    () => () => undefined,
+    () => true,
+    () => false,
+  );
 
   // Guard against SSR — createPortal needs document.body.
-  useEffect(() => setMounted(true), []);
-
   const isSend = climb.runType === "send";
 
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
