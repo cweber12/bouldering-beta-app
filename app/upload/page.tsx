@@ -30,8 +30,32 @@ import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
+import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 
 type ScanStep = "pick" | "detection" | "landmarks" | "match";
+
+const FLOW_META: Record<ScanStep, { step: number; title: string; subtitle: string }> = {
+  pick: {
+    step: 1,
+    title: "Select Source",
+    subtitle: "Choose how to start your scan.",
+  },
+  detection: {
+    step: 2,
+    title: "Set Detection",
+    subtitle: "Crop the climber, then run pose and ORB extraction.",
+  },
+  landmarks: {
+    step: 3,
+    title: "Review Landmarks",
+    subtitle: "Check tracking quality and choose next action.",
+  },
+  match: {
+    step: 4,
+    title: "Optional Route Overlay",
+    subtitle: "Test the scan against a route photo when needed.",
+  },
+};
 
 const MapPicker = dynamic(() => import("@/components/map/MapPicker"), { ssr: false });
 
@@ -143,9 +167,6 @@ function UploadPageInner() {
   const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
 
-  // Edit-mode flag � set when user clicks "Edit climb" from results.
-  const [editMode, setEditMode] = useState(false);
-
   // Skeleton style for overlays
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
 
@@ -155,10 +176,12 @@ function UploadPageInner() {
   const styleRef = useRef<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
 
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [bottomSheetAction, setBottomSheetAction] = useState<"save" | "upload">("save");
+  const [showOptionalMeta, setShowOptionalMeta] = useState(false);
 
   // Derive topology-aware skeleton style
   const activeAttemptId0 = (status === "done") ? attemptId : null;
@@ -332,10 +355,10 @@ function UploadPageInner() {
     setVideoPreviewUrl(url);
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
+    setWallCrop(DEFAULT_CROP);
     setS3Saved(false);
     setSaveError(null);
     setSavedRouteDirHandle(null);
-    setEditMode(false);
     setFirstFrameFile(null);
     // Clear route photo overlay state
     clearRoutePhoto();
@@ -380,14 +403,13 @@ function UploadPageInner() {
 
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;
-    setEditMode(false);
     setFirstFrameFile(null);
     clearRoutePhoto();
     process(pendingFile, model, cv, frameStep, {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop }, startTime);
+    }, { climberCrop, wallCrop }, startTime);
     setStep("landmarks");
   }
 
@@ -400,15 +422,9 @@ function UploadPageInner() {
   }
 
   function handleEditClimb() {
-    setEditMode(true);
     setFirstFrameFile(null);
     clearRoutePhoto();
     setStep("detection");
-  }
-
-  function handleBackToResults() {
-    setEditMode(false);
-    setStep("landmarks");
   }
 
   function handleBackToLandmarks() {
@@ -423,7 +439,6 @@ function UploadPageInner() {
     setVideoPreviewUrl(null);
     setPendingFile(null);
     setFirstFrameFile(null);
-    setEditMode(false);
     cachedPendingFile = null;
     cachedVideoUrl = null;
     clearRoutePhoto();
@@ -468,6 +483,7 @@ function UploadPageInner() {
 
   const isFrameReady = frameStatus === "ready" && !!skeletonData;
   const isMatching = matchStatus === "matching";
+  const currentMeta = FLOW_META[step];
 
   async function handleSaveToDevice() {
     if (!activeAttemptId) return;
@@ -532,12 +548,14 @@ function UploadPageInner() {
 
   function handleOpenSaveSheet() {
     setSaveError(null);
+    setShowOptionalMeta(false);
     setBottomSheetAction("save");
     setShowBottomSheet(true);
   }
 
   function handleOpenUploadSheet() {
     setSaveError(null);
+    setShowOptionalMeta(false);
     setBottomSheetAction("upload");
     setShowBottomSheet(true);
   }
@@ -555,97 +573,118 @@ function UploadPageInner() {
     }
   }
 
+  // Escape closes active modal layers for keyboard users.
+  useEffect(() => {
+    if (!showMapPicker && !showBottomSheet) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (showMapPicker) setShowMapPicker(false);
+      if (showBottomSheet) setShowBottomSheet(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showMapPicker, showBottomSheet]);
+
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      {/* -- Step content -- */}
-      {step === "pick" && (
-        <StepPickVideo
-          onFile={handleSelectFile}
-          onCamera={() => setShowCamera(true)}
-        />
-      )}
+      <ProcessFlowShell
+        step={currentMeta.step}
+        totalSteps={4}
+        title={currentMeta.title}
+        subtitle={currentMeta.subtitle}
+      >
+        {/* -- Step content -- */}
+        {step === "pick" && (
+          <StepPickVideo
+            onFile={handleSelectFile}
+            onCamera={() => setShowCamera(true)}
+          />
+        )}
 
-      {step === "detection" && pendingFile && videoPreviewUrl && (
-        <StepSetDetection
-          videoPreviewUrl={videoPreviewUrl}
-          climberCrop={climberCrop}
-          onClimberCropChange={setClimberCrop}
-          modelVariant={modelVariant}
-          onModelVariantChange={setModelVariant}
-          frameStep={frameStep}
-          onFrameStepChange={setFrameStep}
-          canScan={!!(model && cv)}
-          onScan={handleScan}
-          onBack={() => { setStep("pick"); setEditMode(false); }}
-        />
-      )}
+        {step === "detection" && pendingFile && videoPreviewUrl && (
+          <StepSetDetection
+            videoPreviewUrl={videoPreviewUrl}
+            climberCrop={climberCrop}
+            wallCrop={wallCrop}
+            onClimberCropChange={setClimberCrop}
+            onWallCropChange={setWallCrop}
+            modelVariant={modelVariant}
+            onModelVariantChange={setModelVariant}
+            frameStep={frameStep}
+            onFrameStepChange={setFrameStep}
+            canScan={!!(model && cv)}
+            onScan={handleScan}
+            onBack={() => { setStep("pick"); }}
+          />
+        )}
 
-      {step === "landmarks" && (
-        <StepViewLandmarks
-          isProcessing={isProcessing}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          progressPct={progressPct}
-          orbStatus={orbStatus}
-          frameStep={frameStep}
-          processingError={status === "error" ? errorMessage : null}
-          activeAttempt={activeAttempt}
-          firstFrameFile={firstFrameFile}
-          firstFrameSkeletonData={firstFrameSkeletonData}
-          topoStyle={topoStyle}
-          onSkeletonStyleChange={setSkeletonStyle}
-          onEditClimb={handleEditClimb}
-          onScanAnother={handleSaveComplete}
-          orbReady={orbReady}
-          onViewOnRoutePhoto={handleViewOnRoutePhoto}
-          onUpload={handleOpenUploadSheet}
-          s3Saved={s3Saved}
-          s3Loading={s3Status === "loading"}
-          saveError={saveError}
-          onViewScans={() => router.push("/profile")}
-        />
-      )}
+        {step === "landmarks" && (
+          <StepViewLandmarks
+            isProcessing={isProcessing}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            progressPct={progressPct}
+            orbStatus={orbStatus}
+            frameStep={frameStep}
+            processingError={status === "error" ? errorMessage : null}
+            activeAttempt={activeAttempt}
+            firstFrameFile={firstFrameFile}
+            firstFrameSkeletonData={firstFrameSkeletonData}
+            topoStyle={topoStyle}
+            onSkeletonStyleChange={setSkeletonStyle}
+            onEditClimb={handleEditClimb}
+            onScanAnother={handleSaveComplete}
+            orbReady={orbReady}
+            onViewOnRoutePhoto={handleViewOnRoutePhoto}
+            onUpload={handleOpenUploadSheet}
+            s3Saved={s3Saved}
+            s3Loading={s3Status === "loading"}
+            saveError={saveError}
+            onViewScans={() => router.push("/profile")}
+          />
+        )}
 
-      {step === "match" && routePhotoFile && routePhotoPreviewUrl && (
-        <StepMatchRoutePhoto
-          routePhotoFile={routePhotoFile}
-          routePhotoPreviewUrl={routePhotoPreviewUrl}
-          routePhotoCrop={routePhotoCrop}
-          onRoutePhotoCropChange={setRoutePhotoCrop}
-          routeMatchTriggered={routeMatchTriggered}
-          matchResult={matchResult}
-          matchStatus={matchStatus}
-          matchError={matchError}
-          skeletonData={skeletonData}
-          frameStatus={frameStatus}
-          frameError={frameError}
-          topoStyle={topoStyle}
-          isFrameReady={isFrameReady}
-          isMatching={isMatching}
-          onSkeletonStyleChange={setSkeletonStyle}
-          exportStatus={exportStatus}
-          exportProgress={exportProgress}
-          onApplyMatch={handleApplyRouteMatch}
-          onExportVideo={handleExportUploadVideo}
-          onChangePhoto={(file: File) => {
-            resetMatcher();
-            setRoutePhotoWithPreview(file);
-            setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
-            setRouteMatchTriggered(false);
-          }}
-          onBack={handleBackToLandmarks}
-          onSaveToDevice={handleOpenSaveSheet}
-          onUpload={handleOpenUploadSheet}
-          s3Saved={s3Saved}
-          s3Loading={s3Status === "loading"}
-          savedRouteDirHandle={savedRouteDirHandle}
-          onDeleteFromDevice={handleDeleteFromDevice}
-          saveError={saveError}
-        />
-      )}
+        {step === "match" && routePhotoFile && routePhotoPreviewUrl && (
+          <StepMatchRoutePhoto
+            routePhotoFile={routePhotoFile}
+            routePhotoPreviewUrl={routePhotoPreviewUrl}
+            routePhotoCrop={routePhotoCrop}
+            onRoutePhotoCropChange={setRoutePhotoCrop}
+            routeMatchTriggered={routeMatchTriggered}
+            matchResult={matchResult}
+            matchStatus={matchStatus}
+            matchError={matchError}
+            skeletonData={skeletonData}
+            frameStatus={frameStatus}
+            frameError={frameError}
+            topoStyle={topoStyle}
+            isFrameReady={isFrameReady}
+            isMatching={isMatching}
+            onSkeletonStyleChange={setSkeletonStyle}
+            exportStatus={exportStatus}
+            exportProgress={exportProgress}
+            onApplyMatch={handleApplyRouteMatch}
+            onExportVideo={handleExportUploadVideo}
+            onChangePhoto={(file: File) => {
+              resetMatcher();
+              setRoutePhotoWithPreview(file);
+              setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
+              setRouteMatchTriggered(false);
+            }}
+            onBack={handleBackToLandmarks}
+            onSaveToDevice={handleOpenSaveSheet}
+            onUpload={handleOpenUploadSheet}
+            s3Saved={s3Saved}
+            s3Loading={s3Status === "loading"}
+            savedRouteDirHandle={savedRouteDirHandle}
+            onDeleteFromDevice={handleDeleteFromDevice}
+            saveError={saveError}
+          />
+        )}
+      </ProcessFlowShell>
 
       {/* Camera recording modal */}
       {showCamera && (
@@ -657,7 +696,12 @@ function UploadPageInner() {
 
       {/* -- Map picker modal -- */}
       {showMapPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pick climb location"
+        >
           <div className="w-full max-w-2xl rounded-2xl border border-edge/50 bg-surface p-5 shadow-2xl animate-scale-in">
             <h2 className="mb-3 text-sm font-semibold text-fg">Pick climb location on map</h2>
             <MapPicker
@@ -675,7 +719,7 @@ function UploadPageInner() {
 
       {/* -- Bottom sheet � metadata entry for save / upload -- */}
       {showBottomSheet && createPortal(
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
+        <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Save metadata">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBottomSheet(false)} />
 
@@ -683,9 +727,12 @@ function UploadPageInner() {
           <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge/50 bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
             {/* Close handle */}
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-fg">
-                {bottomSheetAction === "save" ? "Save to Device" : "Upload"}
-              </h2>
+              <div className="flex flex-col">
+                <h2 className="text-sm font-semibold text-fg">
+                  {bottomSheetAction === "save" ? "Save to Device" : "Upload"}
+                </h2>
+                <p className="text-xs text-fg-muted">Enter essentials first. Optional details can be added below.</p>
+              </div>
               <button
                 onClick={() => setShowBottomSheet(false)}
                 className="rounded-full p-1 text-fg-muted hover:text-fg transition"
@@ -722,56 +769,6 @@ function UploadPageInner() {
                   suggestions={routeSuggestions}
                   placeholder="e.g. The Classic"
                 />
-
-                {/* GPS */}
-                <div className="flex flex-col gap-2 pt-1">
-                  <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
-                  {coordinates ? (
-                    <div className="flex items-center justify-between rounded-lg border border-send/40 bg-send-surface px-3 py-2">
-                      <span className="text-xs text-send font-mono">
-                        {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setCoordinates(null)}
-                        className="ml-2 text-xs text-fg-muted hover:text-danger transition"
-                        aria-label="Clear coordinates"
-                      >
-                        ?
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-fg-muted">No coordinates tagged.</p>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={handleUseGPS}
-                      disabled={geoLoading}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
-                    >
-                      {geoLoading ? (
-                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
-                      ) : (
-                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                          <circle cx="12" cy="12" r="3"/>
-                          <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
-                        </svg>
-                      )}
-                      Use GPS
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowBottomSheet(false); setShowMapPicker(true); }}
-                      className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg"
-                    >
-                      <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                      </svg>
-                      Pick on map
-                    </button>
-                  </div>
-                </div>
               </div>
 
               {/* Climb type */}
@@ -797,24 +794,87 @@ function UploadPageInner() {
                 </div>
               </div>
 
-              {/* Details */}
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-semibold text-fg-secondary">Details <span className="text-fg-muted font-normal">(optional)</span></p>
-                <input
-                  type="text"
-                  value={rating}
-                  onChange={e => setRating(e.target.value)}
-                  placeholder="Grade / Rating (e.g. V3, 5.10a)"
-                  className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
-                />
-                <textarea
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                  placeholder="Notes\u2026"
-                  rows={2}
-                  className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 resize-none"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowOptionalMeta((prev) => !prev)}
+                className="flex items-center justify-between rounded-xl border border-edge/50 bg-card/50 px-3 py-2 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                aria-expanded={showOptionalMeta}
+              >
+                <span>Optional details</span>
+                <span>{showOptionalMeta ? "Hide" : "Show"}</span>
+              </button>
+
+              {showOptionalMeta && (
+                <div className="flex flex-col gap-3 rounded-xl border border-edge/40 bg-card/30 px-3 py-3">
+                  {/* GPS */}
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
+                    {coordinates ? (
+                      <div className="flex items-center justify-between rounded-lg border border-send/40 bg-send-surface px-3 py-2">
+                        <span className="text-xs text-send font-mono">
+                          {coordinates.lat.toFixed(5)}, {coordinates.lng.toFixed(5)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCoordinates(null)}
+                          className="ml-2 text-xs text-fg-muted hover:text-danger transition"
+                          aria-label="Clear coordinates"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-fg-muted">No coordinates tagged.</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={handleUseGPS}
+                        disabled={geoLoading}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+                      >
+                        {geoLoading ? (
+                          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
+                        ) : (
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                          </svg>
+                        )}
+                        Use GPS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowBottomSheet(false); setShowMapPicker(true); }}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+                      >
+                        <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                        Pick on map
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-medium text-fg-secondary">Notes and grade</p>
+                    <input
+                      type="text"
+                      value={rating}
+                      onChange={e => setRating(e.target.value)}
+                      placeholder="Grade / Rating (e.g. V3, 5.10a)"
+                      className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+                    />
+                    <textarea
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Notes..."
+                      rows={2}
+                      className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 resize-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               {showLocationWarning && (
                 <p className="rounded-xl border border-caution-border bg-caution-surface px-4 py-2.5 text-xs text-caution">

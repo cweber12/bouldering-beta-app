@@ -157,9 +157,6 @@ function ScanPageInner() {
   const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
 
-  // Edit-mode flag — set when user clicks "Edit climb" from results.
-  const [editMode, setEditMode] = useState(false);
-
   // Skeleton style for overlays
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
 
@@ -169,6 +166,7 @@ function ScanPageInner() {
   const styleRef = useRef<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
+  const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
 
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
@@ -358,10 +356,10 @@ function ScanPageInner() {
     setVideoPreviewUrl(url);
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
+    setWallCrop(DEFAULT_CROP);
     setS3Saved(false);
     setSaveError(null);
     setSavedRouteDirHandle(null);
-    setEditMode(false);
     setFirstFrameFile(null);
     clearRoutePhoto();
   }
@@ -405,14 +403,13 @@ function ScanPageInner() {
 
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;
-    setEditMode(false);
     setFirstFrameFile(null);
     clearRoutePhoto();
     process(pendingFile, model, cv, frameStep, {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop }, startTime);
+    }, { climberCrop, wallCrop }, startTime);
     setStep("landmarks");
   }
 
@@ -425,15 +422,9 @@ function ScanPageInner() {
   }
 
   function handleEditClimb() {
-    setEditMode(true);
     setFirstFrameFile(null);
     clearRoutePhoto();
     setStep("detection");
-  }
-
-  function handleBackToResults() {
-    setEditMode(false);
-    setStep("landmarks");
   }
 
   function handleBackToLandmarks() {
@@ -448,7 +439,6 @@ function ScanPageInner() {
     setVideoPreviewUrl(null);
     setPendingFile(null);
     setFirstFrameFile(null);
-    setEditMode(false);
     cachedPendingFile = null;
     cachedVideoUrl = null;
     clearRoutePhoto();
@@ -625,14 +615,16 @@ function ScanPageInner() {
         <StepSetDetection
           videoPreviewUrl={videoPreviewUrl}
           climberCrop={climberCrop}
+          wallCrop={wallCrop}
           onClimberCropChange={setClimberCrop}
+          onWallCropChange={setWallCrop}
           modelVariant={modelVariant}
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}
           onFrameStepChange={setFrameStep}
           canScan={!!(model && cv)}
           onScan={handleScan}
-          onBack={() => { setStep("pick"); setEditMode(false); }}
+          onBack={() => { setStep("pick"); }}
         />
       )}
 

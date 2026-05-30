@@ -8,6 +8,8 @@ import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
+const WALL_COLOR = "rgba(251,191,36,0.90)";
+type CropMode = "climber" | "wall";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,22 +25,28 @@ function formatVideoTime(secs: number): string {
 // ---------------------------------------------------------------------------
 interface CropToolbarProps {
   climberCropMoved: boolean;
-  showSettingsDropdown: boolean;
+  wallCropMoved: boolean;
+  cropMode: CropMode;
+  showAdvanced: boolean;
   modelVariant: MediaPipeVariant;
   frameStep: number;
-  onToggleSettings: () => void;
-  onCloseSettings: () => void;
+  onCropModeChange: (mode: CropMode) => void;
+  onToggleAdvanced: () => void;
+  onCloseAdvanced: () => void;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   onFrameStepChange: (n: number) => void;
 }
 
 function CropToolbar({
   climberCropMoved,
-  showSettingsDropdown,
+  wallCropMoved,
+  cropMode,
+  showAdvanced,
   modelVariant,
   frameStep,
-  onToggleSettings,
-  onCloseSettings,
+  onCropModeChange,
+  onToggleAdvanced,
+  onCloseAdvanced,
   onModelVariantChange,
   onFrameStepChange,
 }: CropToolbarProps) {
@@ -46,18 +54,47 @@ function CropToolbar({
 
   // Close dropdown on outside click
   useEffect(() => {
-    if (!showSettingsDropdown) return;
+    if (!showAdvanced) return;
     function handler(e: MouseEvent) {
       if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
-        onCloseSettings();
+        onCloseAdvanced();
       }
     }
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [showSettingsDropdown, onCloseSettings]);
+  }, [showAdvanced, onCloseAdvanced]);
 
   return (
     <>
+      <div className="flex items-center gap-1 rounded-lg border border-edge bg-card p-1 text-xs">
+        <button
+          type="button"
+          onClick={() => onCropModeChange("climber")}
+          className={cn(
+            "rounded-md px-2 py-1 font-medium transition",
+            cropMode === "climber"
+              ? "bg-accent/15 text-fg"
+              : "text-fg-secondary hover:text-fg",
+          )}
+          aria-pressed={cropMode === "climber"}
+        >
+          Climber
+        </button>
+        <button
+          type="button"
+          onClick={() => onCropModeChange("wall")}
+          className={cn(
+            "rounded-md px-2 py-1 font-medium transition",
+            cropMode === "wall"
+              ? "bg-caution/15 text-fg"
+              : "text-fg-secondary hover:text-fg",
+          )}
+          aria-pressed={cropMode === "wall"}
+        >
+          Wall texture
+        </button>
+      </div>
+
       {/* Climber crop status indicator */}
       <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-xs font-medium text-fg-secondary shrink-0">
         <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -71,29 +108,42 @@ function CropToolbar({
         )}
       </div>
 
+      <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-xs font-medium text-fg-secondary shrink-0">
+        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 6.75A2.25 2.25 0 015.25 4.5h13.5A2.25 2.25 0 0121 6.75v10.5A2.25 2.25 0 0118.75 19.5H5.25A2.25 2.25 0 013 17.25V6.75z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5v4.5h-7.5z" />
+        </svg>
+        Wall
+        {wallCropMoved && (
+          <svg className="h-3 w-3 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        )}
+      </div>
+
       {/* Detection settings dropdown */}
       <div ref={settingsRef} className="relative">
         <button
           type="button"
-          onClick={onToggleSettings}
+          onClick={onToggleAdvanced}
           className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-            showSettingsDropdown
+            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition motion-cta",
+            showAdvanced
               ? "border-accent/60 bg-accent/10 text-accent"
               : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
           )}
-          title="Detection settings"
-          aria-label="Settings"
-          aria-expanded={showSettingsDropdown}
+          title="Advanced detection controls"
+          aria-label="Advanced controls"
+          aria-expanded={showAdvanced}
         >
           <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          Settings
+          Advanced
         </button>
 
-        {showSettingsDropdown && (
+        {showAdvanced && (
           <div className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
@@ -134,7 +184,9 @@ function CropToolbar({
 export interface StepSetDetectionProps {
   videoPreviewUrl: string;
   climberCrop: CropFraction;
+  wallCrop?: CropFraction;
   onClimberCropChange: (c: CropFraction) => void;
+  onWallCropChange?: (c: CropFraction) => void;
   modelVariant: MediaPipeVariant;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
@@ -153,7 +205,9 @@ export interface StepSetDetectionProps {
 export default function StepSetDetection({
   videoPreviewUrl,
   climberCrop,
+  wallCrop,
   onClimberCropChange,
+  onWallCropChange,
   modelVariant,
   onModelVariantChange,
   frameStep,
@@ -172,23 +226,29 @@ export default function StepSetDetection({
   const [videoCurrentTime,   setVideoCurrentTime]   = useState(0);
   const [videoDuration,      setVideoDuration]      = useState(0);
   const [videoNaturalSize,   setVideoNaturalSize]   = useState<{ w: number; h: number }>({ w: 16, h: 9 });
-  // Fullscreen is the default/primary view.
-  const [videoFullscreen,    setVideoFullscreen]    = useState(true);
+  const [videoFullscreen,    setVideoFullscreen]    = useState(false);
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
   const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
 
   // Crop move tracking — unchecked until user drags the box
   const [climberCropMoved, setClimberCropMoved] = useState(false);
+  const [wallCropMoved, setWallCropMoved] = useState(false);
   const [showCropWarning,  setShowCropWarning]  = useState(false);
+  const [cropMode, setCropMode] = useState<CropMode>("climber");
 
-  // Settings dropdown
-  const [showSettingsDropdown, setShowSettingsDropdown] = useState(false);
+  // Advanced controls are intentionally hidden by default.
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────
   function handleClimberCropChange(c: CropFraction) {
     setClimberCropMoved(true);
     setShowCropWarning(false);
     onClimberCropChange(c);
+  }
+
+  function handleWallCropChange(c: CropFraction) {
+    setWallCropMoved(true);
+    onWallCropChange?.(c);
   }
 
   function handleCropVideoLoaded() {
@@ -255,17 +315,22 @@ export default function StepSetDetection({
   // ── Shared crop toolbar props ──────────────────────────────────────────
   const cropToolbarProps: CropToolbarProps = {
     climberCropMoved,
-    showSettingsDropdown,
+    wallCropMoved,
+    cropMode,
+    showAdvanced,
     modelVariant,
     frameStep,
-    onToggleSettings: () => setShowSettingsDropdown(p => !p),
-    onCloseSettings:  () => setShowSettingsDropdown(false),
+    onCropModeChange: setCropMode,
+    onToggleAdvanced: () => setShowAdvanced(p => !p),
+    onCloseAdvanced:  () => setShowAdvanced(false),
     onModelVariantChange,
     onFrameStepChange,
   };
 
   // ── Instruction hint ──────────────────────────────────────────────────
-  const cropHint = "Drag the white box to fit tightly around the climber";
+  const cropHint = cropMode === "climber"
+    ? "Climber crop: include a little padding around the body so the next move stays inside the box."
+    : "Wall crop: frame stable wall texture and avoid the climber body when possible.";
 
   // ── Scan footer: crop warning + CTA ───────────────────────────────────
   const scanFooter = (
@@ -281,12 +346,14 @@ export default function StepSetDetection({
             </p>
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setShowCropWarning(false)}
                 className="flex-1 rounded-lg border border-caution-border px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/10"
               >
                 Set crops
               </button>
               <button
+                type="button"
                 onClick={doScan}
                 className="flex-1 rounded-lg border border-caution/40 bg-caution/10 px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/20"
               >
@@ -299,10 +366,11 @@ export default function StepSetDetection({
 
       <div className="flex justify-center">
         <button
+          type="button"
           onClick={handleScanClick}
           disabled={!canScan}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl border px-10 py-3 text-sm font-semibold transition",
+            "flex items-center justify-center gap-2 rounded-xl border px-10 py-3 text-sm font-semibold transition motion-cta",
             canScan
               ? "border-accent/40 bg-accent text-fg-inverse shadow-lg shadow-accent/30 hover:bg-accent/90 hover:shadow-accent/40 active:scale-[0.98]"
               : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
@@ -337,6 +405,7 @@ export default function StepSetDetection({
           <CropToolbar {...cropToolbarProps} />
           {/* Expand to fullscreen */}
           <button
+            type="button"
             onClick={() => setVideoFullscreen(true)}
             className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
             aria-label="Expand video preview"
@@ -350,7 +419,9 @@ export default function StepSetDetection({
 
         {/* Inline hint */}
         {hasCropFrame && (
-          <p className="text-xs text-fg-muted -mt-1">{cropHint}</p>
+          <p className="text-xs text-fg-muted -mt-1" role="status" aria-live="polite">
+            {cropHint} <span className="text-fg-secondary">Advanced controls are optional.</span>
+          </p>
         )}
 
         {/* Viewport-fit video container */}
@@ -372,10 +443,10 @@ export default function StepSetDetection({
           />
           {hasCropFrame && (
             <CropBoxOverlay
-              box={climberCrop}
-              onChange={handleClimberCropChange}
+              box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
+              onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
               borderRadius="1rem"
-              color={CLIMBER_COLOR}
+              color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
             />
           )}
           <canvas ref={cropCanvasRef} className="hidden" />
@@ -434,6 +505,7 @@ export default function StepSetDetection({
 
             {/* Exit — back to StepPickVideo */}
             <button
+              type="button"
               onClick={onBack}
               className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
               aria-label="Exit (back to video selection)"
@@ -463,10 +535,10 @@ export default function StepSetDetection({
               />
               {hasCropFrame && (
                 <CropBoxOverlay
-                  box={climberCrop}
-                  onChange={handleClimberCropChange}
+                  box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
+                  onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
                   borderRadius="0.75rem"
-                  color={CLIMBER_COLOR}
+                  color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
                 />
               )}
             </div>

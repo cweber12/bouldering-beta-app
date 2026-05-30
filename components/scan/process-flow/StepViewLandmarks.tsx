@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
+import QualitySummaryCard from "@/components/scan/process-flow/QualitySummaryCard";
+import FixSuggestionsPanel, { type FixSuggestion } from "@/components/scan/process-flow/FixSuggestionsPanel";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -68,44 +70,73 @@ export default function StepViewLandmarks({
   saveError,
   onViewScans,
 }: StepViewLandmarksProps) {
-  const [showInfoDropdown, setShowInfoDropdown] = useState(false);
-  const infoRef = useRef<HTMLDivElement>(null);
+  const [showQualityDetails, setShowQualityDetails] = useState(false);
   const routePhotoInputRef = useRef<HTMLInputElement>(null);
-
-  // Close info dropdown on outside click
-  useEffect(() => {
-    if (!showInfoDropdown) return;
-    function handler(e: MouseEvent) {
-      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
-        setShowInfoDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showInfoDropdown]);
-
-  // Track scan start time for ETA calculation
-  const scanStartTimeRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (isProcessing) {
-      if (scanStartTimeRef.current === null) scanStartTimeRef.current = Date.now();
-    } else {
-      scanStartTimeRef.current = null;
-    }
-  }, [isProcessing]);
-
-  const etaText = useMemo(() => {
-    if (!isProcessing || progressPct < 3 || scanStartTimeRef.current === null) return null;
-    const elapsed = (Date.now() - scanStartTimeRef.current) / 1000;
-    const totalEst = elapsed / (progressPct / 100);
-    const remaining = Math.max(0, totalEst - elapsed);
-    if (remaining < 5) return "almost done";
-    if (remaining < 60) return `~${Math.ceil(remaining)}s remaining`;
-    return `~${Math.ceil(remaining / 60)}m remaining`;
-  }, [isProcessing, progressPct]);
 
   const showResults = !isProcessing && !!activeAttempt &&
     (orbStatus === "ready" || orbStatus === "failed");
+
+  const poseFrames = activeAttempt?.frames.length ?? 0;
+  const orbPoints = activeAttempt?.orbFeatures?.keypoints.length ?? 0;
+  const weakPose = poseFrames < 25;
+  const weakOrb = orbStatus !== "ready" || orbPoints < 120;
+  const coarseSampling = frameStep > 12;
+
+  const qualityScore = useMemo(() => {
+    if (!showResults) return 0;
+    if (processingError || orbStatus === "failed") return 35;
+    let score = 95;
+    if (weakPose) score -= 25;
+    if (weakOrb) score -= 35;
+    if (coarseSampling) score -= 10;
+    return Math.max(0, Math.min(score, 100));
+  }, [showResults, processingError, orbStatus, weakPose, weakOrb, coarseSampling]);
+
+  const qualityStatus: "pass" | "warn" = qualityScore >= 70 ? "pass" : "warn";
+
+  const qualitySummary = useMemo(() => {
+    if (qualityStatus === "pass") {
+      return "Tracking quality looks solid. You can save now or continue to the optional route overlay.";
+    }
+    return "The scan can still be saved, but matching quality may be unstable. Apply one quick fix before saving for better reliability.";
+  }, [qualityStatus]);
+
+  const fixSuggestions = useMemo<FixSuggestion[]>(() => {
+    if (!showResults || qualityStatus === "pass") return [];
+    const suggestions: FixSuggestion[] = [];
+
+    if (weakPose) {
+      suggestions.push({
+        id: "pose-crop",
+        title: "Improve climber tracking",
+        detail: "Pose frame count is low. Tighten the crop around the climber path and rerun.",
+        actionLabel: "Edit crop",
+        onAction: onEditClimb,
+      });
+    }
+
+    if (coarseSampling) {
+      suggestions.push({
+        id: "frame-step",
+        title: "Increase sampling frequency",
+        detail: "Frame step is high. Lower it in Advanced controls for denser keyframes.",
+        actionLabel: "Adjust settings",
+        onAction: onEditClimb,
+      });
+    }
+
+    if (weakOrb) {
+      suggestions.push({
+        id: "orb-strength",
+        title: "Strengthen ORB reference",
+        detail: "Reference point count is weak. Re-run from a sharper frame with steadier lighting.",
+        actionLabel: "Rescan video",
+        onAction: onScanAnother,
+      });
+    }
+
+    return suggestions;
+  }, [showResults, qualityStatus, weakPose, coarseSampling, weakOrb, onEditClimb, onScanAnother]);
 
   return (
     <div className="flex flex-1 flex-col min-h-0 overflow-y-auto">
@@ -154,9 +185,6 @@ export default function StepViewLandmarks({
               Frame {currentFrame} of {totalFrames}
               <span className="ml-1.5 text-fg-muted">· every {frameStep} frames</span>
             </p>
-            {etaText && (
-              <p className="text-xs text-fg-muted">{etaText}</p>
-            )}
           </div>
         </div>
       )}
@@ -232,42 +260,6 @@ export default function StepViewLandmarks({
                 Scan another
               </button>
 
-              {/* Scan metrics */}
-              {activeAttempt && (
-                <div ref={infoRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowInfoDropdown(p => !p)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
-                      showInfoDropdown
-                        ? "border-send/50 bg-send-surface text-send"
-                        : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
-                    )}
-                    aria-label="Scan metrics"
-                    aria-expanded={showInfoDropdown}
-                  >
-                    <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                    </svg>
-                    Metrics
-                  </button>
-
-                  {showInfoDropdown && (
-                    <div className="absolute left-0 top-full z-20 mt-1.5 w-64 rounded-xl border border-send/20 bg-card/95 px-4 py-3 shadow-2xl backdrop-blur-xl animate-fade-in">
-                      <p className="text-xs font-semibold text-send mb-1.5">Analysis complete</p>
-                      <p className="text-xs text-fg-secondary leading-relaxed">
-                        {activeAttempt.frames.length} pose frames &middot;{" "}
-                        {activeAttempt.orbFeatures?.keypoints.length ?? 0} reference points
-                        {activeAttempt.state && ` — ${activeAttempt.state}`}
-                        {activeAttempt.area  && ` › ${activeAttempt.area}`}
-                        {activeAttempt.route && ` › ${activeAttempt.route}`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Skeleton style */}
               <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" />
 
@@ -306,6 +298,19 @@ export default function StepViewLandmarks({
           {/* Animated first-frame landmark preview */}
           {showResults && (
             <div className="flex flex-col gap-3">
+              <QualitySummaryCard
+                score={qualityScore}
+                status={qualityStatus}
+                summary={qualitySummary}
+                poseFrames={poseFrames}
+                orbPoints={orbPoints}
+                frameStep={frameStep}
+                showDetails={showQualityDetails}
+                onToggleDetails={() => setShowQualityDetails((prev) => !prev)}
+              />
+
+              <FixSuggestionsPanel suggestions={fixSuggestions} />
+
               {firstFrameFile && firstFrameSkeletonData ? (
                 <FramePlayer
                   imageFile={firstFrameFile}
@@ -319,11 +324,12 @@ export default function StepViewLandmarks({
                 <p className="text-xs text-fg-muted text-center">Loading preview&#8230;</p>
               )}
 
-              {/* Optional overlay action — secondary style since saving is the primary CTA */}
+              {/* Optional overlay action — explicit branch, not required for save */}
               {orbReady && (
-                <>
-                  <p className="text-xs text-fg-muted text-center">
-                    Optional: upload a route photo to overlay your beta on the wall
+                <div className="rounded-xl border border-edge/40 bg-card/50 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Optional branch</p>
+                  <p className="mt-1 text-xs text-fg-secondary">
+                    Test this scan on a route photo before saving if you want a visual confidence check.
                   </p>
                   <input
                     ref={routePhotoInputRef}
@@ -339,14 +345,14 @@ export default function StepViewLandmarks({
                   <button
                     type="button"
                     onClick={() => routePhotoInputRef.current?.click()}
-                    className="flex items-center justify-center gap-2 w-full rounded-xl border border-edge bg-card px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                    className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-edge bg-inset px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
                   >
                     <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
                     </svg>
-                    Overlay on Route Photo
+                    Open Optional Route Overlay
                   </button>
-                </>
+                </div>
               )}
             </div>
           )}

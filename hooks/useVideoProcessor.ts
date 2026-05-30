@@ -54,7 +54,7 @@ let nextMpTimestampSec = 1;
  * the surrounding wall texture is included. The result is clamped to the frame
  * bounds. Combined with the climber exclusion mask in extractFeaturesExcludingClimber,
  * this gives ORB features from the wall plane immediately around the climber
- * without any user-drawn wall crop.
+ * when a user-defined wall crop is not provided.
  */
 function deriveWallRegion(
   climberCrop: CropFraction,
@@ -99,7 +99,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction },
+    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction },
     startTime?: number,
     backend?: PoseBackend,
   ) => Promise<void>;
@@ -150,7 +150,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction } = {},
+      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
     ) => {
@@ -214,11 +214,18 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           height: Math.round(cropOptions.climberCrop.h * videoHeight),
         } : undefined;
 
-        // Auto-derive the wall analysis region from the climber crop (35 % padding).
-        // Used by analyzeFrame to compute wall-specific lighting stats.
-        const wallCropPx = cropOptions.climberCrop
+        // Wall analysis region: prefer explicit user wall crop; otherwise
+        // derive from climber crop with 35% padding.
+        const wallCropPx = cropOptions.wallCrop ? {
+          x: Math.round(cropOptions.wallCrop.x * videoWidth),
+          y: Math.round(cropOptions.wallCrop.y * videoHeight),
+          width: Math.round(cropOptions.wallCrop.w * videoWidth),
+          height: Math.round(cropOptions.wallCrop.h * videoHeight),
+          srcWidth: videoWidth,
+          srcHeight: videoHeight,
+        } : (cropOptions.climberCrop
           ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
-          : undefined;
+          : undefined);
 
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
@@ -464,11 +471,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               : [];
 
             let orbFeatures;
-            if (cropOptions.climberCrop) {
-              // Derive the ORB region by expanding the climber crop by 35 %.
-              // Then exclude the climber body via pose landmarks remapped to the
-              // crop-local coordinate space.
-              const wallBox = deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight);
+            if (cropOptions.climberCrop || wallCropPx) {
+              // Prefer user-specified wall crop; fallback to derived wall box.
+              // Exclude climber body via pose landmarks remapped to crop-local space.
+              const wallBox = wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
               const croppedData = cropImageData(processedOrbImageData, wallBox);
 
               // Remap full-frame normalised landmarks into the crop-local space.

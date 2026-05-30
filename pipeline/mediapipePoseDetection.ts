@@ -20,6 +20,13 @@ type PoseLandmarker = any;
 const DEFAULT_MIN_SCORE = 0.3;
 
 /**
+ * MediaPipe VIDEO mode requires strictly increasing timestamps per landmarker
+ * instance. Track the last timestamp we sent for each instance and bump by at
+ * least 1 ms when callers provide stale or regressing values.
+ */
+const lastTimestampMsByLandmarker = new WeakMap<object, number>();
+
+/**
  * Run MediaPipe Pose Landmarker on a single video frame canvas.
  *
  * @param landmarker - The loaded MediaPipe PoseLandmarker instance
@@ -35,8 +42,11 @@ export function estimateFrameMediaPipe(
   timestamp: number,
   minScore: number = DEFAULT_MIN_SCORE,
 ): PoseFrame | null {
-  // MediaPipe detectForVideo expects milliseconds as the timestamp.
-  const timestampMs = Math.round(timestamp * 1000);
+  // MediaPipe detectForVideo expects milliseconds and strict monotonicity.
+  const requestedTimestampMs = Math.round(timestamp * 1000);
+  const prevTimestampMs = lastTimestampMsByLandmarker.get(landmarker as object) ?? -Infinity;
+  const timestampMs = Math.max(requestedTimestampMs, prevTimestampMs + 1);
+  lastTimestampMsByLandmarker.set(landmarker as object, timestampMs);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const result: any = landmarker.detectForVideo(canvas, timestampMs);

@@ -126,6 +126,9 @@ export default function StepMatchRoutePhoto({
 
       {/* ── Compact toolbar ── */}
       <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30 bg-surface">
+        <span className="rounded-full border border-edge/50 bg-card/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+          Optional branch
+        </span>
 
         {/* Back */}
         <button
@@ -256,7 +259,7 @@ export default function StepMatchRoutePhoto({
       {!routeMatchTriggered && !isMatching && (
         <div className="shrink-0 px-4 py-1.5">
           <p className="text-xs text-fg-secondary">
-            Adjust the crop region for wall texture matching, then click &ldquo;View Climb&rdquo;.
+            Optional check: adjust crop around wall texture, then click &ldquo;View Climb&rdquo;.
           </p>
         </div>
       )}

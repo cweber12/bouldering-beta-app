@@ -25,13 +25,6 @@ export default function Home() {
     <main className="flex flex-1 flex-col items-center px-4 py-12 sm:px-6 sm:py-20">
       {/* Hero section */}
       <div className="flex flex-col items-center gap-5 text-center max-w-xl">
-        <h1 className="text-3xl font-bold tracking-tight text-fg sm:text-5xl">
-          Route Scanner
-        </h1>
-        <p className="text-base text-fg-secondary leading-relaxed max-w-md">
-          Scan your climbing runs, extract skeleton poses with MediaPipe, then
-          project your movement onto a route photo &#8212; entirely in your browser.
-        </p>
         {!loading && !user && (
           <Link
             href="/login"
