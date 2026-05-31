@@ -80,16 +80,16 @@ export const light = {
   surfaceAlt:     "#e5e1db",
   card:           "#fefcf9",   // warm near-white
   inset:          "#ddd9d2",
-  fg:             "#1c1917",   // stone-950 — warm near-black
-  fgSecondary:    "#3d3935",   // stone-800 — warm strong secondary
-  fgMuted:        "#57534e",   // stone-600 — readable muted (~6.3:1)
-  fgLight:        "#78716c",   // stone-500 — decorative only
+  fg:             "#0f0c0a",   // near-black body text
+  fgSecondary:    "#211c17",   // dark secondary copy
+  fgMuted:        "#332d27",   // readable muted copy
+  fgLight:        "#4d463f",   // supportive but legible text
   fgInverse:      "#ffffff",
   edge:           "#c8c3bc",   // warm stone-300
   edgeHover:      "#a29d96",   // stone-400
-  accent:         "#15803d",   // green-700
-  accentHover:    "#166534",   // green-800
-  success:        "#15803d",
+  accent:         "#14532d",   // green-900
+  accentHover:    "#052e16",   // deep green hover
+  success:        "#14532d",
   danger:         "#b91c1c",   // red-700
   caution:        "#92400e",   // amber-800
   send:           "#047857",   // emerald-700

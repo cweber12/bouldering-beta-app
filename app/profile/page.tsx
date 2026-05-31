@@ -512,7 +512,7 @@ export default function ProfilePage() {
 
         {/* ---- Avatar ---- */}
         <section className="mb-8 flex items-center gap-6">
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
+          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-(--color-inset)">
             {profile.profilePicture ? (
               <NextImage
                 src={profile.profilePicture}
@@ -523,7 +523,7 @@ export default function ProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted">
+              <div className="flex h-full w-full items-center justify-center text-3xl text-fg-secondary">
                 {(profile.displayName || user?.email || "?")[0]?.toUpperCase()}
               </div>
             )}
@@ -552,7 +552,7 @@ export default function ProfilePage() {
         {/* ---- Photo cropper modal ---- */}
         {showCropper && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm px-4 py-6">
-            <div className="w-full max-w-lg rounded-2xl border border-edge bg-surface p-6 shadow-2xl">
+            <div className="w-full max-w-lg rounded-md border border-edge/50 bg-surface p-5 shadow-xl">
               <h2 className="mb-4 text-sm font-semibold text-fg">Crop profile photo</h2>
               <ImageCropper onCrop={handleCropDone} onCancel={() => setShowCropper(false)} />
             </div>
@@ -592,7 +592,7 @@ export default function ProfilePage() {
                 onClick={handleUseGPS}
                 disabled={geoLoading}
                 title="Use current location"
-                className="flex shrink-0 items-center justify-center rounded-lg border border-edge bg-inset px-2.5 py-2 text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+                className="ui-control flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-secondary disabled:opacity-50"
               >
                 {geoLoading ? (
                   <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-edge border-t-accent" />
@@ -627,7 +627,7 @@ export default function ProfilePage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-surface transition hover:bg-accent-hover disabled:opacity-50"
+              className="ui-control-primary rounded-md px-4 py-2 text-sm font-medium disabled:opacity-50"
             >
               {saving ? "Saving\u2026" : "Save profile"}
             </button>
@@ -663,7 +663,7 @@ export default function ProfilePage() {
               {searchResults.map((r) => (
                 <li
                   key={r.userId}
-                  className="flex items-center justify-between rounded-lg border border-edge bg-card px-4 py-2.5"
+                  className="flex items-center justify-between border-b border-edge/40 px-1 py-3 last:border-b-0"
                 >
                   <Link
                     href={`/profile/${r.userId}`}
@@ -716,7 +716,7 @@ export default function ProfilePage() {
                 return (
                   <li
                     key={uid}
-                    className="flex items-center justify-between rounded-lg border border-edge bg-card px-4 py-2.5"
+                    className="flex items-center justify-between border-b border-edge/40 px-1 py-3 last:border-b-0"
                   >
                     <Link
                       href={`/profile/${uid}`}
@@ -758,7 +758,7 @@ export default function ProfilePage() {
     <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
       {/* ---- Profile header ---- */}
       <section className="mb-6 flex items-center gap-4">
-        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-(--color-inset)">
           {profile.profilePicture ? (
             <NextImage
               src={profile.profilePicture}
@@ -769,7 +769,7 @@ export default function ProfilePage() {
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xl text-fg-muted">
+            <div className="flex h-full w-full items-center justify-center text-2xl text-fg-secondary">
               {(profile.displayName || user?.email || "?")[0]?.toUpperCase()}
             </div>
           )}
@@ -778,6 +778,9 @@ export default function ProfilePage() {
           <p className="truncate text-base font-semibold text-fg">
             {profile.displayName || user?.email || "Climber"}
           </p>
+          {profile.displayName && user?.email && (
+            <p className="truncate text-sm text-fg-secondary">{user.email}</p>
+          )}
           {profile.location && (
             <p className="truncate text-sm text-fg-muted">{profile.location}</p>
           )}
@@ -832,12 +835,12 @@ export default function ProfilePage() {
           type="button"
           onClick={() => setFilterOpen((o) => !o)}
           className={cn(
-            "relative flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition",
+            "relative flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition",
             filterOpen
-              ? "border-accent/60 bg-accent/10 text-accent"
+              ? "text-accent"
               : hasActiveFilters
-              ? "border-accent/30 bg-accent/5 text-accent"
-              : "border-edge bg-inset text-fg-secondary hover:border-edge-hover hover:text-fg",
+              ? "text-accent"
+              : "text-fg-secondary hover:text-fg",
           )}
           title="Toggle filters"
           aria-label="Toggle filters"
@@ -899,7 +902,7 @@ export default function ProfilePage() {
         <select
           value={sortOrder}
           onChange={(e) => { setSortOrder(e.target.value as "newest" | "oldest" | "route"); setClimbPage(1); }}
-          className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg focus:border-accent focus:outline-none"
+          className="ui-input w-auto rounded-md px-2 py-1 text-xs"
         >
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
@@ -909,7 +912,7 @@ export default function ProfilePage() {
 
       {/* ---- Collapsible filter panel ---- */}
       {filterOpen && (
-        <section className="mb-4 rounded-xl border border-edge bg-card/60 px-4 py-3">
+        <section className="mb-4 border-t border-edge/40 px-1 pt-3">
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-36">
               <ComboInput
@@ -964,7 +967,7 @@ export default function ProfilePage() {
 
       {/* ---- Map view ---- */}
       {viewMode === "map" && (
-        <section className="mb-6 rounded-xl border border-edge overflow-hidden">
+        <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
           {loadingPins ? (
             <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
               Loading map&#8230;
@@ -1005,10 +1008,10 @@ export default function ProfilePage() {
                     tabIndex={0}
                     onClick={() => handleCardClick(c)}
                     onKeyDown={(e) => e.key === "Enter" && handleCardClick(c)}
-                    className="group cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="group cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     {/* Thumbnail */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
+                    <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
                       {c.thumbnail ? (
                         <NextImage
                           src={c.thumbnail}

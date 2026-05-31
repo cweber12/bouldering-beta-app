@@ -295,7 +295,7 @@ export default function PublicProfilePage() {
         <>
         {/* ---- Profile header ---- */}
         <section className="mb-8 flex items-center gap-6">
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-inset">
+          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-(--color-inset)">
             {profile?.profilePicture ? (
               <Image
                 src={profile.profilePicture}
@@ -306,7 +306,7 @@ export default function PublicProfilePage() {
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl text-fg-muted">
+              <div className="flex h-full w-full items-center justify-center text-2xl text-fg-secondary">
                 {displayName[0]?.toUpperCase() ?? "?"}
               </div>
             )}
@@ -440,7 +440,7 @@ export default function PublicProfilePage() {
 
         {/* ---- Map view ---- */}
         {viewMode === "map" && (
-          <section className="mb-6 rounded-xl border border-edge overflow-hidden">
+          <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
             {loadingPins ? (
               <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
                 Loading map&#8230;
@@ -474,10 +474,10 @@ export default function PublicProfilePage() {
                     <div
                       key={c.key}
                       onClick={() => handleCardClick(c)}
-                      className="group relative cursor-pointer rounded-xl border border-edge bg-card transition hover:border-edge-hover"
+                      className="group relative cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover"
                     >
                       {/* Thumbnail or placeholder */}
-                      <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
+                      <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
                         {c.thumbnail ? (
                           <Image
                             src={c.thumbnail}

@@ -15,9 +15,9 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
       <div className="w-full p-1 sm:p-3">
         <div className="mb-5 flex flex-col gap-2">
-          <p className="text-label tracking-label text-fg-muted uppercase">Start Scan</p>
+          <p className="text-label tracking-label text-fg-secondary uppercase">Start Scan</p>
           <h2 className="text-xl font-semibold text-fg">Choose your video source</h2>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-sm text-fg">
             Upload an existing climb clip or record a new one. You can crop and tune settings in the next step.
           </p>
         </div>
@@ -25,7 +25,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1fr]">
           {/* Primary: Choose existing file */}
           <label className="group relative flex cursor-pointer items-center gap-4 overflow-hidden rounded-md border border-accent/35 bg-accent/10 px-4 py-4 text-left transition-colors duration-150 hover:bg-accent/12">
-            <div className="flex h-11 w-11 items-center justify-center rounded-sm bg-accent/20 text-accent">
+            <div className="flex h-11 w-11 items-center justify-center text-accent">
               <svg
                 className="h-7 w-7"
                 fill="none"
@@ -43,7 +43,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
             </div>
             <div className="flex min-w-0 flex-1 flex-col">
               <span className="text-sm font-semibold text-fg">Upload video</span>
-              <span className="text-xs text-fg-secondary">Primary path: fastest way to start</span>
+              <span className="text-xs text-fg">Primary path: fastest way to start</span>
             </div>
             <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-inverse">
               Recommended
@@ -62,7 +62,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
             onClick={onCamera}
             className="group flex items-center gap-3 rounded-md border border-edge/55 bg-surface-alt/40 px-4 py-4 text-left transition-colors duration-150 hover:border-edge-hover hover:bg-surface-alt/55"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-sm bg-inset text-fg-secondary group-hover:text-fg">
+            <div className="flex h-11 w-11 items-center justify-center text-fg-secondary group-hover:text-fg">
               <svg
                 className="h-6 w-6"
                 fill="none"
@@ -80,7 +80,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
             </div>
             <div className="flex flex-col">
               <span className="text-sm font-semibold text-fg">Record from camera</span>
-              <span className="text-xs text-fg-secondary">Good for on-the-spot attempts</span>
+              <span className="text-xs text-fg">Good for on-the-spot attempts</span>
             </div>
           </button>
         </div>

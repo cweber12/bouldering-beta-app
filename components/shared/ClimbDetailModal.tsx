@@ -77,7 +77,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1001] flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
+      className="fixed inset-0 z-1001 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -85,13 +85,14 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
       aria-modal="true"
       aria-label={`${climb.route} climb detail`}
     >
-      <div className="relative w-full max-w-lg rounded-2xl border border-edge bg-surface shadow-2xl">
+      <div className="relative w-full max-w-lg rounded-md border border-edge/50 bg-(--color-surface) shadow-xl">
         {/* Close button */}
         <button
           ref={closeButtonRef}
           type="button"
           onClick={onClose}
-          className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface/80 text-fg-secondary backdrop-blur transition hover:text-fg"
+          className="ui-control absolute top-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-md text-fg-secondary backdrop-blur"
+          style={{ backgroundColor: "color-mix(in srgb, var(--color-surface) 85%, transparent)" }}
           aria-label="Close"
         >
           <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -100,7 +101,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
         </button>
 
         {/* Image area — object-contain so the full climbing pose is always visible */}
-        <div className="relative aspect-video w-full overflow-hidden rounded-t-2xl bg-inset">
+        <div className="relative aspect-video w-full overflow-hidden rounded-t-md bg-(--color-inset)">
           {climb.thumbnail ? (
             <Image
               src={climb.thumbnail}
@@ -129,26 +130,26 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
         {/* Detail section */}
         <div className="px-5 py-4">
           <h2 className="text-base font-semibold text-fg">{climb.route}</h2>
-          <p className="mt-0.5 text-sm text-fg-muted">
+          <p className="mt-0.5 text-sm text-fg-secondary">
             {climb.area} &middot; {climb.state}
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="text-xs text-fg-muted">{climb.timestamp}</span>
+            <span className="text-xs text-fg-secondary">{climb.timestamp}</span>
             {climb.rating && (
               <span className="rounded bg-accent/20 px-1.5 py-0.5 text-xs font-medium text-accent">
                 {climb.rating}
               </span>
             )}
             {climb.coordinates && (
-              <span className="text-xs text-fg-muted">
+              <span className="text-xs text-fg-secondary">
                 {climb.coordinates.lat.toFixed(4)}, {climb.coordinates.lng.toFixed(4)}
               </span>
             )}
           </div>
 
           {climb.notes && (
-            <p className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{climb.notes}</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm text-fg">{climb.notes}</p>
           )}
 
           {/* Action row — exactly three distinct actions */}
@@ -157,7 +158,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
             <button
               type="button"
               onClick={() => go(viewUrl)}
-              className="w-full rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover"
+              className="ui-control-primary w-full rounded-md px-4 py-2.5 text-sm font-semibold"
             >
               View on route photo
             </button>
@@ -167,7 +168,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
               <button
                 type="button"
                 onClick={() => cameraInputRef.current?.click()}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                className="ui-control flex flex-1 items-center justify-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-medium"
               >
                 <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -194,7 +195,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
                   }
                 }}
                 disabled={!onCompare}
-                className="flex-1 rounded-xl border border-edge px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+                className="ui-control flex-1 rounded-md px-4 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Compare
               </button>

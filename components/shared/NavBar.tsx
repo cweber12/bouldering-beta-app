@@ -8,11 +8,11 @@ import { useAuth } from "@/hooks/useAuth";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 
-const PUBLIC_TABS = [
+const PUBLIC_LINKS = [
   { href: "/docs", label: "Docs" },
 ] as const;
 
-const AUTH_TABS = [
+const AUTH_LINKS = [
   { href: "/scan", label: "Scan" },
   { href: "/profile", label: "Collection" },
   { href: "/docs", label: "Docs" },
@@ -131,7 +131,7 @@ export default function NavBar() {
   const [helpOpenPath, setHelpOpenPath] = useState<string | null>(null);
   const helpRef = useRef<HTMLDivElement>(null);
 
-  const tabs = user ? AUTH_TABS : PUBLIC_TABS;
+  const links = user ? AUTH_LINKS : PUBLIC_LINKS;
   const helpSections = HELP_CONTENT[path] ?? [];
   const helpOpen = helpOpenPath === path;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -162,87 +162,94 @@ export default function NavBar() {
       className="sticky top-0 z-50 border-b border-edge/60 bg-surface-alt/90 backdrop-blur-xl"
       aria-label="Main navigation"
     >
-      <div ref={helpRef} className="relative mx-auto max-w-5xl px-4 sm:px-6">
-        <div className="flex h-12 items-center gap-1">
+      <div ref={helpRef} className="relative w-full px-4 sm:px-6 lg:px-8">
+        <div className="flex h-12 items-center gap-3">
           {/* Brand */}
-          <Link href="/" className="mr-4 flex items-center gap-2 py-2 sm:mr-6">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md text-accent">
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v4a1 1 0 01-1 1H3m18-5v4a1 1 0 001 1h-3M7 21v-4a1 1 0 00-1-1H3m18 5v-4a1 1 0 011-1h-3M12 8v8m-3-5l3-3 3 3" />
+          <Link href="/" className="mr-3 flex items-center gap-2 py-2 sm:mr-5" aria-label="Route Scanner home">
+            <span className="flex h-6 w-6 items-center justify-center text-fg-inverse" aria-hidden="true">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path d="M42.4309 12.0391C37.7023 7.38257 31.1542 4.5 23.9187 4.5C16.7257 4.5 10.2121 7.34876 5.48999 11.9571" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M6.66675 29.4743V29.4167C6.66675 19.8437 14.4271 12.0833 24.0001 12.0833" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M31.1694 13.6309C37.1649 16.3582 41.3333 22.4006 41.3333 29.4167V29.4296" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M14.25 37V29.4167C14.25 24.0319 18.6152 19.6667 24 19.6667C29.3848 19.6667 33.75 24.0319 33.75 29.4167V37" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M17.5261 43.5C19.489 43.0154 20.75 40.9456 20.75 39.196C20.75 37.3354 20.75 34.4367 20.75 30.5C20.75 28.7051 22.2051 27.25 24 27.25C25.795 27.25 27.25 28.7051 27.25 30.5V39.196" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </span>
-            <span className="text-sm font-semibold tracking-tight text-fg uppercase">
+            <span className="text-sm font-semibold tracking-tight text-fg-inverse">
               Beta&nbsp;Scanner
             </span>
           </Link>
 
-          {/* Desktop tabs */}
-          <div className="hidden items-center gap-0.5 md:flex">
-            {tabs.map(tab => {
+          {/* Desktop nav rail */}
+          <div className="hidden items-center md:flex">
+            {links.map((link, index) => {
               const active =
-                path === tab.href || path.startsWith(tab.href + "/");
+                path === link.href || path.startsWith(link.href + "/");
               return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={cn(
-                    "relative rounded-lg px-3 py-1.5 text-body-sm font-medium transition-colors duration-150",
-                    active
-                      ? "text-fg"
-                      : "text-fg-muted hover:text-fg",
+                <div key={link.href} className="flex items-center">
+                  {index > 0 && (
+                    <span className="mx-2 h-3.5 w-px bg-edge/70" aria-hidden="true" />
                   )}
-                  aria-current={active ? "page" : undefined}
-                >
-                  {tab.label}
-                  {active && (
-                    <span className="absolute inset-x-3 -bottom-3.25 h-0.5 rounded-full bg-accent" />
-                  )}
-                </Link>
+                  <Link
+                    href={link.href}
+                    className={cn(
+                      "relative px-1 py-1 text-body-sm font-medium transition-colors duration-150",
+                      active
+                        ? "text-fg-inverse"
+                        : "text-fg-light hover:text-fg-inverse",
+                    )}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {link.label}
+                    {active && (
+                      <span className="absolute inset-x-0 -bottom-2.5 h-0.5 bg-accent" />
+                    )}
+                  </Link>
+                </div>
               );
             })}
 
-            {/* Help tab -- desktop */}
+            {/* Help utility -- desktop */}
             {helpSections.length > 0 && (
-              <button
-                onClick={() => setHelpOpenPath(old => old === path ? null : path)}
-                className={cn(
-                  "flex items-center gap-1 rounded-lg px-3 py-1.5 text-body-sm font-medium transition-colors duration-150",
-                  helpOpen
-                    ? "text-fg"
-                    : "text-fg-muted hover:text-fg",
-                )}
-                aria-expanded={helpOpen}
-              >
-                Help
-                <svg
-                  className={cn("h-3 w-3 transition-transform duration-200", helpOpen && "rotate-180")}
-                  fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
-                  aria-hidden="true"
+              <div className="ml-3 flex items-center border-l border-edge/70 pl-3">
+                <button
+                  onClick={() => setHelpOpenPath(old => old === path ? null : path)}
+                  className={cn(
+                    "flex items-center gap-1 py-1 text-body-sm font-medium transition-colors duration-150",
+                    helpOpen
+                      ? "text-fg-inverse"
+                      : "text-fg-light hover:text-fg-inverse",
+                  )}
+                  aria-expanded={helpOpen}
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                </svg>
-              </button>
+                  Help
+                  <svg
+                    className={cn("h-3 w-3 transition-transform duration-200", helpOpen && "rotate-180")}
+                    fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                  </svg>
+                </button>
+              </div>
             )}
           </div>
 
           {/* Right side — auth + theme toggle + mobile hamburger */}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-1.5">
             {!loading && !user && (
               <Link
                 href="/login"
-                className="hidden rounded-lg border border-accent/35 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/15 sm:inline-flex"
+                className="hidden ui-control px-3 py-1.5 text-xs font-medium text-fg-inverse sm:inline-flex"
               >
                 Sign in
               </Link>
             )}
             {!loading && user && (
               <div className="hidden items-center gap-2 sm:flex">
-                <span className="truncate max-w-35 text-xs text-fg-muted">
-                  {user.email}
-                </span>
                 <button
                   onClick={handleSignOut}
-                  className="ui-control rounded-lg px-3 py-1.5 text-xs font-medium"
+                  className="ui-control rounded-lg px-3 py-1.5 text-xs font-medium text-fg-inverse"
                 >
                   Sign out
                 </button>
@@ -253,7 +260,7 @@ export default function NavBar() {
 
             {/* Mobile hamburger */}
             <button
-              className="ui-control flex h-11 w-11 items-center justify-center rounded-md text-fg-muted md:hidden"
+              className="ui-control flex h-9 w-9 items-center justify-center rounded-md text-fg-light md:hidden"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Toggle menu"
               aria-expanded={mobileOpen}
@@ -274,42 +281,42 @@ export default function NavBar() {
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="animate-fade-in flex flex-col gap-1 border-t border-edge/40 pb-4 pt-2 md:hidden">
-            {tabs.map(tab => {
+            {links.map(link => {
               const active =
-                path === tab.href || path.startsWith(tab.href + "/");
+                path === link.href || path.startsWith(link.href + "/");
               return (
                 <Link
-                  key={tab.href}
-                  href={tab.href}
+                  key={link.href}
+                  href={link.href}
                   className={cn(
-                    "rounded-lg px-3 py-2 text-sm font-medium transition",
+                    "rounded-md px-3 py-2 text-sm font-medium transition",
                     active
-                      ? "border border-edge/70 bg-surface-alt/70 text-fg"
-                      : "text-fg-muted hover:bg-surface-alt/50 hover:text-fg",
+                      ? "border border-edge/80 bg-surface-alt/80 text-fg-inverse"
+                      : "text-fg-light hover:bg-surface-alt/55 hover:text-fg-inverse",
                   )}
+                  aria-current={active ? "page" : undefined}
                 >
-                  {tab.label}
+                  {link.label}
                 </Link>
               );
             })}
             {helpSections.length > 0 && (
               <button
                 onClick={() => { setHelpOpenPath(old => old === path ? null : path); setMobileOpen(false); }}
-                className="rounded-lg px-3 py-2 text-left text-sm font-medium text-fg-muted transition hover:bg-surface-alt/50 hover:text-fg"
+                className="rounded-md px-3 py-2 text-left text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg-inverse"
               >
                 Help
               </button>
             )}
             <div className="mt-2 border-t border-edge/40 pt-2">
               {!loading && !user && (
-                <Link href="/login" className="block rounded-lg border border-accent/35 bg-accent/10 px-3 py-2 text-center text-sm font-medium text-accent transition hover:bg-accent/15">
+                <Link href="/login" className="block rounded-md border border-edge/80 bg-surface-alt/70 px-3 py-2 text-center text-sm font-medium text-fg-inverse transition hover:border-edge-hover hover:text-fg-inverse">
                   Sign in
                 </Link>
               )}
               {!loading && user && (
                 <div className="flex flex-col gap-2">
-                  <span className="truncate px-3 text-xs text-fg-muted">{user.email}</span>
-                  <button onClick={handleSignOut} className="ui-control rounded-lg px-3 py-2 text-sm font-medium">
+                  <button onClick={handleSignOut} className="ui-control rounded-md px-3 py-2 text-sm font-medium">
                     Sign out
                   </button>
                 </div>
@@ -326,7 +333,7 @@ export default function NavBar() {
                 <InfoDropdown key={section.title} title={section.title}>
                   <ul className="flex flex-col gap-1.5 pl-4 list-disc">
                     {section.bullets.map((bullet, j) => (
-                      <li key={j} className="text-xs text-fg-secondary leading-relaxed">
+                      <li key={j} className="text-xs text-fg-light leading-relaxed">
                         {bullet}
                       </li>
                     ))}

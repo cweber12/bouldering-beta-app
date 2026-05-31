@@ -83,11 +83,11 @@
   --color-inset:       #ddd9d2;   /* warm recessed area */
 
   /* ── Foreground — warm stone tones (full contrast chain) */
-  --color-fg:             #1c1917;   /* stone-950 — near-black, warm */
-  --color-fg-secondary:   #3d3935;   /* stone-800 — strong secondary (was blue-grey) */
-  --color-fg-muted:       #57534e;   /* stone-600 — readable muted (~6.3:1 contrast) */
-  --color-fg-light:       #78716c;   /* stone-500 — decorative/large text only */
-  --color-fg-placeholder: #a8a29e;   /* stone-400 — placeholder (exempted from WCAG) */
+  --color-fg:             #0f0c0a;   /* near-black body text for max readability */
+  --color-fg-secondary:   #211c17;   /* dark secondary copy for light surfaces */
+  --color-fg-muted:       #332d27;   /* still muted, but clearly readable */
+  --color-fg-light:       #4d463f;   /* supporting text that remains legible */
+  --color-fg-placeholder: #6f675f;   /* darker placeholder for better visibility */
   --color-fg-inverse:     #ffffff;
 
   /* ── Borders — warm stone ────────────────────────────── */
@@ -95,15 +95,15 @@
   --color-edge-hover: #a29d96;   /* stone-400 — clear hover */
 
   /* ── Accent — richer green for legibility on light bg ── */
-  --color-accent:       #15803d;   /* green-700 — ~4.5:1 on warm surface */
-  --color-accent-hover: #166534;   /* green-800 */
+  --color-accent:       #14532d;   /* green-900 — stronger contrast on light surfaces */
+  --color-accent-hover: #052e16;   /* deep green for hover/active states */
   --color-accent-muted: #d1fae5;   /* emerald-100 tint */
 
   /* ── Primary ────────────────────────────────────────── */
   --color-primary: #dcfce7;   /* emerald-50 */
 
   /* ── Semantic: success ───────────────────────────────── */
-  --color-success: #15803d;
+  --color-success: #14532d;
 
   /* ── Semantic: danger / error ────────────────────────── */
   --color-danger:         #b91c1c;   /* red-700 — strong on light bg */
@@ -124,7 +124,7 @@
   --color-attempt-surface: #fef3c7;   /* amber-100 */
 
   /* ── Glow ────────────────────────────────────────────── */
-  --color-glow: rgba(21, 128, 61, 0.10);
+  --color-glow: rgba(20, 83, 45, 0.14);
 }
 
 /* ─── Layout constants ───────────── */
@@ -134,6 +134,43 @@
   --radius-control: 0.375rem;
   --radius-panel: 0.5rem;
 }
+
+/* ─── Semantic utility bridge ─────────────────────────────────────────────
+   Some generated utility classes resolve to static colors at build time.
+   Re-bind semantic classes to CSS variables so theme class switches update
+   text/accent colors correctly at runtime. */
+
+.text-fg { color: var(--color-fg) !important; }
+.text-fg-secondary { color: var(--color-fg-secondary) !important; }
+.text-fg-muted { color: var(--color-fg-muted) !important; }
+.text-fg-light { color: var(--color-fg-light) !important; }
+.text-fg-placeholder { color: var(--color-fg-placeholder) !important; }
+.text-fg-inverse { color: var(--color-fg-inverse) !important; }
+
+.text-accent { color: var(--color-accent) !important; }
+.text-success { color: var(--color-success) !important; }
+
+.bg-accent { background-color: var(--color-accent) !important; }
+.bg-accent-hover { background-color: var(--color-accent-hover) !important; }
+
+.hover\:bg-accent-hover:hover { background-color: var(--color-accent-hover) !important; }
+.hover\:text-accent:hover { color: var(--color-accent) !important; }
+
+.theme-light .text-fg { color: var(--color-fg) !important; }
+.theme-light .text-fg-secondary { color: var(--color-fg-secondary) !important; }
+.theme-light .text-fg-muted { color: var(--color-fg-muted) !important; }
+.theme-light .text-fg-light { color: var(--color-fg-light) !important; }
+.theme-light .text-fg-placeholder { color: var(--color-fg-placeholder) !important; }
+.theme-light .text-fg-inverse { color: var(--color-fg-inverse) !important; }
+
+.theme-light .text-accent { color: var(--color-accent) !important; }
+.theme-light .text-success { color: var(--color-success) !important; }
+
+.theme-light .bg-accent { background-color: var(--color-accent) !important; }
+.theme-light .bg-accent-hover { background-color: var(--color-accent-hover) !important; }
+
+.theme-light .hover\:bg-accent-hover:hover { background-color: var(--color-accent-hover) !important; }
+.theme-light .hover\:text-accent:hover { color: var(--color-accent) !important; }
 
 /* ─── Base styles ────────────────── */
 
@@ -457,6 +494,12 @@ input[type="checkbox"] {
 
 .theme-light ::selection {
   background: rgba(21, 128, 61, 0.18);
+  color: var(--color-fg);
+}
+
+/* Accessibility pass: docs copy in light mode should never render with low-contrast muted tones. */
+.theme-light .docs-readable .text-fg-secondary,
+.theme-light .docs-readable .text-fg-muted {
   color: var(--color-fg);
 }
 
