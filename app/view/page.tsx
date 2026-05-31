@@ -254,7 +254,7 @@ function ViewPageInner() {
           <button
             type="button"
             onClick={() => router.push("/profile")}
-            className="rounded-xl bg-accent px-6 py-2.5 text-sm font-medium text-surface"
+            className="ui-control-primary rounded-xl px-6 py-2.5 text-sm font-medium"
           >
             Back to Saved
           </button>
@@ -298,7 +298,7 @@ function ViewPageInner() {
               Upload a photo of the route to overlay the skeleton.
             </p>
           </div>
-          <label className="cursor-pointer rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover">
+          <label className="ui-control-primary cursor-pointer rounded-xl px-6 py-2.5 text-sm font-semibold">
             Select route photo
             <input
               type="file"

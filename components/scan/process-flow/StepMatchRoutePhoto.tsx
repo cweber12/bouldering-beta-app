@@ -327,7 +327,7 @@ export default function StepMatchRoutePhoto({
         <p className="shrink-0 mx-4 mb-2 text-xs text-danger">{saveError}</p>
       )}
       {(matchStatus === "error" || frameStatus === "error") && (
-        <p className="shrink-0 mx-4 mb-3 rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+        <p className="feedback-banner feedback-banner-danger shrink-0 mx-4 mb-3 text-sm">
           {matchError ?? frameError}
         </p>
       )}

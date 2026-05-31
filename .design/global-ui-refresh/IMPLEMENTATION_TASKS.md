@@ -74,7 +74,7 @@
     - Focus/hover/active states are consistent and accessible.
     - Styling shifts improve polish without behavior regressions.
 
-- [ ] 5. Apply viewport-fit media workspace constraints
+- [x] 5. Apply viewport-fit media workspace constraints
   - Scope: ensure media-heavy views use nav-aware size constraints with min-h-0 and local overflow control so content stays in-window on scoped routes.
   - Files:
     - Update: app/upload/page.tsx
@@ -87,7 +87,7 @@
     - Key controls remain visible while interacting with media.
     - Crop/overlay behaviors remain pixel-accurate.
 
-- [ ] 6. Refine motion and feedback to support tool-like confidence
+- [x] 6. Refine motion and feedback to support tool-like confidence
   - Scope: reduce decorative effects, keep purposeful transitions, and normalize loading/success/error/caution feedback blocks.
   - Files:
     - Update: app/globals.css

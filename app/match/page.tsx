@@ -442,7 +442,7 @@ function MatchPageInner() {
             onClick={() => setShowCamera(true)}
             disabled={isMatching}
             className={cn(
-              "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
+              "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-colors duration-150",
               isMatching
                 ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
                 : "cursor-pointer bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
@@ -468,7 +468,7 @@ function MatchPageInner() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setImageFullscreen(true)}
-                  className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+                  className="ui-control p-1.5 text-fg-muted"
                   aria-label="Expand to fullscreen"
                   title="Expand preview"
                 >
@@ -485,7 +485,7 @@ function MatchPageInner() {
             {/* Viewport-fit image container — aspect-ratio constrained so CropBoxOverlay fractions map exactly to media pixels */}
             <div
               className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10"
-              style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
+              style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h, "9rem")}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -507,7 +507,7 @@ function MatchPageInner() {
             <button
               onClick={handleApplyAndMatch}
               disabled={!hasAttempt}
-              className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
+              className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Apply &amp; View
             </button>
@@ -518,7 +518,7 @@ function MatchPageInner() {
         {imagePreviewUrl && matchTriggered && (isMatching || !isFrameReady) && (
             <div
               className="relative overflow-hidden rounded-xl border border-edge bg-surface-alt/40"
-            style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
+            style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h, "9rem")}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -583,7 +583,7 @@ function MatchPageInner() {
           ) : (
             <button
               onClick={handleExportVideo}
-              className="flex items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg"
+              className="ui-control flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -593,7 +593,7 @@ function MatchPageInner() {
           )}
 
           {/* Change route photo */}
-          <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-edge/50 bg-card/60 px-6 py-3 text-sm text-fg-secondary transition-all duration-200 hover:border-edge-hover hover:bg-card hover:text-fg">
+          <label className="ui-control flex cursor-pointer items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
             </svg>
@@ -604,7 +604,7 @@ function MatchPageInner() {
       )}
 
       {(matchStatus === "error" || frameStatus === "error") && (
-        <p className="rounded-lg border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+        <p className="feedback-banner feedback-banner-danger text-sm">
           {matchError ?? frameError}
         </p>
       )}
@@ -630,7 +630,7 @@ function MatchPageInner() {
             <p className="text-sm font-medium text-fg">Route photo — adjust crop region</p>
             <button
               onClick={() => setImageFullscreen(false)}
-              className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              className="ui-control p-1.5 text-fg-muted"
               aria-label="Close fullscreen (Escape)"
               title="Close fullscreen (Esc)"
             >
@@ -667,7 +667,7 @@ function MatchPageInner() {
               <button
                 onClick={() => { setImageFullscreen(false); handleApplyAndMatch(); }}
                 disabled={!hasAttempt}
-                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 ring-2 ring-accent/30 ring-offset-2 ring-offset-surface active:scale-[0.98]"
+                className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Apply &amp; View
               </button>

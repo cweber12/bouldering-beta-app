@@ -235,6 +235,32 @@ body {
   box-shadow: 0 20px 44px rgba(0, 0, 0, 0.32);
 }
 
+.feedback-banner {
+  border-radius: var(--radius-control);
+  border-width: 1px;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.feedback-banner-danger {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
+.feedback-banner-caution {
+  border-color: var(--color-caution-border);
+  background: var(--color-caution-surface);
+  color: var(--color-caution);
+}
+
+.feedback-banner-success {
+  border-color: color-mix(in srgb, var(--color-success) 35%, transparent);
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success);
+}
+
 /* ─── Smooth theme transitions ────────────────────── */
 /* Gently crossfade colors when toggling light ↔ dark.
    CSS keyframe animations are a separate property and are unaffected. */

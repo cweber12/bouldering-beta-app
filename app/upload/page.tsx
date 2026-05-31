@@ -704,7 +704,7 @@ function UploadPageInner() {
       {/* -- Map picker modal -- */}
       {showMapPicker && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
           role="dialog"
           aria-modal="true"
           aria-label="Pick climb location"
@@ -728,7 +728,7 @@ function UploadPageInner() {
       {showBottomSheet && createPortal(
         <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-modal="true" aria-label="Save metadata">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowBottomSheet(false)} />
+          <div className="absolute inset-0 bg-surface/70 backdrop-blur-sm" onClick={() => setShowBottomSheet(false)} />
 
           {/* Sheet */}
           <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge/50 bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
@@ -787,7 +787,7 @@ function UploadPageInner() {
                       key={t}
                       onClick={() => setRunType(t)}
                       className={cn(
-                        "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
+                        "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition-colors capitalize",
                         runType === t
                           ? t === "send"
                             ? "border-send/60 bg-send-surface text-send"
@@ -804,7 +804,7 @@ function UploadPageInner() {
               <button
                 type="button"
                 onClick={() => setShowOptionalMeta((prev) => !prev)}
-                className="flex items-center justify-between rounded-xl border border-edge/50 bg-card/50 px-3 py-2 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                className="ui-control flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium"
                 aria-expanded={showOptionalMeta}
               >
                 <span>Optional details</span>
@@ -838,7 +838,7 @@ function UploadPageInner() {
                         type="button"
                         onClick={handleUseGPS}
                         disabled={geoLoading}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+                        className="ui-control flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs disabled:opacity-50"
                       >
                         {geoLoading ? (
                           <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
@@ -853,7 +853,7 @@ function UploadPageInner() {
                       <button
                         type="button"
                         onClick={() => { setShowBottomSheet(false); setShowMapPicker(true); }}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+                        className="ui-control flex flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-xs"
                       >
                         <svg className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -870,21 +870,21 @@ function UploadPageInner() {
                       value={rating}
                       onChange={e => setRating(e.target.value)}
                       placeholder="Grade / Rating (e.g. V3, 5.10a)"
-                      className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+                      className="ui-input rounded-xl px-3 py-2 text-sm"
                     />
                     <textarea
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                       placeholder="Notes..."
                       rows={2}
-                      className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 resize-none"
+                      className="ui-input resize-none rounded-xl px-3 py-2 text-sm"
                     />
                   </div>
                 </div>
               )}
 
               {showLocationWarning && (
-                <p className="rounded-xl border border-caution-border bg-caution-surface px-4 py-2.5 text-xs text-caution">
+                <p className="feedback-banner feedback-banner-caution rounded-xl">
                   Enter State/Region, Area, and Route before uploading.
                 </p>
               )}
@@ -894,7 +894,7 @@ function UploadPageInner() {
               <button
                 onClick={bottomSheetAction === "save" ? handleSaveToDevice : handleSaveToS3}
                 disabled={bottomSheetAction === "upload" && s3Status === "loading"}
-                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+                className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {bottomSheetAction === "save" ? (
                   <>

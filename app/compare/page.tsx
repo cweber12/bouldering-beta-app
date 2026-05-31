@@ -264,7 +264,7 @@ function ComparePageInner() {
 
               {imageFile && imagePreviewUrl ? (
                 <div className="flex flex-col gap-3">
-                  <div className="relative" style={mediaContainerStyle(imageSize.w, imageSize.h)}>
+                  <div className="relative" style={mediaContainerStyle(imageSize.w, imageSize.h, "9rem")}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={imagePreviewUrl}
@@ -281,7 +281,7 @@ function ComparePageInner() {
                     <div ref={updateMenuRef} className="absolute top-2 right-2">
                       <button
                         onClick={() => setShowUpdateMenu(v => !v)}
-                        className="flex items-center gap-1.5 rounded-lg bg-surface/80 backdrop-blur-xl px-3 py-1.5 text-xs font-medium text-fg border border-edge/50 hover:bg-surface hover:text-fg transition shadow-sm"
+                        className="ui-control flex items-center gap-1.5 bg-surface/80 px-3 py-1.5 text-xs font-medium text-fg"
                       >
                         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
@@ -289,8 +289,8 @@ function ComparePageInner() {
                         Update photo
                       </button>
                       {showUpdateMenu && (
-                        <div className="absolute right-0 mt-1 w-44 rounded-xl border border-edge/50 bg-card/95 shadow-2xl overflow-hidden z-10 backdrop-blur-xl animate-fade-in">
-                          <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary hover:bg-inset hover:text-fg transition">
+                        <div className="ui-popover animate-fade-in absolute right-0 z-10 mt-1 w-44 overflow-hidden">
+                          <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg">
                             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
                             </svg>
@@ -299,7 +299,7 @@ function ComparePageInner() {
                           </label>
                           <button
                             onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
-                            className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary hover:bg-inset hover:text-fg transition"
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
                           >
                             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
@@ -318,10 +318,7 @@ function ComparePageInner() {
                   <button
                     onClick={handleApplyAndMatch}
                     disabled={!anyLoaded}
-                    className={cn(
-                      "flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]",
-                      anyLoaded && "ring-2 ring-accent/30 ring-offset-2 ring-offset-surface",
-                    )}
+                    className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Apply &amp; View
                   </button>
@@ -334,7 +331,7 @@ function ComparePageInner() {
                 <div className="grid grid-cols-2 gap-3">
                   <label
                     className={cn(
-                      "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
+                      "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-colors duration-150",
                       "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
                       "border-accent/25",
                     )}
@@ -351,7 +348,7 @@ function ComparePageInner() {
                     type="button"
                     onClick={() => setShowCamera(true)}
                     className={cn(
-                      "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
+                      "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-colors duration-150",
                       "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
                       "border-accent/25",
                     )}
@@ -395,7 +392,7 @@ function ComparePageInner() {
         actions={
           <button
             onClick={() => { setCropConfirmed(false); setMatchResults(Array.from({ length: MAX_SLOTS }, () => null)); }}
-            className="rounded-lg border border-edge/50 bg-card/60 px-3 py-1 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="ui-control rounded-lg px-3 py-1 text-xs font-medium"
           >
             Re-crop
           </button>
@@ -411,10 +408,10 @@ function ComparePageInner() {
             key={mode}
             onClick={() => setViewMode(mode)}
             className={cn(
-              "rounded-lg border px-3 py-1.5 text-xs font-medium transition-all duration-200",
+              "ui-control rounded-lg px-3 py-1.5 text-xs font-medium",
               viewMode === mode
                 ? "border-accent/60 bg-accent/10 text-accent"
-                : "border-edge/50 bg-card/60 text-fg-muted hover:border-edge-hover hover:text-fg",
+                : "",
             )}
           >
             {mode === "sidebyside" ? "Side by side" : "Overlay"}
@@ -440,7 +437,7 @@ function ComparePageInner() {
                 if (ref) { if (next) ref.play(); else ref.pause(); }
               }
             }}
-            className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-muted hover:border-edge-hover hover:text-fg transition"
+            className="ui-control flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
             aria-label={masterPlaying ? "Pause all" : "Play all"}
           >
             {masterPlaying ? (
