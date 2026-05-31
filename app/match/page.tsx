@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer from "@/components/shared/FramePlayer";
@@ -269,16 +270,15 @@ function MatchPageInner() {
   return (
     <div className="flex-1">
     <div className="mx-auto w-full max-w-3xl px-4 py-8 flex flex-col gap-6 sm:px-6 sm:py-10 sm:gap-8">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Route Overlay</h1>
-          <p className="text-body-sm text-fg-secondary leading-relaxed">
-            Upload a photo of the route and we&apos;ll overlay your recorded skeleton onto it using
-            the ORB reference features extracted on the Upload page.
-          </p>
-        </div>
-      </div>
+      <ToolRouteHeader
+        className="rounded-xl border border-edge/40"
+        title="Match"
+        subtitle={
+          hasAttempt && attempt
+            ? `Route overlay for ${[attempt.route, attempt.area, attempt.state].filter(Boolean).join(" · ")}`
+            : "Upload a route photo and overlay a recorded skeleton using ORB matching."
+        }
+      />
 
 
       {/* Climb data section — collapsible after a climb is selected */}
@@ -425,7 +425,7 @@ function MatchPageInner() {
               "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
                 ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
-                : "bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
+                : "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
             )}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
@@ -445,7 +445,7 @@ function MatchPageInner() {
               "flex flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-all duration-200",
               isMatching
                 ? "cursor-not-allowed border-edge/30 bg-card/30 opacity-40 text-fg-secondary"
-                : "cursor-pointer bg-card/50 border-edge/50 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg border-accent/25",
+                : "cursor-pointer bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
             )}
           >
             <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">

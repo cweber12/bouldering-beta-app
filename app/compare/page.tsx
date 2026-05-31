@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
@@ -218,24 +219,17 @@ function ComparePageInner() {
   if (!cropConfirmed) {
     return (
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <ToolRouteHeader
+          title="Compare"
+          subtitle={
+            urlRoute
+              ? `Prepare route photo for ${urlRoute}${urlArea ? ` · ${urlArea}` : ""}${urlState ? ` · ${urlState}` : ""}`
+              : "Select route photo and compare climbs side by side or overlaid."
+          }
+        />
+
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-4xl px-4 py-4 flex flex-col gap-4 sm:px-6">
-
-            {/* Header */}
-            <div className="flex flex-col gap-1">
-              <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Compare Runs</h1>
-              {urlRoute ? (
-                <p className="text-body-sm text-fg-secondary">
-                  Comparing climbs on <span className="font-medium text-fg">{urlRoute}</span>
-                  {urlArea && <> &middot; {urlArea}</>}
-                  {urlState && <> &middot; {urlState}</>}
-                </p>
-              ) : (
-                <p className="text-body-sm text-fg-secondary">
-                  Select a route photo below, then compare climbs side by side or overlaid.
-                </p>
-              )}
-            </div>
 
             {/* Loaded climbs (pre-match metadata) */}
             {anyLoaded && (
@@ -391,21 +385,22 @@ function ComparePageInner() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-
-      {/* Compact route context strip */}
-      {urlRoute && (
-        <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-edge/30">
-          <p className="text-xs font-medium text-fg truncate">{urlRoute}</p>
-          {urlArea && <span className="text-xs text-fg-muted shrink-0">&middot; {urlArea}</span>}
-          {/* Re-crop button */}
+      <ToolRouteHeader
+        title="Compare"
+        subtitle={
+          urlRoute
+            ? `${urlRoute}${urlArea ? ` · ${urlArea}` : ""}${urlState ? ` · ${urlState}` : ""}`
+            : "Compare loaded climbs side by side or overlaid."
+        }
+        actions={
           <button
             onClick={() => { setCropConfirmed(false); setMatchResults(Array.from({ length: MAX_SLOTS }, () => null)); }}
-            className="ml-auto shrink-0 rounded-lg border border-edge/50 bg-card/60 px-3 py-1 text-xs font-medium text-fg-secondary hover:border-edge-hover hover:text-fg transition"
+            className="rounded-lg border border-edge/50 bg-card/60 px-3 py-1 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
           >
             Re-crop
           </button>
-        </div>
-      )}
+        }
+      />
 
       {/* Compact toolbar */}
       <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30">

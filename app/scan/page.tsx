@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 /* CONSTANTS */
 import { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
 /* HOOKS */
@@ -604,6 +605,11 @@ function ScanPageInner() {
   // ---------------------------------------------------------------------------
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <ToolRouteHeader
+        title="Scan"
+        subtitle="Capture and process your climb."
+      />
+
       {/* -- Step content -- */}
       {step === "pick" && (
         <StepPickVideo

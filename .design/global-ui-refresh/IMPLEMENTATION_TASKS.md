@@ -33,7 +33,7 @@
     - Internal regions (panels/sheets/lists) may scroll without breaking primary-action visibility.
     - Existing route behaviors remain unchanged.
 
-- [ ] 2. Standardize top-level tool route structure and hierarchy
+- [x] 2. Standardize top-level tool route structure and hierarchy
   - Scope: unify each tool route around a consistent structure (header context, workspace, action region) to reduce page-to-page friction.
   - Files:
     - Update: app/upload/page.tsx

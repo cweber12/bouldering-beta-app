@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useSearchParams, useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
@@ -232,10 +233,13 @@ function ViewPageInner() {
 
   if (climbLoading) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
-          <p className="text-sm text-fg-muted">Loading climb&#8230;</p>
+      <div className="flex flex-1 min-h-0 flex-col">
+        <ToolRouteHeader title="View" subtitle="Load saved climb and route image." />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+            <p className="text-sm text-fg-muted">Loading climb&#8230;</p>
+          </div>
         </div>
       </div>
     );
@@ -243,25 +247,34 @@ function ViewPageInner() {
 
   if (loadError || !attempt) {
     return (
-      <div className="mx-auto w-full max-w-sm px-4 py-16 text-center flex flex-col items-center gap-4">
-        <p className="text-sm text-danger">{loadError ?? "Climb not found."}</p>
-        <button
-          type="button"
-          onClick={() => router.push("/profile")}
-          className="rounded-xl bg-accent px-6 py-2.5 text-sm font-medium text-surface"
-        >
-          Back to Saved
-        </button>
+      <div className="flex flex-1 min-h-0 flex-col">
+        <ToolRouteHeader title="View" subtitle="Load saved climb and route image." />
+        <div className="mx-auto w-full max-w-sm px-4 py-16 text-center flex flex-col items-center gap-4">
+          <p className="text-sm text-danger">{loadError ?? "Climb not found."}</p>
+          <button
+            type="button"
+            onClick={() => router.push("/profile")}
+            className="rounded-xl bg-accent px-6 py-2.5 text-sm font-medium text-surface"
+          >
+            Back to Saved
+          </button>
+        </div>
       </div>
     );
   }
 
   if (!imageChecked) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
-          <p className="text-sm text-fg-muted">Loading route image&#8230;</p>
+      <div className="flex flex-1 min-h-0 flex-col">
+        <ToolRouteHeader
+          title="View"
+          subtitle={`${[attempt.route, attempt.area, attempt.state].filter(Boolean).join(" · ")}`}
+        />
+        <div className="flex flex-1 items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+            <p className="text-sm text-fg-muted">Loading route image&#8230;</p>
+          </div>
         </div>
       </div>
     );
@@ -270,69 +283,81 @@ function ViewPageInner() {
   if (!imageFile || !imagePreviewUrl) {
     // No route image in S3 — let user select one
     return (
-      <div className="mx-auto w-full max-w-sm px-4 py-16 text-center flex flex-col items-center gap-5">
-        <div className="text-fg-muted">
-          <svg className="mx-auto mb-3 h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-          </svg>
-          <p className="text-sm font-medium text-fg">No route photo saved</p>
-          <p className="mt-1 text-xs text-fg-muted">
-            Upload a photo of the route to overlay the skeleton.
-          </p>
+      <div className="flex flex-1 min-h-0 flex-col">
+        <ToolRouteHeader
+          title="View"
+          subtitle={`${[attempt.route, attempt.area, attempt.state].filter(Boolean).join(" · ")}`}
+        />
+        <div className="mx-auto w-full max-w-sm px-4 py-16 text-center flex flex-col items-center gap-5">
+          <div className="text-fg-muted">
+            <svg className="mx-auto mb-3 h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+            </svg>
+            <p className="text-sm font-medium text-fg">No route photo saved</p>
+            <p className="mt-1 text-xs text-fg-muted">
+              Upload a photo of the route to overlay the skeleton.
+            </p>
+          </div>
+          <label className="cursor-pointer rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover">
+            Select route photo
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleChangePhoto(f); }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => router.push("/profile")}
+            className="text-xs text-fg-muted transition hover:text-fg-secondary"
+          >
+            &#8592; Back to Saved
+          </button>
         </div>
-        <label className="cursor-pointer rounded-xl bg-accent px-6 py-2.5 text-sm font-semibold text-surface transition hover:bg-accent-hover">
-          Select route photo
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleChangePhoto(f); }}
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => router.push("/profile")}
-          className="text-xs text-fg-muted transition hover:text-fg-secondary"
-        >
-          &#8592; Back to Saved
-        </button>
       </div>
     );
   }
 
   return (
-    <LoadingGate>
-      <StepMatchRoutePhoto
-        routePhotoFile={imageFile}
-        routePhotoPreviewUrl={imagePreviewUrl}
-        routePhotoCrop={imageCrop}
-        onRoutePhotoCropChange={setImageCrop}
-        routeMatchTriggered={matchTriggered}
-        matchResult={matchResult}
-        matchStatus={matchStatus}
-        matchError={matchError}
-        skeletonData={skeletonData}
-        frameStatus={frameStatus}
-        frameError={frameError}
-        topoStyle={topoStyle}
-        isFrameReady={isFrameReady}
-        isMatching={isMatching}
-        onSkeletonStyleChange={setSkeletonStyle}
-        exportStatus={exportStatus}
-        exportProgress={exportProgress}
-        onApplyMatch={handleApplyMatch}
-        onExportVideo={handleExportVideo}
-        onChangePhoto={handleChangePhoto}
-        onBack={() => router.push("/profile")}
-        onSaveToDevice={() => {}}
-        onUpload={() => {}}
-        s3Saved
-        s3Loading={false}
-        savedRouteDirHandle={null}
-        onDeleteFromDevice={() => {}}
-        saveError={null}
+    <div className="flex flex-1 min-h-0 flex-col">
+      <ToolRouteHeader
+        title="View"
+        subtitle={`${[attempt.route, attempt.area, attempt.state].filter(Boolean).join(" · ")}`}
       />
-    </LoadingGate>
+      <LoadingGate>
+        <StepMatchRoutePhoto
+          routePhotoFile={imageFile}
+          routePhotoPreviewUrl={imagePreviewUrl}
+          routePhotoCrop={imageCrop}
+          onRoutePhotoCropChange={setImageCrop}
+          routeMatchTriggered={matchTriggered}
+          matchResult={matchResult}
+          matchStatus={matchStatus}
+          matchError={matchError}
+          skeletonData={skeletonData}
+          frameStatus={frameStatus}
+          frameError={frameError}
+          topoStyle={topoStyle}
+          isFrameReady={isFrameReady}
+          isMatching={isMatching}
+          onSkeletonStyleChange={setSkeletonStyle}
+          exportStatus={exportStatus}
+          exportProgress={exportProgress}
+          onApplyMatch={handleApplyMatch}
+          onExportVideo={handleExportVideo}
+          onChangePhoto={handleChangePhoto}
+          onBack={() => router.push("/profile")}
+          onSaveToDevice={() => {}}
+          onUpload={() => {}}
+          s3Saved
+          s3Loading={false}
+          savedRouteDirHandle={null}
+          onDeleteFromDevice={() => {}}
+          saveError={null}
+        />
+      </LoadingGate>
+    </div>
   );
 }
 

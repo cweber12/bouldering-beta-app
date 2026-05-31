@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 
 import { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
@@ -591,6 +592,11 @@ function UploadPageInner() {
   // ---------------------------------------------------------------------------
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      <ToolRouteHeader
+        title="Upload"
+        subtitle="Upload and process an existing climb video."
+      />
+
       <ProcessFlowShell
         step={currentMeta.step}
         totalSteps={4}
