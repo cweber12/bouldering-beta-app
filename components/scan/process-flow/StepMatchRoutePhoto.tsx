@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
+import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
@@ -301,7 +302,7 @@ export default function StepMatchRoutePhoto({
         {/* Matching in progress or building overlay — spinner only, no route photo */}
         {routeMatchTriggered && (isMatching || !isFrameReady) && (
           <div className="flex flex-col items-center gap-4">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+            <LoadingSpinner className="h-10 w-10" />
             <p className="text-sm text-fg-secondary animate-pulse">
               {isMatching ? "Matching features…" : "Building overlay…"}
             </p>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { cn } from "@/utils/cn";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,8 +54,6 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
   );
 
   // Guard against SSR — createPortal needs document.body.
-  const isSend = climb.runType === "send";
-
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
 
   useEffect(() => {
@@ -120,14 +118,11 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
           )}
 
           {/* Run type badge */}
-          <span
-            className={cn(
-              "absolute top-3 left-3 rounded px-2 py-1 text-xs font-bold uppercase tracking-wider",
-              isSend ? "bg-send/80 text-fg-inverse" : "bg-attempt/80 text-fg-inverse",
-            )}
-          >
-            {climb.runType}
-          </span>
+          <RunTypeBadge
+            runType={climb.runType}
+            variant="overlay"
+            className="absolute top-3 left-3 rounded px-2 py-1 text-xs font-bold uppercase tracking-wider"
+          />
 
         </div>
 

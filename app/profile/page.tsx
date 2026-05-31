@@ -16,6 +16,8 @@ import type { ClimbPin } from "@/components/map/ClimbsMap";
 import ComboInput from "@/components/shared/ComboInput";
 import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
 import CompareSelectSheet from "@/components/shared/CompareSelectSheet";
+import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { sanitizeDirName } from "@/utils/fsHelpers";
 
@@ -484,7 +486,7 @@ export default function ProfilePage() {
   if (authLoading || loadingProfile) {    return (
       <main className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+          <LoadingSpinner className="h-10 w-10" />
           <p className="text-sm text-fg-muted">Loading profile&#8230;</p>
         </div>
       </main>
@@ -502,7 +504,7 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="ui-control px-3 py-1.5 text-xs"
           >
             Done
           </button>
@@ -531,7 +533,7 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => setShowCropper(true)}
-              className="cursor-pointer rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+              className="ui-control cursor-pointer px-3 py-1.5 text-xs"
             >
               {profile.profilePicture ? "Change photo" : "Upload photo"}
             </button>
@@ -569,7 +571,7 @@ export default function ProfilePage() {
               value={profile.displayName}
               onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
               placeholder="Your name"
-              className="w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+              className="ui-input px-3 py-2 text-sm"
             />
           </div>
 
@@ -649,7 +651,7 @@ export default function ProfilePage() {
             value={searchQuery}
             onChange={handleSearchChange}
             placeholder="Search by name or email"
-            className="mb-3 w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            className="ui-input mb-3 px-3 py-2 text-sm"
           />
 
           {searching && (
@@ -677,14 +679,14 @@ export default function ProfilePage() {
                   {following.includes(r.userId) ? (
                     <button
                       onClick={() => handleUnfollow(r.userId)}
-                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
+                      className="ui-action-unfollow px-3 py-1 text-xs"
                     >
                       Unfollow
                     </button>
                   ) : (
                     <button
                       onClick={() => handleFollow(r.userId)}
-                      className="rounded-lg bg-primary px-3 py-1 text-xs text-fg transition hover:bg-primary/80"
+                      className="ui-action-follow px-3 py-1 text-xs"
                     >
                       Follow
                     </button>
@@ -729,7 +731,7 @@ export default function ProfilePage() {
                     </Link>
                     <button
                       onClick={() => handleUnfollow(uid)}
-                      className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
+                      className="ui-action-unfollow px-3 py-1 text-xs"
                     >
                       Unfollow
                     </button>
@@ -821,7 +823,7 @@ export default function ProfilePage() {
               }, 350);
             }}
             placeholder="Search routes, areas&#8230;"
-            className="w-full rounded-lg border border-edge bg-inset py-1.5 pl-8 pr-3 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+            className="ui-input py-1.5 pl-8 pr-3 text-sm"
           />
         </div>
 
@@ -850,18 +852,20 @@ export default function ProfilePage() {
         </button>
 
         {/* List / Map toggle */}
-        <div className="flex rounded-lg border border-edge text-xs">
+        <div className="ui-segmented text-xs" role="group" aria-label="View mode">
           <button
             type="button"
             onClick={() => setViewMode("list")}
-            className={cn("px-3 py-1.5 rounded-l-lg transition", viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
+            className="ui-segmented-button px-3 py-1.5"
+            aria-pressed={viewMode === "list"}
           >
             List
           </button>
           <button
             type="button"
             onClick={() => setViewMode("map")}
-            className={cn("px-3 py-1.5 rounded-r-lg transition", viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
+            className="ui-segmented-button px-3 py-1.5"
+            aria-pressed={viewMode === "map"}
           >
             Map
           </button>
@@ -877,15 +881,16 @@ export default function ProfilePage() {
               type="button"
               onClick={() => { setFilterRunType(rt); setClimbPage(1); }}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium transition",
+                "ui-chip-toggle px-3 py-1 text-xs font-medium",
                 filterRunType === rt
                   ? rt === "send"
                     ? "bg-send-surface text-send"
                     : rt === "attempt"
                     ? "bg-attempt-surface text-attempt"
                     : "bg-primary text-fg"
-                  : "border border-edge text-fg-secondary hover:border-edge-hover hover:text-fg",
+                  : "text-fg-secondary",
               )}
+              aria-pressed={filterRunType === rt}
             >
               {rt === "" ? "All" : rt === "send" ? "Sends" : "Attempts"}
             </button>
@@ -979,7 +984,7 @@ export default function ProfilePage() {
         <section className="mb-8">
           {loadingClimbs ? (
             <div className="flex flex-col items-center gap-4 py-10">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
+              <LoadingSpinner />
               <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
             </div>
           ) : displayedClimbs.length === 0 ? (
@@ -1033,16 +1038,10 @@ export default function ProfilePage() {
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-1">
                           {/* Run type badge — subtle, inline with metadata */}
-                          <span
-                            className={cn(
-                              "rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider",
-                              c.runType === "send"
-                                ? "bg-send-surface text-send"
-                                : "bg-attempt-surface text-attempt",
-                            )}
-                          >
-                            {c.runType}
-                          </span>
+                          <RunTypeBadge
+                            runType={c.runType}
+                            className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          />
                           {c.rating && (
                             <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
                               {c.rating}
@@ -1073,7 +1072,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
                     disabled={climbPage <= 1}
-                    className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                    className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
                   >
                     Previous
                   </button>
@@ -1084,7 +1083,7 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
                     disabled={climbPage >= totalPages}
-                    className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                    className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
                   >
                     Next
                   </button>
@@ -1112,7 +1111,7 @@ export default function ProfilePage() {
       {/* ---- Loading detail spinner ---- */}
       {loadingDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+          <LoadingSpinner className="h-10 w-10" />
         </div>
       )}
 

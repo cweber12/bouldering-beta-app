@@ -5,12 +5,13 @@ import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
-import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
 import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
+import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 
@@ -287,7 +288,7 @@ export default function PublicProfilePage() {
 
       {loadingProfile ? (
         <div className="flex flex-col items-center gap-4 py-20">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+          <LoadingSpinner className="h-10 w-10" />
           <p className="text-sm text-fg-muted">Loading profile&#8230;</p>
         </div>
       ) : (
@@ -325,14 +326,14 @@ export default function PublicProfilePage() {
                 {isFollowing ? (
                   <button
                     onClick={handleUnfollow}
-                    className="rounded-lg border border-edge px-3 py-1 text-xs text-fg-secondary transition hover:border-danger hover:text-danger"
+                    className="ui-action-unfollow px-3 py-1 text-xs"
                   >
                     Unfollow
                   </button>
                 ) : (
                   <button
                     onClick={handleFollow}
-                    className="rounded-lg bg-primary px-3 py-1 text-xs text-fg transition hover:bg-primary/80"
+                    className="ui-action-follow px-3 py-1 text-xs"
                   >
                     Follow
                   </button>
@@ -364,7 +365,7 @@ export default function PublicProfilePage() {
                 onChange={(e) => setFilterState(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                 placeholder="Any"
-                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+                className="ui-input w-28 px-2 py-1.5 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -375,7 +376,7 @@ export default function PublicProfilePage() {
                 onChange={(e) => setFilterArea(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                 placeholder="Any"
-                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+                className="ui-input w-28 px-2 py-1.5 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -386,7 +387,7 @@ export default function PublicProfilePage() {
                 onChange={(e) => setFilterRoute(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                 placeholder="Any"
-                className="w-28 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+                className="ui-input w-28 px-2 py-1.5 text-xs"
               />
             </div>
             <div className="flex flex-col gap-1">
@@ -397,7 +398,7 @@ export default function PublicProfilePage() {
                 onChange={(e) => setFilterRating(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && applyFilters()}
                 placeholder="Any"
-                className="w-24 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none"
+                className="ui-input w-24 px-2 py-1.5 text-xs"
               />
             </div>
             {(filterState || filterArea || filterRoute || filterRating) && (
@@ -417,18 +418,20 @@ export default function PublicProfilePage() {
           <h2 className="text-sm font-semibold text-fg">
             Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
           </h2>
-          <div className="flex rounded-lg border border-edge text-xs">
+          <div className="ui-segmented text-xs" role="group" aria-label="View mode">
             <button
               type="button"
               onClick={() => setViewMode("list")}
-              className={cn("px-3 py-1.5 transition", viewMode === "list" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
+              className="ui-segmented-button px-3 py-1.5"
+              aria-pressed={viewMode === "list"}
             >
               List
             </button>
             <button
               type="button"
               onClick={() => setViewMode("map")}
-              className={cn("px-3 py-1.5 transition", viewMode === "map" ? "bg-primary text-fg" : "text-fg-secondary hover:text-fg")}
+              className="ui-segmented-button px-3 py-1.5"
+              aria-pressed={viewMode === "map"}
             >
               Map
             </button>
@@ -457,7 +460,7 @@ export default function PublicProfilePage() {
           <section className="mb-8">
             {loadingClimbs ? (
               <div className="flex flex-col items-center gap-4 py-10">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-edge border-t-fg" />
+                <LoadingSpinner />
                 <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
               </div>
             ) : climbs.length === 0 ? (
@@ -492,16 +495,11 @@ export default function PublicProfilePage() {
                         )}
 
                         {/* Run type badge */}
-                        <span
-                            className={cn(
-                              "absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider",
-                              c.runType === "send"
-                                ? "bg-send/80 text-fg-inverse"
-                                : "bg-attempt/80 text-fg-inverse",
-                            )}
-                        >
-                          {c.runType}
-                        </span>
+                        <RunTypeBadge
+                          runType={c.runType}
+                          variant="overlay"
+                          className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        />
                       </div>
 
                       {/* Info + options */}
@@ -535,7 +533,7 @@ export default function PublicProfilePage() {
                       type="button"
                       onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
                       disabled={climbPage <= 1}
-                      className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
                     >
                       Previous
                     </button>
@@ -546,7 +544,7 @@ export default function PublicProfilePage() {
                       type="button"
                       onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
                       disabled={climbPage >= totalPages}
-                      className="rounded-lg border border-edge px-3 py-1.5 text-xs text-fg-secondary transition hover:border-edge-hover hover:text-fg disabled:opacity-30"
+                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
                     >
                       Next
                     </button>
@@ -567,7 +565,7 @@ export default function PublicProfilePage() {
       {/* ---- Loading detail spinner ---- */}
       {loadingDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+          <LoadingSpinner className="h-10 w-10" />
         </div>
       )}
     </main>

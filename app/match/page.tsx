@@ -12,6 +12,7 @@ import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer from "@/components/shared/FramePlayer";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useS3Storage } from "@/hooks/useS3Storage";
@@ -298,14 +299,10 @@ function MatchPageInner() {
                 {attempt.state && (
                   <span className="text-xs text-fg-muted">{attempt.state}</span>
                 )}
-                <span className={cn(
-                  "rounded-full px-2 py-0.5 text-xs font-semibold capitalize",
-                  attempt.runType === "send"
-                    ? "bg-send-surface text-send"
-                    : "bg-attempt-surface text-attempt",
-                )}>
-                  {attempt.runType ?? "attempt"}
-                </span>
+                <RunTypeBadge
+                  runType={attempt.runType}
+                  className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                />
                 {attempt.rating && (
                   <span className="rounded-full px-2 py-0.5 text-xs font-semibold bg-inset text-fg">
                     {attempt.rating}
@@ -370,14 +367,10 @@ function MatchPageInner() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={cn(
-                        "rounded-full px-2.5 py-1 text-xs font-semibold capitalize",
-                        attempt.runType === "send"
-                          ? "bg-send-surface text-send"
-                          : "bg-attempt-surface text-attempt",
-                      )}>
-                        {attempt.runType ?? "attempt"}
-                      </span>
+                      <RunTypeBadge
+                        runType={attempt.runType}
+                        className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                      />
                       {attempt.rating && (
                         <span className="rounded-full px-2.5 py-1 text-xs font-semibold bg-card text-fg">
                           {attempt.rating}

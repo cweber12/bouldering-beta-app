@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 function DemoPreview() {
   return (
-    <div className="relative w-full max-w-sm overflow-hidden rounded-1xl border border-edge/60 bg-card shadow-2xl shadow-black/20">
+    <div className="relative w-full max-w-sm overflow-hidden rounded-md border border-edge/40 bg-surface">
       <video
         src="/run-1774824194693-pose-overlay.webm"
         autoPlay
@@ -28,7 +28,7 @@ export default function Home() {
         {!loading && !user && (
           <Link
             href="/login"
-            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/25 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/35 active:scale-[0.97]"
+            className="ui-control-primary mt-1 inline-flex items-center gap-2.5 rounded-md px-6 py-2.5 text-sm font-semibold"
           >
             Sign in to get started
             <svg
@@ -50,7 +50,7 @@ export default function Home() {
         {!loading && user && (
           <Link
             href="/scan"
-            className="mt-1 inline-flex items-center gap-2.5 rounded-xl bg-accent px-7 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/25 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/35 active:scale-[0.97]"
+            className="ui-control-primary mt-1 inline-flex items-center gap-2.5 rounded-md px-6 py-2.5 text-sm font-semibold"
           >
             Get started
             <svg
@@ -105,9 +105,9 @@ export default function Home() {
           ].map(({ step, title, body }) => (
             <div
               key={step}
-              className="group relative rounded-2xl border border-edge/50 bg-card/70 px-6 py-6 flex flex-col gap-3 transition-all duration-200 hover:bg-card hover:border-edge-hover/60 animate-scan-pulse"
+              className="relative flex flex-col gap-3 border-l-2 border-edge/45 pl-4"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10 text-xs font-bold text-accent">
+              <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent/10 text-xs font-bold text-accent">
                 {step}
               </div>
               <p className="text-sm font-semibold text-fg">{title}</p>

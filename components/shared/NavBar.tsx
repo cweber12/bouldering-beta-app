@@ -195,7 +195,7 @@ export default function NavBar() {
                 >
                   {tab.label}
                   {active && (
-                    <span className="absolute inset-x-3 -bottom-[13px] h-[2px] rounded-full bg-accent" />
+                    <span className="absolute inset-x-3 -bottom-3.25 h-0.5 rounded-full bg-accent" />
                   )}
                 </Link>
               );
@@ -253,7 +253,7 @@ export default function NavBar() {
 
             {/* Mobile hamburger */}
             <button
-              className="ui-control flex h-8 w-8 items-center justify-center text-fg-muted md:hidden"
+              className="ui-control flex h-11 w-11 items-center justify-center rounded-md text-fg-muted md:hidden"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Toggle menu"
               aria-expanded={mobileOpen}

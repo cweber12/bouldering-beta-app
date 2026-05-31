@@ -1,6 +1,7 @@
 "use client";
 
 import { useOpenCV } from "@/hooks/useOpenCV";
+import LoadingSpinner from "@/components/shared/LoadingSpinner";
 
 interface LoadingGateProps {
   children: React.ReactNode;
@@ -15,7 +16,7 @@ export default function LoadingGate({ children }: LoadingGateProps) {
   if (!cvReady) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 text-fg">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-edge/50 border-t-accent" />
+        <LoadingSpinner className="border-[3px] border-edge/50 border-t-accent" />
         <p className="text-body-sm font-medium tracking-wide text-fg-secondary">Loading OpenCV.js&#8230;</p>
       </div>
     );

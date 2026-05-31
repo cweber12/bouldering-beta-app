@@ -326,7 +326,7 @@ export default function StepViewLandmarks({
 
               {/* Optional overlay action — explicit branch, not required for save */}
               {orbReady && (
-                <div className="rounded-xl border border-edge/40 bg-card/50 px-4 py-3">
+                <div className="border-t border-edge/40 px-1 pt-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-fg-muted">Optional branch</p>
                   <p className="mt-1 text-xs text-fg-secondary">
                     Test this scan on a route photo before saving if you want a visual confidence check.
@@ -345,7 +345,7 @@ export default function StepViewLandmarks({
                   <button
                     type="button"
                     onClick={() => routePhotoInputRef.current?.click()}
-                    className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-edge bg-inset px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+                    className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-md border border-edge bg-inset px-4 py-2.5 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
                   >
                     <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />

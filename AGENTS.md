@@ -161,34 +161,29 @@ When adding or changing code, verify the following:
 
 ## After Every Code Change
 
-Run these checks in order, then commit and push without prompting the user:
+Run these checks in order, then commit without prompting the user:
 
 ```powershell
 # 1. Type-check (zero output = success)
 npx tsc --noEmit
 
-# 2. Full test suite
-npx vitest run
-
-# 3. Coverage (target: all pipeline/ and hooks/ files appear in report)
-npx vitest run --coverage
-
-# 4. Lint
+# 2. Lint
 npx eslint .
 
-# 5. Stage, commit, and push
+# 3. Targeted tests for changed files/features
+npx vitest run <targeted test files>
+
+# 4. Stage and commit
 git add .
 git commit -m "<type>: <summary>
 
 <body bullets>"
-git push
 ```
 
-Review the coverage report for any new source files not covered by tests.
 Fix TypeScript errors before proceeding. Do not disable tsc checks.
 
-**The agent MUST run `git add .`, `git commit -m "..."`, and `git push` automatically
-after every code change session without waiting to be asked.**
+**The agent MUST run `npx tsc --noEmit`, `npx eslint .`, targeted `npx vitest run ...`,
+and `git add .` + `git commit -m "..."` after every code change session without waiting to be asked.**
 
 ### README maintenance
 - When a code change adds, removes, or renames user-visible features, pages,

@@ -445,7 +445,7 @@ export default function StepSetDetection({
             <CropBoxOverlay
               box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
               onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
-              borderRadius="1rem"
+              borderRadius="4px"
               color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
             />
           )}
@@ -537,7 +537,7 @@ export default function StepSetDetection({
                 <CropBoxOverlay
                   box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
                   onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
-                  borderRadius="0.75rem"
+                  borderRadius="4px"
                   color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
                 />
               )}

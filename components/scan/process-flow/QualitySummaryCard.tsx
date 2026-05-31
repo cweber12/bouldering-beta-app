@@ -28,7 +28,7 @@ export default function QualitySummaryCard({
   return (
     <section
       className={cn(
-        "rounded-2xl border px-4 py-3",
+        "rounded-md border px-4 py-3",
         isPass
           ? "border-send/35 bg-send-surface/70"
           : "border-caution-border bg-caution-surface",
@@ -36,7 +36,7 @@ export default function QualitySummaryCard({
       aria-live="polite"
     >
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-edge/40 bg-surface-alt/70">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-edge/30 bg-surface-alt/45">
           <span className="text-sm font-semibold text-fg">{score}</span>
         </div>
         <div className="min-w-0 flex-1">
@@ -59,15 +59,15 @@ export default function QualitySummaryCard({
 
         {showDetails && (
           <div className="mt-2 grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg border border-edge/35 bg-surface-alt/60 px-2 py-2">
+            <div className="border-l-2 border-edge/35 px-2 py-1.5">
               <p className="text-sm font-semibold text-fg">{poseFrames}</p>
               <p className="text-[11px] text-fg-muted">pose frames</p>
             </div>
-            <div className="rounded-lg border border-edge/35 bg-surface-alt/60 px-2 py-2">
+            <div className="border-l-2 border-edge/35 px-2 py-1.5">
               <p className="text-sm font-semibold text-fg">{orbPoints}</p>
               <p className="text-[11px] text-fg-muted">ORB points</p>
             </div>
-            <div className="rounded-lg border border-edge/35 bg-surface-alt/60 px-2 py-2">
+            <div className="border-l-2 border-edge/35 px-2 py-1.5">
               <p className="text-sm font-semibold text-fg">{frameStep}</p>
               <p className="text-[11px] text-fg-muted">frame step</p>
             </div>

@@ -7,15 +7,15 @@ export const metadata = {
 
 export default function DocsPage() {
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-10">
-      <div className="prose prose-invert max-w-none">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+      <div className="max-w-none">
         {/* ---------------------------------------------------------------- */}
         {/* Title                                                            */}
         {/* ---------------------------------------------------------------- */}
         <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">
           Documentation
         </h1>
-        <p className="mt-3 text-body-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
           Route Scanner analyses a climbing video by extracting skeleton poses frame-by-frame,
           then overlays the movement onto a route photo using computer vision. Processed runs
           can be saved to Amazon S3 for access across devices, or exported as local JSON files.
@@ -112,18 +112,18 @@ export default function DocsPage() {
           <h2 className="text-lg font-semibold text-fg">Step-by-step guide</h2>
 
           <div className="mt-4 flex flex-col gap-4">
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">1. Prepare your footage</p>
-              <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 Film your climbing run in portrait or landscape — either works. The camera
                 should be stationary and include the entire wall section. For outdoor climbs,
                 zoom in as much as possible to improve pose accuracy.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">2. Choose Indoor or Outdoor</p>
-              <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/" className="text-fg hover:underline">
                   home page
@@ -137,9 +137,9 @@ export default function DocsPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">3. Upload and process the video</p>
-              <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/scan" className="text-fg hover:underline">
                   Scan page
@@ -148,7 +148,7 @@ export default function DocsPage() {
                 A progress bar shows the current frame. When the status banner turns green, ORB
                 features are ready.
               </p>
-              <p className="mt-2 text-sm text-fg-secondary">
+              <p className="mt-2 text-base text-fg-secondary">
                 If lighting conditions are challenging, expand the{" "}
                 <strong className="text-fg">Frame adjustments</strong> panel and select
                 the conditions that apply — see{" "}
@@ -157,18 +157,18 @@ export default function DocsPage() {
                 </a>{" "}
                 below.
               </p>
-              <p className="mt-2 text-sm text-fg-secondary">
+              <p className="mt-2 text-base text-fg-secondary">
                 You can optionally save the processed data to your device as a{" "}
                 <code className="text-fg">.json</code> file so you can reload it in a
                 later session without reprocessing the video.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">
                 4. Adjust skeleton style (optional)
               </p>
-              <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 On the View page a <strong className="text-fg">Skeleton style</strong>{" "}
                 panel appears once matching completes. Use the colour pickers to change limb and
                 joint colours. Use the sliders to adjust line width and joint radius. Changes
@@ -178,11 +178,11 @@ export default function DocsPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">
                 5. Match a route photo and export
               </p>
-              <p className="mt-1.5 text-sm text-fg-secondary leading-relaxed">
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/match" className="text-fg hover:underline">
                   View page
@@ -201,7 +201,7 @@ export default function DocsPage() {
         {/* ---------------------------------------------------------------- */}
         <section className="mt-10" id="lighting">
           <h2 className="text-lg font-semibold text-fg">Lighting &amp; preprocessing</h2>
-          <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             Pose detection is sensitive to contrast and sharpness. When lighting conditions
             are poor, selecting the matching conditions on the Scan page causes each frame
             to be preprocessed before being sent to the pose model. This does{" "}
@@ -254,7 +254,7 @@ export default function DocsPage() {
             </table>
           </div>
 
-          <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             Multiple conditions can be combined. When both a contrast-enhancement condition and{" "}
             <em>Dusty lens</em> are selected, sharpening is applied to the contrast-enhanced image.
           </p>
@@ -265,12 +265,12 @@ export default function DocsPage() {
         {/* ---------------------------------------------------------------- */}
         <section className="mt-10" id="modes">
           <h2 className="text-lg font-semibold text-fg">Indoor vs Outdoor mode</h2>
-          <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             The primary difference is how pose detection is applied to each video frame.
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">Indoor</p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
                 <li>Full-frame pose detection on every sampled frame.</li>
@@ -279,7 +279,7 @@ export default function DocsPage() {
               </ul>
             </div>
 
-            <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4">
+            <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">Outdoor</p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
                 <li>
@@ -296,14 +296,14 @@ export default function DocsPage() {
             </div>
           </div>
 
-          <p className="mt-4 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-4 text-base text-fg-secondary leading-relaxed">
             <strong className="text-fg">Frame step</strong> (outdoor only) — controls how
             often full pose detection runs. A step of 1 runs pose on every sampled frame (most
             accurate, slowest). A step of 10 runs it every 10th frame and interpolates the rest,
             which is faster but smoother rather than precisely tracked. For a first look at an
             attempt, 5–10 is a good starting point.
           </p>
-          <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             <strong className="text-fg">Smoothing</strong> — after interpolation both
             modes apply an exponential moving average (α = 0.3) over every keypoint track.
             Brief dropouts (frames where a joint was not detected) are filled in before
@@ -317,14 +317,14 @@ export default function DocsPage() {
         {/* ---------------------------------------------------------------- */}
         <section className="mt-10">
           <h2 className="text-lg font-semibold text-fg">Privacy &amp; data storage</h2>
-          <p className="mt-3 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             All processing — video decoding, pose inference, ORB feature extraction, homography
             computation, and video rendering — happens locally in your browser.{" "}
             <strong className="text-fg">
               No video frames or images are sent to any server.
             </strong>
           </p>
-          <p className="mt-2 text-sm text-fg-secondary leading-relaxed">
+          <p className="mt-2 text-base text-fg-secondary leading-relaxed">
             When you click <strong className="text-fg">Save to cloud</strong>, only the
             processed JSON data (pose keypoints, ORB descriptors, and metadata) is uploaded to
             Amazon S3. The original video and route photo are never uploaded. You can also
@@ -339,7 +339,7 @@ export default function DocsPage() {
         <section className="mt-10 mb-12">
           <h2 className="text-lg font-semibold text-fg">Troubleshooting</h2>
           <div className="mt-4 flex flex-col gap-3">
-            <details className="group rounded-2xl border border-edge/50 bg-card/60">
+            <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 The pose overlay looks wrong / skeleton is in the wrong place
                 <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
@@ -352,7 +352,7 @@ export default function DocsPage() {
               </div>
             </details>
 
-            <details className="group rounded-2xl border border-edge/50 bg-card/60">
+            <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 Processing is very slow
                 <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
@@ -366,7 +366,7 @@ export default function DocsPage() {
               </div>
             </details>
 
-            <details className="group rounded-2xl border border-edge/50 bg-card/60">
+            <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 The page is stuck on &ldquo;Loading OpenCV&rdquo; or &ldquo;Loading model&rdquo;
                 <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>

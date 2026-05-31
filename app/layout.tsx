@@ -1,13 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
 import NavBar from "@/components/shared/NavBar";
 import Preloader from "@/components/shared/Preloader";
 import Providers from "@/components/shared/Providers";
 import { cn } from "@/utils/cn";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+});
+
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
@@ -30,7 +35,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(geistSans.variable, geistMono.variable, "h-full antialiased")}
+      className={cn(inter.variable, spaceGrotesk.variable, geistMono.variable, "h-full antialiased")}
       suppressHydrationWarning
     >
       <head>

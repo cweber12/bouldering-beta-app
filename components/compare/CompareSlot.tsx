@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import type { Ref } from "react";
 import FramePlayer, { type FramePlayerHandle } from "@/components/shared/FramePlayer";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
-import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -12,6 +11,7 @@ import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import { getTopology } from "@/utils/poseConstants";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -136,14 +136,7 @@ export default function CompareSlot({
         />
         <span className="text-xs font-medium text-fg">Climb {slotIndex + 1}</span>
         {attempt && (
-          <span className={cn(
-            "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
-            attempt.runType === "send"
-              ? "bg-send-surface text-send"
-              : "bg-attempt-surface text-attempt",
-          )}>
-            {attempt.runType ?? "attempt"}
-          </span>
+          <RunTypeBadge runType={attempt.runType} />
         )}
         {attempt?.rating && (
           <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg">
