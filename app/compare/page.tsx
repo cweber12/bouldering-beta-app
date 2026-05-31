@@ -206,6 +206,21 @@ function ComparePageInner() {
     setMatchTrigger(t => (t === 0 ? 1 : t));
   }, [cv, imageFile, anyLoaded]);
 
+  // Auto re-match when the crop changes (debounced). Once an initial match has
+  // run, adjusting the crop in the Refine panel re-runs matching automatically —
+  // no need to find a separate button. `imageCrop` is a new object reference only
+  // when the user actually edits the crop, so unrelated re-renders are ignored.
+  const cropTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevCropRef = useRef(imageCrop);
+  useEffect(() => {
+    if (prevCropRef.current === imageCrop) return; // not a crop edit
+    prevCropRef.current = imageCrop;
+    if (!cv || !imageFile || !anyLoaded || matchTrigger === 0) return;
+    if (cropTimerRef.current) clearTimeout(cropTimerRef.current);
+    cropTimerRef.current = setTimeout(() => setMatchTrigger(t => t + 1), 400);
+    return () => { if (cropTimerRef.current) clearTimeout(cropTimerRef.current); };
+  }, [imageCrop, cv, imageFile, anyLoaded, matchTrigger]);
+
   // Close update menu on outside click.
   useEffect(() => {
     function onPointerDown(e: PointerEvent) {
@@ -277,7 +292,9 @@ function ComparePageInner() {
 
   /** Re-runs matching across all slots (after a crop or photo change). */
   function handleReMatch() {
+    if (cropTimerRef.current) clearTimeout(cropTimerRef.current);
     setMatchTrigger(t => t + 1);
+    setRefineOpen(false); // collapse so the updated comparison is visible
   }
 
   const hasPhoto = !!(imageFile && imagePreviewUrl);
@@ -438,14 +455,15 @@ function ComparePageInner() {
 
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs text-fg-secondary">
-                    Adjust the crop to focus matching on the relevant wall area.
+                    Adjust the crop to focus matching on the relevant wall area —
+                    changes apply automatically.
                   </p>
                   <button
                     onClick={handleReMatch}
                     disabled={!anyLoaded}
                     className="ui-control-primary shrink-0 rounded-lg px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Re-match
+                    Done
                   </button>
                 </div>
               </div>
