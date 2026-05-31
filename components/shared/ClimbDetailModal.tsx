@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
@@ -46,6 +46,7 @@ interface ClimbDetailModalProps {
 export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDetailModalProps) {
   const router = useRouter();
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const mounted = useSyncExternalStore(
     () => () => undefined,
     () => true,
@@ -56,6 +57,18 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
   const isSend = climb.runType === "send";
 
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
 
   const go = (url: string) => {
     onClose();
@@ -77,6 +90,7 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
       <div className="relative w-full max-w-lg rounded-2xl border border-edge bg-surface shadow-2xl">
         {/* Close button */}
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           className="absolute top-3 right-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-surface/80 text-fg-secondary backdrop-blur transition hover:text-fg"

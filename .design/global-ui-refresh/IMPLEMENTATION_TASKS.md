@@ -98,7 +98,7 @@
     - Feedback blocks are semantically consistent across pages.
     - UI feels calmer and more professional.
 
-- [ ] 7. Accessibility and keyboard hardening for revised layouts
+- [x] 7. Accessibility and keyboard hardening for revised layouts
   - Scope: validate keyboard order and focus management after viewport/layout updates, including modals/sheets and internal scroll regions.
   - Files:
     - Update: app/upload/page.tsx
@@ -112,7 +112,7 @@
     - Keyboard traversal remains logical in all updated routes.
     - Dialog/sheet escape and focus behavior remains correct.
 
-- [ ] 8. Add regression tests for no-scroll and cohesion rules
+- [x] 8. Add regression tests for no-scroll and cohesion rules
   - Scope: add tests covering shell behavior, route-level overflow constraints, and no-card usage for static sections where testable.
   - Files:
     - New/Update: __tests__/components/shared/ToolPageShell.test.tsx
@@ -123,7 +123,7 @@
     - Existing tests remain green.
     - Coverage reflects touched source paths.
 
-- [ ] 9. Documentation sync for new global UI standards
+- [x] 9. Documentation sync for new global UI standards
   - Scope: document route scroll policy, surface semantics (no card for static content), and shared shell usage.
   - Files:
     - Update: README.md

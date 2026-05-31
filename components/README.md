@@ -2,6 +2,12 @@
 
 Shared React components used across pages.
 
+## Shared layout and control system
+
+- `ToolPageShell` keeps the core tool routes inside the viewport and prevents page-level scrolling.
+- `ToolRouteHeader` standardizes route titles, subtitles, and action placement.
+- Shared control primitives in `app/globals.css` (`ui-control`, `ui-control-primary`, `ui-input`, `ui-popover`, and feedback banner classes) keep buttons, inputs, menus, and notices visually consistent across routes.
+
 ## `shared/`
 
 ### `NavBar`

@@ -21,7 +21,7 @@ export default defineConfig({
       provider: "v8",
       // Only collect coverage for our source modules, not node_modules.
       include: ["pipeline/**", "hooks/**", "storage/**", "utils/**", "components/**"],
-      exclude: ["**/*.d.ts"],
+      exclude: ["**/*.d.ts", "**/*.md"],
       reporter: ["text", "lcov"],
     },
   },

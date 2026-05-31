@@ -11,6 +11,7 @@ interface Props {
 
 export default function CameraRecorderModal({ mode = "video", onCapture, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -19,6 +20,18 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
   const [ready, setReady] = useState(false);
 
   const audioConstraint = mode === "video";
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     let active = true;
@@ -164,6 +177,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
             </button>
           )}
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
           >

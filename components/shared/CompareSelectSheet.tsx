@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
@@ -62,6 +63,7 @@ export default function CompareSelectSheet({
   const [climbs, setClimbs] = useState<ClimbSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   // Selected S3 keys (Set for O(1) toggle checks).
   const [selected, setSelected] = useState<Set<string>>(() => new Set([originKey]));
 
@@ -104,6 +106,10 @@ export default function CompareSelectSheet({
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
 
   function toggleClimb(key: string) {
     setSelected((prev) => {
@@ -155,6 +161,7 @@ export default function CompareSelectSheet({
             <p className="truncate text-xs text-fg-muted">{area} &middot; {state}</p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="ml-4 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-secondary transition hover:bg-inset hover:text-fg"
