@@ -311,7 +311,7 @@ function ComparePageInner() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [viewMode, imagePreviewUrl, refineOpen]);
+  }, [viewMode, imagePreviewUrl, refineOpen, consoleMode]);
 
   /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
   function setImageFileWithPreview(file: File | null) {
@@ -398,6 +398,9 @@ function ComparePageInner() {
 
   // Derived rail props: which keys are active and each active key's colour.
   const activeKeys = activeKeysOf(slotKeys);
+  // The slot shown in single mode — the first occupied slot. Other loaded
+  // climbs stay parked; the rail swaps which one occupies this slot (task 4).
+  const singleIdx = slotKeys.findIndex((k) => k !== null);
 
   // Side-by-side column sizing. All overlays share the route-photo aspect, so we
   // cap each column to the media's display width (measured stage height minus the
@@ -582,9 +585,41 @@ function ComparePageInner() {
               </p>
             )}
 
+            {/* Single mode — focused one-climb viewer (the old /view surface).
+                One CompareSlot, centered and capped to the media width, with its
+                own play button; no colour swatch or start anchors (those only
+                matter when aligning multiple climbs). */}
+            {consoleMode === "single" && anyLoaded && singleIdx !== -1 && attempts[singleIdx] && (
+              <div
+                ref={stageRef}
+                className="flex h-full min-h-0 items-center justify-center rounded-xl border border-edge/40 bg-card/20 p-3"
+              >
+                <div
+                  className="flex min-h-0 w-full"
+                  style={colMaxW ? { maxWidth: colMaxW } : undefined}
+                >
+                  <CompareSlot
+                    slotIndex={singleIdx}
+                    attempt={attempts[singleIdx]}
+                    imageFile={imageFile}
+                    imageCrop={imageCrop}
+                    matchTrigger={matchTrigger}
+                    cv={cv}
+                    limbColor={slotColors[singleIdx]}
+                    lineWidth={skeletonLineWidth}
+                    pointRadius={skeletonPointRadius}
+                    highlight={highlight}
+                    onMatchResult={handleMatchResult}
+                    fillHeight
+                    playerRef={(el) => { playerRefs.current[singleIdx] = el; }}
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Side-by-side — all climbs grouped under one shared surface, each
                 column capped to the media width so the overlays sit close. */}
-            {viewMode === "sidebyside" && anyLoaded && (
+            {consoleMode === "multiple" && viewMode === "sidebyside" && anyLoaded && (
               <div className="h-full min-h-0 rounded-xl border border-edge/40 bg-card/20 p-3">
                 <div
                   ref={stageRef}
@@ -633,7 +668,7 @@ function ComparePageInner() {
             {/* Overlay (default) — all skeletons on one frame. The matchers still
                 run per-slot via hidden CompareSlots so each slot's match result
                 feeds the overlay player. */}
-            {viewMode === "overlay" && anyLoaded && (
+            {consoleMode === "multiple" && viewMode === "overlay" && anyLoaded && (
               <div className="flex h-full min-h-0 flex-col gap-2">
                 {/* Hidden matcher slots — feed each slot's match result to the
                     overlay player without rendering a visible card. */}
