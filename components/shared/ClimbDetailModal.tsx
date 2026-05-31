@@ -5,6 +5,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,12 +27,6 @@ export interface ClimbDetailData {
 interface ClimbDetailModalProps {
   climb: ClimbDetailData;
   onClose: () => void;
-  /**
-   * When provided, the Compare button calls this instead of navigating
-   * directly to /compare. The parent (profile page) is responsible for
-   * opening the CompareSelectSheet.
-   */
-  onCompare?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,7 +38,7 @@ interface ClimbDetailModalProps {
 // lives in the DOM.
 // ---------------------------------------------------------------------------
 
-export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDetailModalProps) {
+export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalProps) {
   const router = useRouter();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -55,6 +50,13 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
 
   // Guard against SSR — createPortal needs document.body.
   const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
+  // Compare goes straight to the compare page, scoped to this route, with this
+  // climb pre-loaded — the user adds others from the on-page rail.
+  const compareUrl = buildCompareUrl(climb.key, {
+    state: climb.state,
+    area: climb.area,
+    route: climb.route,
+  });
 
   useEffect(() => {
     closeButtonRef.current?.focus();
@@ -152,54 +154,56 @@ export default function ClimbDetailModal({ climb, onClose, onCompare }: ClimbDet
             <p className="mt-3 whitespace-pre-wrap text-sm text-fg">{climb.notes}</p>
           )}
 
-          {/* Action row — exactly three distinct actions */}
+          {/* Action row — View and Compare are co-equal primary paths */}
           <div className="mt-4 flex flex-col gap-2">
-            {/* Primary: view overlaid on a route photo */}
-            <button
-              type="button"
-              onClick={() => go(viewUrl)}
-              className="ui-control-primary w-full rounded-md px-4 py-2.5 text-sm font-semibold"
-            >
-              View on route photo
-            </button>
-
             <div className="flex gap-2">
-              {/* Secondary: capture a new route photo on-device */}
+              {/* View this climb overlaid on a route photo */}
               <button
                 type="button"
-                onClick={() => cameraInputRef.current?.click()}
-                className="ui-control flex flex-1 items-center justify-center gap-1.5 rounded-md px-4 py-2.5 text-sm font-medium"
+                onClick={() => go(viewUrl)}
+                className="ui-control-primary flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
               >
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
-                Take a photo
+                View
               </button>
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="sr-only"
-                onChange={() => go(viewUrl)}
-              />
 
-              {/* Tertiary: compare to another climb of the same route */}
+              {/* Compare to other climbs on the same route */}
               <button
                 type="button"
-                onClick={() => {
-                  if (onCompare) {
-                    onClose();
-                    onCompare();
-                  }
-                }}
-                disabled={!onCompare}
-                className="ui-control flex-1 rounded-md px-4 py-2.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => go(compareUrl)}
+                className="ui-control-primary flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
               >
+                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A1.5 1.5 0 015.5 4h2A1.5 1.5 0 019 5.5v13A1.5 1.5 0 017.5 20h-2A1.5 1.5 0 014 18.5v-13z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 5.5A1.5 1.5 0 0116.5 4h2A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-2a1.5 1.5 0 01-1.5-1.5v-13z" />
+                </svg>
                 Compare
               </button>
             </div>
+
+            {/* Secondary: capture a new route photo on-device, then view */}
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex w-full items-center justify-center gap-1.5 rounded-md px-4 py-2 text-xs font-medium text-fg-secondary transition hover:bg-inset/60 hover:text-fg"
+            >
+              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Take a photo
+            </button>
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="sr-only"
+              onChange={() => go(viewUrl)}
+            />
           </div>
         </div>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
+import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,11 +23,6 @@ interface ClimbOptionsDropdownProps {
   trigger?: React.ReactNode;
   /** "sm" uses a smaller 28px trigger; default uses 32px with better touch target. */
   size?: "sm" | "default";
-  /**
-   * When provided, clicking any compare action calls this instead of
-   * navigating directly to /compare. The parent opens the CompareSelectSheet.
-   */
-  onCompare?: (climbKey: string, state?: string, area?: string, route?: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -40,7 +36,7 @@ interface ClimbOptionsDropdownProps {
 // Opens upward from the trigger. Closes on outside click.
 // ---------------------------------------------------------------------------
 
-export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default", onCompare }: ClimbOptionsDropdownProps) {
+export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default" }: ClimbOptionsDropdownProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"view" | "compare">("view");
@@ -60,14 +56,16 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Build destination URL (view only — compare actions delegate to onCompare).
+  // Build destination URL based on the active mode.
   const viewUrl = `/view?key=${encodeURIComponent(climbKey)}`;
 
   /** Handles any action button click based on the current mode. */
   const handleAction = () => {
     setOpen(false);
-    if (mode === "compare" && onCompare) {
-      onCompare(climbKey, state, area, route);
+    if (mode === "compare") {
+      // Go straight to the compare page, scoped to this route, with this climb
+      // pre-loaded; the user adds others from the on-page rail.
+      router.push(buildCompareUrl(climbKey, { state, area, route }));
     } else {
       router.push(viewUrl);
     }

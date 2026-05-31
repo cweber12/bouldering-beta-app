@@ -45,14 +45,27 @@ describe("ClimbDetailModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("navigates to view when the primary action is used", () => {
+  it("navigates to view when the View action is used", () => {
     const onClose = vi.fn();
 
     render(<ClimbDetailModal climb={climb} onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /View on route photo/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^View$/i }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(pushMock).toHaveBeenCalledWith("/view?key=run-1");
+  });
+
+  it("navigates straight to compare, scoped to the route, when Compare is used", () => {
+    const onClose = vi.fn();
+
+    render(<ClimbDetailModal climb={climb} onClose={onClose} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /^Compare$/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(pushMock).toHaveBeenCalledWith(
+      "/compare?keys=run-1&state=Colorado&area=Boulder&route=The%20Classic",
+    );
   });
 });
