@@ -23,7 +23,7 @@ import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { FramePlayerHandle } from "@/components/shared/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
-import { buildCompareUrl } from "@/utils/compareUrl";
+import { buildCompareUrl, type ConsoleMode } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -65,6 +65,9 @@ function ComparePageInner() {
   const urlState = params.get("state") ?? undefined;
   const urlArea  = params.get("area")  ?? undefined;
   const urlRoute = params.get("route") ?? undefined;
+  // Explicit mode from the URL, if present; otherwise the mode is derived from
+  // how many climbs the URL carries (1 → single, ≥2 → multiple).
+  const urlMode = params.get("mode");
   const { downloadAttempt } = useS3Storage();
 
   // The comparison is a fixed set of up to MAX_SLOTS slots. `slotKeys` is the S3
@@ -88,6 +91,17 @@ function ComparePageInner() {
   const [userPickedImage, setUserPickedImage] = useState(false);
   const imagePreviewUrlRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("overlay");
+
+  // Console mode — single-climb viewer vs multi-climb comparison. Derived once
+  // from the URL: an explicit `?mode=` wins; otherwise the climb count decides.
+  // Switching multiple→single keeps every loaded climb in its slot (the in-memory
+  // slot arrays are the parking store); only the URL and the rendered view narrow
+  // to the first climb, so single→multiple restores the rest for free this session.
+  const [consoleMode, setConsoleModeState] = useState<ConsoleMode>(() =>
+    urlMode === "single" || urlMode === "multiple"
+      ? urlMode
+      : urlClimbKeys.length >= 2 ? "multiple" : "single",
+  );
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
@@ -149,13 +163,26 @@ function ComparePageInner() {
     } catch { /* leave the slot empty — the rail still shows the climb as available */ }
   }, [downloadAttempt]);
 
-  /** Rewrites `keys` in the URL (replace — no history entry, no scroll). */
-  const syncUrl = useCallback((nextSlotKeys: (string | null)[]) => {
+  /**
+   * Rewrites `keys` + `mode` in the URL (replace — no history entry, no scroll).
+   * In single mode only the first active key is emitted, so a shared link opens
+   * the focused viewer on that one climb; the other loaded climbs stay parked in
+   * the slot arrays for the session and are not reflected in the URL.
+   */
+  const syncUrl = useCallback((nextSlotKeys: (string | null)[], nextMode: ConsoleMode = consoleMode) => {
+    const active = activeKeysOf(nextSlotKeys);
+    const keysForUrl = nextMode === "single" ? active.slice(0, 1) : active;
     router.replace(
-      buildCompareUrl(activeKeysOf(nextSlotKeys), { state: urlState, area: urlArea, route: urlRoute }),
+      buildCompareUrl(keysForUrl, { state: urlState, area: urlArea, route: urlRoute, mode: nextMode }),
       { scroll: false },
     );
-  }, [router, urlState, urlArea, urlRoute]);
+  }, [router, urlState, urlArea, urlRoute, consoleMode]);
+
+  /** Flips console mode and re-syncs the URL; slot data is untouched (parked). */
+  const setConsoleMode = useCallback((next: ConsoleMode) => {
+    setConsoleModeState(next);
+    syncUrl(slotKeys, next);
+  }, [slotKeys, syncUrl]);
 
   /** Adds a climb to the first free slot (no-op when full or already present). */
   const addClimb = useCallback((key: string) => {
@@ -457,6 +484,8 @@ function ComparePageInner() {
         <>
           {/* Toolbar */}
           <CompareToolbar
+            consoleMode={consoleMode}
+            onConsoleMode={setConsoleMode}
             viewMode={viewMode}
             onViewMode={setViewMode}
             masterPlaying={masterPlaying}

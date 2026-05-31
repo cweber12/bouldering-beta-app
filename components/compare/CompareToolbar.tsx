@@ -3,6 +3,7 @@
 import { cn } from "@/utils/cn";
 import BodyPartHighlighter from "@/components/compare/BodyPartHighlighter";
 import type { HighlightSelection } from "@/utils/bodyRegions";
+import type { ConsoleMode } from "@/utils/compareUrl";
 
 export type ViewMode = "overlay" | "sidebyside";
 
@@ -19,6 +20,13 @@ export interface CompareToolbarProps {
   onHighlightChange: (next: HighlightSelection) => void;
   refineOpen: boolean;
   onToggleRefine: () => void;
+  /**
+   * Single vs multiple console mode. When `onConsoleMode` is supplied the
+   * leftmost Single | Multiple control renders; otherwise it is omitted so the
+   * toolbar can be used without the mode gate.
+   */
+  consoleMode?: ConsoleMode;
+  onConsoleMode?: (mode: ConsoleMode) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,9 +51,22 @@ function SideBySideIcon() {
   );
 }
 
+function SingleIcon() {
+  return (
+    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M8 5.5A1.5 1.5 0 019.5 4h5A1.5 1.5 0 0116 5.5v13a1.5 1.5 0 01-1.5 1.5h-5A1.5 1.5 0 018 18.5v-13z" />
+    </svg>
+  );
+}
+
 const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
   { id: "overlay", label: "Overlay", icon: <OverlayIcon /> },
   { id: "sidebyside", label: "Side by side", icon: <SideBySideIcon /> },
+];
+
+const CONSOLE_MODES: { id: ConsoleMode; label: string; icon: React.ReactNode }[] = [
+  { id: "single", label: "Single", icon: <SingleIcon /> },
+  { id: "multiple", label: "Multiple", icon: <SideBySideIcon /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -61,9 +82,36 @@ export default function CompareToolbar({
   onHighlightChange,
   refineOpen,
   onToggleRefine,
+  consoleMode = "multiple",
+  onConsoleMode,
 }: CompareToolbarProps) {
   return (
     <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-edge/30 px-3 py-2">
+      {/* Console-mode segmented control — single climb vs multi-climb comparison.
+          Renders only when wired; it gates the rest of the stage controls. */}
+      {onConsoleMode && (
+        <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="Console mode">
+          {CONSOLE_MODES.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onConsoleMode(m.id)}
+              aria-pressed={consoleMode === m.id}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                consoleMode === m.id
+                  ? "bg-surface-alt text-fg shadow-sm"
+                  : "text-fg-muted hover:text-fg",
+              )}
+            >
+              {m.icon}
+              <span>{m.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* View-mode segmented control */}
       <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="View mode">
         {VIEW_MODES.map((m) => (
