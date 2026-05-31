@@ -27,6 +27,8 @@ export interface CompareOverlayPlayerProps {
   lineWidth: number;
   pointRadius: number;
   highlight?: HighlightSelection;
+  /** Per-slot start anchor (seconds) — aligns each climb to a common start. */
+  slotOffsets?: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -42,6 +44,7 @@ export default function CompareOverlayPlayer({
   lineWidth,
   pointRadius,
   highlight = EMPTY_HIGHLIGHT,
+  slotOffsets,
 }: CompareOverlayPlayerProps) {
   // Pre-compute multi-layer skeleton frames (sync, instant).
   const multiData = useMemo(() => {
@@ -77,6 +80,7 @@ export default function CompareOverlayPlayer({
         const topo = getTopology(attempts[i]?.poseBackend ?? "mediapipe");
         layers.push({
           frames: multiData.layers[layerIdx].frames,
+          timeOffset: slotOffsets?.[i] ?? 0,
           style: buildHighlightStyle({
             selection: highlight,
             limbColor: slotColors[i],
@@ -91,7 +95,7 @@ export default function CompareOverlayPlayer({
       }
     }
     return layers;
-  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius, highlight]);
+  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius, highlight, slotOffsets]);
 
   // On-demand video export.
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");

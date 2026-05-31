@@ -98,6 +98,13 @@ function ComparePageInner() {
     () => [...DEFAULT_LIMB_COLORS],
   );
 
+  // Per-slot start anchor (seconds). The frame the user flags as each climb's
+  // sequence start; master play runs every climb from its own anchor, and the
+  // overlay composite respects the same offsets.
+  const [slotOffsets, setSlotOffsets] = useState<number[]>(
+    () => Array.from({ length: MAX_SLOTS }, () => 0),
+  );
+
   // Shared skeleton sizing applied to all slots simultaneously.
   const skeletonLineWidth = 2.5;
   const skeletonPointRadius = 2;
@@ -173,6 +180,7 @@ function ComparePageInner() {
       next[slot] = null;
       setAttempts(a => { const n = [...a]; n[slot] = null; return n; });
       setMatchResults(m => { const n = [...m]; n[slot] = null; return n; });
+      setSlotOffsets(o => { const n = [...o]; n[slot] = 0; return n; });
       syncUrl(next);
       return next;
     });
@@ -309,6 +317,16 @@ function ComparePageInner() {
       return next;
     });
   }
+
+  // Flag the slot player's current scrub position as that climb's start.
+  const handleSetStart = useCallback((idx: number) => {
+    const t = playerRefs.current[idx]?.getCurrentTime() ?? 0;
+    setSlotOffsets((prev) => { const n = [...prev]; n[idx] = t; return n; });
+  }, []);
+
+  const handleClearStart = useCallback((idx: number) => {
+    setSlotOffsets((prev) => { const n = [...prev]; n[idx] = 0; return n; });
+  }, []);
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -447,7 +465,9 @@ function ComparePageInner() {
               setMasterPlaying(next);
               for (let i = 0; i < MAX_SLOTS; i++) {
                 const ref = playerRefs.current[i];
-                if (ref) { if (next) ref.play(); else ref.pause(); }
+                if (!ref) continue;
+                if (next) { ref.seek(slotOffsets[i]); ref.play(); }
+                else ref.pause();
               }
             }}
             highlight={highlight}
@@ -565,8 +585,11 @@ function ComparePageInner() {
                           lineWidth={skeletonLineWidth}
                           pointRadius={skeletonPointRadius}
                           highlight={highlight}
+                          startOffset={slotOffsets[i]}
                           onMatchResult={handleMatchResult}
                           onColorChange={handleColorChange}
+                          onSetStart={handleSetStart}
+                          onClearStart={handleClearStart}
                           hidePlayButton
                           fillHeight
                           playerRef={(el) => { playerRefs.current[i] = el; }}
@@ -617,6 +640,7 @@ function ComparePageInner() {
                     lineWidth={skeletonLineWidth}
                     pointRadius={skeletonPointRadius}
                     highlight={highlight}
+                    slotOffsets={slotOffsets}
                   />
                 </div>
 

@@ -21,6 +21,13 @@ type CV = any;
 
 const JOINT_COLOR = "rgba(255,255,255,0.9)";
 
+/** Format seconds as M:SS for the start-anchor label. */
+function fmtClock(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -46,11 +53,17 @@ export interface CompareSlotProps {
    * fit (viewport-fit) instead of growing with the frame. Used in side-by-side.
    */
   fillHeight?: boolean;
+  /** Playback anchor in seconds — where this climb's sequence starts. */
+  startOffset?: number;
   /** Ref forwarded to the inner FramePlayer for external play control. */
   playerRef?: Ref<FramePlayerHandle>;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
   /** Edit this climb's identity colour inline (omit to hide the swatch). */
   onColorChange?: (idx: number, hex: string) => void;
+  /** Flag the current scrub position as this climb's start (omit to hide). */
+  onSetStart?: (idx: number) => void;
+  /** Clear this climb's start anchor (omit to hide). */
+  onClearStart?: (idx: number) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,9 +84,12 @@ export default function CompareSlot({
   hidePlayer = false,
   hidePlayButton = false,
   fillHeight = false,
+  startOffset = 0,
   playerRef,
   onMatchResult,
   onColorChange,
+  onSetStart,
+  onClearStart,
 }: CompareSlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
@@ -233,8 +249,40 @@ export default function CompareSlot({
             fit={fillHeight ? "contain" : "width"}
             bare={fillHeight}
             className={fillHeight ? "min-h-0 flex-1" : undefined}
+            startOffset={startOffset}
             autoPlay
           />
+
+          {/* Align the start: scrub the bar above, then flag this frame as the
+              climb's start so master play runs all climbs from their starts. */}
+          {onSetStart && (
+            <div className="flex shrink-0 items-center justify-center gap-2">
+              <button
+                onClick={() => onSetStart(slotIndex)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition",
+                  startOffset > 0
+                    ? "border-accent/60 bg-accent/10 text-accent"
+                    : "border-edge/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
+                )}
+                title="Set this frame as the climb's start"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18M3 4h13l-2 4 2 4H3" />
+                </svg>
+                {startOffset > 0 ? `Start ${fmtClock(startOffset)}` : "Set start"}
+              </button>
+              {startOffset > 0 && onClearStart && (
+                <button
+                  onClick={() => onClearStart(slotIndex)}
+                  className="text-xs text-fg-muted transition hover:text-fg"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
           {exportStatus === "rendering" ? (
             <div className="flex shrink-0 items-center justify-between text-xs text-fg-muted">
               <span>Exporting&#8230;</span>

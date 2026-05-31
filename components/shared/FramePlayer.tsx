@@ -9,12 +9,22 @@ import { cn } from "@/utils/cn";
 export interface FramePlayerLayer {
   frames: RenderedSkeletonFrame[];
   style?: SkeletonStyle;
+  /**
+   * Seconds added to the global playback time when sampling this layer's
+   * frames. Used to align multiple climbs to a common start: a layer whose
+   * sequence begins at t=2s gets timeOffset=2 so global time 0 shows its start.
+   */
+  timeOffset?: number;
 }
 
 /** Imperative methods exposed via ref for external playback control. */
 export interface FramePlayerHandle {
   play: () => void;
   pause: () => void;
+  /** Jump to an absolute time (seconds) and redraw. */
+  seek: (t: number) => void;
+  /** Current playback time in seconds. */
+  getCurrentTime: () => number;
 }
 
 interface FramePlayerProps {
@@ -30,6 +40,11 @@ interface FramePlayerProps {
   hidePlayButton?: boolean;
   /** When true, playback starts automatically once the image is loaded. */
   autoPlay?: boolean;
+  /**
+   * Playback anchor in seconds. Looping wraps back here (not to 0), so an
+   * aligned start keeps its sync across loops. Default 0.
+   */
+  startOffset?: number;
   /**
    * How the canvas sizes within its container:
    * - `"width"` (default): fills the container width, height follows aspect
@@ -114,6 +129,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   loop = true,
   hidePlayButton = false,
   autoPlay = false,
+  startOffset = 0,
   orbKeypoints,
   fit = "width",
   bare = false,
@@ -124,6 +140,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const layersRef = useRef(layers);
   const orbKeypointsRef = useRef<{ x: number; y: number }[]>([]);
   const timeRef = useRef(0);
+  const startOffsetRef = useRef(startOffset);
   const playingRef = useRef(false);
   const animRef = useRef(0);
   const lastTickRef = useRef(0);
@@ -142,6 +159,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   useEffect(() => {
     orbKeypointsRef.current = orbKeypoints ?? [];
   }, [orbKeypoints]);
+
+  // Keep the start-offset ref current; redraw if it moves while paused.
+  useEffect(() => {
+    startOffsetRef.current = startOffset;
+  }, [startOffset]);
 
   // Load the image as an ImageBitmap.
   useEffect(() => {
@@ -197,7 +219,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     }
 
     for (const layer of layersRef.current) {
-      const nearest = findNearest(layer.frames, t);
+      const nearest = findNearest(layer.frames, t + (layer.timeOffset ?? 0));
       if (nearest && Object.keys(nearest.keypoints).length > 0) {
         drawSkeleton(ctx, nearest.keypoints, layer.style);
       }
@@ -218,7 +240,10 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
       timeRef.current += delta;
       if (timeRef.current >= duration) {
         if (loop) {
-          timeRef.current %= duration;
+          // Wrap back to the anchor so an aligned start stays in sync on loop.
+          const anchor = startOffsetRef.current;
+          const span = duration - anchor;
+          timeRef.current = span > 0 ? anchor + ((timeRef.current - anchor) % span) : anchor;
         } else {
           timeRef.current = duration;
           playingRef.current = false;
@@ -256,9 +281,12 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   }, [playing]);
 
   // Draw the first frame when the image is ready; auto-play if requested.
+  // Start at the anchor so an aligned player begins at its set start.
   useEffect(() => {
     if (!ready) return;
-    drawFrame(0);
+    timeRef.current = startOffsetRef.current;
+    setDisplayTime(timeRef.current);
+    drawFrame(timeRef.current);
     if (!autoPlay) return;
     const id = requestAnimationFrame(() => setPlaying(true));
     return () => cancelAnimationFrame(id);
@@ -269,11 +297,17 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     if (ready && !playing) drawFrame(timeRef.current);
   }, [layers, ready, playing, drawFrame]);
 
-  // Expose imperative play/pause to parent via ref.
+  // Expose imperative controls to parent via ref.
   useImperativeHandle(ref, () => ({
     play: () => setPlaying(true),
     pause: () => setPlaying(false),
-  }), []);
+    seek: (t: number) => {
+      timeRef.current = t;
+      setDisplayTime(t);
+      drawFrame(t);
+    },
+    getCurrentTime: () => timeRef.current,
+  }), [drawFrame]);
 
   function togglePlay() {
     setPlaying((p) => !p);
