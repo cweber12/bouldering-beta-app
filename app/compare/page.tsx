@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
@@ -11,13 +11,16 @@ import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import CompareSlot from "@/components/compare/CompareSlot";
 import CompareOverlayPlayer from "@/components/compare/CompareOverlayPlayer";
+import CompareClimbRail from "@/components/compare/CompareClimbRail";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useS3Storage } from "@/hooks/useS3Storage";
+import { useAuth } from "@/hooks/useAuth";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { FramePlayerHandle } from "@/components/shared/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
 // Types / constants
@@ -34,12 +37,20 @@ type ViewMode = "sidebyside" | "overlay";
 const DEFAULT_LIMB_COLORS = ["#00d273", "#38bdf8", "#fb923c", "#c084fc"];
 
 const MAX_SLOTS = 4;
+const MIN_TO_COMPARE = 2;
+
+/** Active (non-null) keys in slot order — the value mirrored into the URL. */
+function activeKeysOf(slotKeys: (string | null)[]): string[] {
+  return slotKeys.filter((k): k is string => Boolean(k));
+}
 
 // ---------------------------------------------------------------------------
 // Main compare page
 // ---------------------------------------------------------------------------
 function ComparePageInner() {
   const { cv } = useOpenCV();
+  const { user } = useAuth();
+  const router = useRouter();
   const params = useSearchParams();
   // Accept ?keys=<csv> (multi-climb entry point) with ?key= backward-compat.
   const urlClimbKeys: string[] = (() => {
@@ -55,9 +66,14 @@ function ComparePageInner() {
   const urlRoute = params.get("route") ?? undefined;
   const { downloadAttempt } = useS3Storage();
 
-  // The comparison is a fixed set of up to MAX_SLOTS slots. `attempts` holds the
-  // loaded climb in each slot; slot index drives the identity color. A climb
-  // keeps its slot — and colour — for the session.
+  // The comparison is a fixed set of up to MAX_SLOTS slots. `slotKeys` is the S3
+  // key occupying each slot (the value mirrored into the URL); `attempts` is the
+  // loaded data. Slot index drives the identity color, and a climb keeps its
+  // slot — and colour — for the session; removing one frees its slot without
+  // reshuffling the others.
+  const [slotKeys, setSlotKeys] = useState<(string | null)[]>(
+    () => Array.from({ length: MAX_SLOTS }, () => null),
+  );
   const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
     () => Array.from({ length: MAX_SLOTS }, () => null),
   );
@@ -104,7 +120,7 @@ function ComparePageInner() {
   );
   const [masterPlaying, setMasterPlaying] = useState(false);
 
-  // ── Slot loading ─────────────────────────────────────────────────────────
+  // ── Slot loading + URL sync ──────────────────────────────────────────────
 
   /** Loads an S3 climb into a specific slot. */
   const loadIntoSlot = useCallback(async (slot: number, key: string) => {
@@ -115,9 +131,47 @@ function ComparePageInner() {
     } catch { /* leave the slot empty — the rail still shows the climb as available */ }
   }, [downloadAttempt]);
 
+  /** Rewrites `keys` in the URL (replace — no history entry, no scroll). */
+  const syncUrl = useCallback((nextSlotKeys: (string | null)[]) => {
+    router.replace(
+      buildCompareUrl(activeKeysOf(nextSlotKeys), { state: urlState, area: urlArea, route: urlRoute }),
+      { scroll: false },
+    );
+  }, [router, urlState, urlArea, urlRoute]);
+
+  /** Adds a climb to the first free slot (no-op when full or already present). */
+  const addClimb = useCallback((key: string) => {
+    setSlotKeys(prev => {
+      if (prev.includes(key)) return prev;
+      const slot = prev.findIndex(k => k === null);
+      if (slot === -1) return prev; // at max
+      const next = [...prev];
+      next[slot] = key;
+      void loadIntoSlot(slot, key);
+      syncUrl(next);
+      return next;
+    });
+  }, [loadIntoSlot, syncUrl]);
+
+  /** Removes a climb, freeing its slot without reshuffling the others. */
+  const removeClimb = useCallback((key: string) => {
+    setSlotKeys(prev => {
+      const slot = prev.findIndex(k => k === key);
+      if (slot === -1) return prev;
+      const next = [...prev];
+      next[slot] = null;
+      setAttempts(a => { const n = [...a]; n[slot] = null; return n; });
+      setMatchResults(m => { const n = [...m]; n[slot] = null; return n; });
+      syncUrl(next);
+      return next;
+    });
+  }, [syncUrl]);
+
   // Pre-load climbs from URL params into slots (once, on mount).
   useEffect(() => {
-    urlClimbKeys.slice(0, MAX_SLOTS).forEach((key, i) => { void loadIntoSlot(i, key); });
+    const initial = Array.from({ length: MAX_SLOTS }, (_, i) => urlClimbKeys[i] ?? null);
+    setSlotKeys(initial);
+    initial.forEach((key, i) => { if (key) void loadIntoSlot(i, key); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  // intentionally run once on mount
 
@@ -232,6 +286,13 @@ function ComparePageInner() {
     ? `${urlRoute}${urlArea ? ` · ${urlArea}` : ""}${urlState ? ` · ${urlState}` : ""}`
     : "Compare loaded climbs side by side or overlaid.";
 
+  // Derived rail props: which keys are active and each active key's colour.
+  const activeKeys = activeKeysOf(slotKeys);
+  const colorForKey = useCallback((key: string): string | null => {
+    const slot = slotKeys.indexOf(key);
+    return slot === -1 ? null : slotColors[slot];
+  }, [slotKeys, slotColors]);
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ToolRouteHeader
@@ -252,6 +313,26 @@ function ComparePageInner() {
           ) : undefined
         }
       />
+
+      {/* Rail (left on desktop, bottom strip on mobile) + main column. */}
+      <div className="flex-1 min-h-0 flex flex-col-reverse overflow-hidden sm:flex-row">
+        {user && urlState && urlArea && urlRoute && (
+          <CompareClimbRail
+            className="max-h-[42%] border-t border-edge/40 sm:max-h-none sm:w-52 sm:border-r sm:border-t-0"
+            userId={user.uid}
+            state={urlState}
+            area={urlArea}
+            route={urlRoute}
+            activeKeys={activeKeys}
+            colorForKey={colorForKey}
+            atMax={activeKeys.length >= MAX_SLOTS}
+            minToCompare={MIN_TO_COMPARE}
+            onAdd={addClimb}
+            onRemove={removeClimb}
+          />
+        )}
+
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 
       {/* No route photo yet — the comparison needs a frame to overlay onto. */}
       {!hasPhoto && (
@@ -512,6 +593,9 @@ function ComparePageInner() {
           </div>
         </>
       )}
+
+        </div>
+      </div>
 
       {showCamera && (
         <CameraRecorderModal
