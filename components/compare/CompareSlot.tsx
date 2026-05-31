@@ -14,6 +14,7 @@ import type { RouteAttempt } from "@/storage/sessionStore";
 import { getTopology } from "@/utils/poseConstants";
 import RunStatusDot from "@/components/shared/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
+import { buildHighlightStyle, EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -34,6 +35,8 @@ export interface CompareSlotProps {
   limbColor: string;
   lineWidth: number;
   pointRadius: number;
+  /** Body-part highlight focus (emphasize selected regions, dim the rest). */
+  highlight?: HighlightSelection;
   /** When true, the FramePlayer + download are hidden (overlay mode). */
   hidePlayer?: boolean;
   /** When true, the FramePlayer's built-in play button is hidden. */
@@ -64,6 +67,7 @@ export default function CompareSlot({
   limbColor,
   lineWidth,
   pointRadius,
+  highlight = EMPTY_HIGHLIGHT,
   hidePlayer = false,
   hidePlayButton = false,
   fillHeight = false,
@@ -114,7 +118,15 @@ export default function CompareSlot({
         matches: matchResult.matches,
         skeletonStyle: (() => {
           const topo = getTopology(att.poseBackend ?? "mediapipe");
-          return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+          return buildHighlightStyle({
+            selection: highlight,
+            limbColor,
+            jointColor: JOINT_COLOR,
+            lineWidth,
+            pointRadius,
+            skeletonEdges: topo.skeletonEdges,
+            keypointNames: topo.keypointNames,
+          });
         })(),
         targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
@@ -135,13 +147,22 @@ export default function CompareSlot({
   const isReady = skeletonStatus === "ready" && !!skeletonData;
   const isError = skeletonStatus === "error" || matchStatus === "error";
 
-  // Single styled layer for this climb (identity colour + shared skeleton sizing).
+  // Single styled layer for this climb — identity colour, shared sizing, and
+  // the body-part highlight focus (emphasize selected regions, dim the rest).
   const playerLayers = skeletonData
     ? [{
         frames: skeletonData.frames,
         style: (() => {
           const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
-          return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+          return buildHighlightStyle({
+            selection: highlight,
+            limbColor,
+            jointColor: JOINT_COLOR,
+            lineWidth,
+            pointRadius,
+            skeletonEdges: topo.skeletonEdges,
+            keypointNames: topo.keypointNames,
+          });
         })(),
       }]
     : [];

@@ -1,8 +1,8 @@
 "use client";
 
 import { cn } from "@/utils/cn";
-import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import BodyPartHighlighter from "@/components/compare/BodyPartHighlighter";
+import type { HighlightSelection } from "@/utils/bodyRegions";
 
 export type ViewMode = "overlay" | "sidebyside";
 
@@ -15,7 +15,8 @@ export interface CompareToolbarProps {
   onViewMode: (mode: ViewMode) => void;
   masterPlaying: boolean;
   onTogglePlayAll: () => void;
-  onSkeletonStyle: (style: SkeletonStyle) => void;
+  highlight: HighlightSelection;
+  onHighlightChange: (next: HighlightSelection) => void;
   refineOpen: boolean;
   onToggleRefine: () => void;
 }
@@ -56,7 +57,8 @@ export default function CompareToolbar({
   onViewMode,
   masterPlaying,
   onTogglePlayAll,
-  onSkeletonStyle,
+  highlight,
+  onHighlightChange,
   refineOpen,
   onToggleRefine,
 }: CompareToolbarProps) {
@@ -100,8 +102,8 @@ export default function CompareToolbar({
         </button>
       )}
 
-      {/* Skeleton style */}
-      <SkeletonStylePanel size="sm" onChange={onSkeletonStyle} />
+      {/* Body-part highlighter — focus the comparison on specific parts */}
+      <BodyPartHighlighter selection={highlight} onChange={onHighlightChange} size="sm" />
 
       {/* Refine disclosure */}
       <button

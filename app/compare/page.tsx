@@ -14,6 +14,7 @@ import CompareClimbRail from "@/components/compare/CompareClimbRail";
 import CompareToolbar, { type ViewMode } from "@/components/compare/CompareToolbar";
 import RunStatusDot from "@/components/shared/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
+import { EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useAuth } from "@/hooks/useAuth";
@@ -97,9 +98,13 @@ function ComparePageInner() {
     () => [...DEFAULT_LIMB_COLORS],
   );
 
-  // Shared skeleton style applied to all slots simultaneously.
-  const [skeletonLineWidth, setSkeletonLineWidth] = useState(2.5);
-  const [skeletonPointRadius, setSkeletonPointRadius] = useState(2);
+  // Shared skeleton sizing applied to all slots simultaneously.
+  const skeletonLineWidth = 2.5;
+  const skeletonPointRadius = 2;
+
+  // Body-part highlight focus — emphasizes selected regions across all climbs
+  // and dims the rest. Empty = full-colour skeletons.
+  const [highlight, setHighlight] = useState<HighlightSelection>(EMPTY_HIGHLIGHT);
 
   // Crop box for ORB detection on the shared route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
@@ -445,10 +450,8 @@ function ComparePageInner() {
                 if (ref) { if (next) ref.play(); else ref.pause(); }
               }
             }}
-            onSkeletonStyle={(s) => {
-              if (s.lineWidth != null) setSkeletonLineWidth(s.lineWidth);
-              if (s.pointRadius != null) setSkeletonPointRadius(s.pointRadius);
-            }}
+            highlight={highlight}
+            onHighlightChange={setHighlight}
             refineOpen={refineOpen}
             onToggleRefine={() => setRefineOpen(v => !v)}
           />
@@ -561,6 +564,7 @@ function ComparePageInner() {
                           limbColor={slotColors[i]}
                           lineWidth={skeletonLineWidth}
                           pointRadius={skeletonPointRadius}
+                          highlight={highlight}
                           onMatchResult={handleMatchResult}
                           onColorChange={handleColorChange}
                           hidePlayButton
@@ -595,6 +599,7 @@ function ComparePageInner() {
                         limbColor={slotColors[i]}
                         lineWidth={skeletonLineWidth}
                         pointRadius={skeletonPointRadius}
+                        highlight={highlight}
                         onMatchResult={handleMatchResult}
                         hidePlayer
                       />
@@ -611,6 +616,7 @@ function ComparePageInner() {
                     slotColors={slotColors}
                     lineWidth={skeletonLineWidth}
                     pointRadius={skeletonPointRadius}
+                    highlight={highlight}
                   />
                 </div>
 

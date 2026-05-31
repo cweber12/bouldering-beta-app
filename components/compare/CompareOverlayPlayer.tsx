@@ -7,6 +7,7 @@ import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { getTopology } from "@/utils/poseConstants";
+import { buildHighlightStyle, EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -25,6 +26,7 @@ export interface CompareOverlayPlayerProps {
   slotColors: string[];
   lineWidth: number;
   pointRadius: number;
+  highlight?: HighlightSelection;
 }
 
 // ---------------------------------------------------------------------------
@@ -39,6 +41,7 @@ export default function CompareOverlayPlayer({
   slotColors,
   lineWidth,
   pointRadius,
+  highlight = EMPTY_HIGHLIGHT,
 }: CompareOverlayPlayerProps) {
   // Pre-compute multi-layer skeleton frames (sync, instant).
   const multiData = useMemo(() => {
@@ -74,13 +77,21 @@ export default function CompareOverlayPlayer({
         const topo = getTopology(attempts[i]?.poseBackend ?? "mediapipe");
         layers.push({
           frames: multiData.layers[layerIdx].frames,
-          style: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames },
+          style: buildHighlightStyle({
+            selection: highlight,
+            limbColor: slotColors[i],
+            jointColor: JOINT_COLOR,
+            lineWidth,
+            pointRadius,
+            skeletonEdges: topo.skeletonEdges,
+            keypointNames: topo.keypointNames,
+          }),
         });
         layerIdx++;
       }
     }
     return layers;
-  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius]);
+  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius, highlight]);
 
   // On-demand video export.
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -100,7 +111,15 @@ export default function CompareOverlayPlayer({
         orbFeatures: att.orbFeatures,
         queryOrb: mr.queryOrb,
         matches: mr.matches,
-        skeletonStyle: { limbColor: slotColors[i], jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames },
+        skeletonStyle: buildHighlightStyle({
+          selection: highlight,
+          limbColor: slotColors[i],
+          jointColor: JOINT_COLOR,
+          lineWidth,
+          pointRadius,
+          skeletonEdges: topo.skeletonEdges,
+          keypointNames: topo.keypointNames,
+        }),
       });
     }
     if (layerInputs.length === 0) return;
