@@ -41,7 +41,7 @@ skeletons render correctly. The match page exposes a style panel
 | `/login` | Sign in / sign up with email & password | No |
 | `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
 | `/match` | Load a saved climb, match a route photo and view/download the pose overlay | Yes |
-| `/compare` | Compare multiple runs side-by-side or overlaid | Yes |
+| `/compare` | Compare multiple runs side-by-side or overlaid, with body-part highlighting and per-climb start-time alignment | Yes |
 | `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes |
 | `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal | Yes |
 | `/docs` | Usage guide | No |
@@ -83,6 +83,15 @@ Drag the overlay on the uploaded route photo before clicking **Apply & Match**.
 The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.
+
+On the **Compare** page, all climbs for a route sit under one grouped surface.
+Each climb shows a clean metadata line (colour swatch · date · time · a green
+send / amber attempt dot); the route grade is accented in the page header. The
+**Highlight** control emphasizes selected body regions (head, arms, hands,
+torso, legs, feet — optionally one side) and dims the rest of every skeleton to
+gray, while each climb keeps its identity colour. Use **Set start** on each
+side-by-side climb to flag the frame its sequence begins, then **Play all** runs
+every climb from its own start in sync.
 
 ## Authentication
 

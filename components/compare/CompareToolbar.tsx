@@ -86,33 +86,39 @@ export default function CompareToolbar({
         ))}
       </div>
 
-      {/* Play all — side-by-side only (overlay shares one synced player) */}
+      {/* Master play — side-by-side only (overlay shares one synced player).
+          Runs every climb from its set start in sync. */}
       {viewMode === "sidebyside" && (
         <button
           type="button"
           onClick={onTogglePlayAll}
-          className="ui-control flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
-          aria-label={masterPlaying ? "Pause all" : "Play all"}
+          className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg transition hover:border-edge-hover"
+          aria-label={masterPlaying ? "Pause all climbs" : "Play all climbs"}
         >
           {masterPlaying ? (
-            <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause all</>
+            <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause</>
           ) : (
             <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play all</>
           )}
         </button>
       )}
 
+      {/* Divider between stage controls and focus tools */}
+      <span className="mx-0.5 hidden h-5 w-px bg-edge/40 sm:block" aria-hidden="true" />
+
       {/* Body-part highlighter — focus the comparison on specific parts */}
       <BodyPartHighlighter selection={highlight} onChange={onHighlightChange} size="sm" />
 
-      {/* Refine disclosure */}
+      {/* Refine — secondary disclosure, pushed to the trailing edge */}
       <button
         type="button"
         onClick={onToggleRefine}
         aria-expanded={refineOpen}
         className={cn(
-          "ui-control flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium",
-          refineOpen ? "border-accent/60 bg-accent/10 text-accent" : "",
+          "ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+          refineOpen
+            ? "border border-accent/60 bg-accent/10 text-accent"
+            : "border border-transparent text-fg-muted hover:bg-inset/60 hover:text-fg",
         )}
       >
         <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
