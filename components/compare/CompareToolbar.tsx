@@ -112,43 +112,49 @@ export default function CompareToolbar({
         </div>
       )}
 
-      {/* View-mode segmented control */}
-      <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="View mode">
-        {VIEW_MODES.map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            onClick={() => onViewMode(m.id)}
-            aria-pressed={viewMode === m.id}
-            className={cn(
-              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-              viewMode === m.id
-                ? "bg-surface-alt text-fg shadow-sm"
-                : "text-fg-muted hover:text-fg",
-            )}
-          >
-            {m.icon}
-            <span>{m.label}</span>
-          </button>
-        ))}
-      </div>
+      {/* Multi-climb stage controls — only meaningful when comparing 2+ climbs.
+          Hidden in single mode, where there is just one climb in one player. */}
+      {consoleMode === "multiple" && (
+        <>
+          {/* View-mode segmented control */}
+          <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="View mode">
+            {VIEW_MODES.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => onViewMode(m.id)}
+                aria-pressed={viewMode === m.id}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  viewMode === m.id
+                    ? "bg-surface-alt text-fg shadow-sm"
+                    : "text-fg-muted hover:text-fg",
+                )}
+              >
+                {m.icon}
+                <span>{m.label}</span>
+              </button>
+            ))}
+          </div>
 
-      {/* Master play — side-by-side only (overlay shares one synced player).
-          Runs every climb from its set start in sync. */}
-      {viewMode === "sidebyside" && (
-        <button
-          type="button"
-          onClick={onTogglePlayAll}
-          className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg transition hover:border-edge-hover"
-          aria-label={masterPlaying ? "Pause all climbs" : "Play all climbs"}
-        >
-          {masterPlaying ? (
-            <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause</>
-          ) : (
-            <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play all</>
+          {/* Master play — side-by-side only (overlay shares one synced player).
+              Runs every climb from its set start in sync. */}
+          {viewMode === "sidebyside" && (
+            <button
+              type="button"
+              onClick={onTogglePlayAll}
+              className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg transition hover:border-edge-hover"
+              aria-label={masterPlaying ? "Pause all climbs" : "Play all climbs"}
+            >
+              {masterPlaying ? (
+                <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause</>
+              ) : (
+                <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play all</>
+              )}
+            </button>
           )}
-        </button>
+        </>
       )}
 
       {/* Divider between stage controls and focus tools */}

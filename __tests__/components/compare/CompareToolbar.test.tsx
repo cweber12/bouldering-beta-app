@@ -42,4 +42,32 @@ describe("CompareToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: /Refine/i }));
     expect(onToggleRefine).toHaveBeenCalledTimes(1);
   });
+
+  it("renders the Single|Multiple control only when wired", () => {
+    setup();
+    expect(screen.queryByRole("group", { name: /Console mode/i })).toBeNull();
+
+    setup({ consoleMode: "multiple", onConsoleMode: vi.fn() });
+    expect(screen.getByRole("group", { name: /Console mode/i })).toBeTruthy();
+  });
+
+  it("switches console mode via the segmented control", () => {
+    const onConsoleMode = vi.fn();
+    setup({ consoleMode: "multiple", onConsoleMode });
+    fireEvent.click(screen.getByRole("button", { name: /Single/i }));
+    expect(onConsoleMode).toHaveBeenCalledWith("single");
+  });
+
+  it("hides view-mode and Play all in single mode", () => {
+    setup({ consoleMode: "single", viewMode: "sidebyside", onConsoleMode: vi.fn() });
+    expect(screen.queryByRole("group", { name: /View mode/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Play all/i })).toBeNull();
+    // Focus tools stay available in single mode.
+    expect(screen.getByRole("button", { name: /Refine/i })).toBeTruthy();
+  });
+
+  it("shows view-mode control in multiple mode", () => {
+    setup({ consoleMode: "multiple", onConsoleMode: vi.fn() });
+    expect(screen.getByRole("group", { name: /View mode/i })).toBeTruthy();
+  });
 });
