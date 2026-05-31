@@ -60,7 +60,7 @@
     - Selectable rows/tiles/cards remain clearly interactive.
     - Perceived UI density remains readable and uncluttered.
 
-- [ ] 4. Tighten global control language for professional cohesion
+- [x] 4. Tighten global control language for professional cohesion
   - Scope: harmonize control radius, border weights, spacing rhythm, and focus styling across nav, inputs, chips, toggles, and lightweight toolbars.
   - Files:
     - Update: app/globals.css

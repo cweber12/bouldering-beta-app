@@ -186,7 +186,7 @@ export default function NavBar() {
                   key={tab.href}
                   href={tab.href}
                   className={cn(
-                    "relative px-3 py-1.5 text-body-sm font-medium rounded-lg transition-colors duration-150",
+                    "relative rounded-lg px-3 py-1.5 text-body-sm font-medium transition-colors duration-150",
                     active
                       ? "text-fg"
                       : "text-fg-muted hover:text-fg",
@@ -206,7 +206,7 @@ export default function NavBar() {
               <button
                 onClick={() => setHelpOpenPath(old => old === path ? null : path)}
                 className={cn(
-                  "flex items-center gap-1 px-3 py-1.5 text-body-sm font-medium rounded-lg transition-colors duration-150",
+                  "flex items-center gap-1 rounded-lg px-3 py-1.5 text-body-sm font-medium transition-colors duration-150",
                   helpOpen
                     ? "text-fg"
                     : "text-fg-muted hover:text-fg",
@@ -230,7 +230,7 @@ export default function NavBar() {
             {!loading && !user && (
               <Link
                 href="/login"
-                className="hidden rounded-lg bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/20 sm:inline-flex"
+                className="hidden rounded-lg border border-accent/35 bg-accent/10 px-3.5 py-1.5 text-xs font-medium text-accent transition hover:bg-accent/15 sm:inline-flex"
               >
                 Sign in
               </Link>
@@ -242,7 +242,7 @@ export default function NavBar() {
                 </span>
                 <button
                   onClick={handleSignOut}
-                  className="rounded-lg bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
+                  className="ui-control rounded-lg px-3 py-1.5 text-xs font-medium"
                 >
                   Sign out
                 </button>
@@ -253,7 +253,7 @@ export default function NavBar() {
 
             {/* Mobile hamburger */}
             <button
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-fg-muted transition hover:bg-card/40 hover:text-fg md:hidden"
+              className="ui-control flex h-8 w-8 items-center justify-center text-fg-muted md:hidden"
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Toggle menu"
               aria-expanded={mobileOpen}
@@ -284,8 +284,8 @@ export default function NavBar() {
                   className={cn(
                     "rounded-lg px-3 py-2 text-sm font-medium transition",
                     active
-                      ? "bg-card/60 text-fg"
-                      : "text-fg-muted hover:bg-card/40 hover:text-fg",
+                      ? "border border-edge/70 bg-surface-alt/70 text-fg"
+                      : "text-fg-muted hover:bg-surface-alt/50 hover:text-fg",
                   )}
                 >
                   {tab.label}
@@ -295,21 +295,21 @@ export default function NavBar() {
             {helpSections.length > 0 && (
               <button
                 onClick={() => { setHelpOpenPath(old => old === path ? null : path); setMobileOpen(false); }}
-                className="rounded-lg px-3 py-2 text-left text-sm font-medium text-fg-muted transition hover:bg-card/40 hover:text-fg"
+                className="rounded-lg px-3 py-2 text-left text-sm font-medium text-fg-muted transition hover:bg-surface-alt/50 hover:text-fg"
               >
                 Help
               </button>
             )}
             <div className="mt-2 border-t border-edge/40 pt-2">
               {!loading && !user && (
-                <Link href="/login" className="block rounded-lg bg-accent/10 px-3 py-2 text-center text-sm font-medium text-accent transition hover:bg-accent/20">
+                <Link href="/login" className="block rounded-lg border border-accent/35 bg-accent/10 px-3 py-2 text-center text-sm font-medium text-accent transition hover:bg-accent/15">
                   Sign in
                 </Link>
               )}
               {!loading && user && (
                 <div className="flex flex-col gap-2">
                   <span className="truncate px-3 text-xs text-fg-muted">{user.email}</span>
-                  <button onClick={handleSignOut} className="rounded-lg bg-card/60 px-3 py-2 text-sm font-medium text-fg-secondary transition hover:bg-card hover:text-fg">
+                  <button onClick={handleSignOut} className="ui-control rounded-lg px-3 py-2 text-sm font-medium">
                     Sign out
                   </button>
                 </div>

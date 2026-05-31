@@ -126,14 +126,14 @@ export default function StepMatchRoutePhoto({
 
       {/* ── Compact toolbar ── */}
       <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30 bg-surface">
-        <span className="rounded-full border border-edge/50 bg-card/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="rounded-full border border-edge/60 bg-surface-alt/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
           Optional branch
         </span>
 
         {/* Back */}
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-accent/40 hover:bg-card hover:text-fg"
+          className="ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
           <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
@@ -145,7 +145,7 @@ export default function StepMatchRoutePhoto({
         {!routeMatchTriggered && (
           <button
             onClick={onApplyMatch}
-            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-surface shadow-md shadow-accent/20 transition hover:bg-accent-hover"
+            className="ui-control-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
           >
             <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
@@ -157,7 +157,7 @@ export default function StepMatchRoutePhoto({
 
         {/* Change photo — only before match */}
         {!routeMatchTriggered && (
-          <label className="cursor-pointer rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg">
+          <label className="ui-control cursor-pointer px-3 py-1.5 text-xs font-medium">
             Change photo
             <input type="file" accept="image/*" className="hidden" onChange={handleChangePhotoInput} />
           </label>
@@ -167,7 +167,7 @@ export default function StepMatchRoutePhoto({
         {isFrameReady && exportStatus !== "rendering" && (
           <button
             onClick={onExportVideo}
-            className="flex items-center gap-1.5 rounded-lg border border-edge/50 bg-card/60 px-3 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
           >
             <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
@@ -187,10 +187,10 @@ export default function StepMatchRoutePhoto({
             <button
               onClick={() => setShowMatchStats(p => !p)}
               className={cn(
-                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+                "ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
                 showMatchStats
                   ? "border-accent/60 bg-accent/10 text-accent"
-                  : "border-edge/50 bg-card/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
+                  : "",
               )}
               aria-label="Match statistics"
               aria-expanded={showMatchStats}
@@ -201,7 +201,7 @@ export default function StepMatchRoutePhoto({
               Stats
             </button>
             {showMatchStats && (
-              <div className="absolute left-0 top-full z-20 mt-1.5 w-56 rounded-xl border border-edge/50 bg-card/95 px-4 py-3 shadow-2xl backdrop-blur-xl">
+              <div className="ui-popover absolute left-0 top-full z-20 mt-1.5 w-56 px-4 py-3">
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
                     <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
@@ -270,7 +270,7 @@ export default function StepMatchRoutePhoto({
         {/* Before match: route photo with crop overlay */}
         {!routeMatchTriggered && !isMatching && (
           <div
-            className="relative overflow-hidden rounded-xl border border-edge/50 bg-card/70 shadow-lg shadow-black/10"
+            className="relative overflow-hidden rounded-xl border border-edge/50 bg-surface-alt/55 shadow-lg shadow-black/10"
             style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "7rem")}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -287,7 +287,7 @@ export default function StepMatchRoutePhoto({
             {/* Expand to fullscreen */}
             <button
               onClick={() => setRoutePhotoFullscreen(true)}
-              className="absolute bottom-2 right-2 rounded-lg bg-surface/70 backdrop-blur-sm p-1.5 text-fg-muted hover:text-fg transition"
+              className="ui-control absolute bottom-2 right-2 p-1.5 text-fg-muted"
               aria-label="Expand route photo to fullscreen"
               title="Expand preview"
             >
@@ -344,7 +344,7 @@ export default function StepMatchRoutePhoto({
             <p className="text-sm font-medium text-fg">Route photo &mdash; adjust ORB crop region</p>
             <button
               onClick={() => setRoutePhotoFullscreen(false)}
-              className="rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              className="ui-control p-1.5 text-fg-muted"
               aria-label="Close fullscreen (Escape)"
               title="Close fullscreen (Esc)"
             >
@@ -373,7 +373,7 @@ export default function StepMatchRoutePhoto({
             <div className="flex justify-center gap-3 px-4 py-3 border-t border-edge/40 bg-surface-alt/80 backdrop-blur">
               <button
                 onClick={() => { setRoutePhotoFullscreen(false); onApplyMatch(); }}
-                className="flex items-center justify-center gap-2 rounded-xl bg-accent px-8 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover active:scale-[0.98]"
+                className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold"
               >
                 View Climb
               </button>

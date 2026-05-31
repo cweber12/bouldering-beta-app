@@ -66,15 +66,15 @@ function CropToolbar({
 
   return (
     <>
-      <div className="flex items-center gap-1 rounded-lg border border-edge bg-card p-1 text-xs">
+      <div className="flex items-center gap-1 rounded-lg border border-edge/70 bg-surface-alt/55 p-1 text-xs">
         <button
           type="button"
           onClick={() => onCropModeChange("climber")}
           className={cn(
-            "rounded-md px-2 py-1 font-medium transition",
+            "ui-chip-toggle rounded-md px-2 py-1 font-medium",
             cropMode === "climber"
-              ? "bg-accent/15 text-fg"
-              : "text-fg-secondary hover:text-fg",
+              ? "border-accent/50 bg-accent/15 text-fg"
+              : "",
           )}
           aria-pressed={cropMode === "climber"}
         >
@@ -84,10 +84,10 @@ function CropToolbar({
           type="button"
           onClick={() => onCropModeChange("wall")}
           className={cn(
-            "rounded-md px-2 py-1 font-medium transition",
+            "ui-chip-toggle rounded-md px-2 py-1 font-medium",
             cropMode === "wall"
-              ? "bg-caution/15 text-fg"
-              : "text-fg-secondary hover:text-fg",
+              ? "border-caution-border bg-caution-surface text-fg"
+              : "",
           )}
           aria-pressed={cropMode === "wall"}
         >
@@ -96,7 +96,7 @@ function CropToolbar({
       </div>
 
       {/* Climber crop status indicator */}
-      <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-xs font-medium text-fg-secondary shrink-0">
+      <div className="ui-control flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
         <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
         </svg>
@@ -108,7 +108,7 @@ function CropToolbar({
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-card px-3 py-1.5 text-xs font-medium text-fg-secondary shrink-0">
+      <div className="ui-control flex shrink-0 items-center gap-1.5 px-3 py-1.5 text-xs font-medium">
         <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 6.75A2.25 2.25 0 015.25 4.5h13.5A2.25 2.25 0 0121 6.75v10.5A2.25 2.25 0 0118.75 19.5H5.25A2.25 2.25 0 013 17.25V6.75z" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 9.75h7.5v4.5h-7.5z" />
@@ -127,10 +127,10 @@ function CropToolbar({
           type="button"
           onClick={onToggleAdvanced}
           className={cn(
-            "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition motion-cta",
+            "ui-control motion-cta flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
             showAdvanced
               ? "border-accent/60 bg-accent/10 text-accent"
-              : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg",
+              : "",
           )}
           title="Advanced detection controls"
           aria-label="Advanced controls"
@@ -144,14 +144,14 @@ function CropToolbar({
         </button>
 
         {showAdvanced && (
-          <div className="absolute left-0 top-full z-30 mt-1.5 w-72 rounded-xl border border-edge/50 bg-card/95 p-3 shadow-2xl backdrop-blur-xl animate-fade-in">
+          <div className="ui-popover animate-fade-in absolute left-0 top-full z-30 mt-1.5 w-72 p-3">
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-fg-secondary">Pose model</label>
                 <select
                   value={modelVariant}
                   onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
-                  className="rounded-lg border border-edge bg-inset px-2 py-1 text-xs text-fg outline-none transition focus:border-accent/60"
+                  className="ui-input w-auto px-2 py-1 text-xs"
                 >
                   <option value="lite">Lite (fast)</option>
                   <option value="full">Full (balanced)</option>
@@ -348,14 +348,14 @@ export default function StepSetDetection({
               <button
                 type="button"
                 onClick={() => setShowCropWarning(false)}
-                className="flex-1 rounded-lg border border-caution-border px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/10"
+                className="ui-control flex-1 border-caution-border px-2.5 py-1.5 text-xs font-medium text-caution hover:bg-caution/10"
               >
                 Set crops
               </button>
               <button
                 type="button"
                 onClick={doScan}
-                className="flex-1 rounded-lg border border-caution/40 bg-caution/10 px-2.5 py-1.5 text-xs font-medium text-caution transition hover:bg-caution/20"
+                className="ui-control flex-1 border-caution/40 bg-caution/10 px-2.5 py-1.5 text-xs font-medium text-caution hover:bg-caution/20"
               >
                 Scan anyway
               </button>
@@ -370,10 +370,10 @@ export default function StepSetDetection({
           onClick={handleScanClick}
           disabled={!canScan}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl border px-10 py-3 text-sm font-semibold transition motion-cta",
+            "motion-cta flex items-center justify-center gap-2 rounded-xl px-10 py-3 text-sm font-semibold",
             canScan
-              ? "border-accent/40 bg-accent text-fg-inverse shadow-lg shadow-accent/30 hover:bg-accent/90 hover:shadow-accent/40 active:scale-[0.98]"
-              : "border-edge bg-card text-fg-muted opacity-60 cursor-not-allowed",
+              ? "ui-control-primary"
+              : "ui-control border-edge bg-surface-alt/45 text-fg-muted opacity-60 cursor-not-allowed",
           )}
           title={canScan ? "Start pose detection" : "Loading model…"}
         >
@@ -407,7 +407,7 @@ export default function StepSetDetection({
           <button
             type="button"
             onClick={() => setVideoFullscreen(true)}
-            className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+            className="ui-control ml-auto p-1.5 text-fg-muted"
             aria-label="Expand video preview"
             title="Expand preview"
           >
@@ -454,7 +454,7 @@ export default function StepSetDetection({
 
         {/* Inline video controls */}
         {hasCropFrame && (
-          <div className="flex items-center gap-3 rounded-xl border border-edge/40 bg-card/70 px-3 py-2">
+          <div className="flex items-center gap-3 rounded-xl border border-edge/40 bg-surface-alt/55 px-3 py-2">
             <button
               onClick={handleVideoPlayPause}
               className="shrink-0 rounded p-1 text-fg-secondary transition hover:text-fg"
@@ -507,7 +507,7 @@ export default function StepSetDetection({
             <button
               type="button"
               onClick={onBack}
-              className="ml-auto rounded-lg border border-edge/50 bg-card/60 p-1.5 text-fg-muted hover:border-edge-hover hover:text-fg transition"
+              className="ui-control ml-auto p-1.5 text-fg-muted"
               aria-label="Exit (back to video selection)"
               title="Exit (back to video selection)"
             >

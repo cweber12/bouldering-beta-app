@@ -84,7 +84,7 @@ export default function LocationAutocomplete({
           onChange={handleChange}
           onFocus={() => setOpen(suggestions.length > 0)}
           placeholder={placeholder}
-          className={cn("w-full rounded-lg border border-edge bg-inset px-3 py-2 text-sm text-fg placeholder:text-fg-placeholder focus:border-accent focus:outline-none", className)}
+          className={cn("ui-input w-full px-3 py-2 text-sm", className)}
           autoComplete="off"
         />
         {loading && (
@@ -95,7 +95,7 @@ export default function LocationAutocomplete({
       </div>
 
       {open && (
-        <ul className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-edge bg-surface shadow-lg">
+        <ul className="ui-popover absolute z-50 mt-1 max-h-60 w-full overflow-auto">
           {suggestions.map((s, i) => (
             <li key={i}>
               <button
@@ -104,7 +104,7 @@ export default function LocationAutocomplete({
                   e.preventDefault(); // prevent blur before click
                   handleSelect(s);
                 }}
-                className="w-full px-3 py-2 text-left text-sm text-fg transition hover:bg-inset focus:outline-none"
+                className="w-full px-3 py-2 text-left text-sm text-fg transition hover:bg-inset/80 focus:outline-none"
               >
                 <span className="block font-medium">{s.shortName}</span>
                 <span className="block truncate text-xs text-fg-muted">{s.displayName}</span>

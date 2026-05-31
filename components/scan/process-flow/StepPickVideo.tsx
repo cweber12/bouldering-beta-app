@@ -13,7 +13,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
-      <div className="w-full rounded-3xl border border-edge/40 bg-card/40 p-5 shadow-xl shadow-black/10 sm:p-7">
+      <div className="w-full rounded-3xl border border-edge/40 bg-surface-alt/35 p-5 shadow-xl shadow-black/10 sm:p-7">
         <div className="mb-5 flex flex-col gap-2">
           <p className="text-label tracking-label text-fg-muted uppercase">Start Scan</p>
           <h2 className="text-xl font-semibold text-fg">Choose your video source</h2>
@@ -24,7 +24,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_1fr]">
           {/* Primary: Choose existing file */}
-          <label className="group relative flex cursor-pointer items-center gap-4 overflow-hidden rounded-2xl border border-accent/40 bg-accent/10 px-4 py-4 text-left transition-all duration-200 hover:bg-accent/15">
+          <label className="group relative flex cursor-pointer items-center gap-4 overflow-hidden rounded-2xl border border-accent/40 bg-accent/10 px-4 py-4 text-left transition-colors duration-150 hover:bg-accent/15">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/20 text-accent">
               <svg
                 className="h-7 w-7"
@@ -60,7 +60,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
           <button
             type="button"
             onClick={onCamera}
-            className="group flex items-center gap-3 rounded-2xl border border-edge/50 bg-surface-alt/70 px-4 py-4 text-left transition-all duration-200 hover:border-edge-hover hover:bg-card/70"
+            className="group flex items-center gap-3 rounded-2xl border border-edge/60 bg-surface-alt/60 px-4 py-4 text-left transition-colors duration-150 hover:border-edge-hover hover:bg-surface-alt/80"
           >
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-inset text-fg-secondary group-hover:text-fg">
               <svg

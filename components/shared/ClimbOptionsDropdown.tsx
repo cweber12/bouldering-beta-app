@@ -88,10 +88,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
-          className={cn(
-            "flex items-center justify-center rounded-lg border border-edge/50 bg-surface/90 text-fg-secondary backdrop-blur-sm transition hover:bg-surface hover:text-fg",
-            size === "sm" ? "h-7 w-7" : "h-8 w-8",
-          )}
+          className={cn("ui-control flex items-center justify-center backdrop-blur-sm", size === "sm" ? "h-7 w-7" : "h-8 w-8")}
           aria-label="Climb options"
           aria-expanded={open}
         >
@@ -106,16 +103,16 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
 
       {/* Dropdown panel */}
       {open && (
-        <div className="absolute top-full left-0 z-60 mt-2 w-44 overflow-hidden rounded-xl border border-edge bg-surface shadow-xl">
+        <div className="ui-popover absolute top-full left-0 z-60 mt-2 w-44 overflow-hidden">
           {/* View / Compare toggle */}
           <div className="m-2 flex gap-1 rounded-lg bg-inset p-1">
             <button
               type="button"
               onClick={() => setMode("view")}
               className={cn(
-                "flex-1 rounded py-1 text-xs font-medium transition",
+                "flex-1 rounded-md py-1 text-xs font-medium transition",
                 mode === "view"
-                  ? "bg-surface text-fg shadow-sm"
+                  ? "bg-surface-alt/70 text-fg shadow-sm"
                   : "text-fg-muted hover:text-fg-secondary",
               )}
             >
@@ -125,9 +122,9 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
               type="button"
               onClick={() => setMode("compare")}
               className={cn(
-                "flex-1 rounded py-1 text-xs font-medium transition",
+                "flex-1 rounded-md py-1 text-xs font-medium transition",
                 mode === "compare"
-                  ? "bg-surface text-fg shadow-sm"
+                  ? "bg-surface-alt/70 text-fg shadow-sm"
                   : "text-fg-muted hover:text-fg-secondary",
               )}
             >
@@ -143,7 +140,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset hover:text-fg"
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
             >
               <svg
                 className="h-3.5 w-3.5 shrink-0"
@@ -169,7 +166,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset hover:text-fg"
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
             >
               <svg
                 className="h-3.5 w-3.5 shrink-0"
@@ -197,7 +194,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
             <button
               type="button"
               onClick={handleAction}
-              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset hover:text-fg"
+              className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
             >
               <svg
                 className="h-3.5 w-3.5 shrink-0"
