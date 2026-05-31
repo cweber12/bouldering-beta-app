@@ -812,7 +812,7 @@ function UploadPageInner() {
               </button>
 
               {showOptionalMeta && (
-                <div className="flex flex-col gap-3 rounded-xl border border-edge/40 bg-card/30 px-3 py-3">
+                <div className="flex flex-col gap-3 rounded-xl border border-edge/40 bg-surface-alt/35 px-3 py-3">
                   {/* GPS */}
                   <div className="flex flex-col gap-2">
                     <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>

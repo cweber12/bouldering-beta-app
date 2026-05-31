@@ -282,7 +282,7 @@ function MatchPageInner() {
 
 
       {/* Climb data section — collapsible after a climb is selected */}
-      <div className="rounded-2xl border border-edge/50 bg-card/60 px-5 py-4 flex flex-col gap-4">
+      <div className="rounded-2xl border border-edge/50 bg-surface-alt/40 px-5 py-4 flex flex-col gap-4">
         {pickerCollapsed && hasAttempt ? (
           <>
             {/* Collapsed summary — click to expand */}
@@ -516,8 +516,8 @@ function MatchPageInner() {
 
         {/* Static preview after match triggered — hidden once frames are ready or when new image selected */}
         {imagePreviewUrl && matchTriggered && (isMatching || !isFrameReady) && (
-          <div
-            className="relative overflow-hidden rounded-xl border border-edge bg-card"
+            <div
+              className="relative overflow-hidden rounded-xl border border-edge bg-surface-alt/40"
             style={mediaContainerStyle(imageNaturalSize.w, imageNaturalSize.h)}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -531,7 +531,7 @@ function MatchPageInner() {
 
       {/* Match stats */}
       {isMatchDone && matchResult && (
-        <div className="rounded-xl border border-edge/40 bg-card/60 px-5 py-4 flex flex-col gap-1">
+        <div className="rounded-xl border border-edge/40 bg-surface-alt/40 px-5 py-4 flex flex-col gap-1">
           <p className="text-label font-semibold uppercase tracking-label text-fg-muted">Match statistics</p>
           <div className="mt-2 grid grid-cols-3 gap-4 text-center">
             <div>

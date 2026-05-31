@@ -46,7 +46,7 @@
     - Primary actions are immediately discoverable.
     - Visual hierarchy is cleaner and less themed.
 
-- [ ] 3. Replace non-selectable card surfaces with neutral section treatments
+- [x] 3. Replace non-selectable card surfaces with neutral section treatments
   - Scope: audit static sections and swap card-like backgrounds/borders for divider-led, neutral surfaces while preserving interactive affordances where selectable.
   - Files:
     - Update: app/upload/page.tsx

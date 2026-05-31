@@ -269,7 +269,7 @@ function ComparePageInner() {
                     <img
                       src={imagePreviewUrl}
                       alt="Route photo"
-                      className="absolute inset-0 h-full w-full rounded-2xl border border-edge/50 bg-card/70 object-fill"
+                      className="absolute inset-0 h-full w-full rounded-2xl border border-edge/50 bg-surface-alt/40 object-fill"
                       onLoad={(e) => {
                         const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
                         if (w && h) setImageSize({ w, h });
