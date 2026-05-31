@@ -12,7 +12,8 @@ import CompareSlot from "@/components/compare/CompareSlot";
 import CompareOverlayPlayer from "@/components/compare/CompareOverlayPlayer";
 import CompareClimbRail from "@/components/compare/CompareClimbRail";
 import CompareToolbar, { type ViewMode } from "@/components/compare/CompareToolbar";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import RunStatusDot from "@/components/shared/RunStatusDot";
+import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useAuth } from "@/hooks/useAuth";
@@ -407,8 +408,6 @@ function ComparePageInner() {
             }}
             refineOpen={refineOpen}
             onToggleRefine={() => setRefineOpen(v => !v)}
-            activeSlots={attempts.flatMap((a, i) => (a ? [{ index: i, color: slotColors[i] }] : []))}
-            onColorChange={handleColorChange}
           />
 
           {/* Refine panel — route photo + crop, collapsed by default. */}
@@ -512,6 +511,7 @@ function ComparePageInner() {
                       lineWidth={skeletonLineWidth}
                       pointRadius={skeletonPointRadius}
                       onMatchResult={handleMatchResult}
+                      onColorChange={handleColorChange}
                       hidePlayButton
                       fillHeight
                       playerRef={(el) => { playerRefs.current[i] = el; }}
@@ -561,20 +561,35 @@ function ComparePageInner() {
                   />
                 </div>
 
-                {/* Legend — color ↔ climb identity. */}
+                {/* Legend — editable colour ↔ climb identity (date distinguishes runs). */}
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  {attempts.map((att, i) =>
-                    att ? (
+                  {attempts.map((att, i) => {
+                    if (!att) return null;
+                    const ts = formatRunTimestamp(att.id);
+                    return (
                       <span
                         key={i}
                         className="inline-flex items-center gap-1.5 rounded-full border border-edge/60 bg-card/60 py-1 pl-1.5 pr-2.5 text-xs"
                       >
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: slotColors[i] }} />
-                        <span className="font-medium text-fg">{att.route || `Climb ${i + 1}`}</span>
-                        <RunTypeBadge runType={att.runType} className="px-1 py-0 text-[9px] uppercase tracking-wider" />
+                        <label
+                          className="relative inline-flex h-4 w-4 shrink-0 cursor-pointer rounded-md ring-1 ring-edge/60 transition hover:ring-edge-hover"
+                          style={{ backgroundColor: slotColors[i] }}
+                          title="Climb colour"
+                        >
+                          <input
+                            type="color"
+                            value={slotColors[i]}
+                            onChange={(e) => handleColorChange(i, e.target.value)}
+                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                            aria-label="Climb colour"
+                          />
+                        </label>
+                        <span className="font-medium text-fg">{ts ? ts.date : att.route}</span>
+                        {ts && <span className="text-fg-muted">{ts.time}</span>}
+                        <RunStatusDot runType={att.runType} />
                       </span>
-                    ) : null,
-                  )}
+                    );
+                  })}
                 </div>
               </div>
             )}

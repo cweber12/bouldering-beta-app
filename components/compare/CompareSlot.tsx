@@ -12,7 +12,8 @@ import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import { getTopology } from "@/utils/poseConstants";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import RunStatusDot from "@/components/shared/RunStatusDot";
+import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -45,6 +46,8 @@ export interface CompareSlotProps {
   /** Ref forwarded to the inner FramePlayer for external play control. */
   playerRef?: Ref<FramePlayerHandle>;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
+  /** Edit this climb's identity colour inline (omit to hide the swatch). */
+  onColorChange?: (idx: number, hex: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +69,7 @@ export default function CompareSlot({
   fillHeight = false,
   playerRef,
   onMatchResult,
+  onColorChange,
 }: CompareSlotProps) {
   const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
     useImageMatcher();
@@ -138,33 +142,43 @@ export default function CompareSlot({
         fillHeight && "h-full min-h-0",
       )}
     >
-      <div className="flex shrink-0 items-center gap-2">
-        <span
-          className="h-2 w-2 rounded-full flex-shrink-0"
-          style={{ backgroundColor: limbColor }}
-        />
-        <span className="text-xs font-medium text-fg">Climb {slotIndex + 1}</span>
-        {attempt && (
-          <RunTypeBadge runType={attempt.runType} />
-        )}
-        {attempt?.rating && (
-          <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-inset text-fg">
-            {attempt.rating}
-          </span>
-        )}
-        {attempt && (
-          <span className="ml-auto text-xs text-fg-muted">
-            {attempt.frames.length} frames
-            {attempt.videoMeta?.duration != null && (
-              <> &middot; {Math.floor(attempt.videoMeta.duration / 60)}m {Math.floor(attempt.videoMeta.duration % 60)}s</>
-            )}
-          </span>
-        )}
-      </div>
+      {attempt && (
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Identity colour swatch — clean rounded swatch, editable inline. */}
+          {onColorChange ? (
+            <label
+              className="relative inline-flex h-5 w-5 shrink-0 cursor-pointer rounded-md ring-1 ring-edge/60 transition hover:ring-edge-hover"
+              style={{ backgroundColor: limbColor }}
+              title="Climb colour"
+            >
+              <input
+                type="color"
+                value={limbColor}
+                onChange={(e) => onColorChange(slotIndex, e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Climb colour"
+              />
+            </label>
+          ) : (
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: limbColor }}
+            />
+          )}
 
-      {attempt?.notes && (
-        <div className="rounded border border-edge bg-inset/50 px-3 py-1.5">
-          <p className="text-xs text-fg-muted">{attempt.notes}</p>
+          {/* Date · time — the real distinguisher between a climber's own runs. */}
+          {(() => {
+            const ts = formatRunTimestamp(attempt.id);
+            return ts ? (
+              <span className="flex min-w-0 items-baseline gap-1.5 text-xs">
+                <span className="truncate font-medium text-fg">{ts.date}</span>
+                <span className="shrink-0 text-fg-muted">{ts.time}</span>
+              </span>
+            ) : null;
+          })()}
+
+          {/* Send / attempt indicator — small dot at the end. */}
+          <RunStatusDot runType={attempt.runType} className="ml-auto" />
         </div>
       )}
 

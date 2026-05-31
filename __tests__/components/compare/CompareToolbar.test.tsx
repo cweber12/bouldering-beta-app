@@ -11,11 +11,6 @@ function setup(overrides: Partial<React.ComponentProps<typeof CompareToolbar>> =
     onSkeletonStyle: vi.fn(),
     refineOpen: false,
     onToggleRefine: vi.fn(),
-    activeSlots: [
-      { index: 0, color: "#00d273" },
-      { index: 1, color: "#38bdf8" },
-    ],
-    onColorChange: vi.fn(),
     ...overrides,
   };
   render(<CompareToolbar {...props} />);
@@ -44,12 +39,5 @@ describe("CompareToolbar", () => {
     const { onToggleRefine } = setup();
     fireEvent.click(screen.getByRole("button", { name: /Refine/i }));
     expect(onToggleRefine).toHaveBeenCalledTimes(1);
-  });
-
-  it("reports a colour change for the right slot", () => {
-    const { onColorChange } = setup();
-    const swatch = screen.getByLabelText("Climb 2 skeleton colour");
-    fireEvent.change(swatch, { target: { value: "#ff0000" } });
-    expect(onColorChange).toHaveBeenCalledWith(1, "#ff0000");
   });
 });

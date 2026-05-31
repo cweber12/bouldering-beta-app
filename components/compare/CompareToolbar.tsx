@@ -18,9 +18,6 @@ export interface CompareToolbarProps {
   onSkeletonStyle: (style: SkeletonStyle) => void;
   refineOpen: boolean;
   onToggleRefine: () => void;
-  /** Active slots in slot order, each with its identity colour. */
-  activeSlots: { index: number; color: string }[];
-  onColorChange: (index: number, hex: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -62,8 +59,6 @@ export default function CompareToolbar({
   onSkeletonStyle,
   refineOpen,
   onToggleRefine,
-  activeSlots,
-  onColorChange,
 }: CompareToolbarProps) {
   return (
     <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-edge/30 px-3 py-2">
@@ -126,29 +121,6 @@ export default function CompareToolbar({
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-
-      {/* Per-climb identity colours — styled swatches (native picker hidden). */}
-      {activeSlots.length > 0 && (
-        <div className="ml-auto flex items-center gap-1.5">
-          {activeSlots.map(({ index, color }) => (
-            <label
-              key={index}
-              className="relative inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full ring-1 ring-edge ring-offset-1 ring-offset-surface transition hover:scale-110"
-              style={{ backgroundColor: color }}
-              title={`Climb ${index + 1} colour`}
-            >
-              <span className="text-[9px] font-bold text-fg-inverse">{index + 1}</span>
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => onColorChange(index, e.target.value)}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                aria-label={`Climb ${index + 1} skeleton colour`}
-              />
-            </label>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
