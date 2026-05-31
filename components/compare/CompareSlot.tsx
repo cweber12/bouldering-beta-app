@@ -135,15 +135,26 @@ export default function CompareSlot({
   const isReady = skeletonStatus === "ready" && !!skeletonData;
   const isError = skeletonStatus === "error" || matchStatus === "error";
 
+  // Single styled layer for this climb (identity colour + shared skeleton sizing).
+  const playerLayers = skeletonData
+    ? [{
+        frames: skeletonData.frames,
+        style: (() => {
+          const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
+          return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+        })(),
+      }]
+    : [];
+
   return (
     <div
       className={cn(
-        "flex flex-col gap-2 rounded-lg border border-edge/50 bg-card/60 p-3",
-        fillHeight && "h-full min-h-0",
+        "flex flex-col gap-2",
+        fillHeight && "h-full min-h-0 w-full",
       )}
     >
       {attempt && (
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex w-full shrink-0 items-center gap-2">
           {/* Identity colour swatch — clean rounded swatch, editable inline. */}
           {onColorChange ? (
             <label
@@ -191,20 +202,15 @@ export default function CompareSlot({
       )}
 
       {isReady && imageFile && !hidePlayer && (
-        <div className={cn("flex flex-col gap-2", fillHeight && "min-h-0 flex-1")}>
+        <div className={cn("flex w-full flex-col gap-2", fillHeight && "min-h-0 flex-1")}>
           <FramePlayer
             ref={playerRef}
             imageFile={imageFile}
-            layers={[{
-              frames: skeletonData.frames,
-              style: (() => {
-                const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
-                return { limbColor, jointColor: JOINT_COLOR, lineWidth, pointRadius, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
-              })(),
-            }]}
+            layers={playerLayers}
             duration={skeletonData.duration}
             hidePlayButton={hidePlayButton}
             fit={fillHeight ? "contain" : "width"}
+            bare={fillHeight}
             className={fillHeight ? "min-h-0 flex-1" : undefined}
             autoPlay
           />

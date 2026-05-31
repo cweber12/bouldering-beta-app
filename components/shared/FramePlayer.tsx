@@ -40,6 +40,12 @@ interface FramePlayerProps {
    */
   fit?: "width" | "contain";
   /**
+   * When true, drops the player's own border / background so it can sit flush
+   * inside a shared surface (e.g. the grouped compare stage). The transport
+   * bar keeps its own subtle background.
+   */
+  bare?: boolean;
+  /**
    * ORB reference keypoints drawn as bright-red background dots before the
    * skeleton overlay. Coordinates must be in image-pixel space (matching the
    * native resolution of `imageFile`). Half the configured joint point radius.
@@ -110,6 +116,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   autoPlay = false,
   orbKeypoints,
   fit = "width",
+  bare = false,
   className,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -295,14 +302,15 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   return (
     <div
       className={cn(
-        "flex flex-col gap-0 overflow-hidden rounded-lg border border-edge/50 bg-surface",
+        "flex flex-col gap-0 overflow-hidden rounded-lg",
+        !bare && "border border-edge/50 bg-surface",
         fit === "contain" && "h-full min-h-0",
         className,
       )}
     >
       {fit === "contain" ? (
         // Centered, viewport-fit canvas: shrinks to fit the bounded parent.
-        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-surface-alt/30">
+        <div className={cn("flex min-h-0 flex-1 items-center justify-center overflow-hidden", !bare && "bg-surface-alt/30")}>
           <canvas ref={canvasRef} className="block max-h-full max-w-full object-contain" />
         </div>
       ) : (

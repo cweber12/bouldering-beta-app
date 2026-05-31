@@ -114,6 +114,12 @@ function ComparePageInner() {
   const [showUpdateMenu, setShowUpdateMenu] = useState(false);
   const updateMenuRef = useRef<HTMLDivElement>(null);
 
+  // Measured height of the side-by-side stage — drives per-column width so the
+  // portrait overlays size to the media and sit close together (not marooned in
+  // 50% cells). 0 until measured; columns fill until then.
+  const [stageH, setStageH] = useState(0);
+  const stageRef = useRef<HTMLDivElement>(null);
+
   // FramePlayer refs for master play control (side-by-side).
   const playerRefs = useRef<(FramePlayerHandle | null)[]>(
     Array.from({ length: MAX_SLOTS }, () => null),
@@ -240,6 +246,33 @@ function ComparePageInner() {
     };
   }, []);
 
+  // Capture the route-photo natural size as soon as a photo is set, so column
+  // sizing has the correct aspect even before the Refine panel is opened.
+  useEffect(() => {
+    if (!imagePreviewUrl) return;
+    let cancelled = false;
+    const img = new window.Image();
+    img.onload = () => {
+      if (!cancelled && img.naturalWidth && img.naturalHeight) {
+        setImageSize({ w: img.naturalWidth, h: img.naturalHeight });
+      }
+    };
+    img.src = imagePreviewUrl;
+    return () => { cancelled = true; };
+  }, [imagePreviewUrl]);
+
+  // Track the side-by-side stage height so columns can be capped to the media
+  // width. Re-attaches when the stage mounts (view-mode switch).
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setStageH(e.contentRect.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewMode, imagePreviewUrl, refineOpen]);
+
   /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
   function setImageFileWithPreview(file: File | null) {
     if (imagePreviewUrlRef.current) {
@@ -315,6 +348,16 @@ function ComparePageInner() {
 
   // Derived rail props: which keys are active and each active key's colour.
   const activeKeys = activeKeysOf(slotKeys);
+
+  // Side-by-side column sizing. All overlays share the route-photo aspect, so we
+  // cap each column to the media's display width (measured stage height minus the
+  // per-slot chrome). fit="contain" handles any residual fitting. Undefined until
+  // measured — columns simply fill their cells until then.
+  const mediaAspect = imageSize.h > 0 ? imageSize.w / imageSize.h : 4 / 3;
+  const SLOT_CHROME_PX = 96; // metadata row + transport bar + download + gaps
+  const stageRows = activeKeys.length > 2 ? 2 : 1;
+  const perRowH = stageH > 0 ? (stageH - (stageRows - 1) * 16) / stageRows : 0;
+  const colMaxW = perRowH > SLOT_CHROME_PX ? (perRowH - SLOT_CHROME_PX) * mediaAspect : undefined;
   const colorForKey = useCallback((key: string): string | null => {
     const slot = slotKeys.indexOf(key);
     return slot === -1 ? null : slotColors[slot];
@@ -487,37 +530,47 @@ function ComparePageInner() {
               </p>
             )}
 
-            {/* Side-by-side — viewport-fit grid; rows share the stage height so
-                portrait frames shrink to fit rather than overflowing. */}
+            {/* Side-by-side — all climbs grouped under one shared surface, each
+                column capped to the media width so the overlays sit close. */}
             {viewMode === "sidebyside" && anyLoaded && (
-              <div
-                className={cn(
-                  "grid h-full min-h-0 gap-3",
-                  activeKeys.length <= 1 ? "grid-cols-1" : "grid-cols-2",
-                  activeKeys.length <= 2 ? "grid-rows-1" : "grid-rows-2",
-                )}
-              >
-                {Array.from({ length: MAX_SLOTS }, (_, i) =>
-                  attempts[i] ? (
-                    <CompareSlot
-                      key={i}
-                      slotIndex={i}
-                      attempt={attempts[i]}
-                      imageFile={imageFile}
-                      imageCrop={imageCrop}
-                      matchTrigger={matchTrigger}
-                      cv={cv}
-                      limbColor={slotColors[i]}
-                      lineWidth={skeletonLineWidth}
-                      pointRadius={skeletonPointRadius}
-                      onMatchResult={handleMatchResult}
-                      onColorChange={handleColorChange}
-                      hidePlayButton
-                      fillHeight
-                      playerRef={(el) => { playerRefs.current[i] = el; }}
-                    />
-                  ) : null,
-                )}
+              <div className="h-full min-h-0 rounded-xl border border-edge/40 bg-card/20 p-3">
+                <div
+                  ref={stageRef}
+                  className={cn(
+                    "flex h-full min-h-0 content-center items-stretch justify-center gap-4",
+                    activeKeys.length > 2 ? "flex-wrap" : "flex-nowrap",
+                  )}
+                >
+                  {Array.from({ length: MAX_SLOTS }, (_, i) =>
+                    attempts[i] ? (
+                      <div
+                        key={i}
+                        className={cn(
+                          "flex min-w-0 min-h-0 flex-1 basis-0",
+                          activeKeys.length > 2 && "basis-[calc(50%-0.5rem)] grow-0",
+                        )}
+                        style={colMaxW ? { maxWidth: colMaxW } : undefined}
+                      >
+                        <CompareSlot
+                          slotIndex={i}
+                          attempt={attempts[i]}
+                          imageFile={imageFile}
+                          imageCrop={imageCrop}
+                          matchTrigger={matchTrigger}
+                          cv={cv}
+                          limbColor={slotColors[i]}
+                          lineWidth={skeletonLineWidth}
+                          pointRadius={skeletonPointRadius}
+                          onMatchResult={handleMatchResult}
+                          onColorChange={handleColorChange}
+                          hidePlayButton
+                          fillHeight
+                          playerRef={(el) => { playerRefs.current[i] = el; }}
+                        />
+                      </div>
+                    ) : null,
+                  )}
+                </div>
               </div>
             )}
 
