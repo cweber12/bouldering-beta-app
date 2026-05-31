@@ -148,7 +148,7 @@ export default function CompareSelectSheet({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1002] flex flex-col bg-surface/80 backdrop-blur-sm"
+      className="fixed inset-0 z-1002 flex flex-col bg-surface/80 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label={`Select climbs to compare on ${route}`}
@@ -166,7 +166,7 @@ export default function CompareSelectSheet({
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="ml-4 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-fg-secondary transition hover:bg-inset hover:text-fg"
+            className="ui-control ml-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-fg-secondary"
             aria-label="Close"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -195,7 +195,7 @@ export default function CompareSelectSheet({
           )}
 
           {!loading && error && (
-            <div className="rounded-xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+            <div className="rounded-md border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
               {error}
             </div>
           )}
@@ -218,7 +218,7 @@ export default function CompareSelectSheet({
                     onClick={() => toggleClimb(c.key)}
                     disabled={isAtMax}
                     className={cn(
-                      "group relative cursor-pointer rounded-xl border bg-card text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                      "group relative cursor-pointer rounded-md border bg-surface text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                       isSelected
                         ? "border-accent bg-accent/5 ring-2 ring-accent/40"
                         : isAtMax
@@ -227,7 +227,7 @@ export default function CompareSelectSheet({
                     )}
                   >
                     {/* Thumbnail */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-t-xl bg-inset">
+                    <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
                       {c.thumbnail ? (
                         <Image
                           src={c.thumbnail}
@@ -288,7 +288,7 @@ export default function CompareSelectSheet({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-edge px-4 py-2 text-sm text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+            className="ui-control rounded-md px-4 py-2 text-sm"
           >
             Cancel
           </button>
@@ -303,7 +303,7 @@ export default function CompareSelectSheet({
               type="button"
               onClick={handleConfirm}
               disabled={!canConfirm}
-              className="rounded-xl bg-accent px-5 py-2 text-sm font-semibold text-surface shadow shadow-accent/20 transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+              className="ui-control-primary rounded-md px-5 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-40"
             >
               {canConfirm ? `Compare ${selCount} climbs` : "Compare"}
             </button>

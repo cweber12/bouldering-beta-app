@@ -29,8 +29,8 @@ export default function MapPickerModal({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
-      <div className="w-full max-w-2xl rounded-2xl border border-edge/50 bg-surface p-5 shadow-2xl animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6">
+      <div className="w-full max-w-2xl rounded-md border border-edge/50 bg-surface p-5 shadow-xl animate-scale-in">
         <h2 className="mb-3 text-sm font-semibold text-fg">Pick climb location on map</h2>
         <MapPicker
           initialLat={initialLat}

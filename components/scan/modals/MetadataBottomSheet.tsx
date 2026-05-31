@@ -81,12 +81,12 @@ export default function MetadataBottomSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-surface/70 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Sheet */}
-      <div className="animate-slide-up relative w-full max-w-lg rounded-t-2xl border border-b-0 border-edge/50 bg-surface px-6 pb-8 pt-5 shadow-2xl max-h-[85vh] overflow-y-auto">
+      <div className="animate-slide-up relative w-full max-w-lg rounded-t-md border border-b-0 border-edge/50 bg-surface px-5 pb-7 pt-5 shadow-xl max-h-[85vh] overflow-y-auto">
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-fg">
@@ -94,7 +94,7 @@ export default function MetadataBottomSheet({
           </h2>
           <button
             onClick={onClose}
-            className="rounded-full p-1 text-fg-muted hover:text-fg transition"
+            className="ui-control flex h-11 w-11 items-center justify-center rounded-md text-fg-muted"
             aria-label="Close"
           >
             <svg
@@ -139,14 +139,14 @@ export default function MetadataBottomSheet({
             <div className="flex flex-col gap-2 pt-1">
               <p className="text-xs font-medium text-fg-secondary">GPS Coordinates</p>
               {location.coordinates ? (
-                <div className="flex items-center justify-between rounded-lg border border-send/40 bg-send-surface px-3 py-2">
+                <div className="flex items-center justify-between rounded-md border border-send/40 bg-send-surface px-3 py-2">
                   <span className="text-xs text-send font-mono">
                     {location.coordinates.lat.toFixed(5)}, {location.coordinates.lng.toFixed(5)}
                   </span>
                   <button
                     type="button"
                     onClick={actions.onClearCoordinates}
-                    className="ml-2 text-xs text-fg-muted hover:text-danger transition"
+                    className="ui-control-text ml-2 text-xs text-fg-muted hover:text-danger"
                     aria-label="Clear coordinates"
                   >
                     ✕
@@ -160,7 +160,7 @@ export default function MetadataBottomSheet({
                   type="button"
                   onClick={actions.onUseGPS}
                   disabled={geoLoading}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg disabled:opacity-50"
+                  className="ui-control flex-1 rounded-md px-2 py-1.5 text-xs disabled:opacity-50"
                 >
                   {geoLoading ? (
                     <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-edge border-t-accent" />
@@ -182,7 +182,7 @@ export default function MetadataBottomSheet({
                 <button
                   type="button"
                   onClick={actions.onOpenMapPicker}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-edge bg-inset px-2 py-1.5 text-xs text-fg-secondary transition hover:border-accent/60 hover:text-fg"
+                  className="ui-control flex-1 rounded-md px-2 py-1.5 text-xs"
                 >
                   <svg
                     className="h-3 w-3"
@@ -214,6 +214,7 @@ export default function MetadataBottomSheet({
                   onClick={() => actions.onRunTypeChange(t)}
                   className={cn(
                     "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
+                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition capitalize",
                     runDetails.runType === t
                       ? t === "send"
                         ? "border-send/60 bg-send-surface text-send"
@@ -238,19 +239,19 @@ export default function MetadataBottomSheet({
               value={runDetails.rating}
               onChange={(e) => actions.onRatingChange(e.target.value)}
               placeholder="Grade / Rating (e.g. V3, 5.10a)"
-              className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60"
+              className="ui-input rounded-md px-3 py-2 text-sm"
             />
             <textarea
               value={runDetails.notes}
               onChange={(e) => actions.onNotesChange(e.target.value)}
               placeholder="Notes…"
               rows={2}
-              className="rounded-xl border border-edge bg-inset px-3 py-2 text-sm text-fg outline-none transition placeholder:text-fg-placeholder focus:border-accent/60 resize-none"
+              className="ui-input resize-none rounded-md px-3 py-2 text-sm"
             />
           </div>
 
           {showLocationWarning && (
-            <p className="rounded-xl border border-caution-border bg-caution-surface px-4 py-2.5 text-xs text-caution">
+            <p className="rounded-md border border-caution-border bg-caution-surface px-4 py-2.5 text-xs text-caution">
               Enter State/Region, Area, and Route before uploading.
             </p>
           )}
@@ -260,7 +261,7 @@ export default function MetadataBottomSheet({
           <button
             onClick={onConfirm}
             disabled={action === "upload" && s3Loading}
-            className="flex items-center justify-center gap-2 rounded-xl bg-accent px-6 py-3.5 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+            className="ui-control-primary flex items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {action === "save" ? (
               <>
