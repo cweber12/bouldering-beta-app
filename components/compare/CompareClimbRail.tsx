@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { cn } from "@/utils/cn";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import type { ConsoleMode } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,7 +34,7 @@ export interface CompareClimbRailProps {
   state: string;
   area: string;
   route: string;
-  /** S3 keys currently in the comparison, in slot order. */
+  /** S3 keys currently active, in slot order (single mode: just the shown one). */
   activeKeys: string[];
   /** Identity colour for an active key, or null when the key is not active. */
   colorForKey: (key: string) => string | null;
@@ -41,6 +42,13 @@ export interface CompareClimbRailProps {
   atMax: boolean;
   /** Minimum climbs needed for a real comparison (drives the "add" hint). */
   minToCompare: number;
+  /**
+   * Console mode. In `single` the rail still lists every climb but selection is
+   * exclusive: tapping a climb swaps the shown one (via `onAdd`) rather than
+   * adding a second, the active tap is a no-op, and the count/hint/identity
+   * colours are hidden (one climb needs none).
+   */
+  mode?: ConsoleMode;
   onAdd: (key: string) => void;
   onRemove: (key: string) => void;
   className?: string;
@@ -64,10 +72,12 @@ export default function CompareClimbRail({
   colorForKey,
   atMax,
   minToCompare,
+  mode = "multiple",
   onAdd,
   onRemove,
   className,
 }: CompareClimbRailProps) {
+  const isSingle = mode === "single";
   const [climbs, setClimbs] = useState<ClimbSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +106,8 @@ export default function CompareClimbRail({
     return () => { cancelled = true; };
   }, [userId, state, area, route]);
 
-  const needsMore = activeKeys.length > 0 && activeKeys.length < minToCompare;
+  // The "add to compare" hint only applies when building a multi-climb comparison.
+  const needsMore = !isSingle && activeKeys.length > 0 && activeKeys.length < minToCompare;
 
   return (
     <aside
@@ -111,9 +122,12 @@ export default function CompareClimbRail({
         <p className="text-label font-semibold uppercase tracking-label text-fg-muted">
           Climbs
         </p>
-        <span className="text-[10px] text-fg-muted">
-          {activeKeys.length}/{4}
-        </span>
+        {/* Slot counter only matters when filling a multi-climb comparison. */}
+        {!isSingle && (
+          <span className="text-[10px] text-fg-muted">
+            {activeKeys.length}/{4}
+          </span>
+        )}
       </div>
 
       {/* Add hint when a comparison needs at least one more climb. */}
@@ -149,23 +163,31 @@ export default function CompareClimbRail({
         )}
 
         {!loading && !error && climbs.map((c) => {
-          const color = colorForKey(c.key);
-          const isActive = color !== null;
-          const isLocked = !isActive && atMax;
+          const isActive = activeKeys.includes(c.key);
+          // Identity colour is a multi-climb concept; single mode shows none.
+          const color = isSingle ? null : colorForKey(c.key);
+          // Single mode is always swappable — never locked. Multiple locks
+          // inactive climbs once every slot is full.
+          const isLocked = !isSingle && !isActive && atMax;
+          // Single mode: tapping the active climb is a no-op (can't deselect the
+          // only view); tapping another swaps via onAdd. Multiple mode toggles.
+          const handleClick = isSingle
+            ? () => { if (!isActive) onAdd(c.key); }
+            : () => (isActive ? onRemove(c.key) : onAdd(c.key));
           return (
             <button
               key={c.key}
               type="button"
               aria-pressed={isActive}
               disabled={isLocked}
-              onClick={() => (isActive ? onRemove(c.key) : onAdd(c.key))}
-              style={isActive ? { borderColor: color! } : undefined}
+              onClick={handleClick}
+              style={isActive && color ? { borderColor: color } : undefined}
               className={cn(
                 "group relative flex w-24 shrink-0 flex-col gap-1 rounded-lg border bg-surface p-1.5 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 "sm:w-full sm:flex-row sm:items-center sm:gap-2.5",
                 isActive
-                  ? "bg-card"
+                  ? cn("bg-card", !color && "border-accent")
                   : isLocked
                   ? "cursor-not-allowed border-edge/40 opacity-40"
                   : "border-edge/50 hover:border-edge-hover hover:bg-card/70",
@@ -189,11 +211,15 @@ export default function CompareClimbRail({
                   </div>
                 )}
 
-                {/* Active check, filled with the identity colour. */}
+                {/* Active check — identity colour in multiple mode, accent in
+                    single mode where there are no per-climb colours. */}
                 {isActive && (
                   <span
-                    className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full"
-                    style={{ backgroundColor: color! }}
+                    className={cn(
+                      "absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full",
+                      !color && "bg-accent",
+                    )}
+                    style={color ? { backgroundColor: color } : undefined}
                   >
                     <svg className="h-2.5 w-2.5 text-fg-inverse" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />

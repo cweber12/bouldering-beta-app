@@ -198,6 +198,27 @@ function ComparePageInner() {
     });
   }, [loadIntoSlot, syncUrl]);
 
+  /**
+   * Single-mode selection: collapse to exactly one shown climb. Reuses the
+   * already-loaded attempt when the tapped climb was parked in another slot,
+   * otherwise loads it. Clearing the other slots is intentional — single mode
+   * means one selected climb, so picking a new one replaces the set. (A plain
+   * multiple→single→multiple toggle without tapping the rail still preserves the
+   * set, because that path never calls this.)
+   */
+  const swapSingle = useCallback((key: string) => {
+    const fromSlot = slotKeys.indexOf(key);
+    if (fromSlot === 0 && activeKeysOf(slotKeys).length === 1) return; // already the sole climb
+    const existing = fromSlot !== -1 ? attempts[fromSlot] : null;
+    const nextKeys = Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? key : null));
+    setSlotKeys(nextKeys);
+    setAttempts(Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? existing : null)));
+    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    setSlotOffsets(Array.from({ length: MAX_SLOTS }, () => 0));
+    if (!existing) void loadIntoSlot(0, key);
+    syncUrl(nextKeys);
+  }, [slotKeys, attempts, loadIntoSlot, syncUrl]);
+
   /** Removes a climb, freeing its slot without reshuffling the others. */
   const removeClimb = useCallback((key: string) => {
     setSlotKeys(prev => {
@@ -429,11 +450,16 @@ function ComparePageInner() {
             state={urlState}
             area={urlArea}
             route={urlRoute}
-            activeKeys={activeKeys}
+            mode={consoleMode}
+            activeKeys={
+              consoleMode === "single"
+                ? (singleIdx !== -1 ? [slotKeys[singleIdx] as string] : [])
+                : activeKeys
+            }
             colorForKey={colorForKey}
             atMax={activeKeys.length >= MAX_SLOTS}
             minToCompare={MIN_TO_COMPARE}
-            onAdd={addClimb}
+            onAdd={consoleMode === "single" ? swapSingle : addClimb}
             onRemove={removeClimb}
           />
         )}
