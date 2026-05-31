@@ -31,6 +31,15 @@ interface FramePlayerProps {
   /** When true, playback starts automatically once the image is loaded. */
   autoPlay?: boolean;
   /**
+   * How the canvas sizes within its container:
+   * - `"width"` (default): fills the container width, height follows aspect
+   *   ratio (the player grows as tall as the frame — fine in a scroll area).
+   * - `"contain"`: the canvas shrinks to fit BOTH the width and the height of a
+   *   height-bounded parent, preserving aspect ratio. Use this when the player
+   *   must never overflow the viewport (e.g. tall portrait frames).
+   */
+  fit?: "width" | "contain";
+  /**
    * ORB reference keypoints drawn as bright-red background dots before the
    * skeleton overlay. Coordinates must be in image-pixel space (matching the
    * native resolution of `imageFile`). Half the configured joint point radius.
@@ -100,6 +109,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   hidePlayButton = false,
   autoPlay = false,
   orbKeypoints,
+  fit = "width",
   className,
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -286,12 +296,20 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     <div
       className={cn(
         "flex flex-col gap-0 overflow-hidden rounded-xl border border-edge/50 bg-surface",
+        fit === "contain" && "h-full min-h-0",
         className,
       )}
     >
-      <canvas ref={canvasRef} className="w-full block" />
+      {fit === "contain" ? (
+        // Centered, viewport-fit canvas: shrinks to fit the bounded parent.
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-surface-alt/30">
+          <canvas ref={canvasRef} className="block max-h-full max-w-full object-contain" />
+        </div>
+      ) : (
+        <canvas ref={canvasRef} className="w-full block" />
+      )}
 
-      <div className="flex items-center gap-3 bg-surface-alt/80 backdrop-blur-sm px-3 py-2">
+      <div className="flex shrink-0 items-center gap-3 bg-surface-alt/80 backdrop-blur-sm px-3 py-2">
         {!hidePlayButton && (
           <button
             onClick={togglePlay}

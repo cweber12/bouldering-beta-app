@@ -136,22 +136,24 @@ export default function CompareOverlayPlayer({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex h-full min-h-0 flex-col gap-2">
       <FramePlayer
         imageFile={imageFile}
         layers={playerLayers}
         duration={multiData.duration}
+        fit="contain"
+        className="min-h-0 flex-1"
         autoPlay
       />
       {exportStatus === "rendering" ? (
-        <div className="flex items-center justify-between text-xs text-fg-muted">
+        <div className="flex shrink-0 items-center justify-between text-xs text-fg-muted">
           <span>Exporting overlay&#8230;</span>
           <span>{exportProgress}%</span>
         </div>
       ) : (
         <button
           onClick={handleDownload}
-          className="text-center text-xs text-fg-muted hover:text-fg transition"
+          className="shrink-0 text-center text-xs text-fg-muted hover:text-fg transition"
         >
           Download .webm
         </button>

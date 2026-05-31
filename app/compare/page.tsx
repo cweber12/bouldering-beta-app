@@ -12,6 +12,7 @@ import CompareSlot from "@/components/compare/CompareSlot";
 import CompareOverlayPlayer from "@/components/compare/CompareOverlayPlayer";
 import CompareClimbRail from "@/components/compare/CompareClimbRail";
 import CompareToolbar, { type ViewMode } from "@/components/compare/CompareToolbar";
+import RunTypeBadge from "@/components/shared/RunTypeBadge";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useAuth } from "@/hooks/useAuth";
@@ -451,17 +452,17 @@ function ComparePageInner() {
             </div>
           )}
 
-          {/* Stage — fills remaining height. */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+          {/* Stage — fills remaining height; never grows past the viewport. */}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
             {!anyLoaded && (
               <p className="py-12 text-center text-sm text-fg-muted">
                 No climbs loaded yet.
               </p>
             )}
 
-            {/* Side-by-side */}
+            {/* Side-by-side — scrolls within the bounded stage. */}
             {viewMode === "sidebyside" && anyLoaded && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="grid h-full grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2">
                 {Array.from({ length: MAX_SLOTS }, (_, i) =>
                   attempts[i] ? (
                     <CompareSlot
@@ -488,7 +489,9 @@ function ComparePageInner() {
                 run per-slot via hidden CompareSlots so each slot's match result
                 feeds the overlay player. */}
             {viewMode === "overlay" && anyLoaded && (
-              <div className="flex flex-col gap-3">
+              <div className="flex h-full min-h-0 flex-col gap-2">
+                {/* Hidden matcher slots — feed each slot's match result to the
+                    overlay player without rendering a visible card. */}
                 <div className="hidden">
                   {Array.from({ length: MAX_SLOTS }, (_, i) =>
                     attempts[i] ? (
@@ -510,23 +513,29 @@ function ComparePageInner() {
                   )}
                 </div>
 
-                <CompareOverlayPlayer
-                  imageFile={imageFile}
-                  matchResults={matchResults}
-                  attempts={attempts}
-                  cv={cv}
-                  slotColors={slotColors}
-                  lineWidth={skeletonLineWidth}
-                  pointRadius={skeletonPointRadius}
-                />
+                <div className="min-h-0 flex-1">
+                  <CompareOverlayPlayer
+                    imageFile={imageFile}
+                    matchResults={matchResults}
+                    attempts={attempts}
+                    cv={cv}
+                    slotColors={slotColors}
+                    lineWidth={skeletonLineWidth}
+                    pointRadius={skeletonPointRadius}
+                  />
+                </div>
 
-                {/* Legend — color ↔ climb */}
-                <div className="flex flex-wrap gap-3 text-xs">
+                {/* Legend — color ↔ climb identity. */}
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
                   {attempts.map((att, i) =>
                     att ? (
-                      <span key={i} className="flex items-center gap-1.5 text-fg-secondary">
-                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: slotColors[i] }} />
-                        Climb {i + 1}: {att.route || att.id}
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-edge/60 bg-card/60 py-1 pl-1.5 pr-2.5 text-xs"
+                      >
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: slotColors[i] }} />
+                        <span className="font-medium text-fg">{att.route || `Climb ${i + 1}`}</span>
+                        <RunTypeBadge runType={att.runType} className="px-1 py-0 text-[9px] uppercase tracking-wider" />
                       </span>
                     ) : null,
                   )}
