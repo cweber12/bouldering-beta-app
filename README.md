@@ -61,6 +61,22 @@ handles to resize it.
 
 Click **Process video** after setting both crop regions.
 
+## Guided scan flow
+
+The upload flow is a guided 4-step process designed to keep the core path fast
+while preserving full analysis quality:
+
+1. **Select source** — upload a video or record with camera.
+2. **Set detection** — set climber crop (with move-padding) and optional wall
+  texture crop; advanced model/stride controls are available but secondary.
+3. **Review landmarks** — view processing output with a single pass/warn quality
+  checkpoint before saving.
+4. **Optional route overlay** — test the run against a route photo as an
+  optional branch, not a required step for saving.
+
+Metadata entry is essentials-first (location + run type), with optional details
+progressively disclosed in the save sheet.
+
 **Match / Compare pages:**
 
 Drag the overlay on the uploaded route photo before clicking **Apply & Match**.
