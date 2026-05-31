@@ -298,9 +298,19 @@ function ComparePageInner() {
   }
 
   const hasPhoto = !!(imageFile && imagePreviewUrl);
-  const subtitle = urlRoute
-    ? `${urlRoute}${urlArea ? ` · ${urlArea}` : ""}${urlState ? ` · ${urlState}` : ""}`
-    : "Compare loaded climbs side by side or overlaid.";
+  // Route grade lives per-attempt; compared climbs share a route so the grade is
+  // consistent — surface the first non-empty one, accented, next to the route name.
+  const grade = attempts.find((a) => a?.rating)?.rating ?? null;
+  const subtitle: React.ReactNode = urlRoute ? (
+    <span>
+      {urlRoute}
+      {grade && <span className="ml-1.5 font-semibold text-accent">{grade}</span>}
+      {urlArea && <span className="text-fg-secondary"> · {urlArea}</span>}
+      {urlState && <span className="text-fg-secondary"> · {urlState}</span>}
+    </span>
+  ) : (
+    "Compare loaded climbs side by side or overlaid."
+  );
 
   // Derived rail props: which keys are active and each active key's colour.
   const activeKeys = activeKeysOf(slotKeys);

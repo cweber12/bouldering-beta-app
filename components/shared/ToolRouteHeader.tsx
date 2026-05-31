@@ -2,7 +2,7 @@ import { cn } from "@/utils/cn";
 
 interface ToolRouteHeaderProps {
   title: string;
-  subtitle?: string;
+  subtitle?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
 }
