@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
 /* CONSTANTS */
 import { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
 /* HOOKS */
@@ -733,15 +734,17 @@ function ScanPageInner() {
 export default function ScanPage() {
   return (
     <LoadingGate>
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-fg-secondary">
-            Loading&#8230;
-          </div>
-        }
-      >
-        <ScanPageInner />
-      </Suspense>
+      <ToolPageShell>
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-fg-secondary">
+              Loading&#8230;
+            </div>
+          }
+        >
+          <ScanPageInner />
+        </Suspense>
+      </ToolPageShell>
     </LoadingGate>
   );
 }

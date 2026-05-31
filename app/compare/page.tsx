@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
@@ -547,15 +548,17 @@ function ComparePageInner() {
 export default function ComparePage() {
   return (
     <LoadingGate>
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
-            Loading&#8230;
-          </div>
-        }
-      >
-        <ComparePageInner />
-      </Suspense>
+      <ToolPageShell>
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
+              Loading&#8230;
+            </div>
+          }
+        >
+          <ComparePageInner />
+        </Suspense>
+      </ToolPageShell>
     </LoadingGate>
   );
 }

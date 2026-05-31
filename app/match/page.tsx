@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import S3RoutePicker from "@/components/shared/S3RoutePicker";
 import FramePlayer from "@/components/shared/FramePlayer";
@@ -683,15 +684,17 @@ function MatchPageInner() {
 export default function MatchPage() {
   return (
     <LoadingGate>
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
-            Loading...
-          </div>
-        }
-      >
-        <MatchPageInner />
-      </Suspense>
+      <ToolPageShell>
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
+              Loading...
+            </div>
+          }
+        >
+          <MatchPageInner />
+        </Suspense>
+      </ToolPageShell>
     </LoadingGate>
   );
 }

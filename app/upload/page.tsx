@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { cn } from "@/utils/cn";
 import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
 
 import { type CropFraction, DEFAULT_CROP } from "@/components/shared/CropBoxOverlay";
 import ComboInput from "@/components/shared/ComboInput";
@@ -918,15 +919,17 @@ function UploadPageInner() {
 export default function UploadPage() {
   return (
     <LoadingGate>
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center text-sm text-fg-secondary">
-            Loading&#8230;
-          </div>
-        }
-      >
-        <UploadPageInner />
-      </Suspense>
+      <ToolPageShell>
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-fg-secondary">
+              Loading&#8230;
+            </div>
+          }
+        >
+          <UploadPageInner />
+        </Suspense>
+      </ToolPageShell>
     </LoadingGate>
   );
 }

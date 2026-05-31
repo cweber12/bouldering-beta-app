@@ -19,7 +19,7 @@
 
 ## Ordered Vertical Slices
 
-- [ ] 1. Create a reusable viewport-fit shell for core tool routes
+- [x] 1. Create a reusable viewport-fit shell for core tool routes
   - Scope: introduce a shared layout primitive that enforces nav-aware in-window composition and local-region overflow handling for tool pages.
   - Files:
     - New: components/shared/ToolPageShell.tsx

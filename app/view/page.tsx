@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
@@ -341,14 +342,16 @@ function ViewPageInner() {
 
 export default function ViewPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
-        </div>
-      }
-    >
-      <ViewPageInner />
-    </Suspense>
+    <ToolPageShell>
+      <Suspense
+        fallback={
+          <div className="flex flex-1 items-center justify-center">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-edge border-t-fg" />
+          </div>
+        }
+      >
+        <ViewPageInner />
+      </Suspense>
+    </ToolPageShell>
   );
 }
