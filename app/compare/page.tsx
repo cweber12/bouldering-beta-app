@@ -8,10 +8,10 @@ import ToolPageShell from "@/components/shared/ToolPageShell";
 import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
-import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
 import CompareSlot from "@/components/compare/CompareSlot";
 import CompareOverlayPlayer from "@/components/compare/CompareOverlayPlayer";
 import CompareClimbRail from "@/components/compare/CompareClimbRail";
+import CompareToolbar, { type ViewMode } from "@/components/compare/CompareToolbar";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,8 +25,6 @@ import { buildCompareUrl } from "@/utils/compareUrl";
 // ---------------------------------------------------------------------------
 // Types / constants
 // ---------------------------------------------------------------------------
-
-type ViewMode = "sidebyside" | "overlay";
 
 /**
  * Default limb colors for new slots (hex, accepted by CSS and SkeletonStyle).
@@ -295,24 +293,7 @@ function ComparePageInner() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <ToolRouteHeader
-        title="Compare"
-        subtitle={subtitle}
-        actions={
-          hasPhoto && anyLoaded ? (
-            <button
-              onClick={() => setRefineOpen(v => !v)}
-              className={cn(
-                "ui-control rounded-lg px-3 py-1.5 text-xs font-medium",
-                refineOpen ? "border-accent/60 bg-accent/10 text-accent" : "",
-              )}
-              aria-expanded={refineOpen}
-            >
-              Refine
-            </button>
-          ) : undefined
-        }
-      />
+      <ToolRouteHeader title="Compare" subtitle={subtitle} />
 
       {/* Rail (left on desktop, bottom strip on mobile) + main column. */}
       <div className="flex-1 min-h-0 flex flex-col-reverse overflow-hidden sm:flex-row">
@@ -379,66 +360,28 @@ function ComparePageInner() {
       {/* Comparison view — shows immediately once a photo is available. */}
       {hasPhoto && (
         <>
-          {/* Compact toolbar */}
-          <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30">
-            {(["overlay", "sidebyside"] as ViewMode[]).map(mode => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={cn(
-                  "ui-control rounded-lg px-3 py-1.5 text-xs font-medium",
-                  viewMode === mode ? "border-accent/60 bg-accent/10 text-accent" : "",
-                )}
-              >
-                {mode === "sidebyside" ? "Side by side" : "Overlay"}
-              </button>
-            ))}
-
-            <SkeletonStylePanel
-              onChange={s => {
-                if (s.lineWidth != null) setSkeletonLineWidth(s.lineWidth);
-                if (s.pointRadius != null) setSkeletonPointRadius(s.pointRadius);
-              }}
-            />
-
-            {viewMode === "sidebyside" && (
-              <button
-                onClick={() => {
-                  const next = !masterPlaying;
-                  setMasterPlaying(next);
-                  for (let i = 0; i < MAX_SLOTS; i++) {
-                    const ref = playerRefs.current[i];
-                    if (ref) { if (next) ref.play(); else ref.pause(); }
-                  }
-                }}
-                className="ui-control flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium"
-                aria-label={masterPlaying ? "Pause all" : "Play all"}
-              >
-                {masterPlaying ? (
-                  <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause all</>
-                ) : (
-                  <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>Play all</>
-                )}
-              </button>
-            )}
-
-            {/* Slot color pickers */}
-            <div className="flex items-center gap-1 ml-auto">
-              {Array.from({ length: MAX_SLOTS }, (_, i) =>
-                attempts[i] ? (
-                  <input
-                    key={i}
-                    type="color"
-                    value={slotColors[i]}
-                    onChange={(e) => handleColorChange(i, e.target.value)}
-                    className="h-6 w-6 cursor-pointer rounded border border-edge bg-transparent p-0.5"
-                    title={`Climb ${i + 1} color`}
-                    aria-label={`Climb ${i + 1} skeleton color`}
-                  />
-                ) : null,
-              )}
-            </div>
-          </div>
+          {/* Toolbar */}
+          <CompareToolbar
+            viewMode={viewMode}
+            onViewMode={setViewMode}
+            masterPlaying={masterPlaying}
+            onTogglePlayAll={() => {
+              const next = !masterPlaying;
+              setMasterPlaying(next);
+              for (let i = 0; i < MAX_SLOTS; i++) {
+                const ref = playerRefs.current[i];
+                if (ref) { if (next) ref.play(); else ref.pause(); }
+              }
+            }}
+            onSkeletonStyle={(s) => {
+              if (s.lineWidth != null) setSkeletonLineWidth(s.lineWidth);
+              if (s.pointRadius != null) setSkeletonPointRadius(s.pointRadius);
+            }}
+            refineOpen={refineOpen}
+            onToggleRefine={() => setRefineOpen(v => !v)}
+            activeSlots={attempts.flatMap((a, i) => (a ? [{ index: i, color: slotColors[i] }] : []))}
+            onColorChange={handleColorChange}
+          />
 
           {/* Refine panel — route photo + crop, collapsed by default. */}
           {refineOpen && (
