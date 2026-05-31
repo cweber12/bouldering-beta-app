@@ -283,7 +283,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     return (
       <div
         className={cn(
-          "flex items-center justify-center rounded-xl border border-edge/50 bg-card/60 py-10",
+          "flex items-center justify-center rounded-lg border border-edge/50 bg-card/60 py-10",
           className,
         )}
       >
@@ -295,7 +295,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   return (
     <div
       className={cn(
-        "flex flex-col gap-0 overflow-hidden rounded-xl border border-edge/50 bg-surface",
+        "flex flex-col gap-0 overflow-hidden rounded-lg border border-edge/50 bg-surface",
         fit === "contain" && "h-full min-h-0",
         className,
       )}

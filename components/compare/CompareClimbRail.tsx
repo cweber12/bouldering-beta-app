@@ -159,20 +159,20 @@ export default function CompareClimbRail({
               aria-pressed={isActive}
               disabled={isLocked}
               onClick={() => (isActive ? onRemove(c.key) : onAdd(c.key))}
-              style={isActive ? { borderColor: color!, boxShadow: `0 0 0 1px ${color!}` } : undefined}
+              style={isActive ? { borderColor: color! } : undefined}
               className={cn(
-                "group relative flex w-24 shrink-0 flex-col gap-1 rounded-xl border bg-surface p-1.5 text-left transition",
+                "group relative flex w-24 shrink-0 flex-col gap-1 rounded-lg border bg-surface p-1.5 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                 "sm:w-full sm:flex-row sm:items-center sm:gap-2.5",
                 isActive
                   ? "bg-card"
                   : isLocked
-                  ? "cursor-not-allowed border-edge/60 opacity-40"
-                  : "border-edge hover:border-edge-hover hover:bg-card/70",
+                  ? "cursor-not-allowed border-edge/40 opacity-40"
+                  : "border-edge/50 hover:border-edge-hover hover:bg-card/70",
               )}
             >
               {/* Thumbnail */}
-              <div className="relative aspect-square w-full overflow-hidden rounded-lg bg-inset sm:h-12 sm:w-12 sm:shrink-0">
+              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-inset sm:h-12 sm:w-12 sm:shrink-0">
                 {c.thumbnail ? (
                   <Image
                     src={c.thumbnail}

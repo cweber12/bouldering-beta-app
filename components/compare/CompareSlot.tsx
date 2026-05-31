@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Ref } from "react";
 import FramePlayer, { type FramePlayerHandle } from "@/components/shared/FramePlayer";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -36,6 +37,11 @@ export interface CompareSlotProps {
   hidePlayer?: boolean;
   /** When true, the FramePlayer's built-in play button is hidden. */
   hidePlayButton?: boolean;
+  /**
+   * When true, the slot fills its parent's height and the player shrinks to
+   * fit (viewport-fit) instead of growing with the frame. Used in side-by-side.
+   */
+  fillHeight?: boolean;
   /** Ref forwarded to the inner FramePlayer for external play control. */
   playerRef?: Ref<FramePlayerHandle>;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
@@ -57,6 +63,7 @@ export default function CompareSlot({
   pointRadius,
   hidePlayer = false,
   hidePlayButton = false,
+  fillHeight = false,
   playerRef,
   onMatchResult,
 }: CompareSlotProps) {
@@ -126,10 +133,12 @@ export default function CompareSlot({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-2xl border border-edge/50 bg-card/60 p-4"
-      style={{ borderTopColor: limbColor, borderTopWidth: 2 }}
+      className={cn(
+        "flex flex-col gap-2 rounded-lg border border-edge/50 bg-card/60 p-3",
+        fillHeight && "h-full min-h-0",
+      )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         <span
           className="h-2 w-2 rounded-full flex-shrink-0"
           style={{ backgroundColor: limbColor }}
@@ -168,7 +177,7 @@ export default function CompareSlot({
       )}
 
       {isReady && imageFile && !hidePlayer && (
-        <div className="flex flex-col gap-2">
+        <div className={cn("flex flex-col gap-2", fillHeight && "min-h-0 flex-1")}>
           <FramePlayer
             ref={playerRef}
             imageFile={imageFile}
@@ -181,17 +190,19 @@ export default function CompareSlot({
             }]}
             duration={skeletonData.duration}
             hidePlayButton={hidePlayButton}
+            fit={fillHeight ? "contain" : "width"}
+            className={fillHeight ? "min-h-0 flex-1" : undefined}
             autoPlay
           />
           {exportStatus === "rendering" ? (
-            <div className="flex items-center justify-between text-xs text-fg-muted">
+            <div className="flex shrink-0 items-center justify-between text-xs text-fg-muted">
               <span>Exporting&#8230;</span>
               <span>{exportProgress}%</span>
             </div>
           ) : (
             <button
               onClick={handleDownload}
-              className="text-center text-xs text-fg-muted hover:text-fg transition"
+              className="shrink-0 text-center text-xs text-fg-muted hover:text-fg transition"
             >
               Download .webm
             </button>

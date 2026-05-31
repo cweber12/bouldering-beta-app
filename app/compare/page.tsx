@@ -326,7 +326,7 @@ function ComparePageInner() {
             <div className="grid grid-cols-2 gap-3">
               <label
                 className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-colors duration-150",
+                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
                   "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
                 )}
               >
@@ -342,7 +342,7 @@ function ComparePageInner() {
                 type="button"
                 onClick={() => setShowCamera(true)}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-2xl border px-4 py-5 text-sm transition-colors duration-150",
+                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
                   "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
                 )}
               >
@@ -393,7 +393,7 @@ function ComparePageInner() {
                   <img
                     src={imagePreviewUrl!}
                     alt="Route photo"
-                    className="absolute inset-0 h-full w-full rounded-2xl border border-edge/50 bg-surface-alt/40 object-fill"
+                    className="absolute inset-0 h-full w-full rounded-lg border border-edge/50 bg-surface-alt/40 object-fill"
                     onLoad={(e) => {
                       const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
                       if (w && h) setImageSize({ w, h });
@@ -460,9 +460,16 @@ function ComparePageInner() {
               </p>
             )}
 
-            {/* Side-by-side — scrolls within the bounded stage. */}
+            {/* Side-by-side — viewport-fit grid; rows share the stage height so
+                portrait frames shrink to fit rather than overflowing. */}
             {viewMode === "sidebyside" && anyLoaded && (
-              <div className="grid h-full grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2">
+              <div
+                className={cn(
+                  "grid h-full min-h-0 gap-3",
+                  activeKeys.length <= 1 ? "grid-cols-1" : "grid-cols-2",
+                  activeKeys.length <= 2 ? "grid-rows-1" : "grid-rows-2",
+                )}
+              >
                 {Array.from({ length: MAX_SLOTS }, (_, i) =>
                   attempts[i] ? (
                     <CompareSlot
@@ -478,6 +485,7 @@ function ComparePageInner() {
                       pointRadius={skeletonPointRadius}
                       onMatchResult={handleMatchResult}
                       hidePlayButton
+                      fillHeight
                       playerRef={(el) => { playerRefs.current[i] = el; }}
                     />
                   ) : null,
