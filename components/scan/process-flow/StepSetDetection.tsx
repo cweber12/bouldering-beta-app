@@ -187,6 +187,9 @@ export interface StepSetDetectionProps {
   wallCrop?: CropFraction;
   onClimberCropChange: (c: CropFraction) => void;
   onWallCropChange?: (c: CropFraction) => void;
+  /** Normalised point [0,1] the user tapped to identify the climber, if any. */
+  climberPoint?: { x: number; y: number } | null;
+  onClimberPointChange?: (p: { x: number; y: number } | null) => void;
   modelVariant: MediaPipeVariant;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
@@ -208,6 +211,8 @@ export default function StepSetDetection({
   wallCrop,
   onClimberCropChange,
   onWallCropChange,
+  climberPoint,
+  onClimberPointChange,
   modelVariant,
   onModelVariantChange,
   frameStep,
@@ -249,6 +254,23 @@ export default function StepSetDetection({
   function handleWallCropChange(c: CropFraction) {
     setWallCropMoved(true);
     onWallCropChange?.(c);
+  }
+
+  // Tap the climber to lock detection onto them. Seeds a default portrait box
+  // around the tap (for the visual crop + wall-region derivation); processing
+  // refines the box adaptively from the climber's landmarks.
+  function handleClimberTap(p: { x: number; y: number }) {
+    setClimberCropMoved(true);
+    setShowCropWarning(false);
+    onClimberPointChange?.(p);
+    const w = 0.34;
+    const h = 0.6;
+    onClimberCropChange({
+      x: Math.max(0, Math.min(1 - w, p.x - w / 2)),
+      y: Math.max(0, Math.min(1 - h, p.y - h / 2)),
+      w,
+      h,
+    });
   }
 
   function handleCropVideoLoaded() {
@@ -328,9 +350,66 @@ export default function StepSetDetection({
   };
 
   // ── Instruction hint ──────────────────────────────────────────────────
-  const cropHint = cropMode === "climber"
-    ? "Climber crop: include a little padding around the body so the next move stays inside the box."
-    : "Wall crop: frame stable wall texture and avoid the climber body when possible.";
+  const cropHint =
+    cropMode === "wall"
+      ? "Wall crop: frame stable wall texture and avoid the climber body when possible."
+      : climberPoint == null
+        ? "Tap the climber — on their torso or hips — to lock detection onto them. Other people in the frame are then ignored."
+        : "Tracking this climber. Drag the box to fine-tune, or re-tap to choose a different person.";
+
+  // Marker showing which climber the user tapped (shared inline + fullscreen).
+  const climberMarker = cropMode === "climber" && climberPoint ? (
+    <div
+      className="pointer-events-none absolute z-20"
+      style={{
+        left: `${climberPoint.x * 100}%`,
+        top: `${climberPoint.y * 100}%`,
+        transform: "translate(-50%, -50%)",
+      }}
+      aria-hidden="true"
+    >
+      <div className="h-4 w-4 rounded-full border-2 border-send bg-send/40" />
+    </div>
+  ) : null;
+
+  // Re-tap button — clears the selection so the whole frame is tappable again.
+  const reselectClimberBtn = cropMode === "climber" && climberPoint != null ? (
+    <button
+      type="button"
+      onClick={() => onClimberPointChange?.(null)}
+      className="ui-control shrink-0 px-2.5 py-1 text-xs font-medium text-fg-secondary"
+    >
+      Re-tap climber
+    </button>
+  ) : null;
+
+  // Crop overlay (shared inline + fullscreen). In climber mode, before a tap the
+  // overlay is a bare tap surface so the box never blocks tapping the climber;
+  // after a tap the derived box is shown for manual fine-tuning.
+  const cropOverlayNode = !hasCropFrame ? null : cropMode === "wall" ? (
+    <CropBoxOverlay
+      box={wallCrop ?? climberCrop}
+      onChange={handleWallCropChange}
+      borderRadius="4px"
+      color={WALL_COLOR}
+    />
+  ) : climberPoint == null ? (
+    <CropBoxOverlay
+      tapOnly
+      box={climberCrop}
+      onChange={() => {}}
+      onTap={handleClimberTap}
+      color={CLIMBER_COLOR}
+    />
+  ) : (
+    <CropBoxOverlay
+      box={climberCrop}
+      onChange={handleClimberCropChange}
+      onTap={handleClimberTap}
+      borderRadius="4px"
+      color={CLIMBER_COLOR}
+    />
+  );
 
   // ── Scan footer: crop warning + CTA ───────────────────────────────────
   const scanFooter = (
@@ -342,7 +421,7 @@ export default function StepSetDetection({
           </svg>
           <div className="flex flex-col gap-2 flex-1 min-w-0">
             <p className="text-xs font-medium text-caution">
-              Climber crop not set — pose detection and image matching may be less accurate.
+              No climber selected — tap the climber so detection locks onto them. Otherwise the strongest pose is used, which may pick the wrong person.
             </p>
             <div className="flex gap-2">
               <button
@@ -350,7 +429,7 @@ export default function StepSetDetection({
                 onClick={() => setShowCropWarning(false)}
                 className="ui-control flex-1 border-caution-border px-2.5 py-1.5 text-xs font-medium text-caution hover:bg-caution/10"
               >
-                Set crops
+                Tap climber
               </button>
               <button
                 type="button"
@@ -419,9 +498,12 @@ export default function StepSetDetection({
 
         {/* Inline hint */}
         {hasCropFrame && (
-          <p className="text-xs text-fg-muted -mt-1" role="status" aria-live="polite">
-            {cropHint} <span className="text-fg-secondary">Advanced controls are optional.</span>
-          </p>
+          <div className="-mt-1 flex items-center gap-2 flex-wrap">
+            <p className="text-xs text-fg-muted" role="status" aria-live="polite">
+              {cropHint} <span className="text-fg-secondary">Advanced controls are optional.</span>
+            </p>
+            {reselectClimberBtn}
+          </div>
         )}
 
         {/* Viewport-fit video container */}
@@ -441,14 +523,8 @@ export default function StepSetDetection({
             onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
             className="absolute inset-0 w-full h-full object-fill"
           />
-          {hasCropFrame && (
-            <CropBoxOverlay
-              box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
-              onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
-              borderRadius="4px"
-              color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
-            />
-          )}
+          {cropOverlayNode}
+          {hasCropFrame && climberMarker}
           <canvas ref={cropCanvasRef} className="hidden" />
         </div>
 
@@ -502,6 +578,7 @@ export default function StepSetDetection({
 
             {/* Hint text */}
             <p className="hidden sm:block text-xs text-fg-muted ml-1">{cropHint}</p>
+            {reselectClimberBtn}
 
             {/* Exit — back to StepPickVideo */}
             <button
@@ -533,14 +610,8 @@ export default function StepSetDetection({
                 onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
                 className="absolute inset-0 w-full h-full object-fill"
               />
-              {hasCropFrame && (
-                <CropBoxOverlay
-                  box={cropMode === "climber" ? climberCrop : (wallCrop ?? climberCrop)}
-                  onChange={cropMode === "climber" ? handleClimberCropChange : handleWallCropChange}
-                  borderRadius="4px"
-                  color={cropMode === "climber" ? CLIMBER_COLOR : WALL_COLOR}
-                />
-              )}
+              {cropOverlayNode}
+              {hasCropFrame && climberMarker}
             </div>
           </div>
 

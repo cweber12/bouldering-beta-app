@@ -25,6 +25,12 @@ export type MediaPipeVariant = "lite" | "full" | "heavy";
 export interface PoseModelConfig {
   backend: "mediapipe";
   variant: MediaPipeVariant;
+  /**
+   * Maximum number of poses the landmarker returns per frame. The
+   * climber-identity tracker needs >1 so it has candidates to disambiguate the
+   * climber from bystanders. Defaults to {@link DEFAULT_MAX_POSES}.
+   */
+  maxPoses?: number;
 }
 
 export interface UsePoseModelResult {
@@ -37,9 +43,16 @@ export interface UsePoseModelResult {
 // Default configuration
 // ---------------------------------------------------------------------------
 
+/**
+ * Default cap on poses returned per frame. Three is enough to disambiguate the
+ * climber from one or two bystanders without materially raising decode cost.
+ */
+export const DEFAULT_MAX_POSES = 3;
+
 export const DEFAULT_POSE_MODEL: PoseModelConfig = {
   backend: "mediapipe",
   variant: "lite",
+  maxPoses: DEFAULT_MAX_POSES,
 };
 
 // ---------------------------------------------------------------------------
@@ -52,7 +65,7 @@ let loadPromise: Promise<void> | null = null;
 const listeners: Array<() => void> = [];
 
 function configKey(config: PoseModelConfig): string {
-  return `${config.backend}:${config.variant}`;
+  return `${config.backend}:${config.variant}:${config.maxPoses ?? DEFAULT_MAX_POSES}`;
 }
 
 function notifyReady() {
@@ -75,7 +88,7 @@ const MP_MODEL_URLS: Record<MediaPipeVariant, string> = {
   heavy: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task",
 };
 
-async function loadMediaPipe(variant: MediaPipeVariant): Promise<void> {
+async function loadMediaPipe(variant: MediaPipeVariant, maxPoses: number): Promise<void> {
   const { FilesetResolver, PoseLandmarker } = await import(
     "@mediapipe/tasks-vision"
   );
@@ -88,14 +101,16 @@ async function loadMediaPipe(variant: MediaPipeVariant): Promise<void> {
       delegate: "GPU",
     },
     runningMode: "VIDEO",
-    numPoses: 1,
+    numPoses: Math.max(1, maxPoses),
     minPoseDetectionConfidence: 0.5,
     minPosePresenceConfidence: 0.5,
     minTrackingConfidence: 0.5,
   });
 
   cachedModel = landmarker;
-  console.info(`[usePoseModel] MediaPipe Pose Landmarker (${variant}) loaded`);
+  console.info(
+    `[usePoseModel] MediaPipe Pose Landmarker (${variant}, numPoses=${maxPoses}) loaded`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +130,7 @@ function disposeCurrentModel(): void {
 
 async function loadModel(config: PoseModelConfig): Promise<void> {
   disposeCurrentModel();
-  await loadMediaPipe(config.variant);
+  await loadMediaPipe(config.variant, config.maxPoses ?? DEFAULT_MAX_POSES);
   cachedConfigKey = configKey(config);
   notifyReady();
 }

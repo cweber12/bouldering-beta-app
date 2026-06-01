@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { estimateFrameMediaPipe } from "@/pipeline/mediapipePoseDetection";
+import { estimateFrameMediaPipe, estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,9 +78,10 @@ describe("estimateFrameMediaPipe — landmark conversion", () => {
 
   it("handles missing visibility by defaulting to 0", () => {
     const lm = mockLandmarker([[{ x: 0.5, y: 0.5 }]]);
-    // visibility undefined → score 0 → filtered out with default minScore(0.3)
+    // visibility undefined → score 0 → filtered out with default minScore(0.3).
+    // A pose with no surviving keypoints is not a detection → null.
     const result = estimateFrameMediaPipe(lm, makeCanvas(), 0);
-    expect(result!.keypoints).toHaveLength(0);
+    expect(result).toBeNull();
   });
 });
 
@@ -103,8 +104,36 @@ describe("estimateFrameMediaPipe — confidence filtering", () => {
 
   it("accepts a custom minScore", () => {
     const lm = mockLandmarker([[{ x: 0.5, y: 0.5, visibility: 0.5 }]]);
-    expect(estimateFrameMediaPipe(lm, makeCanvas(), 0, 0.6)!.keypoints).toHaveLength(0);
+    // minScore 0.6 filters the only keypoint → no surviving pose → null.
+    expect(estimateFrameMediaPipe(lm, makeCanvas(), 0, 0.6)).toBeNull();
     expect(estimateFrameMediaPipe(lm, makeCanvas(), 0, 0.4)!.keypoints).toHaveLength(1);
+  });
+});
+
+describe("estimateFramesMediaPipe — multi-pose", () => {
+  it("returns one PoseFrame per detected person", () => {
+    const lm = mockLandmarker([
+      [{ x: 0.2, y: 0.5, visibility: 0.9 }],
+      [{ x: 0.8, y: 0.5, visibility: 0.9 }],
+    ]);
+    const frames = estimateFramesMediaPipe(lm, makeCanvas(), 0);
+    expect(frames).toHaveLength(2);
+    expect(frames[0].keypoints[0].x).toBe(0.2);
+    expect(frames[1].keypoints[0].x).toBe(0.8);
+  });
+
+  it("drops poses whose keypoints all fall below minScore", () => {
+    const lm = mockLandmarker([
+      [{ x: 0.2, y: 0.5, visibility: 0.9 }], // kept
+      [{ x: 0.8, y: 0.5, visibility: 0.1 }], // all filtered → dropped
+    ]);
+    const frames = estimateFramesMediaPipe(lm, makeCanvas(), 0);
+    expect(frames).toHaveLength(1);
+    expect(frames[0].keypoints[0].x).toBe(0.2);
+  });
+
+  it("returns an empty array when nothing is detected", () => {
+    expect(estimateFramesMediaPipe(mockLandmarker([]), makeCanvas(), 0)).toEqual([]);
   });
 });
 
