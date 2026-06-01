@@ -621,10 +621,10 @@ function ComparePageInner() {
             {consoleMode === "single" && anyLoaded && singleIdx !== -1 && attempts[singleIdx] && (
               <div
                 ref={stageRef}
-                className="flex h-full min-h-0 items-center justify-center rounded-xl border border-edge/40 bg-card/20 p-3"
+                className="flex h-full min-h-0 items-stretch justify-center rounded-xl border border-edge/40 bg-card/20 p-3"
               >
                 <div
-                  className="flex min-h-0 w-full"
+                  className="flex h-full min-h-0 w-full"
                   style={colMaxW ? { maxWidth: colMaxW } : undefined}
                 >
                   <CompareSlot
