@@ -46,6 +46,12 @@ interface CropBoxOverlayProps {
    * tapping directly on the climber.
    */
   onTap?: (point: { x: number; y: number }) => void;
+  /**
+   * Render as a bare tap surface — no crop window, mask, or handles, and the
+   * whole area reports taps via {@link onTap}. Used for "tap the climber"
+   * selection before any box exists, so the box never blocks the tap.
+   */
+  tapOnly?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +146,7 @@ export default function CropBoxOverlay({
   color = "rgba(255,255,255,0.90)",
   showGrid = false,
   onTap,
+  tapOnly = false,
 }: CropBoxOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -250,6 +257,19 @@ export default function CropBoxOverlay({
     },
     [onTap],
   );
+
+  // Tap-only: the whole overlay is a tap surface, no box to avoid.
+  if (tapOnly) {
+    return (
+      <div
+        ref={containerRef}
+        className="absolute inset-0 select-none touch-none overflow-hidden"
+        style={{ cursor: disabled ? "default" : "crosshair" }}
+        onPointerDown={onRootPointerDown}
+        onPointerUp={onPointerUp}
+      />
+    );
+  }
 
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   const { x, y, w, h } = box;
