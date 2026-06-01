@@ -29,6 +29,7 @@ import {
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
+import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { PoseBackend } from "@/utils/poseConstants";
 import { getTopology } from "@/utils/poseConstants";
@@ -151,6 +152,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef(false);
+  // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
+  const seekAbortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
 
   const process = useCallback(
@@ -165,6 +168,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       backend: PoseBackend = "mediapipe",
     ) => {
       abortRef.current = false;
+      const seekController = new AbortController();
+      seekAbortRef.current = seekController;
       setStatus("processing");
       setOrbStatus("idle");
       setCurrentFrame(0);
@@ -307,11 +312,19 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           const seekTime = ((startFrame + i) * frameIntervalMs) / 1000;
 
-          await new Promise<void>((resolve, reject) => {
-            video.onseeked = () => resolve();
-            video.onerror = () => reject(new Error(`Seek failed at ${seekTime}s`));
-            video.currentTime = Math.min(seekTime, duration);
-          });
+          try {
+            await seekVideo(video, Math.min(seekTime, duration), { signal: seekController.signal });
+          } catch (seekErr) {
+            // User cancel → exit the loop cleanly (handled like abortRef).
+            if (seekErr instanceof SeekAbortedError) break;
+            // Decoder stall → skip this frame; the loop index still advances so
+            // processing always terminates.
+            if (seekErr instanceof SeekTimeoutError) {
+              console.warn(`[useVideoProcessor] ${seekErr.message} — skipping frame ${i}`);
+              continue;
+            }
+            throw seekErr;
+          }
 
           ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
@@ -411,11 +424,18 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               if (tsIdx >= allTimestamps.length) break;
               const seekTime = allTimestamps[tsIdx];
 
-              await new Promise<void>((resolve, reject) => {
-                video.onseeked = () => resolve();
-                video.onerror = () => reject(new Error(`Recovery seek failed at ${seekTime}s`));
-                video.currentTime = Math.min(seekTime, duration);
-              });
+              try {
+                await seekVideo(video, Math.min(seekTime, duration), { signal: seekController.signal });
+              } catch (seekErr) {
+                // User cancel → stop recovery entirely.
+                if (seekErr instanceof SeekAbortedError) { abortRef.current = true; break; }
+                // Decoder stall → skip this recovery candidate, try the next.
+                if (seekErr instanceof SeekTimeoutError) {
+                  console.warn(`[useVideoProcessor] recovery ${seekErr.message} — skipping`);
+                  continue;
+                }
+                throw seekErr;
+              }
 
               ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
@@ -577,10 +597,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
   const resetRef = useRef(() => {
     abortRef.current = true;
+    seekAbortRef.current?.abort();
   });
 
   const reset = useCallback(() => {
     abortRef.current = true;
+    seekAbortRef.current?.abort();
     if (mountedRef.current) {
       setStatus("idle");
       setOrbStatus("idle");

@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, buildClimberExclusionMask, extractFeaturesExcludingClimber } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/orbDetector";
 import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/orbDetector";
 
 // ---------------------------------------------------------------------------
@@ -320,6 +320,87 @@ describe("extractFeaturesFromCrop", () => {
     const cropBox: OrbCropBox = { x: 0, y: 0, width: 4, height: 4, srcWidth: 4, srcHeight: 4 };
     const result = extractFeaturesFromCrop(cv, fakeImageData(), cropBox);
     expect(result.descriptors).toEqual(descData);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// query-photo downscaling
+// ---------------------------------------------------------------------------
+
+describe("queryMaxEdgeFor", () => {
+  it("targets the reference longest edge when within bounds", () => {
+    expect(queryMaxEdgeFor(1280, 720)).toBe(1280);
+  });
+
+  it("caps at QUERY_MAX_EDGE for large references", () => {
+    expect(queryMaxEdgeFor(3840, 2160)).toBe(QUERY_MAX_EDGE);
+  });
+
+  it("floors at QUERY_MIN_EDGE for tiny references", () => {
+    expect(queryMaxEdgeFor(320, 240)).toBe(QUERY_MIN_EDGE);
+  });
+});
+
+describe("downscaleImageData", () => {
+  it("returns the input untouched (scale 1) when already within maxEdge", () => {
+    const cv = makeMockCv();
+    const src = fakeImageData(800, 600);
+    const out = downscaleImageData(cv, src, 1600);
+    expect(out.scale).toBe(1);
+    expect(out.imageData).toBe(src);
+    // No resize work performed.
+    expect(cv.matFromImageData).not.toHaveBeenCalled();
+  });
+
+  it("returns scale 1 when maxEdge is non-positive", () => {
+    const cv = makeMockCv();
+    const src = fakeImageData(4000, 3000);
+    const out = downscaleImageData(cv, src, 0);
+    expect(out.scale).toBe(1);
+    expect(out.imageData).toBe(src);
+  });
+});
+
+describe("rescaleFeaturesToNative", () => {
+  it("is identity when scale === 1", () => {
+    const f = makeFeatures(3);
+    expect(rescaleFeaturesToNative(f, 1)).toBe(f);
+  });
+
+  it("maps keypoints back to native coordinates by dividing by scale", () => {
+    // A keypoint detected at (50, 25) in an image downscaled by 0.5 came from
+    // native (100, 50).
+    const f: OrbFeatures = {
+      keypoints: [{ pt: { x: 50, y: 25 }, size: 3, angle: 0, response: 1, octave: 0 }],
+      descriptors: new Uint8Array(32),
+    };
+    const native = rescaleFeaturesToNative(f, 0.5);
+    expect(native.keypoints[0].pt).toEqual({ x: 100, y: 50 });
+    // Descriptors are untouched.
+    expect(native.descriptors).toBe(f.descriptors);
+  });
+
+  it("round-trips: downscaled detection rescaled back equals native position", () => {
+    const scale = 0.4;
+    const nativeX = 1000, nativeY = 600;
+    const detected = { x: nativeX * scale, y: nativeY * scale };
+    const f: OrbFeatures = {
+      keypoints: [{ pt: detected, size: 3, angle: 0, response: 1, octave: 0 }],
+      descriptors: new Uint8Array(32),
+    };
+    const native = rescaleFeaturesToNative(f, scale);
+    expect(native.keypoints[0].pt.x).toBeCloseTo(nativeX, 6);
+    expect(native.keypoints[0].pt.y).toBeCloseTo(nativeY, 6);
+  });
+
+  it("rescales a present cropBox alongside keypoints", () => {
+    const f: OrbFeatures = {
+      keypoints: [],
+      descriptors: new Uint8Array(0),
+      cropBox: { x: 10, y: 20, width: 30, height: 40, srcWidth: 100, srcHeight: 80 },
+    };
+    const native = rescaleFeaturesToNative(f, 0.5);
+    expect(native.cropBox).toEqual({ x: 20, y: 40, width: 60, height: 80, srcWidth: 200, srcHeight: 160 });
   });
 });
 

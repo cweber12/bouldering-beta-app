@@ -99,8 +99,13 @@ export function useS3Storage(): S3StorageResult {
       // Split write: small queryable metadata under `key`, heavy frames/matches/
       // descriptors under the sibling `.data.json`. List/card/detail readers only
       // ever fetch the metadata object, so browsing never pulls the heavy blob.
-      await putObject(key, JSON.stringify(serializeAttemptMetadata(attempt)));
+      //
+      // Write data-first, metadata-last (fail-closed): the metadata object is the
+      // record's existence marker — list/detail views key off it. If the heavy
+      // write fails we never write the marker, so a half-saved run is invisible
+      // rather than appearing in the list with missing frames.
       await putObject(dataKeyFor(key), JSON.stringify(serializeAttemptData(attempt)));
+      await putObject(key, JSON.stringify(serializeAttemptMetadata(attempt)));
       setStatus("idle");
       return key;
     } catch (err) {
@@ -128,10 +133,14 @@ export function useS3Storage(): S3StorageResult {
       const isSplit = raw.schemaVersion != null || raw.frames === undefined;
       if (isSplit) {
         const dataRes = await fetch(`/api/s3/get?key=${encodeURIComponent(dataKeyFor(key))}`);
-        if (dataRes.ok) {
-          const data = await dataRes.json() as Record<string, unknown>;
-          Object.assign(raw, data);
+        if (!dataRes.ok) {
+          throw new Error(
+            "This run's frame data could not be loaded — the heavy-data file is " +
+            "missing or unreadable. The run may not have finished saving.",
+          );
         }
+        const data = await dataRes.json() as Record<string, unknown>;
+        Object.assign(raw, data);
       }
       const attempt = loadAttemptFromJson(raw);
       setStatus("idle");

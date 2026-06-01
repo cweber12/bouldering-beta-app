@@ -15,6 +15,10 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  // True only after the user clicks "Stop & save". Teardown paths
+  // (ESC / backdrop / Cancel / unmount) leave it false so a recording that was
+  // ended by closing the modal is discarded rather than emitted as a capture.
+  const saveIntentRef = useRef(false);
   const [recording, setRecording] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -56,6 +60,11 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
       });
     return () => {
       active = false;
+      // Tear down without emitting: stop the recorder (intent flag stays false
+      // so onstop discards) then release the camera tracks.
+      if (recorderRef.current && recorderRef.current.state !== "inactive") {
+        recorderRef.current.stop();
+      }
       streamRef.current?.getTracks().forEach(t => t.stop());
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,6 +85,12 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
     mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     mr.onstop = () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
+      // Only emit a capture when the user explicitly chose to save. A recording
+      // ended by closing the modal is discarded.
+      if (!saveIntentRef.current) {
+        chunksRef.current = [];
+        return;
+      }
       const mime = mimeType || "video/webm";
       const ext = mime.includes("mp4") ? "mp4" : "webm";
       const blob = new Blob(chunksRef.current, { type: mime });
@@ -88,6 +103,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
   }
 
   function stopRecording() {
+    saveIntentRef.current = true;
     recorderRef.current?.stop();
     setRecording(false);
   }

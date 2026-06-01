@@ -3,6 +3,7 @@
 import { createPortal } from "react-dom";
 import ComboInput from "@/components/shared/ComboInput";
 import { cn } from "@/utils/cn";
+import { ROUTE_TEXT_LIMIT } from "@/utils/fsHelpers";
 import type { RunType } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
@@ -119,6 +120,7 @@ export default function MetadataBottomSheet({
               onChange={actions.onStateChange}
               suggestions={location.stateSuggestions}
               placeholder="e.g. Colorado"
+              maxLength={ROUTE_TEXT_LIMIT}
             />
             <ComboInput
               label="Area"
@@ -126,6 +128,7 @@ export default function MetadataBottomSheet({
               onChange={actions.onAreaChange}
               suggestions={location.areaSuggestions}
               placeholder="e.g. Red Rocks"
+              maxLength={ROUTE_TEXT_LIMIT}
             />
             <ComboInput
               label="Route"
@@ -133,6 +136,7 @@ export default function MetadataBottomSheet({
               onChange={actions.onRouteChange}
               suggestions={location.routeSuggestions}
               placeholder="e.g. The Classic"
+              maxLength={ROUTE_TEXT_LIMIT}
             />
 
             {/* GPS */}
@@ -239,6 +243,7 @@ export default function MetadataBottomSheet({
               value={runDetails.rating}
               onChange={(e) => actions.onRatingChange(e.target.value)}
               placeholder="Grade / Rating (e.g. V3, 5.10a)"
+              maxLength={ROUTE_TEXT_LIMIT}
               className="ui-input rounded-md px-3 py-2 text-sm"
             />
             <textarea
@@ -246,6 +251,7 @@ export default function MetadataBottomSheet({
               onChange={(e) => actions.onNotesChange(e.target.value)}
               placeholder="Notes…"
               rows={2}
+              maxLength={ROUTE_TEXT_LIMIT}
               className="ui-input resize-none rounded-md px-3 py-2 text-sm"
             />
           </div>

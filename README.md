@@ -132,6 +132,11 @@ that the list/card/detail views read, while a sibling
 `run-{timestamp}-{attempt|send}.data.json` holds the heavy frames, per-frame ORB
 matches, and base64-encoded descriptors — fetched only when a run is actually
 opened. Legacy single-file runs (everything inline) still load transparently.
+The heavy data object is written **first** and the metadata object **last**, so a
+save that fails partway never leaves a metadata record pointing at missing
+frames; opening a run whose data sibling is absent surfaces a clear error rather
+than silently loading an empty skeleton. User-supplied text (state, area, route,
+rating, notes) is clamped to 500 characters before storage.
 
 Profile data is stored in the **same S3 bucket** as route data, under the
 prefix `ProfileData/{userId}/profile.json` (display name, bio, location,

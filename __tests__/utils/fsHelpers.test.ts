@@ -9,6 +9,7 @@ import {
   loadAttemptFromJson,
   uint8ToBase64,
   base64ToUint8,
+  ROUTE_TEXT_LIMIT,
 } from "@/utils/fsHelpers";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
@@ -239,6 +240,32 @@ describe("serializeAttemptMetadata", () => {
     expect(meta.runType).toBe("attempt");
     expect(meta.rating).toBe("V4");
     expect(meta.notes).toBe("crux at the top");
+    expect(meta.videoMeta).toEqual({ width: 640, height: 480, fps: 30, duration: 10 });
+  });
+
+  it("clamps over-limit text fields to ROUTE_TEXT_LIMIT", () => {
+    const long = "x".repeat(ROUTE_TEXT_LIMIT + 50);
+    const meta = serializeAttemptMetadata(
+      makeAttempt({ state: long, area: long, route: long, rating: long, notes: long }),
+    );
+    for (const k of ["state", "area", "route", "rating", "notes"] as const) {
+      expect((meta[k] as string).length).toBe(ROUTE_TEXT_LIMIT);
+    }
+  });
+
+  it("keeps text fields exactly at the limit intact", () => {
+    const atLimit = "y".repeat(ROUTE_TEXT_LIMIT);
+    const meta = serializeAttemptMetadata(makeAttempt({ notes: atLimit }));
+    expect(meta.notes).toBe(atLimit);
+  });
+
+  it("trims surrounding whitespace on text fields", () => {
+    const meta = serializeAttemptMetadata(makeAttempt({ route: "  The Classic  " }));
+    expect(meta.route).toBe("The Classic");
+  });
+
+  it("leaves non-text fields (videoMeta) untouched by clamping", () => {
+    const meta = serializeAttemptMetadata(makeAttempt());
     expect(meta.videoMeta).toEqual({ width: 640, height: 480, fps: 30, duration: 10 });
   });
 });

@@ -22,7 +22,7 @@ import { useGeocoding } from "@/hooks/useGeocoding";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { RunType } from "@/storage/sessionStore";
-import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
+import { sanitizeDirName, serializeAttemptForJson, ROUTE_TEXT_LIMIT } from "@/utils/fsHelpers";
 import { type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
@@ -761,6 +761,7 @@ function UploadPageInner() {
                   onChange={handleStateChange}
                   suggestions={stateSuggestions}
                   placeholder="e.g. Colorado"
+                  maxLength={ROUTE_TEXT_LIMIT}
                 />
                 <ComboInput
                   label="Area"
@@ -768,6 +769,7 @@ function UploadPageInner() {
                   onChange={handleAreaChange}
                   suggestions={areaSuggestions}
                   placeholder="e.g. Red Rocks"
+                  maxLength={ROUTE_TEXT_LIMIT}
                 />
                 <ComboInput
                   label="Route"
@@ -775,6 +777,7 @@ function UploadPageInner() {
                   onChange={handleRouteChange}
                   suggestions={routeSuggestions}
                   placeholder="e.g. The Classic"
+                  maxLength={ROUTE_TEXT_LIMIT}
                 />
               </div>
 
@@ -870,6 +873,7 @@ function UploadPageInner() {
                       value={rating}
                       onChange={e => setRating(e.target.value)}
                       placeholder="Grade / Rating (e.g. V3, 5.10a)"
+                      maxLength={ROUTE_TEXT_LIMIT}
                       className="ui-input rounded-xl px-3 py-2 text-sm"
                     />
                     <textarea
@@ -877,6 +881,7 @@ function UploadPageInner() {
                       onChange={e => setNotes(e.target.value)}
                       placeholder="Notes..."
                       rows={2}
+                      maxLength={ROUTE_TEXT_LIMIT}
                       className="ui-input resize-none rounded-xl px-3 py-2 text-sm"
                     />
                   </div>

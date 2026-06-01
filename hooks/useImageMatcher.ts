@@ -1,7 +1,16 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, type OrbMatch, type OrbFeatures } from "@/pipeline/orbDetector";
+import {
+  extractFeatures,
+  extractFeaturesFromCrop,
+  matchOrbFeatures,
+  downscaleImageData,
+  rescaleFeaturesToNative,
+  queryMaxEdgeFor,
+  type OrbMatch,
+  type OrbFeatures,
+} from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
 import { cropImageData } from "@/utils/cvHelpers";
 import { getAttempt } from "@/storage/sessionStore";
@@ -67,19 +76,28 @@ export function useImageMatcher(): ImageMatcherResult {
 
       const imageData = await loadImageAsImageData(file);
 
+      // Phone photos are often 4000px+, which makes ORB extraction take several
+      // seconds and adds no matchable detail beyond the video reference's
+      // resolution. Downscale the query to a reference-aware longest-edge target
+      // before extraction; keypoints are mapped back to native coordinates after
+      // so homography and the re-anchor pass operate in full-resolution space.
+      const maxEdge = queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
+      const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
+
       // When the user specified a crop region, extract ORB features only from
       // that sub-region. Keypoints are offset back to full-image coordinates
       // by extractFeaturesFromCrop so homography computation is unaffected.
       let queryOrb = userCrop
-        ? extractFeaturesFromCrop(cv, imageData, {
-            x: Math.round(userCrop.x * imageData.width),
-            y: Math.round(userCrop.y * imageData.height),
-            width: Math.round(userCrop.w * imageData.width),
-            height: Math.round(userCrop.h * imageData.height),
-            srcWidth: imageData.width,
-            srcHeight: imageData.height,
+        ? extractFeaturesFromCrop(cv, scaled, {
+            x: Math.round(userCrop.x * scaled.width),
+            y: Math.round(userCrop.y * scaled.height),
+            width: Math.round(userCrop.w * scaled.width),
+            height: Math.round(userCrop.h * scaled.height),
+            srcWidth: scaled.width,
+            srcHeight: scaled.height,
           })
-        : extractFeatures(cv, imageData);
+        : extractFeatures(cv, scaled);
+      queryOrb = rescaleFeaturesToNative(queryOrb, scale);
       let matches = matchOrbFeatures(cv, attempt.orbFeatures, queryOrb);
       let reanchorApplied = false;
 

@@ -10,6 +10,8 @@ interface ComboInputProps {
   suggestions: string[];
   placeholder?: string;
   disabled?: boolean;
+  /** Max input length forwarded to the underlying `<input>`. */
+  maxLength?: number;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function ComboInput({
   suggestions,
   placeholder,
   disabled = false,
+  maxLength,
 }: ComboInputProps) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +91,7 @@ export default function ComboInput({
           onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
+          maxLength={maxLength}
           autoComplete="off"
           className="ui-input w-full px-3 py-2 pr-7 text-sm disabled:opacity-50"
         />

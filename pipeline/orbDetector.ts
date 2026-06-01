@@ -169,6 +169,98 @@ export function extractFeaturesFromCrop(
 }
 
 // ---------------------------------------------------------------------------
+// Query-photo downscaling
+// ---------------------------------------------------------------------------
+
+/** Hard upper bound (px) on the longest edge of a query photo fed to ORB. */
+export const QUERY_MAX_EDGE = 1600;
+
+/**
+ * Floor (px) below which the query photo is never downscaled. Guards against
+ * destroying matchable detail when the reference frame is unusually small
+ * (e.g. a tightly-cropped video).
+ */
+export const QUERY_MIN_EDGE = 720;
+
+export interface DownscaleResult {
+  /** The (possibly) downscaled image. Same reference as the input when scale === 1. */
+  imageData: ImageData;
+  /** Linear scale applied to reach `imageData` (newEdge / origEdge), in (0, 1]. */
+  scale: number;
+}
+
+/**
+ * Compute the longest-edge target for a query photo given the reference frame's
+ * dimensions. Targets the reference resolution (matching finer detail than the
+ * reference carries is wasted work) clamped to [{@link QUERY_MIN_EDGE},
+ * {@link QUERY_MAX_EDGE}].
+ */
+export function queryMaxEdgeFor(refWidth: number, refHeight: number): number {
+  const refLongest = Math.max(refWidth, refHeight);
+  return Math.min(QUERY_MAX_EDGE, Math.max(QUERY_MIN_EDGE, refLongest));
+}
+
+/**
+ * Downscale an ImageData so its longest edge does not exceed `maxEdge`, using
+ * OpenCV area interpolation. Returns the input untouched (scale = 1) when it
+ * already fits or `maxEdge` is non-positive. All WASM allocations are freed
+ * before returning.
+ */
+export function downscaleImageData(cv: CV, imageData: ImageData, maxEdge: number): DownscaleResult {
+  const longest = Math.max(imageData.width, imageData.height);
+  if (maxEdge <= 0 || longest <= maxEdge) return { imageData, scale: 1 };
+
+  const scale = maxEdge / longest;
+  const newW = Math.max(1, Math.round(imageData.width * scale));
+  const newH = Math.max(1, Math.round(imageData.height * scale));
+
+  let src = null,
+    dst = null;
+  try {
+    src = cv.matFromImageData(imageData);
+    dst = new cv.Mat();
+    cv.resize(src, dst, new cv.Size(newW, newH), 0, 0, cv.INTER_AREA);
+    // Copy pixels out of the WASM heap before the Mat is freed.
+    const out = new Uint8ClampedArray(dst.data);
+    return { imageData: new ImageData(out, newW, newH), scale };
+  } finally {
+    dst?.delete();
+    src?.delete();
+  }
+}
+
+/**
+ * Map ORB features detected in a downscaled image back to native (full
+ * resolution) coordinates by dividing keypoint positions by `scale`. A `cropBox`,
+ * if present, is rescaled too. Returns the input unchanged when scale === 1.
+ *
+ * Descriptors are scale-invariant (ORB scale pyramid) so only coordinates move.
+ */
+export function rescaleFeaturesToNative(features: OrbFeatures, scale: number): OrbFeatures {
+  if (scale === 1) return features;
+  const inv = 1 / scale;
+  const out: OrbFeatures = {
+    ...features,
+    keypoints: features.keypoints.map(kp => ({
+      ...kp,
+      pt: { x: kp.pt.x * inv, y: kp.pt.y * inv },
+    })),
+  };
+  if (features.cropBox) {
+    out.cropBox = {
+      ...features.cropBox,
+      x: features.cropBox.x * inv,
+      y: features.cropBox.y * inv,
+      width: features.cropBox.width * inv,
+      height: features.cropBox.height * inv,
+      srcWidth: features.cropBox.srcWidth * inv,
+      srcHeight: features.cropBox.srcHeight * inv,
+    };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Climber exclusion mask
 // ---------------------------------------------------------------------------
 

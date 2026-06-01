@@ -139,6 +139,23 @@ export const ATTEMPT_SCHEMA_VERSION = 2;
 const HEAVY_KEYS = ["frames", "matchesPerFrame", "frameCaptures", "orbFeatures"] as const;
 
 /**
+ * Maximum length for user-supplied route metadata text fields (state, area,
+ * route, rating, notes). Aligned with the server-side `PROFILE_TEXT_LIMIT`
+ * (`app/api/s3/shared.ts`); kept local so this client-safe util never imports
+ * the server-only S3 module.
+ */
+export const ROUTE_TEXT_LIMIT = 500;
+
+/** Route metadata fields that carry user-supplied free text and must be clamped. */
+const ROUTE_TEXT_KEYS = ["state", "area", "route", "rating", "notes"] as const;
+
+/** Trim and clamp a free-text field to {@link ROUTE_TEXT_LIMIT}; pass through non-strings. */
+function clampRouteText(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  return value.trim().slice(0, ROUTE_TEXT_LIMIT);
+}
+
+/**
  * Return a JSON-safe copy of a RouteAttempt as a single combined object
  * (legacy v1 format). Converts `orbFeatures.descriptors` from `Uint8Array` to a
  * plain `number[]`. Retained for local file import/export round-trips; the S3
@@ -165,7 +182,10 @@ export function serializeAttemptMetadata(
 ): Record<string, unknown> {
   const meta: Record<string, unknown> = { schemaVersion: ATTEMPT_SCHEMA_VERSION };
   for (const [k, v] of Object.entries(attempt)) {
-    if (!HEAVY_KEYS.includes(k as (typeof HEAVY_KEYS)[number])) meta[k] = v;
+    if (HEAVY_KEYS.includes(k as (typeof HEAVY_KEYS)[number])) continue;
+    meta[k] = ROUTE_TEXT_KEYS.includes(k as (typeof ROUTE_TEXT_KEYS)[number])
+      ? clampRouteText(v)
+      : v;
   }
   return meta;
 }

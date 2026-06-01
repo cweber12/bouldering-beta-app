@@ -10,6 +10,9 @@ vi.mock("@/pipeline/orbDetector", () => ({
   extractFeatures: vi.fn(),
   extractFeaturesFromCrop: vi.fn(),
   matchOrbFeatures: vi.fn(),
+  queryMaxEdgeFor: vi.fn(),
+  downscaleImageData: vi.fn(),
+  rescaleFeaturesToNative: vi.fn(),
 }));
 
 vi.mock("@/pipeline/homography", () => ({
@@ -25,7 +28,14 @@ vi.mock("@/storage/sessionStore", () => ({
   getAttempt: vi.fn(),
 }));
 
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures } from "@/pipeline/orbDetector";
+import {
+  extractFeatures,
+  extractFeaturesFromCrop,
+  matchOrbFeatures,
+  queryMaxEdgeFor,
+  downscaleImageData,
+  rescaleFeaturesToNative,
+} from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
 import { getAttempt } from "@/storage/sessionStore";
 
@@ -133,6 +143,15 @@ function stubLoadImageError() {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Downscale helpers default to a no-op pass-through (scale 1, native coords).
+  // Tests that exercise downscaling override these per-case.
+  (queryMaxEdgeFor as ReturnType<typeof vi.fn>).mockReturnValue(1280);
+  (downscaleImageData as ReturnType<typeof vi.fn>).mockImplementation(
+    (_cv: unknown, imageData: unknown) => ({ imageData, scale: 1 }),
+  );
+  (rescaleFeaturesToNative as ReturnType<typeof vi.fn>).mockImplementation(
+    (features: unknown) => features,
+  );
 });
 
 afterEach(() => {
@@ -194,6 +213,39 @@ describe("useImageMatcher — happy path", () => {
     });
 
     expect(extractFeatures).toHaveBeenCalledWith(mockCv, fakeImageData);
+  });
+
+  it("downscales the query with a reference-aware max edge, then rescales features to native", async () => {
+    const attempt = fakeAttempt(8);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+
+    // Simulate a real downscale: a smaller ImageData and scale 0.5.
+    const scaledImageData = { data: new Uint8ClampedArray(4), width: 50, height: 40, colorSpace: "srgb" } as ImageData;
+    (downscaleImageData as ReturnType<typeof vi.fn>).mockReturnValue({ imageData: scaledImageData, scale: 0.5 });
+
+    const detectedOnScaled = orbResult(4);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(detectedOnScaled);
+    const nativeFeatures = orbResult(4);
+    (rescaleFeaturesToNative as ReturnType<typeof vi.fn>).mockReturnValue(nativeFeatures);
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue([]);
+
+    const loaded = stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    // maxEdge derived from the reference (video) dimensions, not the query.
+    expect(queryMaxEdgeFor).toHaveBeenCalledWith(attempt.videoMeta.width, attempt.videoMeta.height);
+    // Native-resolution image is downscaled before extraction.
+    expect(downscaleImageData).toHaveBeenCalledWith(mockCv, loaded, 1280);
+    // ORB runs on the downscaled image…
+    expect(extractFeatures).toHaveBeenCalledWith(mockCv, scaledImageData);
+    // …and detected keypoints are mapped back to native coords with the scale.
+    expect(rescaleFeaturesToNative).toHaveBeenCalledWith(detectedOnScaled, 0.5);
+    // The native features (not the scaled ones) feed matching.
+    expect(matchOrbFeatures).toHaveBeenCalledWith(mockCv, attempt.orbFeatures, nativeFeatures);
   });
 
   it("calls matchOrbFeatures with the stored orbFeatures as ref", async () => {
