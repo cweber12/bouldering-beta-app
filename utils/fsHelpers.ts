@@ -103,11 +103,46 @@ export async function listAttemptFiles(dir: FileSystemDirectoryHandle): Promise<
   });
 }
 
+// ---------------------------------------------------------------------------
+// Binary <-> base64 (browser-safe, chunked to avoid call-stack limits on large
+// arrays). ORB descriptors are stored base64-encoded (~1.33x) rather than as a
+// JSON number[] (~4x) — see the save-payload split.
+// ---------------------------------------------------------------------------
+
+const B64_CHUNK = 0x8000; // 32 KiB per String.fromCharCode call
+
+/** Encode a Uint8Array as a base64 string. */
+export function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += B64_CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + B64_CHUNK));
+  }
+  return btoa(binary);
+}
+
+/** Decode a base64 string back into a Uint8Array. */
+export function base64ToUint8(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
 /**
- * Return a JSON-safe copy of a RouteAttempt.
- *
- * Converts `orbFeatures.descriptors` from `Uint8Array` to a plain `number[]`
- * so `JSON.stringify` can handle it.
+ * Schema version stamped onto the metadata object of a split-format attempt.
+ * v2 = metadata object + sibling `.data.json` holding frames/matches/descriptors.
+ * Legacy (v1, undefined) = single combined object with everything inline.
+ */
+export const ATTEMPT_SCHEMA_VERSION = 2;
+
+/** Keys whose values are "heavy" and live in the sibling `.data.json` object. */
+const HEAVY_KEYS = ["frames", "matchesPerFrame", "frameCaptures", "orbFeatures"] as const;
+
+/**
+ * Return a JSON-safe copy of a RouteAttempt as a single combined object
+ * (legacy v1 format). Converts `orbFeatures.descriptors` from `Uint8Array` to a
+ * plain `number[]`. Retained for local file import/export round-trips; the S3
+ * save path uses the split serialisers below.
  */
 export function serializeAttemptForJson(
   attempt: RouteAttempt,
@@ -121,10 +156,46 @@ export function serializeAttemptForJson(
 }
 
 /**
+ * Serialise the small, queryable metadata of an attempt (everything the route
+ * picker / climb list / detail views read). Heavy fields are excluded — they go
+ * in the sibling object produced by {@link serializeAttemptData}.
+ */
+export function serializeAttemptMetadata(
+  attempt: RouteAttempt,
+): Record<string, unknown> {
+  const meta: Record<string, unknown> = { schemaVersion: ATTEMPT_SCHEMA_VERSION };
+  for (const [k, v] of Object.entries(attempt)) {
+    if (!HEAVY_KEYS.includes(k as (typeof HEAVY_KEYS)[number])) meta[k] = v;
+  }
+  return meta;
+}
+
+/**
+ * Serialise the heavy fields of an attempt (dense frames, per-frame matches,
+ * frame captures, ORB features). `descriptors` is base64-encoded.
+ */
+export function serializeAttemptData(
+  attempt: RouteAttempt,
+): Record<string, unknown> {
+  return {
+    frames: attempt.frames,
+    matchesPerFrame: attempt.matchesPerFrame,
+    frameCaptures: attempt.frameCaptures,
+    orbFeatures: attempt.orbFeatures
+      ? { ...attempt.orbFeatures, descriptors: uint8ToBase64(attempt.orbFeatures.descriptors) }
+      : null,
+  };
+}
+
+/**
  * Deserialise a raw JSON value into a RouteAttempt.
  *
- * Re-hydrates the `orbFeatures.descriptors` field from a plain number array
- * (as serialised to JSON) back to a `Uint8Array`.
+ * Accepts both formats:
+ *  - legacy combined object (everything inline, `descriptors` as `number[]`)
+ *  - a v2 metadata + data object already merged (`descriptors` as base64 string)
+ *
+ * Re-hydrates `orbFeatures.descriptors` back to a `Uint8Array` from whichever
+ * encoding is present.
  *
  * @throws When the input is not a non-null object.
  */
@@ -135,6 +206,8 @@ export function loadAttemptFromJson(raw: unknown): RouteAttempt {
     const orb = obj.orbFeatures as Record<string, unknown>;
     if (Array.isArray(orb.descriptors)) {
       orb.descriptors = new Uint8Array(orb.descriptors as number[]);
+    } else if (typeof orb.descriptors === "string") {
+      orb.descriptors = base64ToUint8(orb.descriptors);
     }
   }
   return { state: "", area: "", route: "", runType: "attempt", ...obj } as unknown as RouteAttempt;

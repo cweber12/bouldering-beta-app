@@ -236,7 +236,7 @@ function ScanPageInner() {
       const prefix = `${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(area)}/${sanitizeDirName(val)}/`;
       listAttempts(prefix).then(async (entries) => {
         const runs = entries
-          .filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"))
+          .filter(e => e.key.endsWith(".json") && !e.key.endsWith(".data.json") && !e.key.endsWith("/route-image.json"))
           .sort((a, b) => {
             const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
             const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);

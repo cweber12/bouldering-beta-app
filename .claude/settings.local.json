@@ -3,7 +3,9 @@
     "allow": [
       "Bash(git commit -m ' *)",
       "Bash(grep -E \"\\\\.ts$\")",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "PowerShell(npx eslint hooks/useS3Storage.ts utils/fsHelpers.ts \"app/api/s3/put/route.ts\" \"app/api/profile/[userId]/climbs/page/route.ts\" components/shared/S3RoutePicker.tsx app/scan/page.tsx app/upload/page.tsx 2>&1)",
+      "PowerShell(npx vitest run 2>&1)"
     ]
   }
 }

@@ -2,7 +2,12 @@
 
 import { useState, useCallback } from "react";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import { sanitizeDirName, serializeAttemptForJson, loadAttemptFromJson } from "@/utils/fsHelpers";
+import {
+  sanitizeDirName,
+  serializeAttemptMetadata,
+  serializeAttemptData,
+  loadAttemptFromJson,
+} from "@/utils/fsHelpers";
 import { useAuth } from "@/hooks/useAuth";
 
 // ---------------------------------------------------------------------------
@@ -51,6 +56,23 @@ function deriveS3Key(userId: string, attempt: RouteAttempt): string {
   return `${KEY_PREFIX}/${userId}/${state}/${area}/${route}/${attempt.id}-${runType}.json`;
 }
 
+/** Derive the heavy-data sibling key for a metadata key. */
+function dataKeyFor(metaKey: string): string {
+  return metaKey.replace(/\.json$/, ".data.json");
+}
+
+/** POST a JSON document to S3 at `key`. Throws with the server error on failure. */
+async function putObject(key: string, body: string): Promise<void> {
+  const res = await fetch("/api/s3/put", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, body }),
+  });
+  if (!res.ok) {
+    throw new Error((await res.json() as { error?: string }).error ?? "Upload failed.");
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -73,19 +95,12 @@ export function useS3Storage(): S3StorageResult {
     setErrorMessage(null);
     const key = deriveS3Key(user.uid, attempt);
 
-    const serializable = serializeAttemptForJson(attempt);
-
     try {
-      const res = await fetch("/api/s3/put", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, body: JSON.stringify(serializable) }),
-      });
-      if (!res.ok) {
-        const err = (await res.json() as { error?: string }).error ?? "Upload failed.";
-        setErr(err);
-        throw new Error(err);
-      }
+      // Split write: small queryable metadata under `key`, heavy frames/matches/
+      // descriptors under the sibling `.data.json`. List/card/detail readers only
+      // ever fetch the metadata object, so browsing never pulls the heavy blob.
+      await putObject(key, JSON.stringify(serializeAttemptMetadata(attempt)));
+      await putObject(dataKeyFor(key), JSON.stringify(serializeAttemptData(attempt)));
       setStatus("idle");
       return key;
     } catch (err) {
@@ -107,7 +122,17 @@ export function useS3Storage(): S3StorageResult {
         setErr(err);
         throw new Error(err);
       }
-      const raw = await res.json();
+      const raw = await res.json() as Record<string, unknown>;
+      // v2 split format: metadata carries no heavy fields — fetch the sibling
+      // data object and merge. Legacy combined files have `frames` inline.
+      const isSplit = raw.schemaVersion != null || raw.frames === undefined;
+      if (isSplit) {
+        const dataRes = await fetch(`/api/s3/get?key=${encodeURIComponent(dataKeyFor(key))}`);
+        if (dataRes.ok) {
+          const data = await dataRes.json() as Record<string, unknown>;
+          Object.assign(raw, data);
+        }
+      }
       const attempt = loadAttemptFromJson(raw);
       setStatus("idle");
       return attempt;
@@ -132,6 +157,10 @@ export function useS3Storage(): S3StorageResult {
         setErr(err);
         throw new Error(err);
       }
+      // Best-effort removal of the heavy-data sibling (absent for legacy files).
+      await fetch(`/api/s3/delete?key=${encodeURIComponent(dataKeyFor(key))}`, {
+        method: "DELETE",
+      }).catch(() => {});
       setStatus("idle");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

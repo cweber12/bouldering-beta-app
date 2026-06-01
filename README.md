@@ -114,6 +114,13 @@ list existing states → areas → routes → runs directly from the bucket.
 Attempts are highlighted in amber and sends in emerald throughout the UI.
 Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
 
+Each run is stored as **two** objects: the `.json` above holds the small,
+queryable metadata (location, run type, rating, notes, thumbnail, video meta)
+that the list/card/detail views read, while a sibling
+`run-{timestamp}-{attempt|send}.data.json` holds the heavy frames, per-frame ORB
+matches, and base64-encoded descriptors — fetched only when a run is actually
+opened. Legacy single-file runs (everything inline) still load transparently.
+
 Profile data is stored in the **same S3 bucket** as route data, under the
 prefix `ProfileData/{userId}/profile.json` (display name, bio, location,
 profile picture as base64 data URL). A searchable index entry at

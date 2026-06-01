@@ -99,7 +99,7 @@ export async function GET(
       });
       const res = await s3.send(cmd);
       for (const obj of res.Contents ?? []) {
-        if (obj.Key && (obj.Key.match(/run-\d+.*\.json$/) || obj.Key.match(/attempt-\d+\.json$/))) {
+        if (obj.Key && !obj.Key.endsWith(".data.json") && (obj.Key.match(/run-\d+.*\.json$/) || obj.Key.match(/attempt-\d+\.json$/))) {
           allKeys.push(obj.Key);
         }
       }

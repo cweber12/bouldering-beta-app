@@ -4,7 +4,11 @@ import {
   attemptTimestampLabel,
   parseRunType,
   serializeAttemptForJson,
+  serializeAttemptMetadata,
+  serializeAttemptData,
   loadAttemptFromJson,
+  uint8ToBase64,
+  base64ToUint8,
 } from "@/utils/fsHelpers";
 import type { RouteAttempt } from "@/storage/sessionStore";
 
@@ -188,6 +192,79 @@ describe("loadAttemptFromJson", () => {
     const parsed = JSON.parse(JSON.stringify(serialized));
     const restored = loadAttemptFromJson(parsed);
     expect(restored.id).toBe(attempt.id);
+    expect(restored.orbFeatures!.descriptors).toBeInstanceOf(Uint8Array);
+    expect(restored.orbFeatures!.descriptors).toEqual(attempt.orbFeatures!.descriptors);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// base64 helpers
+// ---------------------------------------------------------------------------
+
+describe("uint8ToBase64 / base64ToUint8", () => {
+  it("round-trips an empty array", () => {
+    expect(base64ToUint8(uint8ToBase64(new Uint8Array(0)))).toEqual(new Uint8Array(0));
+  });
+
+  it("round-trips a small array", () => {
+    const bytes = new Uint8Array([0xde, 0xad, 0xbe, 0xef, 0x00, 0xff]);
+    expect(base64ToUint8(uint8ToBase64(bytes))).toEqual(bytes);
+  });
+
+  it("round-trips a large array spanning multiple chunks", () => {
+    const bytes = new Uint8Array(100_000);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = i % 256;
+    expect(base64ToUint8(uint8ToBase64(bytes))).toEqual(bytes);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// split serialisation (v2 metadata + data)
+// ---------------------------------------------------------------------------
+
+describe("serializeAttemptMetadata", () => {
+  it("stamps a schema version and excludes heavy fields", () => {
+    const meta = serializeAttemptMetadata(makeAttempt());
+    expect(meta.schemaVersion).toBe(2);
+    expect(meta.frames).toBeUndefined();
+    expect(meta.matchesPerFrame).toBeUndefined();
+    expect(meta.frameCaptures).toBeUndefined();
+    expect(meta.orbFeatures).toBeUndefined();
+  });
+
+  it("keeps queryable metadata used by list/detail readers", () => {
+    const meta = serializeAttemptMetadata(makeAttempt({ rating: "V4", notes: "crux at the top" }));
+    expect(meta.state).toBe("Colorado");
+    expect(meta.route).toBe("The Classic");
+    expect(meta.runType).toBe("attempt");
+    expect(meta.rating).toBe("V4");
+    expect(meta.notes).toBe("crux at the top");
+    expect(meta.videoMeta).toEqual({ width: 640, height: 480, fps: 30, duration: 10 });
+  });
+});
+
+describe("serializeAttemptData", () => {
+  it("base64-encodes descriptors and carries heavy fields", () => {
+    const data = serializeAttemptData(makeAttempt());
+    const orb = data.orbFeatures as Record<string, unknown>;
+    expect(typeof orb.descriptors).toBe("string");
+    expect("frames" in data).toBe(true);
+    expect("matchesPerFrame" in data).toBe(true);
+  });
+
+  it("preserves null orbFeatures", () => {
+    expect(serializeAttemptData(makeAttempt({ orbFeatures: null })).orbFeatures).toBeNull();
+  });
+});
+
+describe("split round-trip", () => {
+  it("metadata + data merge back into the original attempt", () => {
+    const attempt = makeAttempt();
+    const meta = JSON.parse(JSON.stringify(serializeAttemptMetadata(attempt)));
+    const data = JSON.parse(JSON.stringify(serializeAttemptData(attempt)));
+    const restored = loadAttemptFromJson({ ...meta, ...data });
+    expect(restored.id).toBe(attempt.id);
+    expect(restored.route).toBe(attempt.route);
     expect(restored.orbFeatures!.descriptors).toBeInstanceOf(Uint8Array);
     expect(restored.orbFeatures!.descriptors).toEqual(attempt.orbFeatures!.descriptors);
   });

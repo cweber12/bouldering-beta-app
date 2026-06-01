@@ -2,6 +2,10 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { s3, getBucket, isValidKey, getAuthUserId, awsErrorMessage } from "../shared";
 
+/** Upper bound on a single stored document. Heavy `.data.json` objects are the
+ *  largest legitimate payload; anything beyond this is rejected before buffering. */
+const MAX_BODY_BYTES = 25 * 1024 * 1024;
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const userId = await getAuthUserId();
   if (!userId) {
@@ -28,6 +32,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (!isValidKey(key, userId)) {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
+  }
+
+  if (Buffer.byteLength(body, "utf8") > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Payload too large." }, { status: 413 });
   }
 
   try {

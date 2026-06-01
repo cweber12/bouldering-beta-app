@@ -207,7 +207,7 @@ export default function S3RoutePicker({
             setSelectedRoute(defaultRoute);
             const prefix = `${userPrefix}/${defaultState}/${defaultArea}/${defaultRoute}/`;
             const entries = await listAttempts(prefix);
-            const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"));
+            const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith(".data.json") && !e.key.endsWith("/route-image.json"));
             filtered.sort((a, b) => {
               const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
               const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
@@ -268,7 +268,7 @@ export default function S3RoutePicker({
     try {
       const prefix = `${userPrefix}/${selectedState}/${selectedArea}/${route}/`;
       const entries = await listAttempts(prefix);
-      const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith("/route-image.json"));
+      const filtered = entries.filter(e => e.key.endsWith(".json") && !e.key.endsWith(".data.json") && !e.key.endsWith("/route-image.json"));
       // Sort by embedded timestamp (newest first) so attempts and sends
       // are interleaved in chronological order.
       filtered.sort((a, b) => {
