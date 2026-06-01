@@ -1,17 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { estimateFrameWithRetry, type PoseFrame } from "@/pipeline/poseDetection";
+import { type PoseFrame } from "@/pipeline/poseDetection";
+import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
 import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox } from "@/pipeline/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
 import { applyOrbPreprocessing, applyPosePreprocessing } from "@/pipeline/framePreprocessor";
 import {
-  extractHipCenter,
   mapKeypointsToFullFrame,
-  type HipCenter,
+  type CropBox,
 } from "@/pipeline/cropDetector";
+import {
+  deriveClimberCrop,
+  expandCropBox,
+  poseCentroid,
+  predictCentroid,
+  selectClimberByPoint,
+  selectClimberPose,
+  REACQUIRE_GATE,
+  type Point,
+} from "@/pipeline/climberTracker";
 import {
   filterLandmarks,
   interpolatePoseFrames,
@@ -99,7 +109,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction },
+    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point },
     startTime?: number,
     backend?: PoseBackend,
   ) => Promise<void>;
@@ -150,7 +160,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction } = {},
+      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
     ) => {
@@ -239,12 +249,58 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const detected: PoseFrame[] = [];
         const allTimestamps: number[] = [];
         const frameCaptures: FrameCapture[] = [];
-        let lastHipCenter: HipCenter | null = null;
+        // Climber-identity tracking state.
+        const history: Point[] = [];               // climber centroid trajectory (normalised, full frame)
+        let lastClimberBox: CropBox | null = null; // adaptive crop derived from the last accepted pose
+        const tappedPoint = cropOptions.climberPoint ?? null;
 
         const mpTimestampBase = nextMpTimestampSec;
         nextMpTimestampSec += duration + 2;
 
         let lastMpTs = mpTimestampBase;
+
+        /**
+         * Detect every person in `region` (pixels; null = full frame), map them
+         * back to full-frame coordinates, and return the pose matching the
+         * tracked climber identity. Identity is seeded from the tap (or the
+         * strongest pose) on first acquisition, then tracked by velocity-gated
+         * proximity to the predicted position.
+         */
+        const detectClimber = (
+          region: CropBox | null,
+          predicted: Point | null,
+          gate?: number,
+        ): PoseFrame | null => {
+          const reg = region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight };
+          cropCanvas.width = reg.width;
+          cropCanvas.height = reg.height;
+          const cctx = cropCanvas.getContext("2d");
+          if (!cctx) return null;
+          cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
+
+          // Pose-specific preprocessing driven by the current lighting analysis.
+          // Applied to the detection canvas only — the main canvas stays pristine
+          // for ORB reference capture and lighting re-analysis.
+          if (currentAnalysis) applyPosePreprocessing(cv, cropCanvas, currentAnalysis);
+
+          const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
+          lastMpTs = mpTs;
+          const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
+          if (posesLocal.length === 0) return null;
+
+          const posesFull: PoseFrame[] = posesLocal.map(p => ({
+            timestamp: p.timestamp,
+            keypoints: mapKeypointsToFullFrame(p.keypoints, reg, videoWidth, videoHeight),
+          }));
+
+          // First acquisition: seed identity from the tap, else the strongest pose.
+          if (history.length === 0) {
+            return tappedPoint
+              ? selectClimberByPoint(posesFull, tappedPoint)
+              : selectClimberPose(posesFull, null);
+          }
+          return selectClimberPose(posesFull, predicted, gate);
+        };
 
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
@@ -272,75 +328,37 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           allTimestamps.push(video.currentTime);
 
           if (i % frameStep === 0) {
-            let poseCanvas: HTMLCanvasElement = canvas;
-            let appliedCropBox: { x: number; y: number; width: number; height: number } | null = null;
-            let plannedCropBox: { x: number; y: number; width: number; height: number } | null = null;
+            const predicted = predictCentroid(history);
 
-            if (cropOptions.climberCrop && lastHipCenter !== null) {
-              const cf = cropOptions.climberCrop;
-              const boxW = Math.round(cf.w * videoWidth);
-              const boxH = Math.round(cf.h * videoHeight);
-              const hipX = lastHipCenter.x * videoWidth;
-              const hipY = lastHipCenter.y * videoHeight;
-              plannedCropBox = {
-                x: Math.max(0, Math.min(videoWidth  - boxW, Math.round(hipX - boxW / 2))),
-                y: Math.max(0, Math.min(videoHeight - boxH, Math.round(hipY - boxH / 2))),
-                width: boxW,
-                height: boxH,
-              };
-            } else if (cropOptions.climberCrop && lastHipCenter === null) {
-              const cf = cropOptions.climberCrop;
-              plannedCropBox = {
-                x: Math.round(cf.x * videoWidth),
-                y: Math.round(cf.y * videoHeight),
-                width: Math.round(cf.w * videoWidth),
-                height: Math.round(cf.h * videoHeight),
-              };
+            // Region selection (pixels):
+            //  • established track → adaptive crop around the climber (slack-expanded)
+            //  • no track yet, no tap, manual/derived crop → use it as the seed region
+            //  • otherwise full frame, so the tap / all people can be found
+            let region: CropBox | null = null;
+            if (lastClimberBox) {
+              region = expandCropBox(lastClimberBox, videoWidth, videoHeight, 0.15);
+            } else if (!tappedPoint && climberCropPx) {
+              region = climberCropPx;
             }
 
-            if (plannedCropBox) {
-              cropCanvas.width  = plannedCropBox.width;
-              cropCanvas.height = plannedCropBox.height;
-              const cropCtx = cropCanvas.getContext("2d");
-              if (cropCtx) {
-                cropCtx.drawImage(
-                  canvas,
-                  plannedCropBox.x, plannedCropBox.y, plannedCropBox.width, plannedCropBox.height,
-                  0, 0, plannedCropBox.width, plannedCropBox.height,
-                );
-                poseCanvas   = cropCanvas;
-                appliedCropBox = plannedCropBox;
-              }
+            let chosen = detectClimber(region, predicted);
+
+            // Lost inside a crop → widen to the full frame and re-acquire by
+            // identity rather than locking onto a bystander.
+            if (!chosen && region) {
+              chosen = detectClimber(null, predicted, REACQUIRE_GATE);
             }
 
-            // Pose-specific preprocessing driven by the current lighting analysis.
-            if (currentAnalysis) {
-              applyPosePreprocessing(cv, poseCanvas, currentAnalysis);
+            if (chosen) {
+              chosen.timestamp = video.currentTime;
+              detected.push(chosen);
+              const c = poseCentroid(chosen.keypoints);
+              if (c) history.push(c);
+              const box = deriveClimberCrop(chosen.keypoints, videoWidth, videoHeight);
+              if (box) lastClimberBox = box;
             }
 
-            const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
-            lastMpTs = mpTs;
-            const frame = estimateFrameWithRetry(detector, poseCanvas, mpTs);
-            if (frame) {
-              frame.timestamp = video.currentTime;
-
-              const poseFrame: PoseFrame = appliedCropBox
-                ? {
-                    ...frame,
-                    keypoints: mapKeypointsToFullFrame(
-                      frame.keypoints,
-                      appliedCropBox,
-                      videoWidth,
-                      videoHeight,
-                    ),
-                  }
-                : frame;
-
-              detected.push(poseFrame);
-              lastHipCenter = extractHipCenter(poseFrame.keypoints) ?? lastHipCenter;
-            }
-
-            frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: plannedCropBox });
+            frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: region });
 
             // Periodically re-analyse lighting to adapt to scene changes.
             detectionFrameCount++;
@@ -365,7 +383,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           const tsToIdx = new Map<number, number>();
           allTimestamps.forEach((ts, idx) => tsToIdx.set(ts, idx));
 
-          const gaps: Array<{ afterIdx: number; gapStart: number; gapEnd: number }> = [];
+          const gaps: Array<{ gapStart: number; gapEnd: number; prevCentroid: Point | null }> = [];
           for (let d = 1; d < detected.length; d++) {
             const prevTs = detected[d - 1].timestamp;
             const currTs = detected[d].timestamp;
@@ -373,7 +391,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             const currIdx = tsToIdx.get(currTs) ?? 0;
             const gapSize = currIdx - prevIdx;
             if (gapSize > GAP_RECOVERY_THRESHOLD) {
-              gaps.push({ afterIdx: prevIdx, gapStart: prevIdx + 1, gapEnd: currIdx - 1 });
+              // Anchor recovery selection to the climber's position just before
+              // the gap, so a full-frame re-detection can't lock onto a bystander.
+              gaps.push({
+                gapStart: prevIdx + 1,
+                gapEnd: currIdx - 1,
+                prevCentroid: poseCentroid(detected[d - 1].keypoints),
+              });
             }
           }
 
@@ -395,13 +419,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-              const recMpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
-              lastMpTs = recMpTs;
-              const recoveryFrame = estimateFrameWithRetry(detector, canvas, recMpTs);
+              // Full-frame re-detection, but selected by identity against the
+              // pre-gap position so bystanders are rejected.
+              const recoveryFrame = detectClimber(null, gap.prevCentroid, REACQUIRE_GATE);
               if (recoveryFrame) {
                 recoveryFrame.timestamp = video.currentTime;
                 detected.push(recoveryFrame);
-                lastHipCenter = extractHipCenter(recoveryFrame.keypoints) ?? lastHipCenter;
+                const c = poseCentroid(recoveryFrame.keypoints);
+                if (c) history.push(c);
                 break;
               }
             }

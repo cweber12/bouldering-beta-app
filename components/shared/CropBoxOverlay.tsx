@@ -39,6 +39,13 @@ interface CropBoxOverlayProps {
   color?: string;
   /** Show the rule-of-thirds grid inside the crop window. Off by default for a cleaner UI. */
   showGrid?: boolean;
+  /**
+   * Fires when the user taps (not drags) an empty area of the overlay — i.e.
+   * outside the crop window and its handles. Reports the tap as a fractional
+   * point [0, 1] of the container. Used to seed climber-identity tracking by
+   * tapping directly on the climber.
+   */
+  onTap?: (point: { x: number; y: number }) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +71,9 @@ const MIN_SIZE = 0.05;
 
 /** Invisible hit area around each handle for easier touch interaction. */
 const HIT_AREA_PX = 36;
+
+/** Max pointer travel (px) for a press-release to count as a tap, not a drag. */
+const TAP_MOVE_TOLERANCE_PX = 6;
 
 /** Length of each corner tick in px. */
 const SEG_LEN = 12;
@@ -129,9 +139,12 @@ export default function CropBoxOverlay({
   borderRadius = "4px",
   color = "rgba(255,255,255,0.90)",
   showGrid = false,
+  onTap,
 }: CropBoxOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  // Tracks a potential tap on empty overlay area (no handle/border involved).
+  const tapStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const clamp = (v: number, lo: number, hi: number) =>
     Math.max(lo, Math.min(hi, v));
@@ -207,9 +220,36 @@ export default function CropBoxOverlay({
     [onChange],
   );
 
-  const onPointerUp = useCallback(() => {
-    dragRef.current = null;
-  }, []);
+  // A pointerdown that reaches the root (children stop propagation) is a
+  // candidate tap on empty area. Record its start so onPointerUp can decide
+  // whether it was a tap or the beginning of a drag-elsewhere.
+  const onRootPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (disabled || !onTap) return;
+      tapStartRef.current = { x: e.clientX, y: e.clientY };
+    },
+    [disabled, onTap],
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      const wasDragging = dragRef.current !== null;
+      dragRef.current = null;
+
+      const tapStart = tapStartRef.current;
+      tapStartRef.current = null;
+      if (wasDragging || !tapStart || !onTap || !containerRef.current) return;
+
+      const moved = Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y);
+      if (moved > TAP_MOVE_TOLERANCE_PX) return; // treat as drag, not tap
+
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+      const y = clamp((e.clientY - rect.top) / rect.height, 0, 1);
+      onTap({ x, y });
+    },
+    [onTap],
+  );
 
   const pct = (v: number) => `${(v * 100).toFixed(3)}%`;
   const { x, y, w, h } = box;
@@ -230,6 +270,7 @@ export default function CropBoxOverlay({
     <div
       ref={containerRef}
       className="absolute inset-0 select-none touch-none overflow-hidden"
+      onPointerDown={onRootPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >

@@ -19,7 +19,18 @@ Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any ru
 The upload page offers a **MediaPipe Pose Landmarker** variant selector (Lite /
 Full / Heavy — 33 BlazePose keypoints including hands and feet). The chosen
 model runs on every sampled frame (indoor: every frame; outdoor: configurable
-stride). After estimation, two post-processing passes are applied:
+stride).
+
+The landmarker runs in **multi-pose** mode so the pipeline can tell the climber
+apart from bystanders. A **climber-identity tracker** (`pipeline/climberTracker.ts`)
+seeds identity from a tap on the climber in the first frame (or the strongest
+pose), then on each frame selects the detected pose whose torso centroid is
+nearest the velocity-predicted position — rejecting anyone outside a distance
+gate, so a passerby never steals the track. The per-frame detection crop is
+derived **automatically** from the climber's landmarks; if the climber is lost
+inside the crop, detection widens to the full frame and re-acquires by identity.
+
+After estimation, two post-processing passes are applied:
 
 1. **Interpolation** — for outdoor mode, `interpolatePoseFrames` fills the dense frame timeline from sparse keyframe detections using linear interpolation.
 2. **Smoothing** — `smoothPoseFrames` runs on every mode: forward-fill and backward-fill eliminate brief keypoint dropouts, then an exponential moving average (α = 0.3) reduces jitter.
@@ -55,7 +66,7 @@ handles to resize it.
 
 | Mode | Purpose |
 |---|---|
-| Climber crop | Pose detection window. In outdoor mode the box dimensions are preserved and re-centred on the detected hip each frame. |
+| Climber crop | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
 | Route (ORB) crop | ORB feature extraction region on the first video frame. Focus on the wall texture and holds to improve match quality. |
 
 Click **Process video** after setting both crop regions.
@@ -66,8 +77,9 @@ The upload flow is a guided 4-step process designed to keep the core path fast
 while preserving full analysis quality:
 
 1. **Select source** — upload a video or record with camera.
-2. **Set detection** — set climber crop (with move-padding) and optional wall
-  texture crop; advanced model/stride controls are available but secondary.
+2. **Set detection** — tap the climber to lock tracking onto them (auto-crop;
+  drag to override), plus an optional wall texture crop; advanced model/stride
+  controls are available but secondary.
 3. **Review landmarks** — view processing output with a single pass/warn quality
   checkpoint before saving.
 4. **Optional route overlay** — test the run against a route photo as an

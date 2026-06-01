@@ -169,6 +169,8 @@ function ScanPageInner() {
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
+  // Normalised point the user tapped to identify the climber (seeds tracking).
+  const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
@@ -400,6 +402,7 @@ function ScanPageInner() {
 
   function handleSelectFile(file: File) {
     loadVideoFile(file);
+    setClimberPoint(null);
     setStep("detection");
   }
 
@@ -411,7 +414,7 @@ function ScanPageInner() {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop, wallCrop }, startTime);
+    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined }, startTime);
     setStep("landmarks");
   }
 
@@ -625,6 +628,8 @@ function ScanPageInner() {
           wallCrop={wallCrop}
           onClimberCropChange={setClimberCrop}
           onWallCropChange={setWallCrop}
+          climberPoint={climberPoint}
+          onClimberPointChange={setClimberPoint}
           modelVariant={modelVariant}
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}
