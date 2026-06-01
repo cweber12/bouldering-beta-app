@@ -48,11 +48,9 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
     () => false,
   );
 
-  // Guard against SSR — createPortal needs document.body.
-  const viewUrl = `/view?key=${encodeURIComponent(climb.key)}`;
-  // Compare goes straight to the compare page, scoped to this route, with this
-  // climb pre-loaded — the user adds others from the on-page rail.
-  const compareUrl = buildCompareUrl(climb.key, {
+  // Opens the climb console (single mode by default; the user switches to
+  // "Compare Multiple" on the page to add other climbs from the rail).
+  const openUrl = buildCompareUrl(climb.key, {
     state: climb.state,
     area: climb.area,
     route: climb.route,
@@ -154,37 +152,22 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
             <p className="mt-3 whitespace-pre-wrap text-sm text-fg">{climb.notes}</p>
           )}
 
-          {/* Action row — View and Compare are co-equal primary paths */}
+          {/* Action row — one primary path into the climb console. */}
           <div className="mt-4 flex flex-col gap-2">
-            <div className="flex gap-2">
-              {/* View this climb overlaid on a route photo */}
-              <button
-                type="button"
-                onClick={() => go(viewUrl)}
-                className="ui-control-primary flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
-              >
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                View
-              </button>
+            {/* Open this climb in the console (overlay on a route photo). */}
+            <button
+              type="button"
+              onClick={() => go(openUrl)}
+              className="ui-control-primary flex w-full items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Open
+            </button>
 
-              {/* Compare to other climbs on the same route */}
-              <button
-                type="button"
-                onClick={() => go(compareUrl)}
-                className="ui-control-primary flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold"
-              >
-                <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A1.5 1.5 0 015.5 4h2A1.5 1.5 0 019 5.5v13A1.5 1.5 0 017.5 20h-2A1.5 1.5 0 014 18.5v-13z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 5.5A1.5 1.5 0 0116.5 4h2A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-2a1.5 1.5 0 01-1.5-1.5v-13z" />
-                </svg>
-                Compare
-              </button>
-            </div>
-
-            {/* Secondary: capture a new route photo on-device, then view */}
+            {/* Secondary: capture a new route photo on-device, then open */}
             <button
               type="button"
               onClick={() => cameraInputRef.current?.click()}
@@ -202,7 +185,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
               accept="image/*"
               capture="environment"
               className="sr-only"
-              onChange={() => go(viewUrl)}
+              onChange={() => go(openUrl)}
             />
           </div>
         </div>

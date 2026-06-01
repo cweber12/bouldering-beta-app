@@ -41,7 +41,7 @@ export default function DocsPage() {
               in an external photo later.
             </li>
             <li>
-              <strong className="text-fg">Image matching (View page)</strong> — You
+              <strong className="text-fg">Image matching (climb console)</strong> — You
               upload a photo of the same section of wall. ORB features are extracted from it,
               then matched against the video-frame features to find correspondences.
             </li>
@@ -169,7 +169,7 @@ export default function DocsPage() {
                 4. Adjust skeleton style (optional)
               </p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                On the View page a <strong className="text-fg">Skeleton style</strong>{" "}
+                In the climb console a <strong className="text-fg">Skeleton style</strong>{" "}
                 panel appears once matching completes. Use the colour pickers to change limb and
                 joint colours. Use the sliders to adjust line width and joint radius. Changes
                 take effect on the next render — click{" "}
@@ -183,9 +183,9 @@ export default function DocsPage() {
                 5. Match a route photo and export
               </p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                On the{" "}
-                <Link href="/match" className="text-fg hover:underline">
-                  View page
+                In the{" "}
+                <Link href="/compare" className="text-fg hover:underline">
+                  climb console
                 </Link>
                 , upload a photo of the wall from a similar angle. The match statistics panel
                 shows how many ORB correspondences were found. Aim for at least 10 good matches

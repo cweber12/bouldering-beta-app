@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
   // attempt to bundle the Node.js Admin SDK (which contains native modules and
   // is not compatible with the Edge runtime or browser bundles).
   serverExternalPackages: ["firebase-admin"],
+
+  // The /view and /match routes were consolidated into the /compare climb
+  // console. Redirect stale links — the query string (?key=…) is preserved
+  // automatically, and the console reads ?key= as a single-climb alias.
+  async redirects() {
+    return [
+      { source: "/view", destination: "/compare", permanent: true },
+      { source: "/match", destination: "/compare", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

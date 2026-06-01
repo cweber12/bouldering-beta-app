@@ -10,7 +10,7 @@ import { buildCompareUrl } from "@/utils/compareUrl";
 // ---------------------------------------------------------------------------
 
 interface ClimbOptionsDropdownProps {
-  /** S3 key of the climb run (used to build view / compare URLs). */
+  /** S3 key of the climb run (used to build the console URL). */
   climbKey: string;
   /** Route context — when provided, compare navigation locks to this route. */
   state?: string;
@@ -28,10 +28,10 @@ interface ClimbOptionsDropdownProps {
 // ---------------------------------------------------------------------------
 // ClimbOptionsDropdown
 //
-// A View / Compare mode toggle + three route-photo action options:
+// Three route-photo action options that all open the climb console:
 //   - Select Route Photo  (gallery file picker)
 //   - Take a Photo        (camera capture on mobile)
-//   - Use Route Image     (navigate directly; destination page gets the image)
+//   - Use Route Image     (navigate directly; the console loads the image)
 //
 // Opens upward from the trigger. Closes on outside click.
 // ---------------------------------------------------------------------------
@@ -39,7 +39,6 @@ interface ClimbOptionsDropdownProps {
 export default function ClimbOptionsDropdown({ climbKey, state, area, route, trigger, size = "default" }: ClimbOptionsDropdownProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"view" | "compare">("view");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -56,19 +55,11 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  // Build destination URL based on the active mode.
-  const viewUrl = `/view?key=${encodeURIComponent(climbKey)}`;
-
-  /** Handles any action button click based on the current mode. */
+  /** Opens the climb console, scoped to this route with this climb pre-loaded;
+   *  the user switches to "Compare Multiple" on the page to add others. */
   const handleAction = () => {
     setOpen(false);
-    if (mode === "compare") {
-      // Go straight to the compare page, scoped to this route, with this climb
-      // pre-loaded; the user adds others from the on-page rail.
-      router.push(buildCompareUrl(climbKey, { state, area, route }));
-    } else {
-      router.push(viewUrl);
-    }
+    router.push(buildCompareUrl(climbKey, { state, area, route }));
   };
 
   return (
@@ -102,37 +93,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
       {/* Dropdown panel */}
       {open && (
         <div className="ui-popover absolute top-full left-0 z-60 mt-2 w-44 overflow-hidden">
-          {/* View / Compare toggle */}
-          <div className="m-2 flex gap-1 rounded-lg bg-inset p-1">
-            <button
-              type="button"
-              onClick={() => setMode("view")}
-              className={cn(
-                "flex-1 rounded-md py-1 text-xs font-medium transition",
-                mode === "view"
-                  ? "bg-surface-alt/70 text-fg shadow-sm"
-                  : "text-fg-muted hover:text-fg-secondary",
-              )}
-            >
-              View
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("compare")}
-              className={cn(
-                "flex-1 rounded-md py-1 text-xs font-medium transition",
-                mode === "compare"
-                  ? "bg-surface-alt/70 text-fg shadow-sm"
-                  : "text-fg-muted hover:text-fg-secondary",
-              )}
-            >
-              Compare
-            </button>
-          </div>
-
-          <div className="mx-3 border-t border-edge/50" />
-
-          {/* Action rows */}
+          {/* Action rows — each opens the climb console for this climb. */}
           <div className="py-1">
             {/* Select Route Photo */}
             <button

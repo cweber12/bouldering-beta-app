@@ -15,7 +15,7 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = Boolean(sessionCookie);
 
   // Protected routes — redirect to login when not authenticated.
-  const protectedPaths = ["/scan", "/match", "/view", "/compare", "/profile"];
+  const protectedPaths = ["/scan", "/compare", "/profile"];
   const isProtected = protectedPaths.some(
     (p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(p + "/"),
   );

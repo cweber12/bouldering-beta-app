@@ -45,23 +45,12 @@ describe("ClimbDetailModal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("navigates to view when the View action is used", () => {
+  it("opens the climb console scoped to the route when Open is used", () => {
     const onClose = vi.fn();
 
     render(<ClimbDetailModal climb={climb} onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /^View$/i }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-    expect(pushMock).toHaveBeenCalledWith("/view?key=run-1");
-  });
-
-  it("navigates straight to compare, scoped to the route, when Compare is used", () => {
-    const onClose = vi.fn();
-
-    render(<ClimbDetailModal climb={climb} onClose={onClose} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /^Compare$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Open$/i }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(pushMock).toHaveBeenCalledWith(

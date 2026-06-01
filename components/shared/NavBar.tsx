@@ -35,7 +35,7 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
         "Upload a climbing video and this page analyses it entirely in your browser — nothing is sent to a third-party server.",
         "MediaPipe Pose Landmarker tracks your skeleton joint-by-joint on every sampled frame of the video.",
         "ORB feature matching simultaneously memorises the unique texture of the wall from the first video frame.",
-        "The result is a compact .json file you take to the View page to overlay your movement onto a still route photo.",
+        "The result is a compact .json file you open in the climb console to overlay your movement onto a still route photo.",
       ],
     },
     {
@@ -62,59 +62,37 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
       bullets: [
         "After selecting a video, scrub to a representative frame, then drag the Climber crop box around the area the climber moves through and the Background (ORB) crop over the wall texture.",
         "Click Process video. A progress bar shows frames analysed. Processing runs entirely in the browser.",
-        "Once complete, click View on route photo to test the skeleton overlay immediately on the View page.",
-        "Save the .json to your device or to S3 — it can be reloaded on the View page in any future session without re-processing the video.",
+        "Once complete, click View on route photo to test the skeleton overlay immediately in the climb console.",
+        "Save the .json to your device or to S3 — it can be reloaded in the climb console in any future session without re-processing the video.",
       ],
     },
   ],
-  "/match": [
+  "/compare": [
+    {
+      title: "Opening a climb in the console",
+      bullets: [
+        "Open any saved climb from the Collection page — click the three-dot menu or the Open button in the climb detail view.",
+        "The console starts in single-climb view: it loads the route photo, runs ORB matching, and overlays your skeleton onto the photo.",
+        "The left rail lists every climb you have on the route. In single view, tapping another climb swaps which one is shown.",
+        "Use 'Download .webm' to save an animation of the skeleton overlay.",
+      ],
+    },
+    {
+      title: "Comparing multiple climbs",
+      bullets: [
+        "Click 'Compare Multiple' in the rail header to switch from single view to a 2–4 climb comparison.",
+        "Tap climbs in the rail to add them; each gets a distinct colour and a check in its identity colour.",
+        "Side by side mode shows every climb in its own panel — use Play all to sync playback simultaneously.",
+        "Overlay mode composites all skeletons onto a single image so you can directly compare body positions frame-by-frame.",
+      ],
+    },
     {
       title: "How does route matching work?",
       bullets: [
         "The app extracts ORB visual features (corner points) from your route photo and matches them against the reference features recorded from the video.",
         "Matching finds pairs of features that appear the same in both images. The best pairs compute a perspective transform that maps the video's coordinate space onto the photo.",
         "Each recorded skeleton keypoint is then projected into the photo using that transform, producing the overlay.",
-        "Match quality depends on shared wall texture. Photos taken from a very different angle or distance will reduce accuracy.",
-      ],
-    },
-    {
-      title: "How to crop the route photo",
-      bullets: [
-        "Drag the crop handles to focus on the wall surface — rock texture, holds, and chalk marks are ideal features for matching.",
-        "Exclude sky, trees, gear, people, and the floor — these change between sessions and spoil the match.",
-        "The crop should roughly correspond to the background (ORB) crop you set on the Scan page.",
-        "If matching produces few good matches, try re-cropping to include more distinctive wall texture.",
-      ],
-    },
-  ],
-  "/view": [
-    {
-      title: "Viewing a saved climb",
-      bullets: [
-        "The route photo and saved crop region are loaded automatically from your S3 storage.",
-        "Click 'View Climb' to run ORB matching and overlay your skeleton onto the photo.",
-        "If no route photo is saved for this route yet, you can select one from your device.",
-        "Use 'Export video' to download a .webm animation of the skeleton overlay.",
-      ],
-    },
-  ],
-  "/compare": [
-    {
-      title: "Comparing multiple climbs",
-      bullets: [
-        "Open the Compare sheet from any saved climb on the Saved page — click the three-dot menu or the Compare button in the climb detail view.",
-        "The sheet shows all of your climbs for the same route so you can pick 2–4 to compare.",
-        "Side by side mode shows every climb in its own panel — use Play all to sync playback simultaneously.",
-        "Overlay mode composites all skeletons onto a single image so you can directly compare body positions frame-by-frame.",
-      ],
-    },
-    {
-      title: "Route photo and matching",
-      bullets: [
-        "The route photo for your climb is loaded automatically from your S3 storage when available.",
-        "Crop the route photo to focus on the wall texture before clicking Apply & View.",
-        "All loaded climbs are matched against the same photo — you only need to crop and apply once.",
-        "Each climb gets a unique colour; adjust using the colour picker next to each slot.",
+        "Open Refine to crop the route photo onto the wall surface — rock texture, holds, and chalk marks are ideal features; exclude sky, trees, gear, people, and the floor. All loaded climbs match against the same photo, so you only crop once.",
       ],
     },
   ],
