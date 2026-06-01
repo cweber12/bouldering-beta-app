@@ -5,6 +5,12 @@ import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
+import {
+  QUALITY_TIERS,
+  TIER_LABELS,
+  TIER_DESCRIPTIONS,
+  type QualityTier,
+} from "@/utils/poseTiers";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
@@ -28,11 +34,13 @@ interface CropToolbarProps {
   wallCropMoved: boolean;
   cropMode: CropMode;
   showAdvanced: boolean;
+  tier: QualityTier;
   modelVariant: MediaPipeVariant;
   frameStep: number;
   onCropModeChange: (mode: CropMode) => void;
   onToggleAdvanced: () => void;
   onCloseAdvanced: () => void;
+  onTierChange: (t: QualityTier) => void;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   onFrameStepChange: (n: number) => void;
 }
@@ -42,11 +50,13 @@ function CropToolbar({
   wallCropMoved,
   cropMode,
   showAdvanced,
+  tier,
   modelVariant,
   frameStep,
   onCropModeChange,
   onToggleAdvanced,
   onCloseAdvanced,
+  onTierChange,
   onModelVariantChange,
   onFrameStepChange,
 }: CropToolbarProps) {
@@ -121,6 +131,29 @@ function CropToolbar({
         )}
       </div>
 
+      {/* Quality tier — primary detection control */}
+      <div
+        className="flex items-center gap-1 rounded-lg border border-edge/70 bg-surface-alt/55 p-1 text-xs"
+        role="group"
+        aria-label="Detection quality"
+      >
+        {QUALITY_TIERS.map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => onTierChange(t)}
+            className={cn(
+              "ui-chip-toggle rounded-md px-2 py-1 font-medium",
+              tier === t ? "border-accent/50 bg-accent/15 text-fg" : "",
+            )}
+            aria-pressed={tier === t}
+            title={TIER_DESCRIPTIONS[t]}
+          >
+            {TIER_LABELS[t]}
+          </button>
+        ))}
+      </div>
+
       {/* Detection settings dropdown */}
       <div ref={settingsRef} className="relative">
         <button
@@ -146,6 +179,9 @@ function CropToolbar({
         {showAdvanced && (
           <div className="ui-popover animate-fade-in absolute left-0 top-full z-30 mt-1.5 w-72 p-3">
             <div className="flex flex-col gap-3">
+              <p className="text-xs text-fg-muted">
+                Override the <span className="font-medium text-fg-secondary">{TIER_LABELS[tier]}</span> tier&rsquo;s model and sampling.
+              </p>
               <div className="flex items-center justify-between gap-3">
                 <label className="text-xs font-medium text-fg-secondary">Pose model</label>
                 <select
@@ -190,6 +226,8 @@ export interface StepSetDetectionProps {
   /** Normalised point [0,1] the user tapped to identify the climber, if any. */
   climberPoint?: { x: number; y: number } | null;
   onClimberPointChange?: (p: { x: number; y: number } | null) => void;
+  tier: QualityTier;
+  onTierChange: (t: QualityTier) => void;
   modelVariant: MediaPipeVariant;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
@@ -213,6 +251,8 @@ export default function StepSetDetection({
   onWallCropChange,
   climberPoint,
   onClimberPointChange,
+  tier,
+  onTierChange,
   modelVariant,
   onModelVariantChange,
   frameStep,
@@ -340,11 +380,13 @@ export default function StepSetDetection({
     wallCropMoved,
     cropMode,
     showAdvanced,
+    tier,
     modelVariant,
     frameStep,
     onCropModeChange: setCropMode,
     onToggleAdvanced: () => setShowAdvanced(p => !p),
     onCloseAdvanced:  () => setShowAdvanced(false),
+    onTierChange,
     onModelVariantChange,
     onFrameStepChange,
   };

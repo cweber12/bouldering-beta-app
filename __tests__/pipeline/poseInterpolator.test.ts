@@ -228,7 +228,22 @@ function goodFrame(ts: number): PoseFrame {
   ]);
 }
 
-describe("filterLandmarks", () => {
+/** Drop named keypoints from a frame (simulating absent detections). */
+function dropKeypoints(f: PoseFrame, ...names: string[]): PoseFrame {
+  const drop = new Set(names);
+  return { ...f, keypoints: f.keypoints.filter(kp => !drop.has(kp.name)) };
+}
+
+/** Set the confidence score on named keypoints. */
+function setScore(f: PoseFrame, score: number, ...names: string[]): PoseFrame {
+  const target = new Set(names);
+  return {
+    ...f,
+    keypoints: f.keypoints.map(kp => (target.has(kp.name) ? { ...kp, score } : kp)),
+  };
+}
+
+describe("filterLandmarks (climbing-weighted)", () => {
   it("returns an empty array when given an empty array", () => {
     expect(filterLandmarks([])).toEqual([]);
   });
@@ -238,80 +253,78 @@ describe("filterLandmarks", () => {
     expect(filterLandmarks(frames)).toHaveLength(2);
   });
 
-  it("keeps frames with exactly maxMissingAllowed low-confidence keypoints", () => {
-    const f = goodFrame(0);
-    // Drop score on 2 keypoints to below threshold but keep them present.
-    f.keypoints[0].score = 0.1;
-    f.keypoints[1].score = 0.1;
-    // 2 low-confidence == maxMissingAllowed(2), so frame is kept.
+  it("keeps a frame with both feet occluded but strong hands/torso/hips", () => {
+    // Both ankles + both foot-index points gone → 4 × 0.25 = 1.0 weighted bad,
+    // well within the default tolerance of 3.
+    const f = dropKeypoints(
+      goodFrame(0),
+      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index",
+    );
     expect(filterLandmarks([f])).toHaveLength(1);
   });
 
-  it("drops frames with more than maxMissingAllowed low-confidence keypoints", () => {
-    const f = goodFrame(0);
-    // 3 keypoints with score below threshold.
-    f.keypoints[0].score = 0.1;
-    f.keypoints[1].score = 0.1;
-    f.keypoints[2].score = 0.1;
+  it("keeps a frame even when feet are present but low-confidence", () => {
+    const f = setScore(
+      goodFrame(0), 0.05,
+      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index", "left_heel", "right_heel",
+    );
+    expect(filterLandmarks([f])).toHaveLength(1);
+  });
+
+  it("drops a genuinely degraded frame missing hands/shoulders/hips", () => {
+    // All six full-weight core joints bad → weight 6 > tolerance 3.
+    const f = dropKeypoints(
+      goodFrame(0),
+      "left_wrist", "right_wrist", "left_shoulder", "right_shoulder", "left_hip", "right_hip",
+    );
     expect(filterLandmarks([f])).toHaveLength(0);
   });
 
-  it("counts completely absent keypoints toward the missing tally", () => {
-    // A frame with only 14 keypoints — 3 are absent (counted as missing).
-    const f = frame(0, [
-      ["nose", 0.5, 0.5, 0.9],
-      ["left_eye", 0.4, 0.4, 0.9],
-      ["right_eye", 0.6, 0.4, 0.9],
-      ["left_ear", 0.3, 0.5, 0.9],
-      ["right_ear", 0.7, 0.5, 0.9],
-      ["left_shoulder", 0.3, 0.6, 0.9],
-      ["right_shoulder", 0.7, 0.6, 0.9],
-      ["left_elbow", 0.3, 0.7, 0.9],
-      ["right_elbow", 0.7, 0.7, 0.9],
-      ["left_wrist", 0.3, 0.8, 0.9],
-      ["right_wrist", 0.7, 0.8, 0.9],
-      ["left_hip", 0.4, 0.85, 0.9],
-      ["right_hip", 0.6, 0.85, 0.9],
-      ["left_knee", 0.4, 0.9, 0.9],
-      // right_knee, left_ankle, right_ankle absent — 3 missing
-    ]);
-    // 3 missing > 2 allowed, so it should be dropped.
-    expect(filterLandmarks([f])).toHaveLength(0);
+  it("ignores non-climbing keypoints (face / fingers / knees)", () => {
+    // Wreck the face, fingers, and knees — none are in the climbing subset.
+    const f = setScore(
+      goodFrame(0), 0.0,
+      "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+      "left_pinky", "right_pinky", "left_index", "right_index",
+      "left_knee", "right_knee",
+    );
+    expect(filterLandmarks([f])).toHaveLength(1);
   });
 
-  it("respects a custom maxMissingAllowed threshold", () => {
-    const f = goodFrame(0);
-    // 1 low-confidence keypoint.
-    f.keypoints[0].score = 0.1;
-    // maxMissingAllowed=0 → drop even 1 bad keypoint.
-    expect(filterLandmarks([f], 0.3, 0)).toHaveLength(0);
-    // maxMissingAllowed=1 → keep it.
-    expect(filterLandmarks([f], 0.3, 1)).toHaveLength(1);
+  it("counts absent core keypoints toward the bad-weight budget", () => {
+    // Three core joints absent → weight 3.0 == default tolerance → kept;
+    // a fourth absent core joint → weight 4.0 > tolerance → dropped.
+    const kept = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist", "left_hip");
+    expect(filterLandmarks([kept])).toHaveLength(1);
+
+    const dropped = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist", "left_hip", "right_hip");
+    expect(filterLandmarks([dropped])).toHaveLength(0);
+  });
+
+  it("respects a custom (tier-tunable) tolerance", () => {
+    // Two core joints bad → weight 2.0.
+    const f = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist");
+    // Accurate-style strict tolerance (1) drops it; looser tolerance keeps it.
+    expect(filterLandmarks([f], 0.3, 1)).toHaveLength(0);
+    expect(filterLandmarks([f], 0.3, 2)).toHaveLength(1);
   });
 
   it("respects a custom minScore threshold", () => {
-    const f = goodFrame(0);
-    // All scores are 0.9 — raising the threshold above that drops all.
-    f.keypoints.forEach(kp => { kp.score = 0.5; });
-    // minScore=0.6 makes all keypoints "low confidence".
-    expect(filterLandmarks([f], 0.6, 0)).toHaveLength(0);
-    // minScore=0.4 keeps all keypoints — frame is good.
-    expect(filterLandmarks([f], 0.4, 0)).toHaveLength(1);
+    // Lower all climbing-subset scores to 0.5.
+    const f = setScore(
+      goodFrame(0), 0.5,
+      "left_wrist", "right_wrist", "left_shoulder", "right_shoulder", "left_hip", "right_hip",
+      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index",
+    );
+    // minScore=0.6 makes every climbing keypoint bad → weight 7 > 3 → dropped.
+    expect(filterLandmarks([f], 0.6)).toHaveLength(0);
+    // minScore=0.4 keeps them all → weight 0 → kept.
+    expect(filterLandmarks([f], 0.4)).toHaveLength(1);
   });
 
-  it("uses custom keypointCount to allow fewer keypoints", () => {
-    // Build a frame with only 10 keypoints — less than default 33.
-    const f = frame(0, Array.from({ length: 10 }, (_, i) => [`kp_${i}`, 0.5, 0.5, 0.9]));
-    // Default keypointCount=33: 23 missing > maxMissingAllowed(2) → dropped.
-    expect(filterLandmarks([f])).toHaveLength(0);
-    // With keypointCount=10: 0 missing → kept.
-    expect(filterLandmarks([f], 0.3, 2, 10)).toHaveLength(1);
-  });
-
-  it("keeps MediaPipe frames when enough keypoints are present", () => {
-    // Build a frame with 33 high-confidence keypoints.
-    const mp33 = frame(0, Array.from({ length: 33 }, (_, i) => [`kp_${i}`, 0.5, 0.5, 0.9]));
-    expect(filterLandmarks([mp33], 0.3, 2, 33)).toHaveLength(1);
+  it("drops a frame with no keypoints at all", () => {
+    const empty = frame(0, []);
+    expect(filterLandmarks([empty])).toHaveLength(0);
   });
 });
 

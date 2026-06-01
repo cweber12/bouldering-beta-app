@@ -10,6 +10,7 @@ import { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOver
 /* HOOKS */
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
+import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
@@ -121,9 +122,12 @@ function ScanPageInner() {
   const { cv } = useOpenCV();
   const router = useRouter();
 
-  // Model selection state — MediaPipe only
-  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>("full");
-  const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant });
+  // Quality tier is the primary detection control; it seeds the model variant,
+  // frame step, and maxPoses. The advanced panel can override variant/frameStep.
+  const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
+  const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
+  const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant, maxPoses });
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
@@ -138,7 +142,7 @@ function ScanPageInner() {
   const [notes, setNotes]       = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
-  const [frameStep, setFrameStep] = useState(10);
+  const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved]   = useState(false);
   const [locationWarning, setLocationWarning] = useState(false);
@@ -406,15 +410,29 @@ function ScanPageInner() {
     setStep("detection");
   }
 
+  // Selecting a tier seeds the model variant, frame step, and maxPoses.
+  // The advanced panel may subsequently override variant/frameStep.
+  function handleTierChange(t: QualityTier) {
+    setTier(t);
+    const cfg = getTierConfig(t);
+    setModelVariant(cfg.variant);
+    setFrameStep(cfg.frameStep);
+    setMaxPoses(cfg.maxPoses);
+  }
+
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;
     setFirstFrameFile(null);
     clearRoutePhoto();
+    const cfg = getTierConfig(tier);
     process(pendingFile, model, cv, frameStep, {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined }, startTime);
+    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined }, startTime, "mediapipe", {
+      maxRecoveryFrames: cfg.maxRecoveryFrames,
+      filterTolerance: cfg.filterTolerance,
+    });
     setStep("landmarks");
   }
 
@@ -630,6 +648,8 @@ function ScanPageInner() {
           onWallCropChange={setWallCrop}
           climberPoint={climberPoint}
           onClimberPointChange={setClimberPoint}
+          tier={tier}
+          onTierChange={handleTierChange}
           modelVariant={modelVariant}
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}

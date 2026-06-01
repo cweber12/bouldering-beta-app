@@ -32,7 +32,6 @@ import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 import type { PoseBackend } from "@/utils/poseConstants";
-import { getTopology } from "@/utils/poseConstants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
@@ -103,6 +102,8 @@ export interface VideoProcessorResult {
    * @param cropOptions - Optional user-defined crop boxes.
    * @param startTime - Optional start time in seconds.
    * @param backend   - Which pose backend is active. Default: "mediapipe".
+   * @param detection - Optional quality-tier detection knobs (gap-recovery
+   *                    aggressiveness, landmark-filter tolerance).
    */
   process: (
     file: File,
@@ -113,6 +114,7 @@ export interface VideoProcessorResult {
     cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point },
     startTime?: number,
     backend?: PoseBackend,
+    detection?: { maxRecoveryFrames?: number; filterTolerance?: number },
   ) => Promise<void>;
   /** Abort any in-flight processing and reset all state back to idle. */
   reset: () => void;
@@ -166,6 +168,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
+      detection: { maxRecoveryFrames?: number; filterTolerance?: number } = {},
     ) => {
       abortRef.current = false;
       const seekController = new AbortController();
@@ -388,7 +391,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // Gap recovery pass
         // ---------------------------------------------------------------
         const GAP_RECOVERY_THRESHOLD = 3 * frameStep;
-        const MAX_RECOVERY_FRAMES = 30;
+        const MAX_RECOVERY_FRAMES = detection.maxRecoveryFrames ?? 30;
 
         if (detected.length >= 2 && !abortRef.current) {
           detected.sort((a, b) => a.timestamp - b.timestamp);
@@ -458,8 +461,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         }
 
         // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
-        const topo = getTopology(backend);
-        const goodFrames   = filterLandmarks(detected, 0.3, 2, topo.keypointCount);
+        // Filtering is climbing-weighted; tolerance comes from the quality tier
+        // (undefined → filterLandmarks' built-in default).
+        const goodFrames   = filterLandmarks(detected, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
         const frames       = smoothPoseFrames(estimated);

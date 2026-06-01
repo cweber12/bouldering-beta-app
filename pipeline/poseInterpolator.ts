@@ -12,7 +12,6 @@
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
 import {
-  MEDIAPIPE_KEYPOINT_COUNT,
   MP_KP_NAMES,
   MP_SKELETON_EDGES,
   type PoseBackend,
@@ -152,33 +151,75 @@ function getAllKpNames(_backend?: PoseBackend): ReadonlySet<string> {
 // ---------------------------------------------------------------------------
 
 /**
- * Drop frames that have too many missing or low-confidence keypoints.
+ * Weighted climbing-relevant keypoint subset used to judge frame quality.
  *
- * A keypoint counts as "bad" if its confidence score is below `minScore`,
- * and as "missing" if it is absent from the frame entirely.
+ * A climber's beta is carried by their hands, shoulders, and hips; the legs and
+ * feet are routinely occluded against the wall or by the body, so a missing
+ * foot should not, on its own, discard an otherwise-good frame. Core
+ * load-bearing joints therefore carry full weight while feet contribute only a
+ * small fraction — so both feet can drop out and the frame still survives, but
+ * losing the hands/torso/hips quickly pushes a frame over the budget.
+ *
+ * Names match {@link MP_KP_NAMES} (MediaPipe / BlazePose topology).
+ */
+export const CLIMBING_KEYPOINT_WEIGHTS: Readonly<Record<string, number>> = {
+  // Hands + upper torso + hips — full weight.
+  left_wrist: 1,
+  right_wrist: 1,
+  left_shoulder: 1,
+  right_shoulder: 1,
+  left_hip: 1,
+  right_hip: 1,
+  // Feet — low weight; legitimately occluded while climbing.
+  left_ankle: 0.25,
+  right_ankle: 0.25,
+  left_foot_index: 0.25,
+  right_foot_index: 0.25,
+};
+
+/**
+ * Default weighted-bad-keypoint budget for {@link filterLandmarks}.
+ *
+ * Mirrors the Balanced quality tier. With the weights above, a frame whose
+ * feet are fully occluded carries only 4 × 0.25 = 1.0 of "bad" weight and is
+ * comfortably kept; a frame missing most of its hands/torso/hips exceeds the
+ * budget and is dropped.
+ */
+export const DEFAULT_FILTER_TOLERANCE = 3;
+
+/**
+ * Drop frames whose climbing-relevant keypoints are too degraded.
+ *
+ * Each keypoint in {@link CLIMBING_KEYPOINT_WEIGHTS} is "bad" if it is absent
+ * from the frame or its confidence score is below `minScore`. Bad keypoints
+ * accrue their weight; a frame is kept only when the total stays within
+ * `tolerance`. Keypoints outside the climbing subset (face, fingers, knees)
+ * never affect the verdict.
  *
  * Use this to obtain clean anchor frames before calling
  * {@link interpolatePoseFrames}, preventing poor detections from polluting
  * the interpolated timeline.
  *
- * @param frames           - Input pose frames (may be sparse or dense).
- * @param minScore         - Confidence threshold; keypoints below this are
- *                           counted as bad. Default: 0.3.
- * @param maxMissingAllowed - Maximum number of bad/missing keypoints before
- *                           the frame is discarded. Default: 2.
- * @param keypointCount    - Expected total keypoints for the topology.
- *                           Defaults to MEDIAPIPE_KEYPOINT_COUNT (33).
+ * @param frames    - Input pose frames (may be sparse or dense).
+ * @param minScore  - Confidence threshold; keypoints below this count as bad.
+ *                    Default: 0.3.
+ * @param tolerance - Maximum total weighted "bad" budget before the frame is
+ *                    discarded. Looser for the Fast tier, stricter for
+ *                    Accurate. Default: {@link DEFAULT_FILTER_TOLERANCE}.
  */
 export function filterLandmarks(
   frames: PoseFrame[],
   minScore = 0.3,
-  maxMissingAllowed = 2,
-  keypointCount: number = MEDIAPIPE_KEYPOINT_COUNT,
+  tolerance = DEFAULT_FILTER_TOLERANCE,
 ): PoseFrame[] {
   return frames.filter(f => {
-    const lowConf = f.keypoints.filter(kp => kp.score < minScore).length;
-    const missing = Math.max(0, keypointCount - f.keypoints.length);
-    return (lowConf + missing) <= maxMissingAllowed;
+    const present = new Map(f.keypoints.map(kp => [kp.name, kp]));
+    let badWeight = 0;
+    for (const [name, weight] of Object.entries(CLIMBING_KEYPOINT_WEIGHTS)) {
+      const kp = present.get(name);
+      if (!kp || kp.score < minScore) badWeight += weight;
+    }
+    return badWeight <= tolerance;
   });
 }
 

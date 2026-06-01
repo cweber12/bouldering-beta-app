@@ -16,10 +16,20 @@ Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any ru
 
 ### Pose estimation
 
-The upload page offers a **MediaPipe Pose Landmarker** variant selector (Lite /
-Full / Heavy — 33 BlazePose keypoints including hands and feet). The chosen
-model runs on every sampled frame (indoor: every frame; outdoor: configurable
-stride).
+The scan/upload pages expose a single **Fast / Balanced / Accurate** quality
+tier as the primary detection control (`utils/poseTiers.ts`). Each tier resolves
+to a config bundle that drives the **MediaPipe Pose Landmarker** (33 BlazePose
+keypoints including hands and feet):
+
+| Tier | Model variant | maxPoses | frameStep | Gap-recovery frames | Filter tolerance |
+| --- | --- | --- | --- | --- | --- |
+| Fast | Lite | 2 | 15 | 15 | 4 |
+| Balanced (default) | Full | 3 | 10 | 30 | 3 |
+| Accurate | Heavy | 4 | 5 | 45 | 2 |
+
+An **Advanced** panel still overrides the individual model variant and frame
+step (detection stride) for power users; the tier remains the source of truth
+for `maxPoses`, gap-recovery aggressiveness, and the landmark-filter tolerance.
 
 The landmarker runs in **multi-pose** mode so the pipeline can tell the climber
 apart from bystanders. A **climber-identity tracker** (`pipeline/climberTracker.ts`)
