@@ -92,3 +92,89 @@ performance without rewriting core subsystems.
 - This PRD reflects an audit where work item #1 has a committed first increment and requires completion in this pass.
 - Legacy run objects remain load-compatible; new behavior should preserve backward compatibility while improving split-object resilience.
 - Roadmap entries should capture deferred options explicitly so this hardening pass can stay narrow and shippable.
+
+---
+
+## Addendum: Pose Detection & Climber Tracking
+
+A second audit pass, focused on the **pose landmark detection and processing**
+half of the scan pipeline, was run after the hardening items above. It surfaced
+one architectural root cause and several correctness/UX follow-ups.
+
+### Problem (pose)
+
+Detection used MediaPipe with `numPoses: 1` and no identity tracking between
+frames; the hip-centred crop simply followed whatever single pose the model
+returned. Two user-facing failures fell out of this:
+
+- A **bystander** walking into the shot could become the most-prominent pose and
+  steal the track for the rest of the clip — the skeleton followed the wrong
+  person and never recovered.
+- The **manual crop box** was the only signal telling the app where the climber
+  was, which was accurate but a UX pain point.
+
+### Shipped (branch `feat/climber-identity-tracking`)
+
+The headline fix is complete and verified (tsc/eslint/vitest green; manually
+confirmed in-app):
+
+- Multi-pose detection (`estimateFramesMediaPipe`) + a framework-agnostic
+  **climber-identity tracker** (`pipeline/climberTracker.ts`): torso centroid,
+  velocity prediction, distance-gated selection, tap-seeding, and adaptive
+  full-body crop derivation.
+- **Tap-to-track** UX: tap the climber once on the first frame to lock detection
+  onto them; the crop is then derived automatically and follows their full body.
+  The manual drag box is preserved as an override; before a tap the overlay is a
+  bare tap surface so the box never blocks selection.
+- `numPoses` is configurable in `usePoseModel` (default 3).
+- **Gap recovery** now selects by climber identity against the pre-gap position
+  rather than full-frame single-pose detection (this completes audit item "S2"
+  early, since the prior code referenced removed state).
+
+### Remaining decided work items (this pass)
+
+1. **Retire the centre-shrink retry (S1).** `estimateFrameWithRetry` is no longer
+   used in the main loop (superseded by the tracker's "widen + re-select by
+   identity" path). Remove or repurpose it and drop the dead retry primitive so
+   the only low-confidence response is climber-aware.
+2. **Tier-aware landmark filtering (S3).** `filterLandmarks` discards a frame when
+   more than 2 of 33 keypoints are missing/low-confidence; climbing legitimately
+   occludes feet/lower body. Weight a climbing-relevant keypoint subset (hands,
+   feet, hips, shoulders) and make the threshold tier-aware so valid climbing
+   frames are not over-discarded.
+3. **Quality tier selector (S5).** Replace the loose "lite/full/heavy + frameStep"
+   advanced controls with one **Fast / Balanced / Accurate** preset that maps to a
+   config bundle (model variant, `maxPoses`, retry/recovery effort, default
+   frameStep). The advanced panel still exposes individual knobs for power users.
+
+### Implementation decisions (pose)
+
+- Keep identity selection position-based (torso centroid + velocity gate); it
+  assumes a reasonably stable camera. Handheld/following support and
+  camera-motion-compensated homography are explicitly deferred (see Out of Scope).
+- Quality tiers are presentation/config only — they parameterise existing
+  detection, not a new frame-loop architecture.
+- Preserve `pipeline/` purity: no React imports, `cv` threaded explicitly, no
+  `async` in pipeline modules.
+
+### Testing decisions (pose)
+
+- Tracker tests assert observable identity behavior — a bystander crossing the
+  climber must never switch the track — plus bbox/gate/crop edge cases.
+- Filtering tests assert occluded-foot climbing frames survive while genuinely
+  degraded frames are still dropped, per tier.
+- Tier-selector tests assert each preset maps to the expected detection config.
+
+### Out of scope (pose)
+
+- Handheld / following-camera support and camera-motion-compensated homography
+  (the single-frame homography assumes a static camera).
+- Appearance/embedding-based re-identification (memory/complexity cost).
+- requestVideoFrameCallback-driven scan loop (S4) — already tracked as a deferred
+  roadmap item (see issue 06); revisit once accuracy work is settled.
+
+### Further notes (pose)
+
+- See `docs/adr/0001-tap-seeded-climber-identity-tracker.md` for the decision
+  record and rejected alternatives, and `CONTEXT.md` for the domain glossary
+  (Climber, Bystander, Climber Identity, Adaptive Crop, Quality Tier).
