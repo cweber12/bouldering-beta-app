@@ -111,4 +111,92 @@ describe("CompareClimbRail", () => {
       expect(screen.getByText("Add a climb to compare")).toBeTruthy(),
     );
   });
+
+  it("renders the Compare Multiple toggle and fires onToggleMode", async () => {
+    const onToggleMode = vi.fn();
+    render(
+      <CompareClimbRail
+        {...baseProps}
+        mode="single"
+        onToggleMode={onToggleMode}
+        activeKeys={["k1"]}
+        colorForKey={() => null}
+        atMax={false}
+      />,
+    );
+    await waitFor(() => expect(buttonByTimestamp("day-one")).toBeTruthy());
+    const toggle = screen.getByRole("button", { name: /Compare Multiple/i });
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(toggle);
+    expect(onToggleMode).toHaveBeenCalledTimes(1);
+  });
+
+  it("single mode: tapping an inactive climb swaps via onAdd", async () => {
+    const onAdd = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <CompareClimbRail
+        {...baseProps}
+        mode="single"
+        activeKeys={["k1"]}
+        colorForKey={() => null}
+        atMax={false}
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />,
+    );
+    await waitFor(() => expect(buttonByTimestamp("day-two")).toBeTruthy());
+    fireEvent.click(buttonByTimestamp("day-two"));
+    expect(onAdd).toHaveBeenCalledWith("k2");
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it("single mode: tapping the active climb is a no-op", async () => {
+    const onAdd = vi.fn();
+    const onRemove = vi.fn();
+    render(
+      <CompareClimbRail
+        {...baseProps}
+        mode="single"
+        activeKeys={["k1"]}
+        colorForKey={() => null}
+        atMax={false}
+        onAdd={onAdd}
+        onRemove={onRemove}
+      />,
+    );
+    await waitFor(() => expect(buttonByTimestamp("day-one")).toBeTruthy());
+    fireEvent.click(buttonByTimestamp("day-one"));
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
+  it("single mode: hides the slot counter and add hint", async () => {
+    render(
+      <CompareClimbRail
+        {...baseProps}
+        mode="single"
+        activeKeys={["k1"]}
+        colorForKey={() => null}
+        atMax={false}
+      />,
+    );
+    await waitFor(() => expect(buttonByTimestamp("day-one")).toBeTruthy());
+    expect(screen.queryByText("1/4")).toBeNull();
+    expect(screen.queryByText(/Add a climb to compare/i)).toBeNull();
+  });
+
+  it("shows a send indicator only for sends (not attempts)", async () => {
+    render(
+      <CompareClimbRail
+        {...baseProps}
+        activeKeys={[]}
+        colorForKey={() => null}
+        atMax={false}
+      />,
+    );
+    await waitFor(() => expect(buttonByTimestamp("day-one")).toBeTruthy());
+    // k1 is a send; k2/k3 are attempts → exactly one send dot.
+    expect(screen.getAllByRole("img", { name: /Send/i })).toHaveLength(1);
+  });
 });

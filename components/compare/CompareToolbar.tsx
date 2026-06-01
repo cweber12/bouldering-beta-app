@@ -21,12 +21,11 @@ export interface CompareToolbarProps {
   refineOpen: boolean;
   onToggleRefine: () => void;
   /**
-   * Single vs multiple console mode. When `onConsoleMode` is supplied the
-   * leftmost Single | Multiple control renders; otherwise it is omitted so the
-   * toolbar can be used without the mode gate.
+   * Console mode. Multi-climb stage controls (view-mode, Play all) render only
+   * in `multiple`; single mode leaves just the focus tools (highlight, refine).
+   * The single/multiple switch itself lives in the climb rail, not here.
    */
   consoleMode?: ConsoleMode;
-  onConsoleMode?: (mode: ConsoleMode) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,22 +50,9 @@ function SideBySideIcon() {
   );
 }
 
-function SingleIcon() {
-  return (
-    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M8 5.5A1.5 1.5 0 019.5 4h5A1.5 1.5 0 0116 5.5v13a1.5 1.5 0 01-1.5 1.5h-5A1.5 1.5 0 018 18.5v-13z" />
-    </svg>
-  );
-}
-
 const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
   { id: "overlay", label: "Overlay", icon: <OverlayIcon /> },
   { id: "sidebyside", label: "Side by side", icon: <SideBySideIcon /> },
-];
-
-const CONSOLE_MODES: { id: ConsoleMode; label: string; icon: React.ReactNode }[] = [
-  { id: "single", label: "Single", icon: <SingleIcon /> },
-  { id: "multiple", label: "Multiple", icon: <SideBySideIcon /> },
 ];
 
 // ---------------------------------------------------------------------------
@@ -83,38 +69,13 @@ export default function CompareToolbar({
   refineOpen,
   onToggleRefine,
   consoleMode = "multiple",
-  onConsoleMode,
 }: CompareToolbarProps) {
+  const isMultiple = consoleMode === "multiple";
   return (
-    <div className="shrink-0 flex items-center gap-2 flex-wrap border-b border-edge/30 px-3 py-2">
-      {/* Console-mode segmented control — single climb vs multi-climb comparison.
-          Renders only when wired; it gates the rest of the stage controls. */}
-      {onConsoleMode && (
-        <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="Console mode">
-          {CONSOLE_MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => onConsoleMode(m.id)}
-              aria-pressed={consoleMode === m.id}
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                consoleMode === m.id
-                  ? "bg-surface-alt text-fg shadow-sm"
-                  : "text-fg-muted hover:text-fg",
-              )}
-            >
-              {m.icon}
-              <span>{m.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
+    <div className="flex items-center gap-2 flex-wrap">
       {/* Multi-climb stage controls — only meaningful when comparing 2+ climbs.
           Hidden in single mode, where there is just one climb in one player. */}
-      {consoleMode === "multiple" && (
+      {isMultiple && (
         <>
           {/* View-mode segmented control */}
           <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="View mode">
@@ -154,22 +115,22 @@ export default function CompareToolbar({
               )}
             </button>
           )}
+
+          {/* Divider between stage controls and focus tools */}
+          <span className="mx-0.5 hidden h-5 w-px bg-edge/40 sm:block" aria-hidden="true" />
         </>
       )}
-
-      {/* Divider between stage controls and focus tools */}
-      <span className="mx-0.5 hidden h-5 w-px bg-edge/40 sm:block" aria-hidden="true" />
 
       {/* Body-part highlighter — focus the comparison on specific parts */}
       <BodyPartHighlighter selection={highlight} onChange={onHighlightChange} size="sm" />
 
-      {/* Refine — secondary disclosure, pushed to the trailing edge */}
+      {/* Refine — secondary disclosure */}
       <button
         type="button"
         onClick={onToggleRefine}
         aria-expanded={refineOpen}
         className={cn(
-          "ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+          "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
           refineOpen
             ? "border border-accent/60 bg-accent/10 text-accent"
             : "border border-transparent text-fg-muted hover:bg-inset/60 hover:text-fg",

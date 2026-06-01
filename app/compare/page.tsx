@@ -437,20 +437,46 @@ function ComparePageInner() {
     return slot === -1 ? null : slotColors[slot];
   }, [slotKeys, slotColors]);
 
+  // Stage controls live in the header (in line with the route info) so the
+  // overlay previews get the full height below. Only shown once a photo exists.
+  const headerActions = hasPhoto ? (
+    <CompareToolbar
+      consoleMode={consoleMode}
+      viewMode={viewMode}
+      onViewMode={setViewMode}
+      masterPlaying={masterPlaying}
+      onTogglePlayAll={() => {
+        const next = !masterPlaying;
+        setMasterPlaying(next);
+        for (let i = 0; i < MAX_SLOTS; i++) {
+          const ref = playerRefs.current[i];
+          if (!ref) continue;
+          if (next) { ref.seek(slotOffsets[i]); ref.play(); }
+          else ref.pause();
+        }
+      }}
+      highlight={highlight}
+      onHighlightChange={setHighlight}
+      refineOpen={refineOpen}
+      onToggleRefine={() => setRefineOpen(v => !v)}
+    />
+  ) : undefined;
+
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <ToolRouteHeader title="Compare" subtitle={subtitle} />
+      <ToolRouteHeader title="Compare" subtitle={subtitle} actions={headerActions} />
 
       {/* Rail (left on desktop, bottom strip on mobile) + main column. */}
       <div className="flex-1 min-h-0 flex flex-col-reverse overflow-hidden sm:flex-row">
         {user && urlState && urlArea && urlRoute && (
           <CompareClimbRail
-            className="max-h-[42%] border-t border-edge/40 sm:max-h-none sm:w-52 sm:border-r sm:border-t-0"
+            className="max-h-[42%] border-t border-edge/40 sm:max-h-none sm:w-64 sm:border-r sm:border-t-0"
             userId={user.uid}
             state={urlState}
             area={urlArea}
             route={urlRoute}
             mode={consoleMode}
+            onToggleMode={() => setConsoleMode(consoleMode === "single" ? "multiple" : "single")}
             activeKeys={
               consoleMode === "single"
                 ? (singleIdx !== -1 ? [slotKeys[singleIdx] as string] : [])
@@ -511,29 +537,6 @@ function ComparePageInner() {
       {/* Comparison view — shows immediately once a photo is available. */}
       {hasPhoto && (
         <>
-          {/* Toolbar */}
-          <CompareToolbar
-            consoleMode={consoleMode}
-            onConsoleMode={setConsoleMode}
-            viewMode={viewMode}
-            onViewMode={setViewMode}
-            masterPlaying={masterPlaying}
-            onTogglePlayAll={() => {
-              const next = !masterPlaying;
-              setMasterPlaying(next);
-              for (let i = 0; i < MAX_SLOTS; i++) {
-                const ref = playerRefs.current[i];
-                if (!ref) continue;
-                if (next) { ref.seek(slotOffsets[i]); ref.play(); }
-                else ref.pause();
-              }
-            }}
-            highlight={highlight}
-            onHighlightChange={setHighlight}
-            refineOpen={refineOpen}
-            onToggleRefine={() => setRefineOpen(v => !v)}
-          />
-
           {/* Refine panel — route photo + crop, collapsed by default. */}
           {refineOpen && (
             <div className="shrink-0 border-b border-edge/30 px-4 py-3">

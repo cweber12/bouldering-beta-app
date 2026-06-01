@@ -6,21 +6,17 @@ interface RunStatusDotProps {
 }
 
 /**
- * Minimal run-type indicator: a small green (send) / amber (attempt) dot.
- * Used where a full text badge would be too heavy — e.g. the compare metadata
- * line, where date/time carry the signal and the dot just flags the outcome.
+ * Minimal send indicator: a small green dot shown only for sends. Attempts
+ * render nothing — the absence of a dot is the "attempt" signal. Used where a
+ * full text badge would be too heavy (compare metadata line, overlay legend).
  */
 export default function RunStatusDot({ runType, className }: RunStatusDotProps) {
-  const isSend = runType === "send";
+  if (runType !== "send") return null;
   return (
     <span
-      className={cn(
-        "h-2.5 w-2.5 shrink-0 rounded-full",
-        isSend ? "bg-send" : "bg-attempt",
-        className,
-      )}
-      title={isSend ? "Send" : "Attempt"}
-      aria-label={isSend ? "Send" : "Attempt"}
+      className={cn("h-2.5 w-2.5 shrink-0 rounded-full bg-send", className)}
+      title="Send"
+      aria-label="Send"
       role="img"
     />
   );

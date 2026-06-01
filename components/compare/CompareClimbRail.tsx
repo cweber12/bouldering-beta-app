@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { cn } from "@/utils/cn";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
 import type { ConsoleMode } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
@@ -49,6 +48,8 @@ export interface CompareClimbRailProps {
    * colours are hidden (one climb needs none).
    */
   mode?: ConsoleMode;
+  /** Toggles single ↔ multiple via the header "Compare Multiple" button. */
+  onToggleMode?: () => void;
   onAdd: (key: string) => void;
   onRemove: (key: string) => void;
   className?: string;
@@ -73,6 +74,7 @@ export default function CompareClimbRail({
   atMax,
   minToCompare,
   mode = "multiple",
+  onToggleMode,
   onAdd,
   onRemove,
   className,
@@ -117,16 +119,39 @@ export default function CompareClimbRail({
       )}
       aria-label={`Climbs on ${route}`}
     >
-      {/* Header — hidden on the mobile strip to save vertical space. */}
-      <div className="hidden shrink-0 items-baseline justify-between px-3 pt-3 pb-2 sm:flex">
-        <p className="text-label font-semibold uppercase tracking-label text-fg-muted">
-          Climbs
-        </p>
-        {/* Slot counter only matters when filling a multi-climb comparison. */}
-        {!isSingle && (
-          <span className="text-[10px] text-fg-muted">
-            {activeKeys.length}/{4}
-          </span>
+      {/* Header — hidden on the mobile strip to save vertical space. The
+          "Compare Multiple" toggle lives here, inline with the CLIMBS label. */}
+      <div className="hidden shrink-0 flex-col gap-2 px-3 pt-3 pb-2 sm:flex">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-label font-semibold uppercase tracking-label text-fg-muted">
+            Climbs
+          </p>
+          {/* Slot counter only matters when filling a multi-climb comparison. */}
+          {!isSingle && (
+            <span className="text-[10px] text-fg-muted">
+              {activeKeys.length}/{4}
+            </span>
+          )}
+        </div>
+        {onToggleMode && (
+          <button
+            type="button"
+            onClick={onToggleMode}
+            aria-pressed={!isSingle}
+            className={cn(
+              "flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+              !isSingle
+                ? "border-accent/60 bg-accent/10 text-accent"
+                : "border-edge/50 text-fg-secondary hover:border-edge-hover hover:text-fg",
+            )}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A1.5 1.5 0 015.5 4h2A1.5 1.5 0 019 5.5v13A1.5 1.5 0 017.5 20h-2A1.5 1.5 0 014 18.5v-13z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 5.5A1.5 1.5 0 0116.5 4h2A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-2a1.5 1.5 0 01-1.5-1.5v-13z" />
+            </svg>
+            Compare Multiple
+          </button>
         )}
       </div>
 
@@ -174,6 +199,17 @@ export default function CompareClimbRail({
           const handleClick = isSingle
             ? () => { if (!isActive) onAdd(c.key); }
             : () => (isActive ? onRemove(c.key) : onAdd(c.key));
+          // The only run-type signal: a green dot for sends, nothing for attempts.
+          const isSend = c.runType === "send";
+          // Selection is shown by the border — identity colour in multiple mode,
+          // accent in single mode. (The top-right dot is reserved for sends.)
+          const selectionBorder = isActive
+            ? color
+              ? undefined // inline style below
+              : "border-accent"
+            : isLocked
+            ? "border-edge/40"
+            : "border-edge/50 hover:border-edge-hover";
           return (
             <button
               key={c.key}
@@ -183,18 +219,16 @@ export default function CompareClimbRail({
               onClick={handleClick}
               style={isActive && color ? { borderColor: color } : undefined}
               className={cn(
-                "group relative flex w-24 shrink-0 flex-col gap-1 rounded-lg border bg-surface p-1.5 text-left transition",
+                "group relative flex w-28 shrink-0 flex-col gap-1 rounded-lg border bg-surface p-2 text-left transition",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                "sm:w-full sm:flex-row sm:items-center sm:gap-2.5",
-                isActive
-                  ? cn("bg-card", !color && "border-accent")
-                  : isLocked
-                  ? "cursor-not-allowed border-edge/40 opacity-40"
-                  : "border-edge/50 hover:border-edge-hover hover:bg-card/70",
+                "sm:w-full sm:flex-row sm:items-center sm:gap-3",
+                isActive ? cn("bg-card", color ? "border-2" : "border-2 border-accent") : selectionBorder,
+                !isActive && isLocked && "cursor-not-allowed opacity-40",
+                !isActive && !isLocked && "hover:bg-card/70",
               )}
             >
               {/* Thumbnail */}
-              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-inset sm:h-12 sm:w-12 sm:shrink-0">
+              <div className="relative aspect-square w-full overflow-hidden rounded-md bg-inset sm:h-16 sm:w-16 sm:shrink-0">
                 {c.thumbnail ? (
                   <Image
                     src={c.thumbnail}
@@ -211,37 +245,26 @@ export default function CompareClimbRail({
                   </div>
                 )}
 
-                {/* Active check — identity colour in multiple mode, accent in
-                    single mode where there are no per-climb colours. */}
-                {isActive && (
+                {/* Send indicator — the sole send/attempt signal: a green dot in
+                    the top-right corner for sends, nothing for attempts. */}
+                {isSend && (
                   <span
-                    className={cn(
-                      "absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full",
-                      !color && "bg-accent",
-                    )}
-                    style={color ? { backgroundColor: color } : undefined}
-                  >
-                    <svg className="h-2.5 w-2.5 text-fg-inverse" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                  </span>
+                    className="absolute right-1 top-1 h-3 w-3 rounded-full bg-send ring-2 ring-surface"
+                    title="Send"
+                    aria-label="Send"
+                    role="img"
+                  />
                 )}
               </div>
 
-              {/* Meta */}
+              {/* Meta — date/time and grade; no run-type badge. */}
               <div className="flex min-w-0 flex-col gap-0.5 sm:flex-1">
-                <div className="flex flex-wrap items-center gap-1">
-                  <RunTypeBadge
-                    runType={c.runType}
-                    className="rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-                  />
-                  {c.rating && (
-                    <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
-                      {c.rating}
-                    </span>
-                  )}
-                </div>
-                <p className="truncate text-[10px] text-fg-muted">{c.timestamp}</p>
+                {c.rating && (
+                  <span className="w-fit rounded bg-accent/15 px-1 py-0.5 text-[10px] font-medium text-accent">
+                    {c.rating}
+                  </span>
+                )}
+                <p className="truncate text-[11px] text-fg-muted">{c.timestamp}</p>
               </div>
             </button>
           );
