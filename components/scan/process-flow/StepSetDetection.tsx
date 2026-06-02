@@ -503,19 +503,6 @@ export default function StepSetDetection({
     );
   }
 
-  const backButton = (
-    <button
-      type="button"
-      onClick={onBack}
-      className="ui-control flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium"
-    >
-      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-      </svg>
-      Back
-    </button>
-  );
-
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <>
@@ -530,7 +517,7 @@ export default function StepSetDetection({
               ? "tap the climber to lock tracking"
               : "drag to fine-tune, or scan"
         }
-        secondaryAction={backButton}
+        onBack={onBack}
         primaryAction={scanButton("footer")}
       >
         <div className="h-full overflow-y-auto">

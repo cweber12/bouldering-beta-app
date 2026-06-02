@@ -13,6 +13,9 @@ interface ProcessFlowShellProps {
   /** Compact status control (e.g. quality chip) rendered in the footer's right
    *  cluster. Any popover it owns should open upward (the bar sits at the bottom). */
   accessory?: ReactNode;
+  /** When set, renders an icon-only back arrow at the far left of the footer bar
+   *  (left of the step text) that navigates to the previous step. */
+  onBack?: () => void;
   children: ReactNode;
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
@@ -32,6 +35,7 @@ export default function ProcessFlowShell({
   stepName,
   instruction,
   accessory,
+  onBack,
   children,
   primaryAction,
   secondaryAction,
@@ -48,6 +52,21 @@ export default function ProcessFlowShell({
 
       <footer className="shrink-0 border-t border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
         <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+          {/* Back to previous step */}
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to previous step"
+              title="Back"
+              className="ui-control -ml-1 flex h-8 w-8 shrink-0 items-center justify-center p-0 text-fg-muted"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              </svg>
+            </button>
+          )}
+
           {/* Step indicator + dynamic instruction */}
           <div className="flex min-w-0 flex-1 items-center gap-1.5" role="status" aria-live="polite">
             <span className="shrink-0 text-label tracking-label uppercase text-fg-secondary">

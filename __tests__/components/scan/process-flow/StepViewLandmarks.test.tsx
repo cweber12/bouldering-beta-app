@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -26,119 +26,59 @@ function makeAttempt(frameCount: number, orbCount: number): RouteAttempt {
   } as unknown as RouteAttempt;
 }
 
-describe("StepViewLandmarks optional branch", () => {
-  it("shows optional route overlay branch when orb is ready", () => {
-    render(
-      <StepViewLandmarks
-        isProcessing={false}
-        currentFrame={1}
-        totalFrames={10}
-        progressPct={100}
-        orbStatus="ready"
-        frameStep={5}
-        processingError={null}
-        activeAttempt={makeAttempt(40, 240)}
-        firstFrameFile={null}
-        firstFrameSkeletonData={null}
-        topoStyle={{ lineWidth: 2, pointRadius: 3 }}
-        onSkeletonStyleChange={() => {}}
-        onEditClimb={vi.fn()}
-        onScanAnother={vi.fn()}
-        orbReady
-        onViewOnRoutePhoto={vi.fn()}
-        onUpload={vi.fn()}
-        s3Saved={false}
-        s3Loading={false}
-        saveError={null}
-        onViewScans={vi.fn()}
-      />,
-    );
+type Props = Parameters<typeof StepViewLandmarks>[0];
 
-    // Optional overlay entry point is a quiet, demoted secondary action.
-    expect(
-      screen.getByRole("button", { name: "Overlay on a route photo (optional)" }),
-    ).toBeTruthy();
+function baseProps(overrides: Partial<Props> = {}): Props {
+  return {
+    isProcessing: false,
+    currentFrame: 1,
+    totalFrames: 10,
+    progressPct: 100,
+    orbStatus: "ready",
+    frameStep: 5,
+    processingError: null,
+    activeAttempt: makeAttempt(40, 240),
+    firstFrameFile: null,
+    firstFrameSkeletonData: null,
+    topoStyle: { lineWidth: 2, pointRadius: 3 },
+    onSkeletonStyleChange: () => {},
+    onEditClimb: vi.fn(),
+    onScanAnother: vi.fn(),
+    orbReady: true,
+    onViewOnRoutePhoto: vi.fn(),
+    onUpload: vi.fn(),
+    s3Saved: false,
+    s3Loading: false,
+    saveError: null,
+    onViewScans: vi.fn(),
+    ...overrides,
+  };
+}
 
-    // The primary Save action lives in the sticky shell footer.
-    const saveButton = screen.getByRole("button", { name: "Save" });
-    expect(saveButton.closest("footer")).not.toBeNull();
+describe("StepViewLandmarks", () => {
+  it("shows the Test action, Save, and a back arrow in the footer when results are ready", () => {
+    render(<StepViewLandmarks {...baseProps()} />);
+
+    // The optional route-photo overlay action is now labelled "Test".
+    expect(screen.getByRole("button", { name: "Test" })).toBeTruthy();
+
+    // Primary Save sits in the sticky footer bar.
+    const save = screen.getByRole("button", { name: "Save" });
+    expect(save.closest("footer")).not.toBeNull();
+
+    // Back arrow (to Step 2) lives at the far left of the footer bar.
+    expect(screen.getByRole("button", { name: "Back to previous step" })).toBeTruthy();
+
+    // The removed quality chip and Edit / Scan another buttons are gone.
+    expect(screen.queryByRole("button", { name: /Quality/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Scan another" })).toBeNull();
   });
 
-  it("shows warn summary with targeted fixes and wires recovery actions", () => {
-    const onEditClimb = vi.fn();
-    const onScanAnother = vi.fn();
+  it("hides footer actions and shows the success banner after upload", () => {
+    render(<StepViewLandmarks {...baseProps({ s3Saved: true })} />);
 
-    render(
-      <StepViewLandmarks
-        isProcessing={false}
-        currentFrame={1}
-        totalFrames={10}
-        progressPct={100}
-        orbStatus="ready"
-        frameStep={20}
-        processingError={null}
-        activeAttempt={makeAttempt(10, 80)}
-        firstFrameFile={null}
-        firstFrameSkeletonData={null}
-        topoStyle={{ lineWidth: 2, pointRadius: 3 }}
-        onSkeletonStyleChange={() => {}}
-        onEditClimb={onEditClimb}
-        onScanAnother={onScanAnother}
-        orbReady
-        onViewOnRoutePhoto={vi.fn()}
-        onUpload={vi.fn()}
-        s3Saved={false}
-        s3Loading={false}
-        saveError={null}
-        onViewScans={vi.fn()}
-      />,
-    );
-
-    // Quality is now a compact header chip; metrics + fixes live in its popover.
-    fireEvent.click(screen.getByRole("button", { name: /Quality: Check/ }));
-    expect(screen.getByText("Improve climber tracking")).toBeTruthy();
-    expect(screen.getByText("Increase sampling frequency")).toBeTruthy();
-    expect(screen.getByText("Strengthen ORB reference")).toBeTruthy();
-
-    fireEvent.click(screen.getAllByRole("button", { name: "Edit crop" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Adjust settings" }));
-    fireEvent.click(screen.getByRole("button", { name: "Rescan video" }));
-
-    expect(onEditClimb).toHaveBeenCalledTimes(2);
-    expect(onScanAnother).toHaveBeenCalledTimes(1);
-  });
-
-  it("shows pass summary without fix suggestions", () => {
-    render(
-      <StepViewLandmarks
-        isProcessing={false}
-        currentFrame={1}
-        totalFrames={10}
-        progressPct={100}
-        orbStatus="ready"
-        frameStep={5}
-        processingError={null}
-        activeAttempt={makeAttempt(80, 400)}
-        firstFrameFile={null}
-        firstFrameSkeletonData={null}
-        topoStyle={{ lineWidth: 2, pointRadius: 3 }}
-        onSkeletonStyleChange={() => {}}
-        onEditClimb={vi.fn()}
-        onScanAnother={vi.fn()}
-        orbReady
-        onViewOnRoutePhoto={vi.fn()}
-        onUpload={vi.fn()}
-        s3Saved={false}
-        s3Loading={false}
-        saveError={null}
-        onViewScans={vi.fn()}
-      />,
-    );
-
-    // Pass state: chip reads "Good" and the popover carries no fix suggestions.
-    expect(screen.getByRole("button", { name: /Quality: Good/ })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /Quality: Good/ }));
-    expect(screen.queryByText("Improve climber tracking")).toBeNull();
-    expect(screen.queryByText("Strengthen ORB reference")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.getByText("Scan saved successfully")).toBeTruthy();
   });
 });
