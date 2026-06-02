@@ -155,8 +155,8 @@ export default function StepMatchRoutePhoto({
       <ProcessFlowShell
         step={3}
         totalSteps={3}
-        title="Overlay on photo"
-        subtitle="Project the scanned skeleton onto a photo of the route."
+        stepName="Overlay on photo"
+        instruction={routeMatchTriggered ? undefined : "adjust the crop, then project the skeleton"}
         secondaryAction={backButton}
         primaryAction={saveDropdown}
       >

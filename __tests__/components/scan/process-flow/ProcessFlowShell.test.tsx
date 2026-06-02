@@ -3,26 +3,32 @@ import { describe, expect, it } from "vitest";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 
 describe("ProcessFlowShell", () => {
-  it("renders step progress semantics and heading", () => {
+  it("renders the step indicator + instruction in the footer bar", () => {
     render(
-      <ProcessFlowShell step={2} totalSteps={4} title="Set Detection" subtitle="Crop and run scan">
+      <ProcessFlowShell
+        step={2}
+        totalSteps={4}
+        stepName="Set detection"
+        instruction="tap the climber"
+      >
         <div>Inner content</div>
       </ProcessFlowShell>,
     );
 
-    expect(screen.getByRole("heading", { name: "Set Detection" })).toBeTruthy();
-    expect(screen.getByText("Step 2 of 4")).toBeTruthy();
-    expect(screen.getByRole("progressbar", { name: "Process progress" })).toBeTruthy();
-    expect(screen.getByText("50%")).toBeTruthy();
+    expect(screen.getByText("Step 2/4")).toBeTruthy();
+    expect(screen.getByText("Set detection")).toBeTruthy();
+    expect(screen.getByText("tap the climber")).toBeTruthy();
+    // No top banner / progress bar in the footer-bar model.
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 
-  it("renders action rail when actions are supplied", () => {
+  it("renders accessory + actions in the footer right cluster", () => {
     render(
       <ProcessFlowShell
         step={1}
         totalSteps={4}
-        title="Pick"
-        subtitle="Select source"
+        stepName="Pick"
+        accessory={<span>Quality: Good</span>}
         primaryAction={<button type="button">Next</button>}
         secondaryAction={<button type="button">Back</button>}
       >
@@ -30,6 +36,7 @@ describe("ProcessFlowShell", () => {
       </ProcessFlowShell>,
     );
 
+    expect(screen.getByText("Quality: Good")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Back" })).toBeTruthy();
   });

@@ -17,8 +17,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
     <ProcessFlowShell
       step={1}
       totalSteps={3}
-      title="Choose a video"
-      subtitle="Upload a climb clip or record a new one. You'll crop and tune detection in the next step."
+      stepName="Choose a video"
     >
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
         <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">

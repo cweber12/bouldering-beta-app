@@ -183,7 +183,7 @@ export default function StepViewLandmarks({
       </button>
 
       {qualityOpen && (
-        <div className="ui-popover animate-fade-in absolute right-0 top-full z-30 mt-1.5 w-72 p-3 text-left">
+        <div className="ui-popover animate-fade-in absolute right-0 bottom-full z-30 mb-1.5 w-72 p-3 text-left">
           <div className="flex flex-col gap-3">
             <div className="flex items-start gap-3">
               <div className={cn(
@@ -313,13 +313,9 @@ export default function StepViewLandmarks({
     <ProcessFlowShell
       step={3}
       totalSteps={3}
-      title={isProcessing ? "Scanning video" : "Review your scan"}
-      subtitle={
-        isProcessing
-          ? "Detecting the climber's pose frame by frame."
-          : "Check tracking quality, then save your scan."
-      }
-      headerAccessory={qualityIndicator}
+      stepName={isProcessing ? "Scanning video" : "Review your scan"}
+      instruction={isProcessing ? "detecting pose frame by frame" : undefined}
+      accessory={qualityIndicator}
       primaryAction={showFooterActions ? saveButton : undefined}
       secondaryAction={showFooterActions ? secondaryActions : undefined}
     >

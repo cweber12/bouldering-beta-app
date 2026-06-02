@@ -522,8 +522,14 @@ export default function StepSetDetection({
       <ProcessFlowShell
         step={2}
         totalSteps={3}
-        title="Set detection"
-        subtitle="Tap the climber to lock tracking, then scan to detect their pose."
+        stepName="Set detection"
+        instruction={
+          cropMode === "wall"
+            ? "frame the wall texture"
+            : climberPoint == null
+              ? "tap the climber to lock tracking"
+              : "drag to fine-tune, or scan"
+        }
         secondaryAction={backButton}
         primaryAction={scanButton("footer")}
       >
