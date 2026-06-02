@@ -16,10 +16,11 @@ Pipeline map being audited:
 - **Save**: `usePoseVideo` renders the annotated WebM → `useS3Storage.uploadAttempt`
   → `serializeAttemptForJson` → `POST /api/s3/put`.
 
-> Note (docs reconciliation): `AGENTS.md`/`CLAUDE.md` describe a **Supabase** auth
-> layer, but the code is **100% Firebase** (`utils/firebase/*`, `useAuth.tsx`,
-> `shared.ts` verifies a Firebase session cookie; `utils/supabase/` does not exist).
-> Stale-docs cleanup — tracked as a separate doc fix, not a pipeline issue.
+> Note (docs reconciliation) — ✅ RESOLVED (issue 07): `AGENTS.md`/`CLAUDE.md`
+> previously described a **Supabase** auth layer, but the code is **100% Firebase**
+> (`utils/firebase/*`, `useAuth.tsx`, `shared.ts` verifies a Firebase session cookie;
+> `utils/supabase/` does not exist). Both docs now describe the real Firebase
+> session-cookie architecture.
 
 ---
 
@@ -195,18 +196,20 @@ bug A fixes cleanly.
 
 ---
 
-## Roadmap deferrals (add to `docs/roadmap.md` during implementation)
+## Roadmap deferrals — ✅ all five captured in `docs/roadmap.md` (issue 06)
 
-- **Recompute derived data on load** (Issue #1 Option C) — already in `docs/roadmap.md`.
+- **Recompute derived data on load** (Issue #1 Option C).
 - **Coarse-to-fine match refinement** (Issue #2 Option B) — revisit only if overlays
   look misaligned after reference-aware downscale.
-- **`requestVideoFrameCallback` seek loop** (Issue #4 Option B) — revisit if the
+- **`requestVideoFrameCallback` seek loop** (Issue #4 Option B / S4) — revisit if the
   seek-vs-paint race produces bad captures in practice.
+- **Handheld / following-camera + motion-compensated homography** (pose addendum).
+- **Appearance / embedding-based re-identification** (pose addendum).
 
-## Separate doc fix (not a pipeline issue)
+## Separate doc fix (not a pipeline issue) — ✅ RESOLVED (issue 07)
 
-`AGENTS.md`/`CLAUDE.md` describe a Supabase auth layer; the code is 100% Firebase.
-Track as a docs-correction issue.
+`AGENTS.md`/`CLAUDE.md` previously described a Supabase auth layer; the code is 100%
+Firebase. Corrected — both docs now describe the Firebase session-cookie architecture.
 
 ---
 

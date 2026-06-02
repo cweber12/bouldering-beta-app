@@ -70,7 +70,7 @@ Route photo (ImageData)
 ```
 
 ### Auth flow
-Firebase Auth (client) → `signIn()` in `useAuth.tsx` → exchange ID token for HTTP-only session cookie via `POST /api/auth/session` → `middleware.ts` (proxy.ts) validates the cookie on every protected route request using the Supabase server client → API routes call `getAuthUserId()` which re-validates server-side.
+Firebase Auth (client) → `signIn()` in `useAuth.tsx` → exchange the Firebase ID token for an HTTP-only `__session` cookie via `POST /api/auth/session` (Firebase Admin `createSessionCookie`) → `proxy.ts` (Edge middleware) checks `__session` cookie **presence** on every protected route request (UX redirect guard only — firebase-admin is unavailable in Edge) → API routes call `getAuthUserId()`, which verifies the cookie server-side via `getAdminAuth().verifySessionCookie(cookie, true)`.
 
 ### S3 access control
 Every `/api/s3/*` route calls `getAuthUserId()` (returns 401 if missing), then `isValidKey(key, userId)` or `isValidPrefix(prefix, userId)` before any AWS SDK call. Keys are always `RouteData/{userId}/...` so one user can never read or write another's data.
