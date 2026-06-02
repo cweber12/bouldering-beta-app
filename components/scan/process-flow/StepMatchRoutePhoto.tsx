@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
@@ -118,220 +119,229 @@ export default function StepMatchRoutePhoto({
   }
 
   // Max width for the FramePlayer wrapper so the canvas never exceeds the
-  // available viewport height (nav + toolbar ~2.5rem + controls bar ~2.5rem + padding ~2rem = 7rem total).
+  // available viewport height (nav + shell header/footer + toolbar + padding).
   const playerRatio = (routePhotoNaturalSize.w / routePhotoNaturalSize.h).toFixed(4);
-  const playerMaxWidth = `min(100%, calc((100dvh - var(--nav-h) - 7rem) * ${playerRatio}))`;
+  const playerMaxWidth = `min(100%, calc((100dvh - var(--nav-h) - 16rem) * ${playerRatio}))`;
+
+  // ── Footer actions ──────────────────────────────────────────────────────
+  const backButton = (
+    <button
+      type="button"
+      onClick={onBack}
+      className="ui-control flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium"
+    >
+      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+      </svg>
+      Back
+    </button>
+  );
+
+  const saveDropdown = (
+    <SaveDropdown
+      s3Saved={s3Saved}
+      s3Loading={s3Loading}
+      savedRouteDirHandle={savedRouteDirHandle}
+      onUpload={onUpload}
+      onSaveToDevice={onSaveToDevice}
+      onDeleteFromDevice={onDeleteFromDevice}
+      dropdownAlign="right"
+      openUpward
+    />
+  );
 
   return (
-    <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+    <>
+      <ProcessFlowShell
+        step={3}
+        totalSteps={3}
+        title="Overlay on photo"
+        subtitle="Project the scanned skeleton onto a photo of the route."
+        secondaryAction={backButton}
+        primaryAction={saveDropdown}
+      >
+        <div className="flex h-full flex-col min-h-0">
 
-      {/* ── Compact toolbar ── */}
-      <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30 bg-surface">
-        <span className="rounded-full border border-edge/60 bg-surface-alt/60 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
-          Optional branch
-        </span>
+          {/* ── Photo controls toolbar ── */}
+          <div className="shrink-0 flex items-center gap-2 flex-wrap px-4 py-2 border-b border-edge/30">
+            {/* Project skeleton — primary action before match */}
+            {!routeMatchTriggered && (
+              <button
+                onClick={onApplyMatch}
+                className="ui-control-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                Project skeleton
+              </button>
+            )}
 
-        {/* Back */}
-        <button
-          onClick={onBack}
-          className="ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-          </svg>
-          Back
-        </button>
+            {/* Change photo — only before match */}
+            {!routeMatchTriggered && (
+              <label className="ui-control cursor-pointer px-3 py-1.5 text-xs font-medium">
+                Change photo
+                <input type="file" accept="image/*" className="hidden" onChange={handleChangePhotoInput} />
+              </label>
+            )}
 
-        {/* View Climb — primary CTA, only before match */}
-        {!routeMatchTriggered && (
-          <button
-            onClick={onApplyMatch}
-            className="ui-control-primary flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold"
-          >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            View Climb
-          </button>
-        )}
+            {/* Export video — after match ready */}
+            {isFrameReady && exportStatus !== "rendering" && (
+              <button
+                onClick={onExportVideo}
+                className="ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
+              >
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>
+                {exportStatus === "done" ? "Re-export video" : "Export video"}
+              </button>
+            )}
 
-        {/* Change photo — only before match */}
-        {!routeMatchTriggered && (
-          <label className="ui-control cursor-pointer px-3 py-1.5 text-xs font-medium">
-            Change photo
-            <input type="file" accept="image/*" className="hidden" onChange={handleChangePhotoInput} />
-          </label>
-        )}
+            {/* Skeleton style — after match triggered */}
+            {routeMatchTriggered && (
+              <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" />
+            )}
 
-        {/* Export video — after match ready */}
-        {isFrameReady && exportStatus !== "rendering" && (
-          <button
-            onClick={onExportVideo}
-            className="ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
-          >
-            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-            </svg>
-            {exportStatus === "done" ? "Re-export video" : "Export video"}
-          </button>
-        )}
-
-        {/* Skeleton style — after match triggered */}
-        {routeMatchTriggered && (
-          <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" />
-        )}
-
-        {/* Match statistics dropdown */}
-        {matchStatus === "done" && matchResult && (
-          <div ref={matchStatsRef} className="relative">
-            <button
-              onClick={() => setShowMatchStats(p => !p)}
-              className={cn(
-                "ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
-                showMatchStats
-                  ? "border-accent/60 bg-accent/10 text-accent"
-                  : "",
-              )}
-              aria-label="Match statistics"
-              aria-expanded={showMatchStats}
-            >
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-              </svg>
-              Stats
-            </button>
-            {showMatchStats && (
-              <div className="ui-popover absolute left-0 top-full z-20 mt-1.5 w-56 px-4 py-3">
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
-                    <p className="text-xs text-fg-muted">matches</p>
+            {/* Match statistics dropdown */}
+            {matchStatus === "done" && matchResult && (
+              <div ref={matchStatsRef} className="relative ml-auto">
+                <button
+                  onClick={() => setShowMatchStats(p => !p)}
+                  className={cn(
+                    "ui-control flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium",
+                    showMatchStats ? "border-accent/60 bg-accent/10 text-accent" : "",
+                  )}
+                  aria-label="Match statistics"
+                  aria-expanded={showMatchStats}
+                >
+                  <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                  </svg>
+                  Stats
+                </button>
+                {showMatchStats && (
+                  <div className="ui-popover absolute right-0 top-full z-20 mt-1.5 w-56 px-4 py-3">
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div>
+                        <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
+                        <p className="text-xs text-fg-muted">matches</p>
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
+                        <p className="text-xs text-fg-muted">query pts</p>
+                      </div>
+                      <div>
+                        <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
+                        <p className="text-xs text-fg-muted">ref pts</p>
+                      </div>
+                    </div>
+                    {matchResult.matches.length < 10 && (
+                      <p className="mt-2 text-xs text-caution">
+                        Fewer than 10 matches &mdash; the homography may be unstable.
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
-                    <p className="text-xs text-fg-muted">query pts</p>
-                  </div>
-                  <div>
-                    <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
-                    <p className="text-xs text-fg-muted">ref pts</p>
-                  </div>
-                </div>
-                {matchResult.matches.length < 10 && (
-                  <p className="mt-2 text-xs text-caution">
-                    Fewer than 10 matches &mdash; the homography may be unstable.
-                  </p>
                 )}
               </div>
             )}
           </div>
-        )}
 
-        {/* Save dropdown — always, right-aligned */}
-        <SaveDropdown
-          s3Saved={s3Saved}
-          s3Loading={s3Loading}
-          savedRouteDirHandle={savedRouteDirHandle}
-          onUpload={onUpload}
-          onSaveToDevice={onSaveToDevice}
-          onDeleteFromDevice={onDeleteFromDevice}
-          dropdownAlign="right"
-          containerClassName="ml-auto"
-        />
-      </div>
+          {/* ── Export progress bar ── */}
+          {exportStatus === "rendering" && (
+            <div className="shrink-0 flex flex-col gap-1.5 px-4 py-2 border-b border-edge/30">
+              <div className="flex items-center justify-between text-xs text-fg-secondary">
+                <span>Encoding video for download&#8230;</span>
+                <span>{exportProgress}%</span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-inset">
+                <div
+                  className="h-full rounded-full bg-accent transition-all duration-150"
+                  style={{ width: `${exportProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
 
-      {/* ── Export progress bar ── */}
-      {exportStatus === "rendering" && (
-        <div className="shrink-0 flex flex-col gap-1.5 px-4 py-2 border-b border-edge/30">
-          <div className="flex items-center justify-between text-xs text-fg-secondary">
-            <span>Encoding video for download&#8230;</span>
-            <span>{exportProgress}%</span>
+          {/* ── Instruction hint (before match only) ── */}
+          {!routeMatchTriggered && !isMatching && (
+            <div className="shrink-0 px-4 py-1.5">
+              <p className="text-xs text-fg-secondary">
+                Adjust the crop around stable wall texture, then project the skeleton onto the photo.
+              </p>
+            </div>
+          )}
+
+          {/* ── Media area — fills remaining height ── */}
+          <div className="flex-1 min-h-0 flex items-center justify-center overflow-hidden p-4">
+
+            {/* Before match: route photo with crop overlay */}
+            {!routeMatchTriggered && !isMatching && (
+              <div
+                className="relative overflow-hidden rounded-xl border border-edge/50 bg-surface-alt/55 shadow-lg shadow-black/10"
+                style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "16rem")}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={routePhotoPreviewUrl}
+                  alt="Route photo preview"
+                  className="absolute inset-0 w-full h-full object-fill"
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
+                  }}
+                />
+                <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="0.75rem" />
+                {/* Expand to fullscreen */}
+                <button
+                  onClick={() => setRoutePhotoFullscreen(true)}
+                  className="ui-control absolute bottom-2 right-2 p-1.5 text-fg-muted"
+                  aria-label="Expand route photo to fullscreen"
+                  title="Expand preview"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* Matching in progress or building overlay — spinner only */}
+            {routeMatchTriggered && (isMatching || !isFrameReady) && (
+              <div className="flex flex-col items-center gap-4">
+                <LoadingSpinner className="h-10 w-10" />
+                <p className="text-sm text-fg-secondary animate-pulse">
+                  {isMatching ? "Matching features…" : "Building overlay…"}
+                </p>
+              </div>
+            )}
+
+            {/* Pose overlay — FramePlayer constrained to viewport height */}
+            {isFrameReady && skeletonData && (
+              <div className="w-full mx-auto" style={{ maxWidth: playerMaxWidth }}>
+                <FramePlayer
+                  imageFile={routePhotoFile}
+                  layers={[{ frames: skeletonData.frames, style: topoStyle }]}
+                  duration={skeletonData.duration}
+                  autoPlay
+                />
+              </div>
+            )}
+
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-inset">
-            <div
-              className="h-full rounded-full bg-accent transition-all duration-150"
-              style={{ width: `${exportProgress}%` }}
-            />
-          </div>
-        </div>
-      )}
 
-      {/* ── Instruction hint (before match only) ── */}
-      {!routeMatchTriggered && !isMatching && (
-        <div className="shrink-0 px-4 py-1.5">
-          <p className="text-xs text-fg-secondary">
-            Optional check: adjust crop around wall texture, then click &ldquo;View Climb&rdquo;.
-          </p>
-        </div>
-      )}
-
-      {/* ── Media area — fills remaining height ── */}
-      <div className="flex-1 min-h-0 flex items-center justify-center p-4">
-
-        {/* Before match: route photo with crop overlay */}
-        {!routeMatchTriggered && !isMatching && (
-          <div
-            className="relative overflow-hidden rounded-xl border border-edge/50 bg-surface-alt/55 shadow-lg shadow-black/10"
-            style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "7rem")}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={routePhotoPreviewUrl}
-              alt="Route photo preview"
-              className="absolute inset-0 w-full h-full object-fill"
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
-              }}
-            />
-            <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="0.75rem" />
-            {/* Expand to fullscreen */}
-            <button
-              onClick={() => setRoutePhotoFullscreen(true)}
-              className="ui-control absolute bottom-2 right-2 p-1.5 text-fg-muted"
-              aria-label="Expand route photo to fullscreen"
-              title="Expand preview"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Matching in progress or building overlay — spinner only, no route photo */}
-        {routeMatchTriggered && (isMatching || !isFrameReady) && (
-          <div className="flex flex-col items-center gap-4">
-            <LoadingSpinner className="h-10 w-10" />
-            <p className="text-sm text-fg-secondary animate-pulse">
-              {isMatching ? "Matching features…" : "Building overlay…"}
+          {/* ── Error banners ── */}
+          {saveError && (
+            <p className="shrink-0 mx-4 mb-2 text-xs text-danger">{saveError}</p>
+          )}
+          {(matchStatus === "error" || frameStatus === "error") && (
+            <p className="feedback-banner feedback-banner-danger shrink-0 mx-4 mb-3 text-sm">
+              {matchError ?? frameError}
             </p>
-          </div>
-        )}
-
-        {/* Pose overlay — FramePlayer constrained to viewport height */}
-        {isFrameReady && skeletonData && (
-          <div className="w-full mx-auto" style={{ maxWidth: playerMaxWidth }}>
-            <FramePlayer
-              imageFile={routePhotoFile}
-              layers={[{ frames: skeletonData.frames, style: topoStyle }]}
-              duration={skeletonData.duration}
-              autoPlay
-            />
-          </div>
-        )}
-
-      </div>
-
-      {/* ── Error banners ── */}
-      {saveError && (
-        <p className="shrink-0 mx-4 mb-2 text-xs text-danger">{saveError}</p>
-      )}
-      {(matchStatus === "error" || frameStatus === "error") && (
-        <p className="feedback-banner feedback-banner-danger shrink-0 mx-4 mb-3 text-sm">
-          {matchError ?? frameError}
-        </p>
-      )}
+          )}
+        </div>
+      </ProcessFlowShell>
 
       {/* ── Route photo fullscreen portal ── */}
       {routePhotoFullscreen && createPortal(
@@ -376,13 +386,13 @@ export default function StepMatchRoutePhoto({
                 onClick={() => { setRoutePhotoFullscreen(false); onApplyMatch(); }}
                 className="ui-control-primary flex items-center justify-center gap-2 rounded-xl px-8 py-3 text-sm font-semibold"
               >
-                View Climb
+                Project skeleton
               </button>
             </div>
           )}
         </div>,
         document.body,
       )}
-    </div>
+    </>
   );
 }

@@ -54,8 +54,14 @@ describe("StepViewLandmarks optional branch", () => {
       />,
     );
 
-    expect(screen.getByText("Optional branch")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Open Optional Route Overlay" })).toBeTruthy();
+    // Optional overlay entry point is a quiet, demoted secondary action.
+    expect(
+      screen.getByRole("button", { name: "Overlay on a route photo (optional)" }),
+    ).toBeTruthy();
+
+    // The primary Save action lives in the sticky shell footer.
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    expect(saveButton.closest("footer")).not.toBeNull();
   });
 
   it("shows warn summary with targeted fixes and wires recovery actions", () => {

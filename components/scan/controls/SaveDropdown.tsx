@@ -17,6 +17,9 @@ export interface SaveDropdownProps {
   /** Left-aligns the panel by default; pass "right" for toolbars where the
    *  button sits at the far right of its container. */
   dropdownAlign?: "left" | "right";
+  /** Opens the panel above the trigger — use when the button lives in a sticky
+   *  footer where a downward panel would be clipped off-screen. */
+  openUpward?: boolean;
   /** Extra classes applied to the outer wrapper (e.g. `ml-auto`). */
   containerClassName?: string;
   /** Fired when the dropdown opens so the parent can close other dropdowns. */
@@ -31,6 +34,7 @@ export default function SaveDropdown({
   onSaveToDevice,
   onDeleteFromDevice,
   dropdownAlign = "left",
+  openUpward = false,
   containerClassName = "",
   onOpen,
 }: SaveDropdownProps) {
@@ -84,7 +88,8 @@ export default function SaveDropdown({
       {open && (
         <div
           className={cn(
-            "absolute top-full z-20 mt-1.5 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in",
+            "absolute z-20 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in",
+            openUpward ? "bottom-full mb-1.5" : "top-full mt-1.5",
             dropdownAlign === "right" ? "right-0" : "left-0",
           )}
         >

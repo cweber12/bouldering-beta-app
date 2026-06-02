@@ -78,6 +78,14 @@ export default function MetadataBottomSheet({
 }: MetadataBottomSheetProps) {
   if (!open) return null;
 
+  // Upload requires a full location (it forms the S3 key). Gate the confirm
+  // button so the user can't trigger an after-the-fact warning — prevent,
+  // don't scold. Device save keeps its unknown_* fallback, so it stays enabled.
+  const requiredMissing =
+    !location.state.trim() || !location.area.trim() || !location.route.trim();
+  const confirmDisabled =
+    action === "upload" ? s3Loading || requiredMissing : false;
+
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center">
       {/* Backdrop */}
@@ -113,7 +121,12 @@ export default function MetadataBottomSheet({
         <div className="flex flex-col gap-4">
           {/* Location */}
           <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold text-fg-secondary">Location</p>
+            <p className="text-xs font-semibold text-fg-secondary">
+              Location{" "}
+              {action === "upload" && (
+                <span className="font-normal text-fg-muted">(required)</span>
+              )}
+            </p>
             <ComboInput
               label="State / Region"
               value={location.state}
@@ -217,8 +230,7 @@ export default function MetadataBottomSheet({
                   key={t}
                   onClick={() => actions.onRunTypeChange(t)}
                   className={cn(
-                    "flex-1 rounded-xl border px-3 py-2 text-sm font-medium transition capitalize",
-                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium transition capitalize",
+                    "flex-1 rounded-md border px-3 py-2 text-sm font-medium capitalize transition",
                     runDetails.runType === t
                       ? t === "send"
                         ? "border-send/60 bg-send-surface text-send"
@@ -266,7 +278,12 @@ export default function MetadataBottomSheet({
           {/* Action button */}
           <button
             onClick={onConfirm}
-            disabled={action === "upload" && s3Loading}
+            disabled={confirmDisabled}
+            title={
+              action === "upload" && requiredMissing
+                ? "Enter State/Region, Area, and Route to upload"
+                : undefined
+            }
             className="ui-control-primary flex items-center justify-center gap-2 rounded-md px-6 py-3.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
           >
             {action === "save" ? (

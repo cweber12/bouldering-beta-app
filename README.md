@@ -79,28 +79,33 @@ handles to resize it.
 | Climber crop | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
 | Route (ORB) crop | ORB feature extraction region on the first video frame. Focus on the wall texture and holds to improve match quality. |
 
-Click **Process video** after setting both crop regions.
+Click **Scan video** after setting the crop region.
 
 ## Guided scan flow
 
-The upload flow is a guided 4-step process designed to keep the core path fast
-while preserving full analysis quality:
+The upload flow is a guided 3-step wizard. Every step shares a common
+`ProcessFlowShell` chrome: a sticky header with a "Step _n_ of 3" progress bar
+and a sticky footer that always keeps the primary action visible, regardless of
+media aspect ratio (so the Scan/Save buttons never fall below the fold on
+portrait video):
 
-1. **Select source** — upload a video or record with camera.
+1. **Choose a video** — upload a clip or record with camera (both equal-weight).
 2. **Set detection** — tap the climber to lock tracking onto them (auto-crop;
-  drag to override), plus an optional wall texture crop; advanced model/stride
-  controls are available but secondary.
-3. **Review landmarks** — view processing output with a single pass/warn quality
-  checkpoint before saving.
-4. **Optional route overlay** — test the run against a route photo as an
-  optional branch, not a required step for saving.
+  drag to override), plus an optional wall-texture crop. Quality tier, pose
+  model, and sampling stride are pocketed in a single **Settings** popover. The
+  **Scan video** CTA lives in the sticky footer.
+3. **Review your scan** — view processing output with a single pass/warn quality
+  checkpoint; **Save** lives in the sticky footer. From here an understated
+  secondary action, **Overlay on a route photo**, opens the optional overlay
+  view (titled "Overlay on photo") — it is a detour, not a required step.
 
-Metadata entry is essentials-first (location + run type), with optional details
-progressively disclosed in the save sheet.
+Metadata entry is essentials-first (location + run type, with location required
+for cloud upload — the Upload button stays disabled until it is filled), and
+optional details (grade, notes) progressively disclosed in the save sheet.
 
 **Match / Compare pages:**
 
-Drag the overlay on the uploaded route photo before clicking **Apply & Match**.
+Drag the overlay on the uploaded route photo before clicking **Project skeleton**.
 The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.
