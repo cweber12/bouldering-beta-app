@@ -11,6 +11,9 @@ interface ProcessFlowShellProps {
   children: ReactNode;
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
+  /** Optional compact control rendered at the right of the header (e.g. a status
+   *  chip). Visible at all breakpoints, unlike the desktop-only progress badge. */
+  headerAccessory?: ReactNode;
   className?: string;
 }
 
@@ -22,6 +25,7 @@ export default function ProcessFlowShell({
   children,
   primaryAction,
   secondaryAction,
+  headerAccessory,
   className,
 }: ProcessFlowShellProps) {
   const progressPct = Math.round((step / totalSteps) * 100);
@@ -31,19 +35,22 @@ export default function ProcessFlowShell({
       className={cn("flex h-full min-h-0 flex-col", className)}
       aria-label="Scan process flow"
     >
-      <header className="sticky top-12 z-20 border-b border-edge/40 bg-surface/95 backdrop-blur-xl">
+      <header className="sticky top-12 z-20 border-b border-edge/60 bg-surface">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-3 px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between gap-4">
             <div className="flex min-w-0 flex-col" role="status" aria-live="polite">
-              <p className="text-label tracking-label text-fg-muted uppercase">
+              <p className="text-label tracking-label text-fg-secondary uppercase">
                 Step {step} of {totalSteps}
               </p>
               <h1 className="truncate text-base font-semibold text-fg sm:text-lg">{title}</h1>
-              <p className="line-clamp-2 text-body-sm text-fg-secondary">{subtitle}</p>
+              <p className="line-clamp-2 text-body-sm text-fg-light">{subtitle}</p>
             </div>
-            <span className="hidden rounded-full border border-edge/50 bg-card/70 px-2.5 py-1 text-xs font-medium text-fg-secondary sm:inline-flex">
-              {progressPct}%
-            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              {headerAccessory}
+              <span className="hidden rounded-full border border-edge/60 bg-card px-2.5 py-1 text-xs font-medium text-fg-light sm:inline-flex">
+                {progressPct}%
+              </span>
+            </div>
           </div>
           <div
             className="h-1.5 overflow-hidden rounded-full bg-inset"

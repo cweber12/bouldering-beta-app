@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
-import QualitySummaryCard from "@/components/scan/process-flow/QualitySummaryCard";
 import FixSuggestionsPanel, { type FixSuggestion } from "@/components/scan/process-flow/FixSuggestionsPanel";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
@@ -71,7 +70,8 @@ export default function StepViewLandmarks({
   saveError,
   onViewScans,
 }: StepViewLandmarksProps) {
-  const [showQualityDetails, setShowQualityDetails] = useState(false);
+  const [qualityOpen, setQualityOpen] = useState(false);
+  const qualityRef = useRef<HTMLDivElement>(null);
   const routePhotoInputRef = useRef<HTMLInputElement>(null);
 
   const showResults = !isProcessing && !!activeAttempt &&
@@ -139,6 +139,86 @@ export default function StepViewLandmarks({
     return suggestions;
   }, [showResults, qualityStatus, weakPose, coarseSampling, weakOrb, onEditClimb, onScanAnother]);
 
+  // Close the quality popover on outside click.
+  useEffect(() => {
+    if (!qualityOpen) return;
+    function handler(e: MouseEvent) {
+      if (qualityRef.current && !qualityRef.current.contains(e.target as Node)) {
+        setQualityOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [qualityOpen]);
+
+  // ── Quality indicator — compact chip in the header; metrics + fixes in a
+  //    popover. Replaces the large in-body quality card. ──
+  const qualityIndicator = showResults ? (
+    <div ref={qualityRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setQualityOpen(o => !o)}
+        aria-expanded={qualityOpen}
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+          qualityStatus === "pass"
+            ? "border-send/30 bg-send-surface text-send"
+            : "border-caution-border bg-caution-surface text-caution",
+        )}
+        title="Tracking quality details"
+      >
+        {qualityStatus === "pass" ? (
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        ) : (
+          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        )}
+        {qualityStatus === "pass" ? "Quality: Good" : "Quality: Check"}
+        <svg className={cn("h-3 w-3 shrink-0 transition-transform", qualityOpen && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {qualityOpen && (
+        <div className="ui-popover animate-fade-in absolute right-0 top-full z-30 mt-1.5 w-72 p-3 text-left">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-sm font-bold tabular-nums",
+                qualityStatus === "pass" ? "bg-send-surface text-send" : "bg-caution-surface text-caution",
+              )}>
+                {qualityScore}
+              </div>
+              <p className="text-xs text-fg-secondary">{qualitySummary}</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-md border border-edge/40 bg-inset px-2 py-1.5">
+                <p className="text-sm font-semibold text-fg tabular-nums">{poseFrames}</p>
+                <p className="text-[11px] text-fg-muted">pose frames</p>
+              </div>
+              <div className="rounded-md border border-edge/40 bg-inset px-2 py-1.5">
+                <p className="text-sm font-semibold text-fg tabular-nums">{orbPoints}</p>
+                <p className="text-[11px] text-fg-muted">ORB points</p>
+              </div>
+              <div className="rounded-md border border-edge/40 bg-inset px-2 py-1.5">
+                <p className="text-sm font-semibold text-fg tabular-nums">{frameStep}</p>
+                <p className="text-[11px] text-fg-muted">frame step</p>
+              </div>
+            </div>
+
+            {fixSuggestions.length > 0 && (
+              <FixSuggestionsPanel suggestions={fixSuggestions} />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : undefined;
+
   // ── Footer actions — only meaningful once results exist and before upload ──
   const showFooterActions = showResults && !s3Saved;
 
@@ -170,27 +250,62 @@ export default function StepViewLandmarks({
   );
 
   const secondaryActions = (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       <button
         type="button"
         onClick={onEditClimb}
         className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        title="Edit detection"
+        aria-label="Edit detection"
       >
         <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
         </svg>
-        Edit
+        <span className="hidden sm:inline">Edit</span>
       </button>
+
       <button
         type="button"
         onClick={onScanAnother}
         className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        title="Scan another"
+        aria-label="Scan another"
       >
         <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
         </svg>
         <span className="hidden sm:inline">Scan another</span>
       </button>
+
+      <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" openUpward />
+
+      {orbReady && (
+        <>
+          <input
+            ref={routePhotoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onViewOnRoutePhoto(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => routePhotoInputRef.current?.click()}
+            className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+            title="Overlay on a route photo (optional)"
+            aria-label="Overlay on a route photo (optional)"
+          >
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span className="hidden sm:inline">Overlay</span>
+          </button>
+        </>
+      )}
     </div>
   );
 
@@ -204,6 +319,7 @@ export default function StepViewLandmarks({
           ? "Detecting the climber's pose frame by frame."
           : "Check tracking quality, then save your scan."
       }
+      headerAccessory={qualityIndicator}
       primaryAction={showFooterActions ? saveButton : undefined}
       secondaryAction={showFooterActions ? secondaryActions : undefined}
     >
@@ -212,7 +328,6 @@ export default function StepViewLandmarks({
         {/* ── Processing: vertically centered scan animation ── */}
         {isProcessing && (
           <div className="flex h-full flex-col items-center justify-center gap-6 px-6 py-8">
-            {/* Scan frame */}
             <div className="relative h-32 w-52 overflow-hidden rounded-xl border border-accent/30 bg-inset">
               <div
                 className="absolute inset-0 opacity-[0.08] pointer-events-none"
@@ -258,7 +373,7 @@ export default function StepViewLandmarks({
           </div>
         )}
 
-        {/* ── Results area ── */}
+        {/* ── Results area — preview only; status + controls live in the chrome ── */}
         {(showResults || (!isProcessing && orbStatus === "failed") || processingError) && (
           <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-4 pb-8 sm:px-6">
 
@@ -294,29 +409,10 @@ export default function StepViewLandmarks({
               </div>
             )}
 
-            {/* Results detail */}
+            {/* Animated preview */}
             {showResults && (
-              <div className="flex flex-col gap-3">
-                <QualitySummaryCard
-                  score={qualityScore}
-                  status={qualityStatus}
-                  summary={qualitySummary}
-                  poseFrames={poseFrames}
-                  orbPoints={orbPoints}
-                  frameStep={frameStep}
-                  showDetails={showQualityDetails}
-                  onToggleDetails={() => setShowQualityDetails((prev) => !prev)}
-                />
-
-                <FixSuggestionsPanel suggestions={fixSuggestions} />
-
+              <>
                 {saveError && <p className="text-xs text-danger">{saveError}</p>}
-
-                {/* Preview + skeleton style control */}
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-label tracking-label uppercase text-fg-muted">Preview</p>
-                  <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" />
-                </div>
 
                 {firstFrameFile && firstFrameSkeletonData ? (
                   <FramePlayer
@@ -330,34 +426,7 @@ export default function StepViewLandmarks({
                 ) : (
                   <p className="text-xs text-fg-muted text-center">Loading preview&#8230;</p>
                 )}
-
-                {/* Optional overlay — quiet secondary action, not required for save */}
-                {orbReady && !s3Saved && (
-                  <>
-                    <input
-                      ref={routePhotoInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) onViewOnRoutePhoto(file);
-                        e.target.value = "";
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => routePhotoInputRef.current?.click()}
-                      className="ui-control-text mx-auto flex items-center gap-1.5 text-xs font-medium text-fg-secondary"
-                    >
-                      <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                      </svg>
-                      Overlay on a route photo (optional)
-                    </button>
-                  </>
-                )}
-              </div>
+              </>
             )}
 
             {/* Processing error */}

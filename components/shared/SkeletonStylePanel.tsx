@@ -152,6 +152,9 @@ export interface SkeletonStylePanelProps {
   className?: string;
   /** "sm" renders a compact toolbar-height button (px-3 py-1.5 text-xs). Default is "md". */
   size?: "sm" | "md";
+  /** Opens the panel above the trigger — use in sticky footers where a downward
+   *  panel would be clipped off-screen. */
+  openUpward?: boolean;
 }
 
 /**
@@ -171,6 +174,7 @@ export default function SkeletonStylePanel({
   label = "Style",
   className = "",
   size = "md",
+  openUpward = false,
 }: SkeletonStylePanelProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -320,7 +324,10 @@ export default function SkeletonStylePanel({
         <div
           role="dialog"
           aria-label="Skeleton style options"
-          className="absolute left-0 top-full z-30 mt-1 w-80 overflow-y-auto max-h-[80vh] rounded-lg border border-edge bg-card p-3 shadow-xl flex flex-col gap-3"
+          className={cn(
+            "absolute left-0 z-30 w-80 overflow-y-auto max-h-[80vh] rounded-lg border border-edge bg-card p-3 shadow-xl flex flex-col gap-3",
+            openUpward ? "bottom-full mb-1" : "top-full mt-1",
+          )}
         >
           {/* ── Tier 1: Global colors + sizes ── */}
           <div className="flex flex-col gap-2">

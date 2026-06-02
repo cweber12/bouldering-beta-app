@@ -94,7 +94,8 @@ describe("StepViewLandmarks optional branch", () => {
       />,
     );
 
-    expect(screen.getByText("Quality Check: Needs Attention")).toBeTruthy();
+    // Quality is now a compact header chip; metrics + fixes live in its popover.
+    fireEvent.click(screen.getByRole("button", { name: /Quality: Check/ }));
     expect(screen.getByText("Improve climber tracking")).toBeTruthy();
     expect(screen.getByText("Increase sampling frequency")).toBeTruthy();
     expect(screen.getByText("Strengthen ORB reference")).toBeTruthy();
@@ -134,7 +135,9 @@ describe("StepViewLandmarks optional branch", () => {
       />,
     );
 
-    expect(screen.getByText("Quality Check: Good")).toBeTruthy();
+    // Pass state: chip reads "Good" and the popover carries no fix suggestions.
+    expect(screen.getByRole("button", { name: /Quality: Good/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Quality: Good/ }));
     expect(screen.queryByText("Improve climber tracking")).toBeNull();
     expect(screen.queryByText("Strengthen ORB reference")).toBeNull();
   });
