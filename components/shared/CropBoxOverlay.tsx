@@ -142,7 +142,7 @@ export default function CropBoxOverlay({
   box,
   onChange,
   disabled = false,
-  borderRadius = "4px",
+  borderRadius = "2px",
   color = "rgba(255,255,255,0.90)",
   showGrid = false,
   onTap,
