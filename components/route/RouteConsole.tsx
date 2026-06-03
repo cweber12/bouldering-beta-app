@@ -246,7 +246,10 @@ export default function RouteConsole({
     let cancelled = false;
     (async () => {
       try {
-        const key = `RouteData/${encodeURIComponent(userId)}/${encodeURIComponent(state)}/${encodeURIComponent(area)}/${encodeURIComponent(route)}/route-image.json`;
+        // The S3 key uses the raw route names (literal spaces etc., as stored by
+        // S3RoutePicker). Only the query-string transport is encoded — encoding
+        // the segments here too would double-encode (e.g. "Stained%2520Glass").
+        const key = `RouteData/${userId}/${state}/${area}/${route}/route-image.json`;
         const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as { dataUrl?: string };
