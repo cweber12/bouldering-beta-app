@@ -47,8 +47,8 @@ export default function RouteToolbar({
   }, [filterOpen]);
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Search */}
+    <div className="flex items-stretch gap-2">
+      {/* Search — shares equal width with the sort control. */}
       <div className="relative min-w-0 flex-1">
         <svg
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
@@ -64,23 +64,25 @@ export default function RouteToolbar({
           type="text"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search routes, areas&#8230;"
-          className="ui-input py-1.5 pl-8 pr-3 text-sm"
+          placeholder="Search&#8230;"
+          className="ui-input h-9 pl-8 pr-3 text-sm"
         />
       </div>
 
-      {/* Sort */}
+      {/* Sort — equal width + height to the search field. */}
       {showSort && (
-        <select
-          value={sort}
-          onChange={(e) => onSort(e.target.value as RouteSort)}
-          className="ui-input w-auto shrink-0 rounded-md px-2 py-1.5 text-xs"
-          aria-label="Sort routes"
-        >
-          <option value="recent">Last climbed</option>
-          <option value="oldest">Oldest</option>
-          <option value="route">Route A–Z</option>
-        </select>
+        <div className="min-w-0 flex-1">
+          <select
+            value={sort}
+            onChange={(e) => onSort(e.target.value as RouteSort)}
+            className="ui-input h-9 px-2.5 text-sm"
+            aria-label="Sort routes"
+          >
+            <option value="recent">Last climbed</option>
+            <option value="oldest">Oldest</option>
+            <option value="route">Route A–Z</option>
+          </select>
+        </div>
       )}
 
       {/* Filter popover */}
@@ -91,7 +93,7 @@ export default function RouteToolbar({
           aria-expanded={filterOpen}
           aria-label="Filter by state and area"
           className={cn(
-            "relative flex h-8 w-8 items-center justify-center rounded-md border transition",
+            "relative flex h-9 w-9 items-center justify-center rounded-md border transition",
             filterOpen || hasFilters
               ? "border-accent/60 text-accent"
               : "border-edge/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
