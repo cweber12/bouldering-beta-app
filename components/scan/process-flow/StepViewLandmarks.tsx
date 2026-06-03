@@ -5,7 +5,7 @@ import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer from "@/components/shared/FramePlayer";
 import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
-import { squareMediaMaxWidth } from "@/utils/mediaContainerStyle";
+import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -76,13 +76,13 @@ export default function StepViewLandmarks({
   const showResults = !isProcessing && !!activeAttempt &&
     (orbStatus === "ready" || orbStatus === "failed");
 
-  // Square-bound the overlay preview to the available vertical space so it fits
-  // between the nav and footer without scrolling: portrait fills the height,
-  // landscape is capped so it never sprawls. Defaults to portrait (9:16).
+  // Fill the available vertical space with the overlay preview so it sits flush
+  // between the nav and footer without scrolling — both orientations reach the
+  // full height, width following the aspect ratio. Defaults to portrait (9:16).
   const vm = activeAttempt?.videoMeta;
   const previewW = vm && vm.height ? vm.width : 9;
   const previewH = vm && vm.height ? vm.height : 16;
-  const previewMaxWidth = squareMediaMaxWidth(previewW, previewH, "10rem");
+  const previewMaxWidth = fitMediaMaxWidth(previewW, previewH, "10rem");
 
   // ── Footer actions — only once results exist and before upload ──
   const showFooterActions = showResults && !s3Saved;

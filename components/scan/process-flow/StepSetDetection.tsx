@@ -12,7 +12,7 @@ import {
   TIER_DESCRIPTIONS,
   type QualityTier,
 } from "@/utils/poseTiers";
-import { squareMediaStyle, squareMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { fitMediaStyle, fitMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
@@ -525,7 +525,7 @@ export default function StepSetDetection({
           >
             <div
               className="relative overflow-hidden"
-              style={squareMediaStyle(videoNaturalSize.w, videoNaturalSize.h, stageHeight)}
+              style={fitMediaStyle(videoNaturalSize.w, videoNaturalSize.h, stageHeight)}
             >
               <video
                 ref={cropVideoRef}
@@ -549,7 +549,7 @@ export default function StepSetDetection({
           {hasCropFrame && (
             <div
               className="mx-auto w-full shrink-0"
-              style={{ maxWidth: squareMediaWidth(videoNaturalSize.w, videoNaturalSize.h, stageHeight) }}
+              style={{ maxWidth: fitMediaWidth(videoNaturalSize.w, videoNaturalSize.h, stageHeight) }}
             >
               <TransportBar
                 playing={isPlaying}
