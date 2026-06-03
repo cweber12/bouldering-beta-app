@@ -111,38 +111,41 @@ export default function StepViewLandmarks({
     </button>
   );
 
-  const secondaryActions = (
-    <div className="flex items-center gap-1.5">
-      <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" openUpward />
-
-      {orbReady && (
-        <>
-          <input
-            ref={routePhotoInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) onViewOnRoutePhoto(file);
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => routePhotoInputRef.current?.click()}
-            className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-            title="Test the scan on a route photo"
-          >
-            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            Test
-          </button>
-        </>
-      )}
+  // Skeleton style lives in the top toolbar (plateless icon) whenever a preview
+  // is shown.
+  const toolbarActions = showResults ? (
+    <div className="ml-auto flex items-center gap-1">
+      <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" variant="icon" />
     </div>
-  );
+  ) : undefined;
+
+  // Footer secondary — "Test on a route photo" forward action.
+  const secondaryActions = orbReady ? (
+    <>
+      <input
+        ref={routePhotoInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onViewOnRoutePhoto(file);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => routePhotoInputRef.current?.click()}
+        className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        title="Test the scan on a route photo"
+      >
+        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+        </svg>
+        Test
+      </button>
+    </>
+  ) : undefined;
 
   return (
     <ProcessFlowShell
@@ -151,6 +154,7 @@ export default function StepViewLandmarks({
       stepName={isProcessing ? "Scanning video" : "Review your scan"}
       instruction={isProcessing ? "detecting pose frame by frame" : undefined}
       onBack={showFooterActions ? onEditClimb : undefined}
+      toolbar={toolbarActions}
       primaryAction={showFooterActions ? saveButton : undefined}
       secondaryAction={showFooterActions ? secondaryActions : undefined}
     >
@@ -159,7 +163,7 @@ export default function StepViewLandmarks({
         {/* ── Processing: vertically centered scan animation ── */}
         {isProcessing && (
           <div className="flex h-full flex-col items-center justify-center gap-6 px-6 py-8">
-            <div className="relative h-32 w-52 overflow-hidden rounded-xl border border-accent/30 bg-inset">
+            <div className="relative h-32 w-52 overflow-hidden rounded-(--radius-panel) border border-accent/30 bg-inset">
               <div
                 className="absolute inset-0 opacity-[0.08] pointer-events-none"
                 style={{
@@ -214,7 +218,7 @@ export default function StepViewLandmarks({
 
             {/* Upload success banner */}
             {showResults && s3Saved && (
-              <div className="w-full rounded-xl border border-send/30 bg-send-surface px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="w-full rounded-(--radius-panel) border border-send/30 bg-send-surface px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
                 <div className="flex items-center gap-2 flex-1">
                   <svg className="h-4 w-4 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -250,7 +254,7 @@ export default function StepViewLandmarks({
                     duration={firstFrameSkeletonData.duration}
                     autoPlay
                     orbKeypoints={activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt)}
-                    className="w-full rounded-xl border border-edge/50"
+                    className="w-full rounded-(--radius-panel) border border-edge/50"
                   />
                 </div>
               ) : (
@@ -260,7 +264,7 @@ export default function StepViewLandmarks({
 
             {/* Processing error */}
             {processingError && (
-              <p className="w-full rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+              <p className="w-full rounded-(--radius-panel) border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
                 {processingError}
               </p>
             )}

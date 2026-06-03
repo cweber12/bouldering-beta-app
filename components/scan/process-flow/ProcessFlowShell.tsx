@@ -16,6 +16,9 @@ interface ProcessFlowShellProps {
   /** When set, renders an icon-only back arrow at the far left of the footer bar
    *  (left of the step text) that navigates to the previous step. */
   onBack?: () => void;
+  /** Slim top bar (mirrors the footer) carrying plateless utility controls that
+   *  used to float over the media. Rendered above the step content only when set. */
+  toolbar?: ReactNode;
   children: ReactNode;
   primaryAction?: ReactNode;
   secondaryAction?: ReactNode;
@@ -36,6 +39,7 @@ export default function ProcessFlowShell({
   instruction,
   accessory,
   onBack,
+  toolbar,
   children,
   primaryAction,
   secondaryAction,
@@ -48,6 +52,14 @@ export default function ProcessFlowShell({
       className={cn("flex h-full min-h-0 flex-col", className)}
       aria-label="Scan process flow"
     >
+      {toolbar && (
+        <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+            {toolbar}
+          </div>
+        </header>
+      )}
+
       <div className="flex-1 min-h-0 motion-flow-enter">{children}</div>
 
       <footer className="shrink-0 border-t border-edge/60 bg-surface px-4 py-2.5 sm:px-6">

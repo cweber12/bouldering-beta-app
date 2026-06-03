@@ -51,7 +51,7 @@ export default function SaveDropdown({
         type="button"
         onClick={toggle}
         className={cn(
-          "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+          "flex items-center gap-1.5 rounded-(--radius-control) border px-3 py-1.5 text-xs font-medium transition",
           open
             ? "border-accent/60 bg-accent/10 text-accent"
             : s3Saved
@@ -88,7 +88,7 @@ export default function SaveDropdown({
       {open && (
         <div
           className={cn(
-            "absolute z-20 w-52 rounded-xl border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in",
+            "absolute z-20 w-52 rounded-(--radius-panel) border border-edge/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in",
             openUpward ? "bottom-full mb-1.5" : "top-full mt-1.5",
             dropdownAlign === "right" ? "right-0" : "left-0",
           )}
@@ -96,7 +96,7 @@ export default function SaveDropdown({
           <button
             onClick={() => { setOpen(false); onUpload(); }}
             disabled={s3Loading}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg disabled:opacity-50"
+            className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg disabled:opacity-50"
           >
             <svg
               className="h-3.5 w-3.5 shrink-0"
@@ -116,7 +116,7 @@ export default function SaveDropdown({
           </button>
           <button
             onClick={() => { setOpen(false); onSaveToDevice(); }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
+            className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
           >
             <svg
               className="h-3.5 w-3.5 shrink-0"
@@ -137,7 +137,7 @@ export default function SaveDropdown({
           {savedRouteDirHandle && (
             <button
               onClick={() => { setOpen(false); onDeleteFromDevice(); }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger-surface"
+              className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger-surface"
             >
               <svg
                 className="h-3.5 w-3.5 shrink-0"

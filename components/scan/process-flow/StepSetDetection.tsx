@@ -18,10 +18,6 @@ const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 const WALL_COLOR = "rgba(251,191,36,0.90)";
 type CropMode = "climber" | "wall";
 
-// Shared class for small translucent controls floating over the video.
-const FLOAT_BTN =
-  "flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge/50 bg-surface/70 px-2 text-fg-secondary backdrop-blur-sm transition-colors hover:bg-surface/90 hover:text-fg";
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -32,7 +28,7 @@ function formatVideoTime(secs: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// DetectionSettings — floating gear button + popover (quality tier · pose model
+// DetectionSettings — plateless gear icon + popover (quality tier · pose model
 // · sampling frequency). Module-level so it never remounts on parent re-render.
 // ---------------------------------------------------------------------------
 interface DetectionSettingsProps {
@@ -74,7 +70,7 @@ function DetectionSettings({
       <button
         type="button"
         onClick={onToggle}
-        className={cn(FLOAT_BTN, "w-8 px-0", showSettings && "border-accent/60 bg-accent/15 text-accent")}
+        className="ui-icon-btn flex h-8 w-8 items-center justify-center"
         title="Detection settings"
         aria-label="Detection settings"
         aria-expanded={showSettings}
@@ -146,7 +142,7 @@ function DetectionSettings({
 }
 
 // ---------------------------------------------------------------------------
-// TransportBar — thin translucent play/scrub strip pinned to the video bottom.
+// TransportBar — plateless play/scrub strip sitting directly below the video.
 // ---------------------------------------------------------------------------
 function TransportBar({
   playing,
@@ -162,11 +158,11 @@ function TransportBar({
   onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2.5 bg-surface/65 px-3 py-1.5 backdrop-blur-sm">
+    <div className="flex w-full items-center gap-2.5 px-1 py-1">
       <button
         type="button"
         onClick={onPlayPause}
-        className="shrink-0 rounded p-0.5 text-fg-light transition hover:text-fg"
+        className="ui-icon-btn shrink-0 p-0.5"
         aria-label={playing ? "Pause" : "Play"}
       >
         {playing ? (
@@ -184,7 +180,7 @@ function TransportBar({
         onChange={onSeek}
         className="flex-1 accent-accent" aria-label="Video progress"
       />
-      <span className="shrink-0 font-mono text-[11px] text-fg-light">
+      <span className="shrink-0 font-mono text-[11px] text-fg-muted">
         {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
       </span>
     </div>
@@ -252,10 +248,8 @@ export default function StepSetDetection({
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
   const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
 
-  // Guided crop stage: "climber" first, "wall" after Confirm.
+  // Guided crop stage: "climber" first, "wall" after switching the toggle.
   const [cropMode, setCropMode] = useState<CropMode>("climber");
-  // Once the user has tapped a climber, the ghost hint never returns.
-  const [everTapped, setEverTapped] = useState(false);
   // Detection settings popover.
   const [showSettings, setShowSettings] = useState(false);
 
@@ -271,7 +265,6 @@ export default function StepSetDetection({
   // Tap the climber to lock detection. Seeds a default portrait box around the
   // tap; processing refines it adaptively from the climber's landmarks.
   function handleClimberTap(p: { x: number; y: number }) {
-    setEverTapped(true);
     onClimberPointChange?.(p);
     const w = 0.34;
     const h = 0.6;
@@ -283,9 +276,9 @@ export default function StepSetDetection({
     });
   }
 
-  function handleConfirmClimber() { setCropMode("wall"); }
-  function handleBackToClimber()  { setCropMode("climber"); }
-  function handleReTap()          { onClimberPointChange?.(null); }
+  function handleSelectClimber() { setCropMode("climber"); }
+  function handleSelectWall()    { setCropMode("wall"); }
+  function handleReTap()         { onClimberPointChange?.(null); }
 
   function handleCropVideoLoaded() {
     const video  = cropVideoRef.current;
@@ -369,68 +362,6 @@ export default function StepSetDetection({
     </div>
   ) : null;
 
-  // One-time ghost hint — uncolored, fades permanently after the first tap.
-  const ghostHint = cropMode === "climber" && climberPoint == null && !everTapped ? (
-    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-2 rounded-xl bg-surface/35 px-5 py-4 backdrop-blur-[2px]">
-        <svg className="h-7 w-7 text-fg-light" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-        </svg>
-        <span className="text-sm font-medium text-fg-light">Tap the climber</span>
-      </div>
-    </div>
-  ) : null;
-
-  // Confirm button above the climber crop box. Flips below the box when the box
-  // sits near the top edge so it never clips off-screen.
-  const confirmButton = cropMode === "climber" && climberPoint ? (() => {
-    const box = climberCrop;
-    const placeBelow = box.y < 0.14;
-    return (
-      <button
-        type="button"
-        onClick={handleConfirmClimber}
-        className="motion-cta absolute z-20 flex items-center gap-1.5 rounded-full bg-accent px-3 py-1.5 text-xs font-semibold text-fg-inverse shadow-lg shadow-black/30"
-        style={{
-          left: `${(box.x + box.w / 2) * 100}%`,
-          top: placeBelow ? `calc(${box.y * 100}% + 0.5rem)` : `calc(${box.y * 100}% - 0.5rem)`,
-          transform: placeBelow ? "translate(-50%, 0)" : "translate(-50%, -100%)",
-        }}
-      >
-        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-        </svg>
-        Confirm climber
-      </button>
-    );
-  })() : null;
-
-  // Back-to-climber pill (wall stage), floating top-left.
-  const backToClimberBtn = cropMode === "wall" ? (
-    <button
-      type="button"
-      onClick={handleBackToClimber}
-      className={cn(FLOAT_BTN, "absolute left-2 top-2 z-20 text-xs font-medium")}
-    >
-      <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
-      </svg>
-      Climber
-    </button>
-  ) : null;
-
-  // Re-tap pill — clears the selection so a different person can be tapped.
-  const reTapBtn = cropMode === "climber" && climberPoint != null ? (
-    <button
-      type="button"
-      onClick={handleReTap}
-      className={cn(FLOAT_BTN, "text-xs font-medium")}
-      title="Re-tap a different climber"
-    >
-      Re-tap
-    </button>
-  ) : null;
-
   // Crop overlay. In climber mode, before a tap the overlay is a bare tap surface
   // so the box never blocks tapping the climber; after a tap the derived box is
   // shown for fine-tuning. Wall mode shows the wall crop box.
@@ -459,9 +390,75 @@ export default function StepSetDetection({
     />
   );
 
+  // ── Toolbar — Climber|Wall toggle (left) + plateless utility icons (right).
+  //    `variant` switches the trailing button between Expand and Exit. ──
+  function toolbarNode(variant: "inline" | "fullscreen") {
+    return (
+      <>
+        <div className="ui-segmented text-xs" role="group" aria-label="Crop target">
+          <button
+            type="button"
+            onClick={handleSelectClimber}
+            className="ui-segmented-button px-3 py-1 font-medium"
+            aria-pressed={cropMode === "climber"}
+          >
+            Climber
+          </button>
+          <button
+            type="button"
+            onClick={handleSelectWall}
+            disabled={climberPoint == null}
+            className="ui-segmented-button px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+            aria-pressed={cropMode === "wall"}
+            title={climberPoint == null ? "Tap the climber first" : "Frame the wall texture"}
+          >
+            Wall
+          </button>
+        </div>
+
+        <div className="ml-auto flex items-center gap-1">
+          <DetectionSettings {...settingsProps} />
+          {cropMode === "climber" && climberPoint != null && (
+            <button
+              type="button"
+              onClick={handleReTap}
+              className="ui-icon-btn flex h-8 w-8 items-center justify-center"
+              aria-label="Re-tap a different climber"
+              title="Re-tap a different climber"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setVideoFullscreen(variant === "inline")}
+            className="ui-icon-btn flex h-8 w-8 items-center justify-center"
+            aria-label={variant === "inline" ? "Expand video preview" : "Exit fullscreen"}
+            title={variant === "inline" ? "Expand preview" : "Exit fullscreen"}
+          >
+            {variant === "inline" ? (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+              </svg>
+            )}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   // ── Scan CTA — lives in the sticky shell footer (inline) and the fullscreen
-  //    footer, so it is always visible regardless of media aspect ratio. ──
+  //    footer, so it is always visible regardless of media aspect ratio.
+  //    Clickable whenever the model is ready; only accented once a climber is
+  //    tapped so the crop step reads as the prerequisite. ──
   function scanButton(size: "footer" | "fullscreen") {
+    const accented = canScan && climberPoint != null;
     return (
       <button
         type="button"
@@ -470,9 +467,11 @@ export default function StepSetDetection({
         className={cn(
           "motion-cta flex items-center justify-center gap-2 rounded-md text-sm font-semibold",
           size === "fullscreen" ? "px-10 py-3" : "px-6 py-2.5",
-          canScan
-            ? "ui-control-primary"
-            : "ui-control border-edge bg-surface-alt/45 text-fg-muted opacity-60 cursor-not-allowed",
+          !canScan
+            ? "ui-control border-edge bg-surface-alt/45 text-fg-muted opacity-60 cursor-not-allowed"
+            : accented
+              ? "ui-control-primary"
+              : "ui-control",
         )}
         title={canScan ? "Start pose detection" : "Loading model…"}
       >
@@ -496,7 +495,7 @@ export default function StepSetDetection({
       ? "frame the wall texture"
       : climberPoint == null
         ? "tap the climber to lock tracking"
-        : "confirm the climber, or scan";
+        : "fine-tune the box, or scan";
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
@@ -507,51 +506,32 @@ export default function StepSetDetection({
         stepName="Set detection"
         instruction={detectionInstruction}
         onBack={onBack}
+        toolbar={hasCropFrame ? toolbarNode("inline") : undefined}
         primaryAction={scanButton("footer")}
       >
         <div className="flex h-full min-h-0 items-center justify-center p-3 sm:p-4">
-          <div
-            className="relative overflow-hidden rounded-2xl border border-edge/50 bg-surface shadow-lg shadow-black/10"
-            style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h, "8rem")}
-          >
-            <video
-              ref={cropVideoRef}
-              src={videoPreviewUrl}
-              muted
-              playsInline
-              onLoadedData={handleCropVideoLoaded}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onTimeUpdate={() => setVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0)}
-              onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
-              className="absolute inset-0 w-full h-full object-fill"
-            />
-            {cropOverlayNode}
-            {hasCropFrame && climberMarker}
-            {hasCropFrame && ghostHint}
-            {hasCropFrame && confirmButton}
-            {hasCropFrame && backToClimberBtn}
+          <div className="flex max-h-full flex-col gap-1.5">
+            <div
+              className="relative overflow-hidden rounded-(--radius-panel) border border-edge/50 bg-surface shadow-lg shadow-black/10"
+              style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h, "11rem")}
+            >
+              <video
+                ref={cropVideoRef}
+                src={videoPreviewUrl}
+                muted
+                playsInline
+                onLoadedData={handleCropVideoLoaded}
+                onPlay={() => setIsPlaying(true)}
+                onPause={() => setIsPlaying(false)}
+                onTimeUpdate={() => setVideoCurrentTime(cropVideoRef.current?.currentTime ?? 0)}
+                onDurationChange={() => setVideoDuration(cropVideoRef.current?.duration ?? 0)}
+                className="absolute inset-0 w-full h-full object-fill"
+              />
+              {cropOverlayNode}
+              {hasCropFrame && climberMarker}
+              <canvas ref={cropCanvasRef} className="hidden" />
+            </div>
 
-            {/* Floating top-right cluster: settings · re-tap · expand */}
-            {hasCropFrame && (
-              <div className="absolute right-2 top-2 z-20 flex items-center gap-1.5">
-                <DetectionSettings {...settingsProps} />
-                {reTapBtn}
-                <button
-                  type="button"
-                  onClick={() => setVideoFullscreen(true)}
-                  className={cn(FLOAT_BTN, "w-8 px-0")}
-                  aria-label="Expand video preview"
-                  title="Expand preview"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
-                  </svg>
-                </button>
-              </div>
-            )}
-
-            {/* Transport strip */}
             {hasCropFrame && (
               <TransportBar
                 playing={isPlaying}
@@ -561,8 +541,6 @@ export default function StepSetDetection({
                 onSeek={handleVideoSeek}
               />
             )}
-
-            <canvas ref={cropCanvasRef} className="hidden" />
           </div>
         </div>
       </ProcessFlowShell>
@@ -575,42 +553,30 @@ export default function StepSetDetection({
           aria-modal="true"
           aria-label="Set detection — fullscreen"
         >
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4 min-h-0">
-            <div
-              className="relative overflow-hidden rounded-xl border border-edge/40"
-              style={fsMediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
-            >
-              <video
-                ref={fullscreenVideoRef}
-                src={videoPreviewUrl}
-                muted
-                playsInline
-                onPlay={() => setFsIsPlaying(true)}
-                onPause={() => setFsIsPlaying(false)}
-                onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
-                className="absolute inset-0 w-full h-full object-fill"
-              />
-              {cropOverlayNode}
-              {hasCropFrame && climberMarker}
-              {hasCropFrame && ghostHint}
-              {hasCropFrame && confirmButton}
-              {hasCropFrame && backToClimberBtn}
+          <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
+            <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+              {toolbarNode("fullscreen")}
+            </div>
+          </header>
 
-              {/* Floating top-right cluster: settings · re-tap · exit */}
-              <div className="absolute right-2 top-2 z-20 flex items-center gap-1.5">
-                <DetectionSettings {...settingsProps} />
-                {reTapBtn}
-                <button
-                  type="button"
-                  onClick={() => setVideoFullscreen(false)}
-                  className={cn(FLOAT_BTN, "w-8 px-0")}
-                  aria-label="Exit fullscreen"
-                  title="Exit fullscreen"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
-                  </svg>
-                </button>
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4 min-h-0">
+            <div className="flex max-h-full flex-col gap-1.5">
+              <div
+                className="relative overflow-hidden rounded-(--radius-panel) border border-edge/40"
+                style={fsMediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
+              >
+                <video
+                  ref={fullscreenVideoRef}
+                  src={videoPreviewUrl}
+                  muted
+                  playsInline
+                  onPlay={() => setFsIsPlaying(true)}
+                  onPause={() => setFsIsPlaying(false)}
+                  onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
+                  className="absolute inset-0 w-full h-full object-fill"
+                />
+                {cropOverlayNode}
+                {hasCropFrame && climberMarker}
               </div>
 
               {hasCropFrame && (
@@ -625,9 +591,9 @@ export default function StepSetDetection({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-center border-t border-edge/40 bg-surface px-4 py-3">
+          <footer className="flex shrink-0 items-center justify-center border-t border-edge/40 bg-surface px-4 py-3">
             {scanButton("fullscreen")}
-          </div>
+          </footer>
         </div>,
         document.body,
       )}
