@@ -166,40 +166,36 @@ export default function RouteConsole({
     } catch { /* leave the slot empty — the rail still shows the climb as available */ }
   }, [downloadAttempt]);
 
-  /**
-   * Rewrites `keys` + `mode` in the URL (replace — no history entry, no scroll).
-   * In single mode only the first active key is emitted, so a shared link opens
-   * the focused viewer on that one climb; the other loaded climbs stay parked in
-   * the slot arrays for the session and are not reflected in the URL.
-   */
-  const syncUrl = useCallback((nextSlotKeys: (string | null)[], nextMode: ConsoleMode = consoleMode) => {
-    const active = activeKeysOf(nextSlotKeys);
-    const keysForUrl = nextMode === "single" ? active.slice(0, 1) : active;
+  // URL sync is a side effect of state, never a render-time action.
+  const didMountSyncRef = useRef(false);
+  useEffect(() => {
+    if (!didMountSyncRef.current) {
+      didMountSyncRef.current = true;
+      return;
+    }
+    const active = activeKeysOf(slotKeys);
+    const keysForUrl = consoleMode === "single" ? active.slice(0, 1) : active;
     router.replace(
-      buildRouteUrl(userId, { state, area, route }, { keys: keysForUrl, mode: nextMode }),
+      buildRouteUrl(userId, { state, area, route }, { keys: keysForUrl, mode: consoleMode }),
       { scroll: false },
     );
-  }, [router, userId, state, area, route, consoleMode]);
+  }, [slotKeys, consoleMode, router, userId, state, area, route]);
 
   /** Flips console mode and re-syncs the URL; slot data is untouched (parked). */
   const setConsoleMode = useCallback((next: ConsoleMode) => {
     setConsoleModeState(next);
-    syncUrl(slotKeys, next);
-  }, [slotKeys, syncUrl]);
+  }, []);
 
   /** Adds a climb to the first free slot (no-op when full or already present). */
   const addClimb = useCallback((key: string) => {
-    setSlotKeys(prev => {
-      if (prev.includes(key)) return prev;
-      const slot = prev.findIndex(k => k === null);
-      if (slot === -1) return prev; // at max
-      const next = [...prev];
-      next[slot] = key;
-      void loadIntoSlot(slot, key);
-      syncUrl(next);
-      return next;
-    });
-  }, [loadIntoSlot, syncUrl]);
+    if (slotKeys.includes(key)) return;
+    const slot = slotKeys.findIndex((k) => k === null);
+    if (slot === -1) return; // at max
+    const next = [...slotKeys];
+    next[slot] = key;
+    setSlotKeys(next);
+    void loadIntoSlot(slot, key);
+  }, [slotKeys, loadIntoSlot]);
 
   /**
    * Single-mode selection: collapse to exactly one shown climb. Reuses the
@@ -219,23 +215,21 @@ export default function RouteConsole({
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
     setSlotOffsets(Array.from({ length: MAX_SLOTS }, () => 0));
     if (!existing) void loadIntoSlot(0, key);
-    syncUrl(nextKeys);
-  }, [slotKeys, attempts, loadIntoSlot, syncUrl]);
+  }, [slotKeys, attempts, loadIntoSlot]);
 
   /** Removes a climb, freeing its slot without reshuffling the others. */
   const removeClimb = useCallback((key: string) => {
-    setSlotKeys(prev => {
-      const slot = prev.findIndex(k => k === key);
-      if (slot === -1) return prev;
-      const next = [...prev];
-      next[slot] = null;
-      setAttempts(a => { const n = [...a]; n[slot] = null; return n; });
-      setMatchResults(m => { const n = [...m]; n[slot] = null; return n; });
-      setSlotOffsets(o => { const n = [...o]; n[slot] = 0; return n; });
-      syncUrl(next);
-      return next;
+    const slot = slotKeys.findIndex((k) => k === key);
+    if (slot === -1) return;
+    setSlotKeys((prev) => {
+      const n = [...prev];
+      n[slot] = null;
+      return n;
     });
-  }, [syncUrl]);
+    setAttempts((a) => { const n = [...a]; n[slot] = null; return n; });
+    setMatchResults((m) => { const n = [...m]; n[slot] = null; return n; });
+    setSlotOffsets((o) => { const n = [...o]; n[slot] = 0; return n; });
+  }, [slotKeys]);
 
   // Pre-load climbs from the path/query into slots (once, on mount).
   useEffect(() => {
