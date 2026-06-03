@@ -24,8 +24,10 @@ export interface ClimbPin {
 
 export interface ClimbsMapProps {
   pins: ClimbPin[];
-  /** Tailwind / inline height (default 400 px). */
+  /** Tailwind / inline height (default 400 px). Ignored when `fill` is set. */
   height?: number;
+  /** Fill the parent's height (h-full) instead of using a fixed pixel height. */
+  fill?: boolean;
   className?: string;
   /** Called when a pin is clicked (if the pin has a key). */
   onPinClick?: (key: string) => void;
@@ -140,6 +142,7 @@ async function fetchOsmClimbing(
 export default function ClimbsMap({
   pins,
   height = 400,
+  fill = false,
   className = "",
   onPinClick,
 }: ClimbsMapProps) {
@@ -391,7 +394,7 @@ export default function ClimbsMap({
   return (
     // Outer wrapper is position:relative so we can overlay React controls (toggle
     // button, loading indicator) above the Leaflet canvas without being clipped.
-    <div className="relative w-full" style={{ height }}>
+    <div className={cn("relative w-full", fill && "h-full")} style={fill ? undefined : { height }}>
       {/* Leaflet map canvas */}
       <div
         ref={containerRef}

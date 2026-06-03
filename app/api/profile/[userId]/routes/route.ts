@@ -9,32 +9,12 @@ import {
   isValidRoutePrefix,
   awsErrorMessage,
 } from "../../../s3/shared";
-import { attemptTimestampLabel } from "@/utils/fsHelpers";
+import { attemptTimestampLabel, parseRunType } from "@/utils/fsHelpers";
+import type { RouteSummary } from "@/utils/routeSummary";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/** One route (state/area/route) with aggregate info folded from its runs. */
-export interface RouteSummary {
-  state: string;
-  area: string;
-  route: string;
-  /** Number of runs (attempts + sends) recorded on this route. */
-  climbCount: number;
-  /** Human label for the most recent run. */
-  lastClimbedLabel: string;
-  /** Sort key — epoch millis of the most recent run. */
-  lastClimbedTs: number;
-  /** S3 key of the most recent run (the one auto-selected when opening the route). */
-  lastClimbKey: string;
-  /** Most recent run's thumbnail, rating, and GPS (one fetch per route). */
-  thumbnail?: string;
-  rating?: string;
-  coordinates?: { lat: number; lng: number };
-  /** True when the route has GPS to center the map on. */
-  hasGps: boolean;
-}
 
 interface ParsedKey {
   key: string;
@@ -191,6 +171,7 @@ export async function GET(
           lastClimbedLabel: attemptTimestampLabel(head.filename),
           lastClimbedTs: head.ts,
           lastClimbKey: head.key,
+          runType: parseRunType(head.filename),
           thumbnail: meta.thumbnail,
           rating: meta.rating,
           coordinates: meta.coordinates,
