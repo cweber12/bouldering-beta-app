@@ -114,7 +114,7 @@ export default function ClimbGrid({ userId, search, state, area, sort }: ClimbGr
 
   return (
     <div className="p-3">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3">
         {climbs.map((c) => (
           <div
             key={c.key}

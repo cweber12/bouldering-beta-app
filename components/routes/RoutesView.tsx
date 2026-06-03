@@ -22,10 +22,10 @@ interface RoutesViewProps {
 }
 
 // ---------------------------------------------------------------------------
-// RoutesView — the route-grouped collection. Desktop: route list (left) + map
-// (right), both visible. Mobile: List | Map toggle, default Map. A left-pane
-// Routes | Climbs toggle swaps the grouped list for the per-run grid; the map
-// persists alongside either way.
+// RoutesView — the route-grouped collection presented as one inset panel.
+// Desktop: route list (left) + map (right) inside a single rounded card, with
+// all controls living in the list header so the map stays clean. Mobile: a
+// List | Map toggle swaps the single visible pane (defaults to Map).
 // ---------------------------------------------------------------------------
 
 export default function RoutesView({ userId }: RoutesViewProps) {
@@ -117,107 +117,121 @@ export default function RoutesView({ userId }: RoutesViewProps) {
     setViewMode("list");
   };
 
+  // ── Reusable segmented toggles (shared between mobile bar + desktop header) ──
+
+  const paneToggle = (
+    <div className="ui-segmented text-xs" role="group" aria-label="Grouping">
+      <button
+        type="button"
+        onClick={() => setPaneMode("routes")}
+        className="ui-segmented-button px-3 py-1.5"
+        aria-pressed={paneMode === "routes"}
+      >
+        Routes
+      </button>
+      <button
+        type="button"
+        onClick={() => setPaneMode("climbs")}
+        className="ui-segmented-button px-3 py-1.5"
+        aria-pressed={paneMode === "climbs"}
+      >
+        Climbs
+      </button>
+    </div>
+  );
+
+  const viewToggle = (
+    <div className="ui-segmented text-xs" role="group" aria-label="View mode">
+      <button
+        type="button"
+        onClick={() => setViewMode("list")}
+        className="ui-segmented-button px-3 py-1.5"
+        aria-pressed={viewMode === "list"}
+      >
+        List
+      </button>
+      <button
+        type="button"
+        onClick={() => setViewMode("map")}
+        className="ui-segmented-button px-3 py-1.5"
+        aria-pressed={viewMode === "map"}
+      >
+        Map
+      </button>
+    </div>
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* Header — title + view toggles */}
-      <div className="shrink-0 border-b border-edge/30 px-4 py-2.5 sm:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-base font-semibold text-fg">Routes</h1>
-          <div className="flex items-center gap-2">
-            {/* Routes | Climbs grouping toggle */}
-            <div className="ui-segmented text-xs" role="group" aria-label="Grouping">
-              <button
-                type="button"
-                onClick={() => setPaneMode("routes")}
-                className="ui-segmented-button px-3 py-1.5"
-                aria-pressed={paneMode === "routes"}
-              >
-                Routes
-              </button>
-              <button
-                type="button"
-                onClick={() => setPaneMode("climbs")}
-                className="ui-segmented-button px-3 py-1.5"
-                aria-pressed={paneMode === "climbs"}
-              >
-                Climbs
-              </button>
+    <div className="flex min-h-0 flex-1 flex-col p-3 sm:p-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden rounded-xl border border-edge/60 bg-surface-alt/20 shadow-sm">
+        {/* Mobile-only toggle bar — always visible so you can switch panes. */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/40 px-3 py-2 sm:hidden">
+          {paneToggle}
+          {viewToggle}
+        </div>
+
+        {/* Body */}
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* List column — owns all the controls. */}
+          <div
+            className={cn(
+              "flex min-h-0 flex-col sm:w-[42%] sm:min-w-82.5 sm:max-w-120 sm:flex-none sm:border-r sm:border-edge/40",
+              viewMode === "map" ? "hidden sm:flex" : "flex",
+            )}
+          >
+            <div className="flex shrink-0 flex-col gap-2.5 border-b border-edge/40 px-3 py-2.5">
+              {/* Desktop header row: title + grouping toggle. */}
+              <div className="hidden items-center justify-between sm:flex">
+                <h2 className="text-sm font-semibold text-fg">
+                  {paneMode === "routes" ? "Routes" : "Climbs"}
+                </h2>
+                {paneToggle}
+              </div>
+              <RouteToolbar
+                search={search}
+                onSearch={setSearch}
+                state={filterState}
+                onState={setFilterState}
+                area={filterArea}
+                onArea={setFilterArea}
+                sort={sort}
+                onSort={setSort}
+                showSort={paneMode === "routes"}
+              />
             </div>
-            {/* List | Map — mobile only (both panes show on desktop) */}
-            <div className="ui-segmented text-xs sm:hidden" role="group" aria-label="View mode">
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className="ui-segmented-button px-3 py-1.5"
-                aria-pressed={viewMode === "list"}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("map")}
-                className="ui-segmented-button px-3 py-1.5"
-                aria-pressed={viewMode === "map"}
-              >
-                Map
-              </button>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {paneMode === "routes" ? (
+                <RouteList
+                  routes={routes}
+                  loading={loading}
+                  error={error}
+                  selectedKey={selectedKey}
+                  onOpen={openRoute}
+                  onFocusMap={focusMap}
+                  emptyHint="No routes recorded yet."
+                />
+              ) : (
+                <ClimbGrid
+                  userId={userId}
+                  search={debouncedSearch}
+                  state={filterState}
+                  area={filterArea}
+                  sort={sort}
+                />
+              )}
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Toolbar */}
-      <div className="shrink-0 border-b border-edge/30 px-4 py-2 sm:px-6">
-        <RouteToolbar
-          search={search}
-          onSearch={setSearch}
-          state={filterState}
-          onState={setFilterState}
-          area={filterArea}
-          onArea={setFilterArea}
-          sort={sort}
-          onSort={setSort}
-        />
-      </div>
-
-      {/* Two-pane body */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
-        {/* Content pane (routes list or climbs grid) */}
-        <div
-          className={cn(
-            "min-h-0 flex-1 overflow-y-auto sm:w-[420px] sm:flex-none sm:border-r sm:border-edge/40",
-            viewMode === "map" ? "hidden sm:block" : "block",
-          )}
-        >
-          {paneMode === "routes" ? (
-            <RouteList
-              routes={routes}
-              loading={loading}
-              error={error}
-              selectedKey={selectedKey}
-              onOpen={openRoute}
-              onFocusMap={focusMap}
-              emptyHint="No routes recorded yet."
-            />
-          ) : (
-            <ClimbGrid
-              userId={userId}
-              search={debouncedSearch}
-              state={filterState}
-              area={filterArea}
-              sort={sort}
-            />
-          )}
-        </div>
-
-        {/* Map pane */}
-        <div
-          className={cn(
-            "min-h-0 flex-1 p-3",
-            viewMode === "list" ? "hidden sm:block" : "block",
-          )}
-        >
-          <ClimbsMap pins={pins} fill onPinClick={onPinClick} />
+          {/* Map column — clean, no controls. */}
+          <div
+            className={cn(
+              "min-h-0 flex-1 p-3",
+              viewMode === "list" ? "hidden sm:block" : "block",
+            )}
+          >
+            <ClimbsMap pins={pins} fill onPinClick={onPinClick} />
+          </div>
         </div>
       </div>
     </div>

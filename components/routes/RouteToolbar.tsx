@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import type { RouteSort } from "@/utils/routeSummary";
 
@@ -12,12 +13,13 @@ interface RouteToolbarProps {
   onArea: (v: string) => void;
   sort: RouteSort;
   onSort: (v: RouteSort) => void;
-  /** Hides the sort control (Climbs view uses its own ordering label). */
+  /** Hides the sort control (Climbs view uses its own ordering). */
   showSort?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// RouteToolbar — search + state/area filters + sort for the collection.
+// RouteToolbar — list-header controls: a search field and sort menu inline,
+// with State/Area filters tucked behind a popover so the header stays clean.
 // ---------------------------------------------------------------------------
 
 export default function RouteToolbar({
@@ -31,12 +33,23 @@ export default function RouteToolbar({
   onSort,
   showSort = true,
 }: RouteToolbarProps) {
-  const hasFilters = !!(search || state || area);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
+  const hasFilters = !!(state || area);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [filterOpen]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-2">
       {/* Search */}
-      <div className="relative min-w-0 flex-1 basis-48">
+      <div className="relative min-w-0 flex-1">
         <svg
           className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted"
           fill="none"
@@ -56,30 +69,12 @@ export default function RouteToolbar({
         />
       </div>
 
-      {/* State / area filters */}
-      <input
-        type="text"
-        value={state}
-        onChange={(e) => onState(e.target.value)}
-        placeholder="State"
-        className="ui-input w-24 py-1.5 px-2.5 text-sm"
-        aria-label="Filter by state"
-      />
-      <input
-        type="text"
-        value={area}
-        onChange={(e) => onArea(e.target.value)}
-        placeholder="Area"
-        className="ui-input w-28 py-1.5 px-2.5 text-sm"
-        aria-label="Filter by area"
-      />
-
       {/* Sort */}
       {showSort && (
         <select
           value={sort}
           onChange={(e) => onSort(e.target.value as RouteSort)}
-          className="ui-input w-auto rounded-md px-2 py-1.5 text-xs"
+          className="ui-input w-auto shrink-0 rounded-md px-2 py-1.5 text-xs"
           aria-label="Sort routes"
         >
           <option value="recent">Last climbed</option>
@@ -88,19 +83,67 @@ export default function RouteToolbar({
         </select>
       )}
 
-      {hasFilters && (
+      {/* Filter popover */}
+      <div ref={filterRef} className="relative shrink-0">
         <button
           type="button"
-          onClick={() => {
-            onSearch("");
-            onState("");
-            onArea("");
-          }}
-          className={cn("rounded-md px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary")}
+          onClick={() => setFilterOpen((o) => !o)}
+          aria-expanded={filterOpen}
+          aria-label="Filter by state and area"
+          className={cn(
+            "relative flex h-8 w-8 items-center justify-center rounded-md border transition",
+            filterOpen || hasFilters
+              ? "border-accent/60 text-accent"
+              : "border-edge/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
+          )}
         >
-          Clear
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h18M6 12h12M10 19.5h4" />
+          </svg>
+          {hasFilters && (
+            <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent" />
+          )}
         </button>
-      )}
+
+        {filterOpen && (
+          <div className="ui-popover animate-fade-in absolute right-0 z-60 mt-2 w-56 p-3">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State / Region</label>
+                <input
+                  type="text"
+                  value={state}
+                  onChange={(e) => onState(e.target.value)}
+                  placeholder="Any"
+                  className="ui-input px-2.5 py-1.5 text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
+                <input
+                  type="text"
+                  value={area}
+                  onChange={(e) => onArea(e.target.value)}
+                  placeholder="Any"
+                  className="ui-input px-2.5 py-1.5 text-sm"
+                />
+              </div>
+              {hasFilters && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onState("");
+                    onArea("");
+                  }}
+                  className="self-start text-xs text-fg-muted transition hover:text-fg-secondary"
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
