@@ -84,6 +84,11 @@ export async function GET(
   const filterSearch = request.nextUrl.searchParams.get("search")?.toLowerCase() ?? "";
   const filterRunType = request.nextUrl.searchParams.get("runType") ?? "";
   const sortParam = request.nextUrl.searchParams.get("sort") ?? "newest";
+  // Exact (case-insensitive) location matching — used by the route console/rail
+  // so "Slab" does not also match "Slab Master".
+  const exact = request.nextUrl.searchParams.get("exact") === "1";
+  const matches = (value: string, filter: string) =>
+    exact ? value.toLowerCase() === filter : value.toLowerCase().includes(filter);
 
   try {
     // 1. List all climb JSON keys for this user.
@@ -115,9 +120,9 @@ export async function GET(
       })
       .filter((p): p is ParsedKey => p !== null);
 
-    if (filterState) parsed = parsed.filter((p) => p.state.toLowerCase().includes(filterState));
-    if (filterArea) parsed = parsed.filter((p) => p.area.toLowerCase().includes(filterArea));
-    if (filterRoute) parsed = parsed.filter((p) => p.route.toLowerCase().includes(filterRoute));
+    if (filterState) parsed = parsed.filter((p) => matches(p.state, filterState));
+    if (filterArea) parsed = parsed.filter((p) => matches(p.area, filterArea));
+    if (filterRoute) parsed = parsed.filter((p) => matches(p.route, filterRoute));
     if (filterSearch) {
       parsed = parsed.filter(
         (p) =>

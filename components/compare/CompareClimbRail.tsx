@@ -90,7 +90,7 @@ export default function CompareClimbRail({
     setLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ state, area, route, pageSize: "50", page: "1" });
+    const params = new URLSearchParams({ state, area, route, pageSize: "50", page: "1", exact: "1" });
 
     (async () => {
       try {

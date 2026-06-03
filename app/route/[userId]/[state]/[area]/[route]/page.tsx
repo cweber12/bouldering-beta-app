@@ -1,0 +1,65 @@
+"use client";
+
+import { Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import LoadingGate from "@/components/shared/LoadingGate";
+import ToolPageShell from "@/components/shared/ToolPageShell";
+import RouteConsole from "@/components/route/RouteConsole";
+import type { ConsoleMode } from "@/utils/routeUrl";
+
+/** Coerce a useParams() value (string | string[] | undefined) to a single string. */
+function seg(v: string | string[] | undefined): string {
+  return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
+}
+
+function RoutePageInner() {
+  const params = useParams();
+  const sp = useSearchParams();
+
+  // Path params arrive URL-decoded from Next.js — use them as-is.
+  const userId = seg(params.userId);
+  const state = seg(params.state);
+  const area = seg(params.area);
+  const route = seg(params.route);
+
+  // Selected climbs + mode ride in the query (keys CSV; ?key= single alias).
+  const csv = sp.get("keys");
+  const single = sp.get("key");
+  const initialKeys = csv
+    ? csv.split(",").map((k) => k.trim()).filter(Boolean)
+    : single
+    ? [single]
+    : [];
+  const modeParam = sp.get("mode");
+  const initialMode: ConsoleMode | null =
+    modeParam === "single" || modeParam === "multiple" ? modeParam : null;
+
+  return (
+    <RouteConsole
+      userId={userId}
+      state={state}
+      area={area}
+      route={route}
+      initialKeys={initialKeys}
+      initialMode={initialMode}
+    />
+  );
+}
+
+export default function RouteConsolePage() {
+  return (
+    <LoadingGate>
+      <ToolPageShell>
+        <Suspense
+          fallback={
+            <div className="flex flex-1 items-center justify-center text-sm text-fg-muted">
+              Loading&#8230;
+            </div>
+          }
+        >
+          <RoutePageInner />
+        </Suspense>
+      </ToolPageShell>
+    </LoadingGate>
+  );
+}
