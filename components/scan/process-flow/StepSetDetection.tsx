@@ -12,7 +12,8 @@ import {
   TIER_DESCRIPTIONS,
   type QualityTier,
 } from "@/utils/poseTiers";
-import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { squareMediaStyle, squareMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 const WALL_COLOR = "rgba(251,191,36,0.90)";
@@ -239,11 +240,17 @@ export default function StepSetDetection({
   const cropCanvasRef      = useRef<HTMLCanvasElement>(null);
   const fullscreenVideoRef = useRef<HTMLVideoElement>(null);
 
+  // Measures the video stage so the media is square-bounded to the exact
+  // available vertical space (drives both height and the landscape width cap).
+  const [stageRef, stageHeight] = useMeasuredHeight();
+
   const [hasCropFrame,       setHasCropFrame]       = useState(false);
   const [isPlaying,          setIsPlaying]          = useState(false);
   const [videoCurrentTime,   setVideoCurrentTime]   = useState(0);
   const [videoDuration,      setVideoDuration]      = useState(0);
-  const [videoNaturalSize,   setVideoNaturalSize]   = useState<{ w: number; h: number }>({ w: 16, h: 9 });
+  // Default to portrait (9:16) — ascents are recorded vertically, so this
+  // minimises the layout snap when the real metadata loads.
+  const [videoNaturalSize,   setVideoNaturalSize]   = useState<{ w: number; h: number }>({ w: 9, h: 16 });
   const [videoFullscreen,    setVideoFullscreen]    = useState(false);
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
   const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
@@ -369,7 +376,7 @@ export default function StepSetDetection({
     <CropBoxOverlay
       box={wallCrop ?? climberCrop}
       onChange={handleWallCropChange}
-      borderRadius="4px"
+      borderRadius="0"
       color={WALL_COLOR}
     />
   ) : climberPoint == null ? (
@@ -385,7 +392,7 @@ export default function StepSetDetection({
       box={climberCrop}
       onChange={handleClimberCropChange}
       onTap={handleClimberTap}
-      borderRadius="4px"
+      borderRadius="0"
       color={CLIMBER_COLOR}
     />
   );
@@ -509,11 +516,16 @@ export default function StepSetDetection({
         toolbar={hasCropFrame ? toolbarNode("inline") : undefined}
         primaryAction={scanButton("footer")}
       >
-        <div className="flex h-full min-h-0 items-center justify-center p-3 sm:p-4">
-          <div className="flex max-h-full flex-col gap-1.5">
+        <div className="flex h-full min-h-0 flex-col bg-surface">
+          {/* Measured video stage — the media is square-bounded to this height,
+              flush (no border/radius/padding) and centered on a flat surface. */}
+          <div
+            ref={stageRef}
+            className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+          >
             <div
-              className="relative overflow-hidden rounded-(--radius-panel) border border-edge/50 bg-surface shadow-lg shadow-black/10"
-              style={mediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h, "11rem")}
+              className="relative overflow-hidden"
+              style={squareMediaStyle(videoNaturalSize.w, videoNaturalSize.h, stageHeight)}
             >
               <video
                 ref={cropVideoRef}
@@ -531,8 +543,14 @@ export default function StepSetDetection({
               {hasCropFrame && climberMarker}
               <canvas ref={cropCanvasRef} className="hidden" />
             </div>
+          </div>
 
-            {hasCropFrame && (
+          {/* Transport bar — aligned to the media width, flush beneath the video. */}
+          {hasCropFrame && (
+            <div
+              className="mx-auto w-full shrink-0"
+              style={{ maxWidth: squareMediaWidth(videoNaturalSize.w, videoNaturalSize.h, stageHeight) }}
+            >
               <TransportBar
                 playing={isPlaying}
                 currentTime={videoCurrentTime}
@@ -540,8 +558,8 @@ export default function StepSetDetection({
                 onPlayPause={handleVideoPlayPause}
                 onSeek={handleVideoSeek}
               />
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </ProcessFlowShell>
 
