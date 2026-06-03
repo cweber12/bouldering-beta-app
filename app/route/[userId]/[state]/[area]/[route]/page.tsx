@@ -7,16 +7,28 @@ import ToolPageShell from "@/components/shared/ToolPageShell";
 import RouteConsole from "@/components/route/RouteConsole";
 import type { ConsoleMode } from "@/utils/routeUrl";
 
-/** Coerce a useParams() value (string | string[] | undefined) to a single string. */
+/**
+ * Coerce a useParams() value to a single decoded string.
+ *
+ * Route context lives in the path (percent-encoded by `buildRouteUrl`), and
+ * `useParams()` may hand it back still-encoded. We decode here so values like
+ * "Midnight%20Lightning" become "Midnight Lightning" — the exact form stored in
+ * the S3 key, which the rail/console match against. Decoding is a no-op when the
+ * value is already decoded (a literal space is never re-encoded).
+ */
 function seg(v: string | string[] | undefined): string {
-  return Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
+  const raw = Array.isArray(v) ? (v[0] ?? "") : (v ?? "");
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
 }
 
 function RoutePageInner() {
   const params = useParams();
   const sp = useSearchParams();
 
-  // Path params arrive URL-decoded from Next.js — use them as-is.
   const userId = seg(params.userId);
   const state = seg(params.state);
   const area = seg(params.area);
