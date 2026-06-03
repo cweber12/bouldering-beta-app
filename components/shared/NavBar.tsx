@@ -7,6 +7,7 @@ import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import ThemeToggle from "@/components/shared/ThemeToggle";
+import AccountMenu from "@/components/shared/AccountMenu";
 
 const PUBLIC_LINKS = [
   { href: "/docs", label: "Docs" },
@@ -14,7 +15,7 @@ const PUBLIC_LINKS = [
 
 const AUTH_LINKS = [
   { href: "/scan", label: "Scan" },
-  { href: "/profile", label: "Collection" },
+  { href: "/routes", label: "Routes" },
   { href: "/docs", label: "Docs" },
 ] as const;
 
@@ -225,12 +226,7 @@ export default function NavBar() {
             )}
             {!loading && user && (
               <div className="hidden items-center gap-2 sm:flex">
-                <button
-                  onClick={handleSignOut}
-                  className="ui-control rounded-lg px-3 py-1.5 text-xs font-medium text-fg-inverse"
-                >
-                  Sign out
-                </button>
+                <AccountMenu />
               </div>
             )}
 
@@ -294,6 +290,12 @@ export default function NavBar() {
               )}
               {!loading && user && (
                 <div className="flex flex-col gap-2">
+                  <Link
+                    href="/profile"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg-inverse"
+                  >
+                    Profile
+                  </Link>
                   <button onClick={handleSignOut} className="ui-control rounded-md px-3 py-2 text-sm font-medium">
                     Sign out
                   </button>
