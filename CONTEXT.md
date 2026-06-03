@@ -46,6 +46,30 @@ A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects th
 pose model variant and detection effort. (Planned — see ADR backlog.)
 _Avoid_: mode, level, model setting.
 
+### Persistence & media
+
+**Route**:
+A single climbing problem, identified by its location `{State}/{Area}/{Route}`.
+Every recording of that problem belongs to one Route.
+_Avoid_: climb (the UI/code calls a Route a "climb" in places — ambiguous with a
+single **Run**).
+
+**Run**:
+One recorded ascent of a **Route** — a single capture-and-analysis session,
+classified by **Run Type** as a **Send** or an **Attempt**. A Route has many Runs.
+_Avoid_: climb, attempt (as the generic term — an Attempt is one Run Type, not the
+word for "a Run").
+
+**Run Type**:
+Whether a **Run** reached the top (**Send**) or did not (**Attempt**).
+_Avoid_: result, outcome.
+
+**Route Photo**:
+The single reference photograph of the wall for a **Route**. A **Run**'s pose is
+matched against it (ORB + homography) and the skeleton overlay is projected onto
+it. One per Route, optional, shared by every Run of the Route.
+_Avoid_: route image, background photo.
+
 ## Relationships
 
 - A scan has exactly one **Climber** and zero or more **Bystanders**.
@@ -68,3 +92,7 @@ _Avoid_: mode, level, model setting.
   resolved: **Manual Crop** (user-drawn) vs **Adaptive Crop** (auto-derived).
 - "user" meant both the account holder and the person climbing — resolved: the
   account holder is the **User**; the person climbing is the **Climber**.
+- "climb" is used in the UI/code for both the **Route** (a problem) and a single
+  **Run** (one ascent) — prefer Route / Run when precision matters.
+- "attempt" is used for both a **Run** generically and the not-topped **Run Type**
+  — resolved: a Run is a Run; "Attempt" is reserved for the Run Type opposite Send.

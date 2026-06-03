@@ -20,6 +20,7 @@ import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { FramePlayerHandle } from "@/components/shared/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { dataUrlToFile } from "@/utils/imageHelpers";
 import { buildRouteUrl, type ConsoleMode } from "@/utils/routeUrl";
 
 // ---------------------------------------------------------------------------
@@ -90,8 +91,11 @@ export default function RouteConsole({
   // Natural dimensions of the loaded route photo (needed for the aspect-ratio container).
   const [imageSize, setImageSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
   const [showCamera, setShowCamera] = useState(false);
-  // True once the user has manually supplied a photo — suppresses the S3 auto-load.
-  const [userPickedImage, setUserPickedImage] = useState(false);
+  // S3 key of this route's saved Route Photo, or null when none exists. Detected
+  // by a metadata-only list probe; the photo is never auto-applied — the chooser
+  // offers "Use saved photo" alongside take/upload (camera is the priority case).
+  const [savedPhotoKey, setSavedPhotoKey] = useState<string | null>(null);
+  const [loadingSaved, setLoadingSaved] = useState(false);
   const imagePreviewUrlRef = useRef<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("overlay");
 
@@ -239,31 +243,28 @@ export default function RouteConsole({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);  // intentionally run once on mount
 
-  // Auto-load route photo from S3 (the owner's per-user route photo). The user
-  // can always manually override by uploading their own photo.
+  // Detect whether this route has a saved Route Photo — a metadata-only list
+  // probe, NOT a download. We never auto-apply it: the chooser surfaces "Use
+  // saved photo" only when one exists, and the full object is fetched lazily on
+  // click (see handleUseSavedPhoto). Keeps the camera-first path zero-cost.
   useEffect(() => {
-    if (!state || !area || !route || userPickedImage) return;
+    if (!userId || !state || !area || !route) return;
     let cancelled = false;
+    // Raw (unencoded) names as stored in the key; only the query transport is
+    // encoded, so encoding the segments here too would double-encode.
+    const prefix = `RouteData/${userId}/${state}/${area}/${route}/`;
+    const photoKey = `${prefix}route-image.json`;
     (async () => {
       try {
-        // The S3 key uses the raw route names (literal spaces etc., as stored by
-        // S3RoutePicker). Only the query-string transport is encoded — encoding
-        // the segments here too would double-encode (e.g. "Stained%2520Glass").
-        const key = `RouteData/${userId}/${state}/${area}/${route}/route-image.json`;
-        const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
+        const res = await fetch(`/api/s3/list?prefix=${encodeURIComponent(prefix)}`);
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { dataUrl?: string };
-        if (!data.dataUrl || cancelled) return;
-        // Convert the data URL to a File so the existing imageFile pipeline works.
-        const blob = await fetch(data.dataUrl).then(r => r.blob());
-        const file = new File([blob], "route-image.jpg", { type: blob.type || "image/jpeg" });
-        if (cancelled) return;
-        setImageFileWithPreview(file);
-      } catch { /* silently skip — user can still upload manually */ }
+        const data = (await res.json()) as { objects?: { Key?: string }[] };
+        const exists = (data.objects ?? []).some((o) => o.Key === photoKey);
+        if (!cancelled) setSavedPhotoKey(exists ? photoKey : null);
+      } catch { /* no saved-photo option — the user can still take/upload */ }
     })();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, state, area, route]); // userPickedImage intentionally omitted — only run when route changes
+  }, [userId, state, area, route]);
 
   // Auto-match: as soon as a route photo and at least one climb are both ready,
   // run the match once — no "Apply" gate. Newly added slots match on their own
@@ -376,23 +377,41 @@ export default function RouteConsole({
     setSlotOffsets((prev) => { const n = [...prev]; n[idx] = 0; return n; });
   }, []);
 
+  /** Applies a chosen photo through the shared selection path: resets the crop
+   *  and clears stale matches so every slot re-matches against the new photo. */
+  function applyPhoto(file: File) {
+    setImageFileWithPreview(file);
+    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
+    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+  }
+
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImageFileWithPreview(file);
-    setUserPickedImage(true);
-    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
-    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    applyPhoto(file);
     setShowUpdateMenu(false);
   }
 
   function handleCameraCapture(file: File) {
-    setImageFileWithPreview(file);
-    setUserPickedImage(true);
-    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
-    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    applyPhoto(file);
     setShowCamera(false);
     setShowUpdateMenu(false);
+  }
+
+  /** Lazily downloads the saved Route Photo and applies it via the same path as
+   *  take/upload — so matching always runs and the overlay renders. */
+  async function handleUseSavedPhoto() {
+    if (!savedPhotoKey || loadingSaved) return;
+    setLoadingSaved(true);
+    try {
+      const res = await fetch(`/api/s3/get?key=${encodeURIComponent(savedPhotoKey)}`);
+      if (!res.ok) return;
+      const data = (await res.json()) as { dataUrl?: string };
+      if (!data.dataUrl) return;
+      applyPhoto(await dataUrlToFile(data.dataUrl, "route-image.jpg"));
+      setShowUpdateMenu(false);
+    } catch { /* leave the chooser up — the user can take/upload instead */ }
+    finally { setLoadingSaved(false); }
   }
 
   /** Re-runs matching across all slots (after a crop or photo change). */
@@ -497,38 +516,59 @@ export default function RouteConsole({
         <div className="flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
             <p className="mb-3 text-sm text-fg-secondary">
-              Add a route photo to compare {anyLoaded ? "the loaded climbs" : "climbs"} on it.
+              Take a photo of the wall to overlay {anyLoaded ? "the loaded climbs" : "climbs"} on it
+              {savedPhotoKey ? ", or reuse this route's saved photo" : ""}.
             </p>
-            <div className="grid grid-cols-2 gap-3">
+
+            {/* Primary: take a photo — the priority case (you're at the wall). */}
+            <button
+              type="button"
+              onClick={() => setShowCamera(true)}
+              className={cn(
+                "mb-3 flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
+                "border-accent/50 bg-accent/10 text-fg hover:border-accent hover:bg-accent/15",
+              )}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
+              </svg>
+              <span className="font-medium">Take a photo</span>
+            </button>
+
+            {/* Secondary: upload a file, or reuse the saved route photo if one exists. */}
+            <div className="flex gap-3">
               <label
                 className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
+                  "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150",
                   "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
                 )}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
                 </svg>
-                <span className="font-medium text-fg">Select route photo</span>
+                <span className="font-medium text-fg">Upload a photo</span>
                 <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </label>
 
-              <button
-                type="button"
-                onClick={() => setShowCamera(true)}
-                className={cn(
-                  "flex cursor-pointer flex-col items-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
-                  "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
-                )}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-                </svg>
-                <span className="font-medium text-fg">Take a photo</span>
-                <span className="text-xs text-fg-muted">Opens camera</span>
-              </button>
+              {savedPhotoKey && (
+                <button
+                  type="button"
+                  onClick={handleUseSavedPhoto}
+                  disabled={loadingSaved}
+                  className={cn(
+                    "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150 disabled:cursor-wait disabled:opacity-60",
+                    "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                  )}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                  </svg>
+                  <span className="font-medium text-fg">{loadingSaved ? "Loading…" : "Use saved photo"}</span>
+                  <span className="text-xs text-fg-muted">{"This route's photo"}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -584,6 +624,18 @@ export default function RouteConsole({
                           </svg>
                           Take a photo
                         </button>
+                        {savedPhotoKey && (
+                          <button
+                            onClick={handleUseSavedPhoto}
+                            disabled={loadingSaved}
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg disabled:cursor-wait disabled:opacity-60"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                            </svg>
+                            {loadingSaved ? "Loading…" : "Use saved photo"}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
