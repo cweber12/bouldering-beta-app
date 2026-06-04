@@ -28,6 +28,11 @@ import {
   estimateMissingLandmarks,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
+import {
+  detectFlips,
+  isLandmarkFlip,
+  DEFAULT_TELEPORT_THRESHOLD,
+} from "@/pipeline/flipDetection";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
@@ -114,7 +119,20 @@ export interface VideoProcessorResult {
     cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean },
     startTime?: number,
     backend?: PoseBackend,
-    detection?: { maxRecoveryFrames?: number; filterTolerance?: number },
+    detection?: {
+      maxRecoveryFrames?: number;
+      filterTolerance?: number;
+      /** Base teleport threshold for flip detection (scaled by frameStep). */
+      flipTeleportBase?: number;
+      /**
+       * Centroid displacement (normalised) between adjacent detected anchors
+       * above which a segment is densified by Adaptive Refinement. Omit / set
+       * very high to disable motion-triggered densification (e.g. Fast tier).
+       */
+      motionThreshold?: number;
+      /** Frame stride used while refining a gap (1 = every frame). */
+      refineStride?: number;
+    },
   ) => Promise<void>;
   /** Abort any in-flight processing and reset all state back to idle. */
   reset: () => void;
@@ -176,7 +194,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
-      detection: { maxRecoveryFrames?: number; filterTolerance?: number } = {},
+      detection: {
+        maxRecoveryFrames?: number;
+        filterTolerance?: number;
+        flipTeleportBase?: number;
+        motionThreshold?: number;
+        refineStride?: number;
+      } = {},
     ) => {
       abortRef.current = false;
       const seekController = new AbortController();
@@ -449,54 +473,95 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           setCurrentFrame(i + 1);
         }
 
+        if (detected.length >= 2) {
+          detected.sort((a, b) => a.timestamp - b.timestamp);
+        }
+
         // ---------------------------------------------------------------
-        // Gap recovery pass
+        // Landmark-flip pass (always-on)
         // ---------------------------------------------------------------
+        // Discard Climber frames whose left/right labels glitched, comparing
+        // each to the last accepted frame. The teleport threshold scales with
+        // frameStep — sparser sampling legitimately allows more real motion
+        // between detected frames. Discarded frames become gaps that Adaptive
+        // Refinement re-probes below.
+        const flipTeleportBase = detection.flipTeleportBase ?? DEFAULT_TELEPORT_THRESHOLD;
+        const flipScan = detectFlips(detected, {
+          teleportThreshold: flipTeleportBase * Math.max(1, frameStep / DEFAULT_FRAME_STEP),
+        });
+        const kept = flipScan.kept;
+        const flippedIdx = new Set<number>();
+
+        // ---------------------------------------------------------------
+        // Adaptive Refinement pass
+        // ---------------------------------------------------------------
+        // Densely re-detect only the segments that need it — fast inter-anchor
+        // motion, large tracking-loss gaps, or frames discarded as flips —
+        // stepping frame-by-frame and accepting identity- + flip-gated poses up
+        // to a per-gap budget. Static segments stay sparse. Reuses the seek
+        // loop; the budget / motion threshold come from the quality tier.
         const GAP_RECOVERY_THRESHOLD = 3 * frameStep;
         const MAX_RECOVERY_FRAMES = detection.maxRecoveryFrames ?? 30;
+        const MOTION_THRESHOLD = detection.motionThreshold ?? Infinity; // off by default
+        const REFINE_STRIDE = Math.max(1, detection.refineStride ?? 1);
+        // Refinement re-probes consecutive frames, so the flip gate there uses
+        // the tight (un-scaled) base threshold.
+        const refineFlipOptions = { teleportThreshold: flipTeleportBase };
 
-        if (detected.length >= 2 && !abortRef.current) {
-          detected.sort((a, b) => a.timestamp - b.timestamp);
-
+        if (kept.length >= 2 && MAX_RECOVERY_FRAMES > 0 && !abortRef.current) {
           const tsToIdx = new Map<number, number>();
           allTimestamps.forEach((ts, idx) => tsToIdx.set(ts, idx));
+          for (const ts of flipScan.flippedTimestamps) {
+            const fi = tsToIdx.get(ts);
+            if (fi !== undefined) flippedIdx.add(fi);
+          }
 
-          const gaps: Array<{ gapStart: number; gapEnd: number; prevCentroid: Point | null }> = [];
-          for (let d = 1; d < detected.length; d++) {
-            const prevTs = detected[d - 1].timestamp;
-            const currTs = detected[d].timestamp;
-            const prevIdx = tsToIdx.get(prevTs) ?? 0;
-            const currIdx = tsToIdx.get(currTs) ?? 0;
-            const gapSize = currIdx - prevIdx;
-            if (gapSize > GAP_RECOVERY_THRESHOLD) {
-              // Anchor recovery selection to the climber's position just before
-              // the gap, so a full-frame re-detection can't lock onto a bystander.
-              gaps.push({
-                gapStart: prevIdx + 1,
-                gapEnd: currIdx - 1,
-                prevCentroid: poseCentroid(detected[d - 1].keypoints),
-              });
+          const gaps: Array<{ gapStart: number; gapEnd: number; leftFrame: PoseFrame }> = [];
+          for (let d = 1; d < kept.length; d++) {
+            const prevFrame = kept[d - 1];
+            const currFrame = kept[d];
+            const prevIdx = tsToIdx.get(prevFrame.timestamp) ?? 0;
+            const currIdx = tsToIdx.get(currFrame.timestamp) ?? 0;
+            if (currIdx - prevIdx <= 1) continue; // adjacent samples — nothing to refine
+
+            // Trigger 1: large gap (tracking loss / discarded flip run).
+            const largeGap = currIdx - prevIdx > GAP_RECOVERY_THRESHOLD;
+            // Trigger 2: a flip was discarded inside this gap.
+            let hasFlip = false;
+            for (const fi of flippedIdx) {
+              if (fi > prevIdx && fi < currIdx) { hasFlip = true; break; }
+            }
+            // Trigger 3: fast motion between the two anchors (centroid jump).
+            const pc = poseCentroid(prevFrame.keypoints);
+            const cc = poseCentroid(currFrame.keypoints);
+            const fastMotion = pc && cc
+              ? Math.hypot(cc.x - pc.x, cc.y - pc.y) > MOTION_THRESHOLD
+              : false;
+
+            if (largeGap || hasFlip || fastMotion) {
+              gaps.push({ gapStart: prevIdx + 1, gapEnd: currIdx - 1, leftFrame: prevFrame });
             }
           }
 
           for (const gap of gaps) {
             if (abortRef.current) break;
-            const framesToProcess = Math.min(gap.gapEnd - gap.gapStart + 1, MAX_RECOVERY_FRAMES);
+            let prevAccepted: PoseFrame = gap.leftFrame;
+            let prevCentroid: Point | null = poseCentroid(gap.leftFrame.keypoints);
+            let budget = MAX_RECOVERY_FRAMES;
 
-            for (let g = 0; g < framesToProcess; g++) {
+            for (let tsIdx = gap.gapStart; tsIdx <= gap.gapEnd && budget > 0; tsIdx += REFINE_STRIDE) {
               if (abortRef.current) break;
-              const tsIdx = gap.gapStart + g;
               if (tsIdx >= allTimestamps.length) break;
               const seekTime = allTimestamps[tsIdx];
 
               try {
                 await seekVideo(video, Math.min(seekTime, duration), { signal: seekController.signal });
               } catch (seekErr) {
-                // User cancel → stop recovery entirely.
+                // User cancel → stop refinement entirely.
                 if (seekErr instanceof SeekAbortedError) { abortRef.current = true; break; }
-                // Decoder stall → skip this recovery candidate, try the next.
+                // Decoder stall → skip this candidate, try the next.
                 if (seekErr instanceof SeekTimeoutError) {
-                  console.warn(`[useVideoProcessor] recovery ${seekErr.message} — skipping`);
+                  console.warn(`[useVideoProcessor] refinement ${seekErr.message} — skipping`);
                   continue;
                 }
                 throw seekErr;
@@ -504,28 +569,31 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-              // Full-frame re-detection, but selected by identity against the
-              // pre-gap position so bystanders are rejected.
-              const recoveryFrame = detectClimber(null, gap.prevCentroid, REACQUIRE_GATE);
-              if (recoveryFrame) {
-                recoveryFrame.timestamp = video.currentTime;
-                detected.push(recoveryFrame);
-                const c = poseCentroid(recoveryFrame.keypoints);
-                if (c) history.push(c);
-                break;
-              }
+              // Full-frame re-detection, selected by identity against the last
+              // accepted position so bystanders are rejected.
+              const candidate = detectClimber(null, prevCentroid, REACQUIRE_GATE);
+              if (!candidate) continue;
+              candidate.timestamp = video.currentTime;
+
+              // Flip gate: don't accept a re-detected frame that is itself a
+              // glitch flip relative to the last accepted pose.
+              if (isLandmarkFlip(prevAccepted, candidate, refineFlipOptions)) continue;
+
+              kept.push(candidate);
+              const c = poseCentroid(candidate.keypoints);
+              if (c) { history.push(c); prevCentroid = c; }
+              prevAccepted = candidate;
+              budget--;
             }
           }
 
-          if (gaps.length > 0) {
-            detected.sort((a, b) => a.timestamp - b.timestamp);
-          }
+          kept.sort((a, b) => a.timestamp - b.timestamp);
         }
 
         // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
         // Filtering is climbing-weighted; tolerance comes from the quality tier
         // (undefined → filterLandmarks' built-in default).
-        const goodFrames   = filterLandmarks(detected, 0.3, detection.filterTolerance);
+        const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
         const frames       = smoothPoseFrames(estimated);
@@ -550,7 +618,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         setStatus("done");
 
         console.info(
-          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}` +
+          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} ` +
+            `flips=${flipScan.flippedTimestamps.length} kept=${kept.length} good=${goodFrames.length} frames=${frames.length}` +
             (panning ? ` keyframes=${keyframes.length}` : ""),
         );
 
