@@ -37,11 +37,14 @@ interface DetectionSettingsProps {
   tier: QualityTier;
   modelVariant: MediaPipeVariant;
   frameStep: number;
+  /** Panning Capture (long route) mode — align per keyframe instead of frame 0. */
+  panning: boolean;
   onToggle: () => void;
   onClose: () => void;
   onTierChange: (t: QualityTier) => void;
   onModelVariantChange: (v: MediaPipeVariant) => void;
   onFrameStepChange: (n: number) => void;
+  onPanningChange: (b: boolean) => void;
 }
 
 function DetectionSettings({
@@ -49,11 +52,13 @@ function DetectionSettings({
   tier,
   modelVariant,
   frameStep,
+  panning,
   onToggle,
   onClose,
   onTierChange,
   onModelVariantChange,
   onFrameStepChange,
+  onPanningChange,
 }: DetectionSettingsProps) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -135,6 +140,31 @@ function DetectionSettings({
             <p className="text-xs text-fg-muted">
               1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
             </p>
+
+            <div className="border-t border-edge/60 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="flex flex-col">
+                  <span className="text-xs font-medium text-fg-secondary">Long route (panning)</span>
+                  <span className="text-xs text-fg-muted">Camera pans up the wall</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={panning}
+                  onClick={() => onPanningChange(!panning)}
+                  className={cn(
+                    "ui-chip-toggle rounded-md px-2.5 py-1 text-xs font-medium",
+                    panning ? "border-accent/50 bg-accent/15 text-fg" : "",
+                  )}
+                >
+                  {panning ? "On" : "Off"}
+                </button>
+              </div>
+              <p className="mt-1.5 text-xs text-fg-muted">
+                Aligns each pan section to the route photo by keyframe. Leave off for a fixed
+                (tripod) shot.
+              </p>
+            </div>
           </div>
         </div>
       )}
@@ -206,6 +236,9 @@ export interface StepSetDetectionProps {
   onModelVariantChange: (v: MediaPipeVariant) => void;
   frameStep: number;
   onFrameStepChange: (n: number) => void;
+  /** Panning Capture (long route) mode toggle state. */
+  panning: boolean;
+  onPanningChange: (b: boolean) => void;
   /** True when model and cv are both ready to scan. */
   canScan: boolean;
   /** Called with the video start time when the user confirms. */
@@ -231,6 +264,8 @@ export default function StepSetDetection({
   onModelVariantChange,
   frameStep,
   onFrameStepChange,
+  panning,
+  onPanningChange,
   canScan,
   onScan,
   onBack,
@@ -347,11 +382,13 @@ export default function StepSetDetection({
     tier,
     modelVariant,
     frameStep,
+    panning,
     onToggle: () => setShowSettings(p => !p),
     onClose: () => setShowSettings(false),
     onTierChange,
     onModelVariantChange,
     onFrameStepChange,
+    onPanningChange,
   };
 
   // Marker showing which climber the user tapped.

@@ -174,6 +174,9 @@ function ScanPageInner() {
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
   // Normalised point the user tapped to identify the climber (seeds tracking).
   const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
+  // Panning Capture (long route): align per keyframe instead of a single frame-0
+  // homography. Opt-in at scan setup; does not replace Fixed Capture.
+  const [panning, setPanning] = useState(false);
 
   // Bottom sheet for metadata entry (triggered by save/upload buttons)
   const [showBottomSheet, setShowBottomSheet] = useState(false);
@@ -428,7 +431,7 @@ function ScanPageInner() {
       state, area, route, runType,
       rating: rating || undefined,
       notes: notes || undefined,
-    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined }, startTime, "mediapipe", {
+    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning }, startTime, "mediapipe", {
       maxRecoveryFrames: cfg.maxRecoveryFrames,
       filterTolerance: cfg.filterTolerance,
     });
@@ -648,6 +651,8 @@ function ScanPageInner() {
           onModelVariantChange={setModelVariant}
           frameStep={frameStep}
           onFrameStepChange={setFrameStep}
+          panning={panning}
+          onPanningChange={setPanning}
           canScan={!!(model && cv)}
           onScan={handleScan}
           onBack={() => { setStep("pick"); }}
