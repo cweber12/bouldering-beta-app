@@ -2,8 +2,8 @@
 
 import { Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import LoadingGate from "@/components/shared/LoadingGate";
-import ToolPageShell from "@/components/shared/ToolPageShell";
+import LoadingGate from "@/components/layout/LoadingGate";
+import ToolPageShell from "@/components/layout/ToolPageShell";
 import RouteConsole from "@/components/route/RouteConsole";
 import type { ConsoleMode } from "@/utils/routeUrl";
 

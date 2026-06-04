@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import FramePlayer, { type FramePlayerLayer } from "@/components/shared/FramePlayer";
+import FramePlayer, { type FramePlayerLayer } from "@/components/skeleton/FramePlayer";
 import { buildMultiSkeletonFrames } from "@/pipeline/skeletonRenderer";
 import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";

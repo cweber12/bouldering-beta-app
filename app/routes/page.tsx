@@ -1,9 +1,9 @@
 "use client";
 
 import { useAuth } from "@/hooks/useAuth";
-import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolPageShell from "@/components/layout/ToolPageShell";
 import RoutesView from "@/components/routes/RoutesView";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 // ---------------------------------------------------------------------------
 // /routes — the route-grouped collection (route list + map). Replaces the

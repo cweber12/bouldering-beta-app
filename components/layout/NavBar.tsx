@@ -6,9 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
 import { useClickOutside } from "@/hooks/useClickOutside";
-import InfoDropdown from "@/components/shared/InfoDropdown";
-import ThemeToggle from "@/components/shared/ThemeToggle";
-import AccountMenu from "@/components/shared/AccountMenu";
+import InfoDropdown from "@/components/ui/InfoDropdown";
+import ThemeToggle from "@/components/ui/ThemeToggle";
+import AccountMenu from "@/components/layout/AccountMenu";
 
 const PUBLIC_LINKS = [
   { href: "/docs", label: "Docs" },

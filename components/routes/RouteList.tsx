@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import RouteRow from "@/components/routes/RouteRow";
 import type { RouteSummary } from "@/utils/routeSummary";
 

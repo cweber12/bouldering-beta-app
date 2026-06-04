@@ -1,6 +1,17 @@
 # components/
 
-Shared React components used across pages.
+React components used across pages, grouped by **why** a module lives where it
+does rather than one catch-all `shared/`:
+
+| Folder | Holds |
+| --- | --- |
+| `ui/` | Generic primitives — no domain or feature knowledge (LoadingSpinner, ThemeToggle, InfoDropdown, ComboInput, ImageCropper, LocationAutocomplete, Modal, FullscreenModal). |
+| `layout/` | App-global chrome & page shells (NavBar, AccountMenu, Preloader, Providers, LoadingGate, ToolPageShell, ToolRouteHeader). |
+| `skeleton/` | Skeleton-overlay UI shared by scan + compare + route (FramePlayer, SkeletonStylePanel). |
+| `capture/` | Climber/Wall crop + camera (CropBoxOverlay, CameraRecorderModal). |
+| `run/` | Run-classification domain primitives (RunTypeBadge, RunStatusDot). |
+| `scan/`, `compare/`, `route/`, `routes/`, `map/` | Feature-owned components. |
+| `shared/` | `ClimbDetailModal` only (pending removal in the route-collection redesign). |
 
 ## Shared layout and control system
 
@@ -8,14 +19,14 @@ Shared React components used across pages.
 - `ToolRouteHeader` standardizes route titles, subtitles, and action placement.
 - Shared control primitives in `app/globals.css` (`ui-control`, `ui-control-primary`, `ui-input`, `ui-popover`, and feedback banner classes) keep buttons, inputs, menus, and notices visually consistent across routes.
 
-## `shared/`
+## Component notes
 
 ### `NavBar`
 
 Sticky top navigation bar with tabs: Home, Upload, Match, Docs.
 
 ```tsx
-import NavBar from "@/components/shared/NavBar";
+import NavBar from "@/components/layout/NavBar";
 
 // Used in app/layout.tsx — rendered on every page.
 <NavBar />
@@ -30,7 +41,7 @@ import NavBar from "@/components/shared/NavBar";
 Accessible accordion using native `<details>/<summary>`. No JavaScript state.
 
 ```tsx
-import InfoDropdown from "@/components/shared/InfoDropdown";
+import InfoDropdown from "@/components/ui/InfoDropdown";
 
 <InfoDropdown title="How does this work?" defaultOpen>
   <p>Explanation here.</p>
@@ -50,4 +61,4 @@ import InfoDropdown from "@/components/shared/InfoDropdown";
 
 Gates child content until OpenCV is ready.
 
-Located at `components/shared/LoadingGate.tsx`. Used on the Upload and Match pages to prevent hooks from running before runtimes are initialised.
+Located at `components/layout/LoadingGate.tsx`. Used on the Upload and Match pages to prevent hooks from running before runtimes are initialised.

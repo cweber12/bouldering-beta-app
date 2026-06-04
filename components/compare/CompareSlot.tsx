@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { Ref } from "react";
-import FramePlayer, { type FramePlayerHandle } from "@/components/shared/FramePlayer";
-import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
+import type { CropFraction } from "@/components/capture/CropBoxOverlay";
 import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
@@ -12,7 +12,7 @@ import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import { getTopology } from "@/utils/poseConstants";
-import RunStatusDot from "@/components/shared/RunStatusDot";
+import RunStatusDot from "@/components/run/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 import { buildHighlightStyle, EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 

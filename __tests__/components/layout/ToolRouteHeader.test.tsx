@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import ToolRouteHeader from "@/components/shared/ToolRouteHeader";
+import ToolRouteHeader from "@/components/layout/ToolRouteHeader";
 
 describe("ToolRouteHeader", () => {
   it("renders title and subtitle", () => {

@@ -2,8 +2,8 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import LoadingGate from "@/components/shared/LoadingGate";
-import ToolPageShell from "@/components/shared/ToolPageShell";
+import LoadingGate from "@/components/layout/LoadingGate";
+import ToolPageShell from "@/components/layout/ToolPageShell";
 /* CONSTANTS */
 import { DEFAULT_CROP, type CropFraction } from "@/utils/cropFraction";
 /* HOOKS */
@@ -23,7 +23,7 @@ import { type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getTopology } from "@/utils/poseConstants";
-import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
+import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";

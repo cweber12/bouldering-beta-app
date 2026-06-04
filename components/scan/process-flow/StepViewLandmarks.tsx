@@ -3,8 +3,8 @@
 import { useRef } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
-import FramePlayer from "@/components/shared/FramePlayer";
-import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
+import FramePlayer from "@/components/skeleton/FramePlayer";
+import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";

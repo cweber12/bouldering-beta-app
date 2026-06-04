@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Modal from "@/components/ui/Modal";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import RunTypeBadge from "@/components/run/RunTypeBadge";
 import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------

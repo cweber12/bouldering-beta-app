@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import RunTypeBadge from "@/components/run/RunTypeBadge";
 import { buildRouteUrl } from "@/utils/routeUrl";
 import type { RouteSort } from "@/utils/routeSummary";
 

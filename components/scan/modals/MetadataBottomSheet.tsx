@@ -1,7 +1,7 @@
 "use client";
 
 import Modal from "@/components/ui/Modal";
-import ComboInput from "@/components/shared/ComboInput";
+import ComboInput from "@/components/ui/ComboInput";
 import { cn } from "@/utils/cn";
 import { ROUTE_TEXT_LIMIT } from "@/utils/fsHelpers";
 import type { RunType } from "@/storage/sessionStore";

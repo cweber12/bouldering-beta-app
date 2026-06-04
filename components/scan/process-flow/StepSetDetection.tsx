@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
-import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
+import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import {
   QUALITY_TIERS,

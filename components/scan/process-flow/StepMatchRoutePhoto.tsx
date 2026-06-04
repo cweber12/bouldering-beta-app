@@ -2,10 +2,10 @@
 
 import { useRef, useState } from "react";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
-import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
-import FramePlayer from "@/components/shared/FramePlayer";
-import SkeletonStylePanel from "@/components/shared/SkeletonStylePanel";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
+import FramePlayer from "@/components/skeleton/FramePlayer";
+import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";

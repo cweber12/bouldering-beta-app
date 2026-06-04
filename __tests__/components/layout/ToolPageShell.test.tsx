@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import ToolPageShell from "@/components/shared/ToolPageShell";
+import ToolPageShell from "@/components/layout/ToolPageShell";
 
 describe("ToolPageShell", () => {
   it("renders children and applies viewport-fit shell classes", () => {
