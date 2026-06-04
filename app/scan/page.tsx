@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import LoadingGate from "@/components/shared/LoadingGate";
 import ToolPageShell from "@/components/shared/ToolPageShell";
 /* CONSTANTS */
-import { DEFAULT_CROP, type CropFraction } from "@/components/shared/CropBoxOverlay";
+import { DEFAULT_CROP, type CropFraction } from "@/utils/cropFraction";
 /* HOOKS */
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";

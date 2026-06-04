@@ -16,7 +16,7 @@ import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, typ
 import { cropImageData } from "@/utils/cvHelpers";
 import { capToPixelBudget } from "@/utils/imageHelpers";
 import { getAttempt } from "@/storage/sessionStore";
-import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import type { CropFraction } from "@/utils/cropFraction";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;

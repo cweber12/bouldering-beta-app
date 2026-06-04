@@ -30,7 +30,7 @@ import {
 } from "@/pipeline/poseInterpolator";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
-import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import type { CropFraction } from "@/utils/cropFraction";
 import type { PoseBackend } from "@/utils/poseConstants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
