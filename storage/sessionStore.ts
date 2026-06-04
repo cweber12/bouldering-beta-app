@@ -7,10 +7,10 @@
  */
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
-import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+import type { OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
 import type { CropBox } from "@/pipeline/cropDetector";
 import type { PoseBackend } from "@/utils/poseConstants";
-export type { OrbKeypoint, OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+export type { OrbKeypoint, OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
 export type { CropBox } from "@/pipeline/cropDetector";
 export type { PoseBackend } from "@/utils/poseConstants";
 
@@ -62,6 +62,15 @@ export interface RouteAttempt {
    * Null when ORB extraction was skipped or failed.
    */
   orbFeatures: OrbFeatures | null;
+  /**
+   * Panning Capture only: ordered ORB **Keyframe** feature sets (Wall Crop,
+   * one per ~0.5–1 s of pan), each tagged with its video timestamp. The Route
+   * Photo is matched to each Keyframe independently to stay drift-free.
+   *
+   * Absent/null for Fixed Capture, which uses the single frame-0 `orbFeatures`.
+   * Legacy attempts predate this field and load with it undefined.
+   */
+  keyframes?: KeyframeFeatures[] | null;
   /**
    * Per-frame ORB match results against the reference frame.
    * Index aligns with the `frames` array. Frame 0 (reference) is always [].

@@ -46,6 +46,32 @@ A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects th
 pose model variant and detection effort. (Planned — see ADR backlog.)
 _Avoid_: mode, level, model setting.
 
+### Capture mode
+
+**Fixed Capture**:
+A **Run** recorded with a static camera (tripod or propped). The whole **Route**
+stays in frame, so a single homography aligns the Run to the **Route Photo** for
+every frame. The original and default capture path.
+_Avoid_: tripod mode, static mode.
+
+**Panning Capture**:
+A **Run** recorded while deliberately panning the camera along a longer **Route**
+that does not fit in one frame. Aligned to the **Route Photo** per-**Keyframe**
+rather than by a single homography, so the skeleton overlay tracks the wall as
+the camera moves. Opt-in via a scan-setup toggle; it does not replace **Fixed
+Capture**.
+_Avoid_: handheld mode, moving-camera mode (it is specifically a _deliberate
+pan_, not shake/jitter correction — fast handheld shake is out of scope).
+
+**Keyframe**:
+A sampled video frame in a **Panning Capture** at which **Wall Crop** features
+(ORB) are extracted and stored, so each section of the pan can be matched to the
+**Route Photo** independently (the photo is the one image that overlaps every
+Keyframe, which keeps the alignment drift-free). In-between frames are placed by
+interpolating between adjacent Keyframes.
+_Avoid_: anchor frame, reference frame (the single Fixed-Capture reference frame
+is not a Keyframe).
+
 ### Persistence & media
 
 **Route**:

@@ -73,6 +73,22 @@ export interface OrbMatch {
 }
 
 /**
+ * ORB features extracted from a single **Keyframe** of a **Panning Capture**,
+ * tagged with the video timestamp the keyframe was sampled at.
+ *
+ * A Panning Capture stores an ordered array of these (Wall Crop features at
+ * ~0.5–1 s intervals) so each section of the pan can be matched to the Route
+ * Photo independently. Fixed Capture stores none — it relies on the single
+ * frame-0 `orbFeatures` instead.
+ */
+export interface KeyframeFeatures {
+  /** Video timestamp (seconds) of the frame this ORB set was extracted from. */
+  timestamp: number;
+  /** Wall Crop ORB features for this keyframe (full-frame pixel coordinates). */
+  features: OrbFeatures;
+}
+
+/**
  * Extract ORB keypoints and descriptors from an ImageData on the main thread.
  * Requires the OpenCV `cv` object (from useOpenCV) to already be initialised.
  *

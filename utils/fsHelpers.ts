@@ -6,7 +6,7 @@
  * or falling back — callers should guard with `"showDirectoryPicker" in window`.
  */
 
-import type { RouteAttempt, RunType } from "@/storage/sessionStore";
+import type { RouteAttempt, RunType, OrbFeatures, KeyframeFeatures } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,7 +136,7 @@ export function base64ToUint8(b64: string): Uint8Array {
 export const ATTEMPT_SCHEMA_VERSION = 2;
 
 /** Keys whose values are "heavy" and live in the sibling `.data.json` object. */
-const HEAVY_KEYS = ["frames", "matchesPerFrame", "frameCaptures", "orbFeatures"] as const;
+const HEAVY_KEYS = ["frames", "matchesPerFrame", "frameCaptures", "orbFeatures", "keyframes"] as const;
 
 /**
  * Maximum length for user-supplied route metadata text fields (state, area,
@@ -156,10 +156,51 @@ function clampRouteText(value: unknown): unknown {
 }
 
 /**
+ * Encode one OrbFeatures' binary descriptors for JSON. `mode: "array"` emits a
+ * plain `number[]` (legacy v1); `mode: "base64"` emits a compact base64 string
+ * (v2 split format). Keypoints and any crop box pass through untouched.
+ */
+function serializeOrbFeatures(
+  features: OrbFeatures,
+  mode: "array" | "base64",
+): Record<string, unknown> {
+  return {
+    ...features,
+    descriptors:
+      mode === "base64"
+        ? uint8ToBase64(features.descriptors)
+        : Array.from(features.descriptors),
+  };
+}
+
+/** Encode an array of keyframe ORB feature sets, preserving timestamps. */
+function serializeKeyframes(
+  keyframes: KeyframeFeatures[],
+  mode: "array" | "base64",
+): Array<Record<string, unknown>> {
+  return keyframes.map(kf => ({
+    timestamp: kf.timestamp,
+    features: serializeOrbFeatures(kf.features, mode),
+  }));
+}
+
+/**
+ * Re-hydrate the `descriptors` field of a raw ORB-features object in place,
+ * accepting either a `number[]` (v1) or a base64 `string` (v2).
+ */
+function rehydrateOrbDescriptors(orb: Record<string, unknown>): void {
+  if (Array.isArray(orb.descriptors)) {
+    orb.descriptors = new Uint8Array(orb.descriptors as number[]);
+  } else if (typeof orb.descriptors === "string") {
+    orb.descriptors = base64ToUint8(orb.descriptors);
+  }
+}
+
+/**
  * Return a JSON-safe copy of a RouteAttempt as a single combined object
- * (legacy v1 format). Converts `orbFeatures.descriptors` from `Uint8Array` to a
- * plain `number[]`. Retained for local file import/export round-trips; the S3
- * save path uses the split serialisers below.
+ * (legacy v1 format). Converts `orbFeatures.descriptors` (and each keyframe's
+ * descriptors) from `Uint8Array` to a plain `number[]`. Retained for local file
+ * import/export round-trips; the S3 save path uses the split serialisers below.
  */
 export function serializeAttemptForJson(
   attempt: RouteAttempt,
@@ -167,8 +208,11 @@ export function serializeAttemptForJson(
   return {
     ...attempt,
     orbFeatures: attempt.orbFeatures
-      ? { ...attempt.orbFeatures, descriptors: Array.from(attempt.orbFeatures.descriptors) }
+      ? serializeOrbFeatures(attempt.orbFeatures, "array")
       : null,
+    keyframes: attempt.keyframes
+      ? serializeKeyframes(attempt.keyframes, "array")
+      : attempt.keyframes ?? null,
   };
 }
 
@@ -202,8 +246,11 @@ export function serializeAttemptData(
     matchesPerFrame: attempt.matchesPerFrame,
     frameCaptures: attempt.frameCaptures,
     orbFeatures: attempt.orbFeatures
-      ? { ...attempt.orbFeatures, descriptors: uint8ToBase64(attempt.orbFeatures.descriptors) }
+      ? serializeOrbFeatures(attempt.orbFeatures, "base64")
       : null,
+    keyframes: attempt.keyframes
+      ? serializeKeyframes(attempt.keyframes, "base64")
+      : attempt.keyframes ?? null,
   };
 }
 
@@ -214,8 +261,9 @@ export function serializeAttemptData(
  *  - legacy combined object (everything inline, `descriptors` as `number[]`)
  *  - a v2 metadata + data object already merged (`descriptors` as base64 string)
  *
- * Re-hydrates `orbFeatures.descriptors` back to a `Uint8Array` from whichever
- * encoding is present.
+ * Re-hydrates `orbFeatures.descriptors` (and each keyframe's descriptors) back
+ * to a `Uint8Array` from whichever encoding is present. Attempts without a
+ * `keyframes` field (Fixed Capture / legacy) are left untouched.
  *
  * @throws When the input is not a non-null object.
  */
@@ -223,11 +271,13 @@ export function loadAttemptFromJson(raw: unknown): RouteAttempt {
   if (!raw || typeof raw !== "object") throw new Error("Invalid attempt data.");
   const obj = raw as Record<string, unknown>;
   if (obj.orbFeatures && typeof obj.orbFeatures === "object") {
-    const orb = obj.orbFeatures as Record<string, unknown>;
-    if (Array.isArray(orb.descriptors)) {
-      orb.descriptors = new Uint8Array(orb.descriptors as number[]);
-    } else if (typeof orb.descriptors === "string") {
-      orb.descriptors = base64ToUint8(orb.descriptors);
+    rehydrateOrbDescriptors(obj.orbFeatures as Record<string, unknown>);
+  }
+  if (Array.isArray(obj.keyframes)) {
+    for (const kf of obj.keyframes as Array<Record<string, unknown>>) {
+      if (kf?.features && typeof kf.features === "object") {
+        rehydrateOrbDescriptors(kf.features as Record<string, unknown>);
+      }
     }
   }
   return { state: "", area: "", route: "", runType: "attempt", ...obj } as unknown as RouteAttempt;
