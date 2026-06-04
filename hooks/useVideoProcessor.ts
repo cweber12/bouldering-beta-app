@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type PoseFrame } from "@/pipeline/poseDetection";
 import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
-import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
@@ -111,7 +111,7 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point },
+    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean },
     startTime?: number,
     backend?: PoseBackend,
     detection?: { maxRecoveryFrames?: number; filterTolerance?: number },
@@ -131,6 +131,14 @@ export interface VideoProcessorResult {
 }
 
 const DEFAULT_FRAME_STEP = 5;
+
+/**
+ * Keyframe sampling interval (seconds) for Panning Capture. A Wall Crop ORB
+ * **Keyframe** is captured roughly every {@link KEYFRAME_INTERVAL_SEC} of video
+ * (fixed spacing, v1) so each section of the pan can be anchored to the Route
+ * Photo independently. Fixed Capture extracts none.
+ */
+const KEYFRAME_INTERVAL_SEC = 0.75;
 
 /**
  * Seeks through a video file frame-by-frame, runs pose estimation on every
@@ -165,7 +173,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point } = {},
+      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
       detection: { maxRecoveryFrames?: number; filterTolerance?: number } = {},
@@ -245,6 +253,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
           : undefined);
 
+        // Panning Capture: sample Wall Crop ORB at fixed keyframe intervals so
+        // each pan section anchors to the Route Photo independently. Zero-cost
+        // for Fixed Capture (panning false → keyframeWallBox null, no captures).
+        const panning = cropOptions.panning ?? false;
+        const keyframeWallBox: OrbCropBox | null = panning
+          ? (wallCropPx ?? { x: 0, y: 0, width: videoWidth, height: videoHeight, srcWidth: videoWidth, srcHeight: videoHeight })
+          : null;
+        const keyframes: KeyframeFeatures[] = [];
+        let nextKeyframeTime = -Infinity; // first qualifying frame becomes keyframe 0
+        const kfOrbCanvas = panning ? document.createElement("canvas") : null;
+        if (kfOrbCanvas) {
+          kfOrbCanvas.width = videoWidth;
+          kfOrbCanvas.height = videoHeight;
+        }
+
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
@@ -310,6 +333,37 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           return selectClimberPose(posesFull, predicted, gate);
         };
 
+        /**
+         * Capture a Panning Capture **Keyframe**: extract Wall Crop ORB from the
+         * frame currently drawn on `ctx` (full-frame coords), tagged with `ts`.
+         * Applies the same ORB preprocessing as the frame-0 reference. Per-frame
+         * climber masking is intentionally omitted (ADR scope) — the Wall Crop
+         * plus Lowe/RANSAC drop climber features when matched to the photo.
+         */
+        const captureKeyframe = (ts: number): void => {
+          if (!keyframeWallBox) return;
+          const full = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          let processed = full;
+          const kfCtx = kfOrbCanvas?.getContext("2d");
+          if (kfCtx && currentAnalysis) {
+            kfCtx.putImageData(full, 0, 0);
+            applyOrbPreprocessing(cv, kfOrbCanvas!, currentAnalysis);
+            processed = kfCtx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+          const cropped = cropImageData(processed, keyframeWallBox);
+          // normalizePixels only when ORB preprocessing did not already run.
+          const feats = extractFeatures(cv, cropped, !currentAnalysis);
+          const adjusted: OrbFeatures = {
+            ...feats,
+            keypoints: feats.keypoints.map(kp => ({
+              ...kp,
+              pt: { x: kp.pt.x + keyframeWallBox.x, y: kp.pt.y + keyframeWallBox.y },
+            })),
+            cropBox: keyframeWallBox,
+          };
+          keyframes.push({ timestamp: ts, features: adjusted });
+        };
+
         for (let i = 0; i < frameCount; i++) {
           if (abortRef.current) break;
 
@@ -339,6 +393,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           if (i === middleIndex) {
             middleFrameImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+
+          // Panning Capture keyframe sampling (fixed ~KEYFRAME_INTERVAL_SEC
+          // spacing). Runs after the i===0 lighting seed so currentAnalysis is
+          // available for the first keyframe's ORB preprocessing.
+          if (panning && video.currentTime >= nextKeyframeTime) {
+            captureKeyframe(video.currentTime);
+            nextKeyframeTime = video.currentTime + KEYFRAME_INTERVAL_SEC;
           }
 
           allTimestamps.push(video.currentTime);
@@ -473,6 +535,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           videoMeta,
           frames,
           orbFeatures: null,
+          keyframes: panning ? keyframes : null,
           matchesPerFrame: null,
           frameCaptures,
           poseBackend: backend,
@@ -487,7 +550,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         setStatus("done");
 
         console.info(
-          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}`,
+          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}` +
+            (panning ? ` keyframes=${keyframes.length}` : ""),
         );
 
         await new Promise<void>(r => setTimeout(r, 0));
@@ -564,6 +628,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               videoMeta,
               frames,
               orbFeatures,
+              keyframes: panning ? keyframes : null,
               matchesPerFrame: null,
               frameCaptures,
               poseBackend: backend,
