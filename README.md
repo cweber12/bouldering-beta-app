@@ -292,7 +292,7 @@ npx eslint .
 pipeline/   Framework-agnostic processing modules (no React)
 hooks/      React hooks wiring pipeline modules to UI state
 storage/    In-memory session store (swappable backend); exports RunType
-components/ Shared UI components (CropBoxOverlay, S3RoutePicker, ComboInput, …)
+components/ UI components (CropBoxOverlay, ComboInput, …)
 app/        Next.js App Router pages and layout
 app/api/s3/ S3 route handlers (put, get, list, delete) + shared utilities
 workers/    Legacy Web Worker files (kept for reference)
