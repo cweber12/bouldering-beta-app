@@ -374,4 +374,44 @@ describe("drawSkeleton", () => {
     expect(ctx.stroke).not.toHaveBeenCalled();
     expect(ctx.fill).not.toHaveBeenCalled();
   });
+
+  it("dims a low-confidence Estimated Landmark joint", () => {
+    // Record the globalAlpha in effect at each joint fill.
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(ctx, {
+      nose: { x: 50, y: 50, score: 0.9 },       // confident → full alpha
+      left_eye_inner: { x: 40, y: 40, score: 0.1 }, // estimated → dimmed
+    });
+    expect(alphasByFill).toContain(1);
+    // The low-confidence joint is drawn at reduced opacity.
+    expect(alphasByFill.some(a => a < 1)).toBe(true);
+  });
+
+  it("never dims keypoints that carry no score (legacy callers)", () => {
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(ctx, { nose: { x: 50, y: 50 }, left_eye_inner: { x: 40, y: 40 } });
+    expect(alphasByFill.every(a => a === 1)).toBe(true);
+  });
+
+  it("estimatedDimThreshold: 0 disables confidence dimming", () => {
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(
+      ctx,
+      { nose: { x: 50, y: 50, score: 0.01 } },
+      { estimatedDimThreshold: 0 },
+    );
+    expect(alphasByFill.every(a => a === 1)).toBe(true);
+  });
 });

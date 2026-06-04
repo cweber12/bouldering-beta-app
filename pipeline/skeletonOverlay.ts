@@ -22,6 +22,24 @@ const LIMB_COLOR  = "rgba(34, 197, 94, 0.65)";   // accent green, lower opacity 
 const LIMB_WIDTH = 2.5;
 
 /**
+ * Confidence below which a keypoint is treated as an unreliable
+ * **Estimated Landmark** and drawn dimmed. Detected joints and confidently
+ * bridged/estimated joints sit above this; only weakly-extrapolated or
+ * long-held joints fall below. Keypoints with no `score` are never dimmed.
+ */
+const ESTIMATED_DIM_THRESHOLD = 0.4;
+/** Opacity multiplier applied to a dimmed Estimated Landmark / its limbs. */
+const ESTIMATED_DIM_OPACITY = 0.4;
+
+/** A transformed overlay point. `score` (when present) drives confidence dimming. */
+export interface OverlayPoint {
+  x: number;
+  y: number;
+  /** Carried-through detection/estimation confidence in [0, 1]. */
+  score?: number;
+}
+
+/**
  * Style options for the skeleton overlay.
  * All fields are optional; unset values fall back to built-in defaults.
  */
@@ -62,6 +80,17 @@ export interface SkeletonStyle {
    * Overrides `lineWidth` for that edge.
    */
   edgeWidthMap?: Partial<Record<string, number>>;
+  /**
+   * Confidence threshold below which a keypoint is dimmed as an unreliable
+   * Estimated Landmark. Default {@link ESTIMATED_DIM_THRESHOLD}; set to `0` to
+   * disable confidence dimming entirely.
+   */
+  estimatedDimThreshold?: number;
+  /**
+   * Opacity multiplier for dimmed Estimated Landmarks.
+   * Default {@link ESTIMATED_DIM_OPACITY}.
+   */
+  estimatedDimOpacity?: number;
 }
 
 /**
@@ -79,13 +108,15 @@ export function buildTransformedKeypoints(
   h: Float64Array,
   videoWidth: number,
   videoHeight: number,
-): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
+): Record<string, OverlayPoint> {
+  const out: Record<string, OverlayPoint> = {};
 
   for (const kp of frame.keypoints) {
     const px = kp.x * videoWidth;
     const py = kp.y * videoHeight;
-    out[kp.name] = applyHomographyMatrix(h, px, py);
+    const { x, y } = applyHomographyMatrix(h, px, py);
+    // Carry the confidence through so the renderer can dim Estimated Landmarks.
+    out[kp.name] = { x, y, score: kp.score };
   }
 
   return out;
@@ -101,26 +132,36 @@ export function buildTransformedKeypoints(
  * @param alpha - Blend factor in [0, 1]: 0 = fully a, 1 = fully b.
  */
 export function lerpKeypoints(
-  a: Record<string, { x: number; y: number }>,
-  b: Record<string, { x: number; y: number }>,
+  a: Record<string, OverlayPoint>,
+  b: Record<string, OverlayPoint>,
   alpha: number,
-): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
+): Record<string, OverlayPoint> {
+  const out: Record<string, OverlayPoint> = {};
   for (const name of Object.keys(a)) {
+    const pa = a[name];
     const pb = b[name];
     if (pb) {
       out[name] = {
-        x: a[name].x + alpha * (pb.x - a[name].x),
-        y: a[name].y + alpha * (pb.y - a[name].y),
+        x: pa.x + alpha * (pb.x - pa.x),
+        y: pa.y + alpha * (pb.y - pa.y),
+        // A joint dims if either endpoint is low-confidence — take the min.
+        score: minScore(pa.score, pb.score),
       };
     } else {
-      out[name] = a[name];
+      out[name] = pa;
     }
   }
   for (const name of Object.keys(b)) {
     if (!out[name]) out[name] = b[name];
   }
   return out;
+}
+
+/** Min of two optional scores; undefined only when both are undefined. */
+function minScore(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b;
+  if (b === undefined) return a;
+  return Math.min(a, b);
 }
 
 /**
@@ -136,7 +177,7 @@ export function lerpKeypoints(
  */
 export function drawSkeleton(
   ctx: CanvasRenderingContext2D,
-  keypoints: Record<string, { x: number; y: number }>,
+  keypoints: Record<string, OverlayPoint>,
   options?: SkeletonStyle,
 ): void {
   const limbColor = options?.limbColor ?? LIMB_COLOR;
@@ -149,6 +190,14 @@ export function drawSkeleton(
   const edgeWidthMap = options?.edgeWidthMap;
   const jointColorOverrides = options?.jointColorOverrides;
   const jointRadiusOverrides = options?.jointRadiusOverrides;
+  const dimThreshold = options?.estimatedDimThreshold ?? ESTIMATED_DIM_THRESHOLD;
+  const dimOpacity = options?.estimatedDimOpacity ?? ESTIMATED_DIM_OPACITY;
+
+  // A point is dimmed when it carries a score below the threshold. Points with
+  // no score (legacy callers, fully-detected joints) are never dimmed.
+  const isDim = (p: OverlayPoint | undefined): boolean =>
+    !!p && p.score !== undefined && p.score < dimThreshold;
+
   // Draw limb lines first so joints render on top.
   ctx.save();
   ctx.lineCap = "round";
@@ -161,6 +210,8 @@ export function drawSkeleton(
     const edgeKey = `${fromIdx}-${toIdx}`;
     ctx.strokeStyle = edgeColorMap?.[edgeKey] ?? limbColor;
     ctx.lineWidth = edgeWidthMap?.[edgeKey] ?? lineWidth;
+    // Dim a limb if either endpoint is an unreliable Estimated Landmark.
+    ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
 
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
@@ -171,10 +222,12 @@ export function drawSkeleton(
   // Draw joint circles — per-keypoint overrides take precedence.
   for (const [name, pt] of Object.entries(keypoints)) {
     ctx.fillStyle = jointColorOverrides?.[name] ?? jointColor;
+    ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, jointRadiusOverrides?.[name] ?? pointRadius, 0, Math.PI * 2);
     ctx.fill();
   }
 
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
