@@ -43,8 +43,36 @@ _Avoid_: background crop.
 
 **Quality Tier**:
 A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects the
-pose model variant and detection effort. (Planned — see ADR backlog.)
+pose model variant and detection effort (model variant, sampling density, and
+**Adaptive Refinement** budget). An advanced panel may override individual knobs
+after a tier is picked. Trades a slower **Scan** for a cleaner overlay.
 _Avoid_: mode, level, model setting.
+
+### Detection quality
+
+**Landmark Flip**:
+A frame in which the pose model mislabels the **Climber**'s left/right sides
+(e.g. `left_shoulder` jumps to the right side of the body) without the body
+actually having rotated — a detection glitch, _not_ a real movement. Detected by
+a fast, discontinuous sign-change in shoulder/hip separation; distinguished from
+a genuine torso rotation, which moves each labelled joint smoothly. Flipped
+frames are discarded (not relabelled — flips are often asymmetric) and re-detected.
+_Avoid_: rotation, twist (those are real motion), mirror.
+
+**Adaptive Refinement**:
+A second detection pass that densely re-samples only the segments that need it —
+where the Climber moves fast between sampled frames, or where a frame was
+discarded (e.g. a **Landmark Flip**) — stepping frame-by-frame until a clean pose
+is captured or a budget cap is hit. Static segments stay sparsely sampled. Spends
+**Scan** time where it changes the overlay, not uniformly.
+_Avoid_: gap recovery (that is one trigger of Adaptive Refinement, not the whole thing).
+
+**Estimated Landmark**:
+A keypoint whose position was inferred (from neighbouring frames or skeletal
+geometry) rather than detected, so the skeleton stays whole through brief
+dropouts/occlusion. Carried at reduced confidence; rendered dimmed only when the
+gap is too large to estimate reliably.
+_Avoid_: predicted point, fake landmark.
 
 ### Capture mode
 
