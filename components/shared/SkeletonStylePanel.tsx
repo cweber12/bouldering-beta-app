@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { MP_KP_NAMES } from "@/utils/poseConstants";
 import { cn } from "@/utils/cn";
+import { useClickOutside } from "@/hooks/useClickOutside";
 
 // ---------------------------------------------------------------------------
 // Joint / limb group definitions (MediaPipe 33-keypoint topology)
@@ -219,16 +220,7 @@ export default function SkeletonStylePanel({
   }, [lineWidth, pointRadius, globalPointColor, globalLineColor, useSideColors, useGroups, headCfg, jointGroups, limbGroups]);
 
   // Close when clicking outside.
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useClickOutside(panelRef, () => setOpen(false), open);
 
   // ── Cascade handlers ─────────────────────────────────────────────────────
 

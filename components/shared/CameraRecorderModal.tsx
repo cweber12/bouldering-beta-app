@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 interface Props {
   /** "video" (default) records a clip; "photo" captures a still frame. */
@@ -29,13 +30,7 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
     closeButtonRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   useEffect(() => {
     let active = true;

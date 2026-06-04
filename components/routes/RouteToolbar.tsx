@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import type { RouteSort } from "@/utils/routeSummary";
 
 interface RouteToolbarProps {
@@ -37,14 +38,7 @@ export default function RouteToolbar({
   const filterRef = useRef<HTMLDivElement>(null);
   const hasFilters = !!(state || area);
 
-  useEffect(() => {
-    if (!filterOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [filterOpen]);
+  useClickOutside(filterRef, () => setFilterOpen(false), filterOpen);
 
   return (
     <div className="flex items-stretch gap-2">

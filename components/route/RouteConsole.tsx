@@ -14,6 +14,7 @@ import RunStatusDot from "@/components/shared/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 import { EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 import { useOpenCV } from "@/hooks/useOpenCV";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -291,15 +292,7 @@ export default function RouteConsole({
   }, [imageCrop, cv, imageFile, anyLoaded, matchTrigger]);
 
   // Close update menu on outside click.
-  useEffect(() => {
-    function onPointerDown(e: PointerEvent) {
-      if (updateMenuRef.current && !updateMenuRef.current.contains(e.target as Node)) {
-        setShowUpdateMenu(false);
-      }
-    }
-    if (showUpdateMenu) document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [showUpdateMenu]);
+  useClickOutside(updateMenuRef, () => setShowUpdateMenu(false), showUpdateMenu, "pointerdown");
 
   // Revoke objectURL on unmount.
   useEffect(() => {

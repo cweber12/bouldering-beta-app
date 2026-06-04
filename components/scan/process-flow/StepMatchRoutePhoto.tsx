@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
@@ -13,6 +13,8 @@ import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { useClickOutside } from "@/hooks/useClickOutside";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -93,24 +95,10 @@ export default function StepMatchRoutePhoto({
   const matchStatsRef = useRef<HTMLDivElement>(null);
 
   // Close match stats when clicking outside.
-  useEffect(() => {
-    if (!showMatchStats) return;
-    function handler(e: MouseEvent) {
-      if (matchStatsRef.current && !matchStatsRef.current.contains(e.target as Node)) {
-        setShowMatchStats(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showMatchStats]);
+  useClickOutside(matchStatsRef, () => setShowMatchStats(false), showMatchStats);
 
   // ESC closes fullscreen
-  useEffect(() => {
-    if (!routePhotoFullscreen) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setRoutePhotoFullscreen(false); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [routePhotoFullscreen]);
+  useEscapeKey(() => setRoutePhotoFullscreen(false), routePhotoFullscreen);
 
   function handleChangePhotoInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

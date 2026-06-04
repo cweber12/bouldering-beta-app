@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
@@ -14,6 +14,8 @@ import {
 } from "@/utils/poseTiers";
 import { fitMediaStyle, fitMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
+import { useClickOutside } from "@/hooks/useClickOutside";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 const WALL_COLOR = "rgba(251,191,36,0.90)";
@@ -62,14 +64,7 @@ function DetectionSettings({
 }: DetectionSettingsProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!showSettings) return;
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showSettings, onClose]);
+  useClickOutside(ref, onClose, showSettings);
 
   return (
     <div ref={ref} className="relative">
@@ -369,12 +364,7 @@ export default function StepSetDetection({
   }
 
   // ESC key closes fullscreen
-  useEffect(() => {
-    if (!videoFullscreen) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setVideoFullscreen(false); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [videoFullscreen]);
+  useEscapeKey(() => setVideoFullscreen(false), videoFullscreen);
 
   // ── Shared settings props ──────────────────────────────────────────────
   const settingsProps: DetectionSettingsProps = {

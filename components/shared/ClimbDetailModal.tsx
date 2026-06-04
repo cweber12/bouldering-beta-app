@@ -5,6 +5,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
@@ -60,13 +61,7 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
     closeButtonRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  useEscapeKey(onClose);
 
   const go = (url: string) => {
     onClose();

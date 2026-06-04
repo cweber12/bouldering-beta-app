@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/hooks/useAuth";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import InfoDropdown from "@/components/shared/InfoDropdown";
 import ThemeToggle from "@/components/shared/ThemeToggle";
 import AccountMenu from "@/components/shared/AccountMenu";
@@ -121,15 +122,7 @@ export default function NavBar() {
   }
 
   // Close on outside click
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (helpRef.current && !helpRef.current.contains(e.target as Node)) {
-        setHelpOpenPath(null);
-      }
-    }
-    if (helpOpen) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [helpOpen]);
+  useClickOutside(helpRef, () => setHelpOpenPath(null), helpOpen);
 
   async function handleSignOut() {
     await signOut();
