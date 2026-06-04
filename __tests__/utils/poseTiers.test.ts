@@ -26,6 +26,8 @@ describe("poseTiers", () => {
       frameStep: 15,
       maxRecoveryFrames: 15,
       filterTolerance: 4,
+      motionThreshold: Infinity,
+      refineStride: 2,
     });
   });
 
@@ -36,6 +38,8 @@ describe("poseTiers", () => {
       frameStep: 10,
       maxRecoveryFrames: 30,
       filterTolerance: 3,
+      motionThreshold: 0.06,
+      refineStride: 1,
     });
   });
 
@@ -46,6 +50,8 @@ describe("poseTiers", () => {
       frameStep: 5,
       maxRecoveryFrames: 45,
       filterTolerance: 2,
+      motionThreshold: 0.04,
+      refineStride: 1,
     });
   });
 
@@ -60,6 +66,14 @@ describe("poseTiers", () => {
     // Strictly increasing in both: denser→sparser sampling, stricter→looser filter.
     expect(steps).toEqual([...steps].sort((a, b) => a - b));
     expect(tols).toEqual([...tols].sort((a, b) => a - b));
+  });
+
+  it("motion densification: off for Fast, looser→tighter threshold accurate < balanced", () => {
+    expect(getTierConfig("fast").motionThreshold).toBe(Infinity);
+    // A lower threshold densifies more eagerly — Accurate should refine the most.
+    expect(getTierConfig("accurate").motionThreshold).toBeLessThan(
+      getTierConfig("balanced").motionThreshold,
+    );
   });
 
   it("provides a human-readable label for every tier", () => {

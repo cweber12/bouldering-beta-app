@@ -434,6 +434,8 @@ function ScanPageInner() {
     }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning }, startTime, "mediapipe", {
       maxRecoveryFrames: cfg.maxRecoveryFrames,
       filterTolerance: cfg.filterTolerance,
+      motionThreshold: cfg.motionThreshold,
+      refineStride: cfg.refineStride,
     });
     setStep("landmarks");
   }
