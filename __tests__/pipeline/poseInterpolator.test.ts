@@ -79,16 +79,23 @@ describe("interpolatePoseFrames", () => {
     expect(result[2].keypoints[0]).toMatchObject({ x: 0.5, y: 0.1 });
   });
 
-  it("only interpolates keypoints present in both anchor frames", () => {
+  it("interpolates shared keypoints and holds one-anchor keypoints (attenuated)", () => {
     const processed = [
-      frame(0.0, [["left_hip", 0.4, 0.5], ["nose", 0.5, 0.1]]),
+      frame(0.0, [["left_hip", 0.4, 0.5], ["nose", 0.5, 0.1, 0.8]]),
       frame(1.0, [["left_hip", 0.6, 0.7]]), // nose is missing in second frame
     ];
     const result = interpolatePoseFrames(processed, [0.0, 0.5, 1.0]);
-    const midKps = result[1].keypoints.map(k => k.name);
-    // nose disappears at the midpoint because it is absent in the to-frame.
-    expect(midKps).not.toContain("nose");
-    expect(midKps).toContain("left_hip");
+    const mid = result[1].keypoints;
+    // left_hip is in both anchors → interpolated to the midpoint.
+    const hip = mid.find(k => k.name === "left_hip")!;
+    expect(hip.x).toBeCloseTo(0.5);
+    // nose is in only the first anchor → HELD at its position, not dropped, with
+    // an attenuated score so the renderer can dim it.
+    const nose = mid.find(k => k.name === "nose")!;
+    expect(nose).toBeDefined();
+    expect(nose.x).toBeCloseTo(0.5);
+    expect(nose.y).toBeCloseTo(0.1);
+    expect(nose.score).toBeCloseTo(0.4); // 0.8 × HELD factor (0.5)
   });
 
   it("produces one output frame per input timestamp", () => {
@@ -182,6 +189,46 @@ describe("smoothPoseFrames", () => {
     const hip1  = result[1].keypoints.find(k => k.name === "left_hip")!;
     expect(nose1.x).toBeCloseTo(1.0, 2);
     expect(hip1.x).toBeCloseTo(0.0, 2);
+  });
+
+  it("is zero-phase: time-reversing the input reverses the output (no directional lag)", () => {
+    // A step at the middle. A causal (forward-only) filter would lag the step,
+    // making the forward and time-reversed responses asymmetric. The zero-phase
+    // filter is symmetric: smoothing the reversed sequence yields the reverse of
+    // smoothing the forward sequence.
+    const ts = [0, 1, 2, 3, 4, 5];
+    const fwdVals = [0, 0, 0, 1, 1, 1];
+    const fwd = ts.map((t, i) => frame(t, [["nose", fwdVals[i], 0]]));
+    // Same timestamps, values reversed in order (a mirror-image step).
+    const rev = ts.map((t, i) => frame(t, [["nose", fwdVals[fwdVals.length - 1 - i], 0]]));
+
+    const outFwd = smoothPoseFrames(fwd).map(f => f.keypoints[0].x);
+    const outRev = smoothPoseFrames(rev).map(f => f.keypoints[0].x);
+
+    // One-Euro's cutoff is speed-dependent (nonlinear), so the filter is only
+    // approximately zero-phase — symmetric to ~0.5% rather than bit-exact. A
+    // causal forward-only filter would be grossly asymmetric here (the lagged
+    // step would land several frames late), so this still pins down zero-phase.
+    for (let i = 0; i < ts.length; i++) {
+      expect(outFwd[i]).toBeCloseTo(outRev[ts.length - 1 - i], 2);
+    }
+  });
+
+  it("smooths a mid-sequence spike toward its neighbours (jitter rejection)", () => {
+    // Single-frame outlier surrounded by a constant signal. Zero-phase smoothing
+    // must pull the spike back toward the baseline from both sides.
+    const frames = [
+      frame(0, [["nose", 0.5, 0.5]]),
+      frame(1, [["nose", 0.5, 0.5]]),
+      frame(2, [["nose", 0.9, 0.5]]), // spike
+      frame(3, [["nose", 0.5, 0.5]]),
+      frame(4, [["nose", 0.5, 0.5]]),
+    ];
+    const result = smoothPoseFrames(frames);
+    const spike = result[2].keypoints[0].x;
+    // Pulled down from 0.9, but still above the 0.5 baseline.
+    expect(spike).toBeLessThan(0.9);
+    expect(spike).toBeGreaterThan(0.5);
   });
 });
 
