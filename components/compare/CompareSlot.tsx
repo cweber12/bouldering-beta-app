@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Ref } from "react";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import type { CropFraction } from "@/components/capture/CropBoxOverlay";
@@ -116,6 +116,22 @@ export default function CompareSlot({
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
 
+  // This climb's styled skeleton — identity colour, shared sizing, and the
+  // body-part highlight focus. Derived once and reused for both the live player
+  // layer and the download/export render path.
+  const highlightStyle = useMemo(() => {
+    const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
+    return buildHighlightStyle({
+      selection: highlight,
+      limbColor,
+      jointColor: JOINT_COLOR,
+      lineWidth,
+      pointRadius,
+      skeletonEdges: topo.skeletonEdges,
+      keypointNames: topo.keypointNames,
+    });
+  }, [attempt?.poseBackend, highlight, limbColor, lineWidth, pointRadius]);
+
   async function handleDownload() {
     if (!cv || !imageFile || !attempt || !matchResult) return;
     const att = getAttempt(attempt.id);
@@ -132,18 +148,7 @@ export default function CompareSlot({
         orbFeatures: att.orbFeatures,
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
-        skeletonStyle: (() => {
-          const topo = getTopology(att.poseBackend ?? "mediapipe");
-          return buildHighlightStyle({
-            selection: highlight,
-            limbColor,
-            jointColor: JOINT_COLOR,
-            lineWidth,
-            pointRadius,
-            skeletonEdges: topo.skeletonEdges,
-            keypointNames: topo.keypointNames,
-          });
-        })(),
+        skeletonStyle: highlightStyle,
         targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
@@ -166,21 +171,7 @@ export default function CompareSlot({
   // Single styled layer for this climb — identity colour, shared sizing, and
   // the body-part highlight focus (emphasize selected regions, dim the rest).
   const playerLayers = skeletonData
-    ? [{
-        frames: skeletonData.frames,
-        style: (() => {
-          const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
-          return buildHighlightStyle({
-            selection: highlight,
-            limbColor,
-            jointColor: JOINT_COLOR,
-            lineWidth,
-            pointRadius,
-            skeletonEdges: topo.skeletonEdges,
-            keypointNames: topo.keypointNames,
-          });
-        })(),
-      }]
+    ? [{ frames: skeletonData.frames, style: highlightStyle }]
     : [];
 
   return (
