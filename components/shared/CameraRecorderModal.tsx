@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useEscapeKey } from "@/hooks/useEscapeKey";
+import Modal from "@/components/ui/Modal";
 
 interface Props {
   /** "video" (default) records a clip; "photo" captures a still frame. */
@@ -29,8 +29,6 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
   useEffect(() => {
     closeButtonRef.current?.focus();
   }, []);
-
-  useEscapeKey(onClose);
 
   useEffect(() => {
     let active = true;
@@ -123,17 +121,14 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
   const ariaLabel = mode === "photo" ? "Take a photo" : "Record a video";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={ariaLabel}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 sm:items-center"
-      onClick={onClose}
+    <Modal
+      open
+      onClose={onClose}
+      ariaLabel={ariaLabel}
+      placement="bottom"
+      containerClassName="sm:items-center"
+      panelClassName="w-full max-w-lg overflow-hidden rounded-t-2xl bg-card shadow-2xl sm:rounded-2xl"
     >
-      <div
-        className="relative w-full max-w-lg overflow-hidden rounded-t-2xl bg-card shadow-2xl sm:rounded-2xl"
-        onClick={e => e.stopPropagation()}
-      >
         {/* Camera preview */}
         <div className="relative aspect-video w-full bg-black">
           <video
@@ -195,7 +190,6 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
             Cancel
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

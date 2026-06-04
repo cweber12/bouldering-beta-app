@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
@@ -15,7 +14,7 @@ import {
 import { fitMediaStyle, fitMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { useClickOutside } from "@/hooks/useClickOutside";
-import { useEscapeKey } from "@/hooks/useEscapeKey";
+import FullscreenModal from "@/components/ui/FullscreenModal";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 const WALL_COLOR = "rgba(251,191,36,0.90)";
@@ -363,9 +362,6 @@ export default function StepSetDetection({
     onScan(t > 0 ? t : 0);
   }
 
-  // ESC key closes fullscreen
-  useEscapeKey(() => setVideoFullscreen(false), videoFullscreen);
-
   // ── Shared settings props ──────────────────────────────────────────────
   const settingsProps: DetectionSettingsProps = {
     showSettings,
@@ -591,57 +587,53 @@ export default function StepSetDetection({
       </ProcessFlowShell>
 
       {/* ── Fullscreen portal ── */}
-      {videoFullscreen && createPortal(
-        <div
-          className="fixed inset-0 z-fullscreen flex flex-col bg-surface"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Set detection — fullscreen"
-        >
+      <FullscreenModal
+        open={videoFullscreen}
+        onClose={() => setVideoFullscreen(false)}
+        ariaLabel="Set detection — fullscreen"
+        header={
           <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
             <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
               {toolbarNode("fullscreen")}
             </div>
           </header>
-
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden p-4 min-h-0">
-            <div className="flex max-h-full flex-col gap-1.5">
-              <div
-                className="relative overflow-hidden rounded-(--radius-panel) border border-edge/40"
-                style={fsMediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
-              >
-                <video
-                  ref={fullscreenVideoRef}
-                  src={videoPreviewUrl}
-                  muted
-                  playsInline
-                  onPlay={() => setFsIsPlaying(true)}
-                  onPause={() => setFsIsPlaying(false)}
-                  onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
-                  className="absolute inset-0 w-full h-full object-fill"
-                />
-                {cropOverlayNode}
-                {hasCropFrame && climberMarker}
-              </div>
-
-              {hasCropFrame && (
-                <TransportBar
-                  playing={fsIsPlaying}
-                  currentTime={fsVideoCurrentTime}
-                  duration={videoDuration}
-                  onPlayPause={handleFsPlayPause}
-                  onSeek={handleFsSeek}
-                />
-              )}
-            </div>
-          </div>
-
+        }
+        footer={
           <footer className="flex shrink-0 items-center justify-center border-t border-edge/40 bg-surface px-4 py-3">
             {scanButton("fullscreen")}
           </footer>
-        </div>,
-        document.body,
-      )}
+        }
+      >
+        <div className="flex max-h-full flex-col gap-1.5">
+          <div
+            className="relative overflow-hidden rounded-(--radius-panel) border border-edge/40"
+            style={fsMediaContainerStyle(videoNaturalSize.w, videoNaturalSize.h)}
+          >
+            <video
+              ref={fullscreenVideoRef}
+              src={videoPreviewUrl}
+              muted
+              playsInline
+              onPlay={() => setFsIsPlaying(true)}
+              onPause={() => setFsIsPlaying(false)}
+              onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
+              className="absolute inset-0 w-full h-full object-fill"
+            />
+            {cropOverlayNode}
+            {hasCropFrame && climberMarker}
+          </div>
+
+          {hasCropFrame && (
+            <TransportBar
+              playing={fsIsPlaying}
+              currentTime={fsVideoCurrentTime}
+              duration={videoDuration}
+              onPlayPause={handleFsPlayPause}
+              onSeek={handleFsSeek}
+            />
+          )}
+        </div>
+      </FullscreenModal>
     </>
   );
 }

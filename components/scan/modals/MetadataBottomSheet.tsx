@@ -1,6 +1,6 @@
 "use client";
 
-import { createPortal } from "react-dom";
+import Modal from "@/components/ui/Modal";
 import ComboInput from "@/components/shared/ComboInput";
 import { cn } from "@/utils/cn";
 import { ROUTE_TEXT_LIMIT } from "@/utils/fsHelpers";
@@ -76,8 +76,6 @@ export default function MetadataBottomSheet({
   s3Loading,
   onConfirm,
 }: MetadataBottomSheetProps) {
-  if (!open) return null;
-
   // Upload requires a full location (it forms the S3 key). Gate the confirm
   // button so the user can't trigger an after-the-fact warning — prevent,
   // don't scold. Device save keeps its unknown_* fallback, so it stays enabled.
@@ -86,16 +84,14 @@ export default function MetadataBottomSheet({
   const confirmDisabled =
     action === "upload" ? s3Loading || requiredMissing : false;
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-surface/70 backdrop-blur-sm"
-        onClick={onClose}
-      />
-
-      {/* Sheet */}
-      <div className="animate-slide-up relative w-full max-w-lg rounded-t-md border border-b-0 border-edge/50 bg-surface px-5 pb-7 pt-5 shadow-xl max-h-[85vh] overflow-y-auto">
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      ariaLabel={action === "save" ? "Save to Device" : "Upload"}
+      placement="bottom"
+      panelClassName="animate-slide-up w-full max-w-lg rounded-t-md border border-b-0 border-edge/50 bg-surface px-5 pb-7 pt-5 shadow-xl max-h-[85vh] overflow-y-auto"
+    >
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-fg">
@@ -325,8 +321,6 @@ export default function MetadataBottomSheet({
             )}
           </button>
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }

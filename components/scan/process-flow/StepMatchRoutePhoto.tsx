@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/shared/CropBoxOverlay";
 import FramePlayer from "@/components/shared/FramePlayer";
@@ -14,7 +13,7 @@ import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useClickOutside } from "@/hooks/useClickOutside";
-import { useEscapeKey } from "@/hooks/useEscapeKey";
+import FullscreenModal from "@/components/ui/FullscreenModal";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -96,9 +95,6 @@ export default function StepMatchRoutePhoto({
 
   // Close match stats when clicking outside.
   useClickOutside(matchStatsRef, () => setShowMatchStats(false), showMatchStats);
-
-  // ESC closes fullscreen
-  useEscapeKey(() => setRoutePhotoFullscreen(false), routePhotoFullscreen);
 
   function handleChangePhotoInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -320,13 +316,11 @@ export default function StepMatchRoutePhoto({
       </ProcessFlowShell>
 
       {/* ── Route photo fullscreen portal (crop adjustment) ── */}
-      {routePhotoFullscreen && createPortal(
-        <div
-          className="fixed inset-0 z-fullscreen flex flex-col bg-surface"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Route photo crop — fullscreen"
-        >
+      <FullscreenModal
+        open={routePhotoFullscreen}
+        onClose={() => setRoutePhotoFullscreen(false)}
+        ariaLabel="Route photo crop — fullscreen"
+        header={
           <header className="flex shrink-0 items-center justify-between border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
             <p className="text-sm font-medium text-fg">Route photo &mdash; adjust ORB crop region</p>
             <button
@@ -340,23 +334,9 @@ export default function StepMatchRoutePhoto({
               </svg>
             </button>
           </header>
-
-          <div className="flex-1 relative overflow-hidden flex items-center justify-center px-4 py-4 min-h-0">
-            <div
-              className="relative overflow-hidden rounded-(--radius-panel) border border-edge/40"
-              style={fsMediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={routePhotoPreviewUrl}
-                alt="Route photo preview"
-                className="absolute inset-0 w-full h-full object-fill"
-              />
-              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
-            </div>
-          </div>
-
-          {!routeMatchTriggered && (
+        }
+        footer={
+          !routeMatchTriggered ? (
             <footer className="flex justify-center gap-3 border-t border-edge/40 bg-surface px-4 py-3">
               <button
                 onClick={() => { setRoutePhotoFullscreen(false); onApplyMatch(); }}
@@ -365,10 +345,22 @@ export default function StepMatchRoutePhoto({
                 Project skeleton
               </button>
             </footer>
-          )}
-        </div>,
-        document.body,
-      )}
+          ) : undefined
+        }
+      >
+        <div
+          className="relative overflow-hidden rounded-(--radius-panel) border border-edge/40"
+          style={fsMediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={routePhotoPreviewUrl}
+            alt="Route photo preview"
+            className="absolute inset-0 w-full h-full object-fill"
+          />
+          <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
+        </div>
+      </FullscreenModal>
     </>
   );
 }
