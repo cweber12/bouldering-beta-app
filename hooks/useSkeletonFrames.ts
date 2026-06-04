@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   buildSkeletonFrames,
+  buildPanningSkeletonFrames,
   type SkeletonFrameData,
 } from "@/pipeline/skeletonRenderer";
 import { getAttempt } from "@/storage/sessionStore";
@@ -43,7 +44,8 @@ export function useSkeletonFrames(
   // reference changes but the underlying data is the same.
   const depsKey = useMemo(() => {
     if (!cv || !attemptId || !matchResult) return null;
-    return `${attemptId}:${matchResult.matches.length}`;
+    const kf = matchResult.keyframeHomographies?.length ?? 0;
+    return `${attemptId}:${matchResult.matches.length}:${kf}`;
   }, [cv, attemptId, matchResult]);
 
   useEffect(() => {
@@ -55,22 +57,32 @@ export function useSkeletonFrames(
     }
 
     const attempt = getAttempt(attemptId);
-    if (!attempt?.orbFeatures) {
+    // Panning Capture renders from per-keyframe homographies and does not need
+    // the single frame-0 reference; Fixed Capture requires orbFeatures.
+    const kfHomographies = matchResult.keyframeHomographies;
+    if (!kfHomographies?.length && !attempt?.orbFeatures) {
       setStatus("error");
       setErrorMessage("No ORB reference features found for this attempt.");
       return;
     }
 
     try {
-      const result = buildSkeletonFrames({
-        cv,
-        frames: attempt.frames,
-        videoMeta: attempt.videoMeta,
-        orbFeatures: attempt.orbFeatures,
-        queryOrb: matchResult.queryOrb,
-        matches: matchResult.matches,
-        targetFps,
-      });
+      const result = kfHomographies?.length
+        ? buildPanningSkeletonFrames({
+            frames: attempt!.frames,
+            videoMeta: attempt!.videoMeta,
+            keyframeHomographies: kfHomographies,
+            targetFps,
+          })
+        : buildSkeletonFrames({
+            cv,
+            frames: attempt!.frames,
+            videoMeta: attempt!.videoMeta,
+            orbFeatures: attempt!.orbFeatures!,
+            queryOrb: matchResult.queryOrb,
+            matches: matchResult.matches,
+            targetFps,
+          });
       setData(result);
       setStatus("ready");
       setErrorMessage(null);

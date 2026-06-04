@@ -200,6 +200,15 @@ export function extractFeaturesFromCrop(
 export const QUERY_MAX_EDGE = 1600;
 
 /**
+ * Longest-edge target for the Route Photo in **Panning Capture**. Each Keyframe
+ * is a close-up that maps to a small region of the whole-route photo, so the
+ * photo is kept at higher resolution than the Fixed-path {@link QUERY_MAX_EDGE}
+ * (which targets the reference-frame resolution) to preserve matchable detail.
+ * Still bounded by the decode-time pixel cap.
+ */
+export const PANNING_QUERY_MAX_EDGE = 3200;
+
+/**
  * Floor (px) below which the query photo is never downscaled. Guards against
  * destroying matchable detail when the reference frame is unusually small
  * (e.g. a tightly-cropped video).

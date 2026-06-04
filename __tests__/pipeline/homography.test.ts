@@ -3,7 +3,10 @@ import {
   applyHomographyMatrix,
   isValidHomography,
   ransacReprojThresholdFor,
+  interpolateHomographies,
+  homographyAtTime,
   RANSAC_BASE_THRESHOLD,
+  type KeyframeHomography,
 } from "@/pipeline/homography";
 import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { PoseFrame } from "@/pipeline/poseDetection";
@@ -136,6 +139,105 @@ describe("ransacReprojThresholdFor", () => {
 
   it("falls back to the baseline for non-positive input", () => {
     expect(ransacReprojThresholdFor(0)).toBe(RANSAC_BASE_THRESHOLD);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// interpolateHomographies
+// ---------------------------------------------------------------------------
+
+describe("interpolateHomographies", () => {
+  // prettier-ignore
+  const T0 = new Float64Array([1, 0, 0,    0, 1, 0,    0, 0, 1]);
+  // prettier-ignore
+  const T100 = new Float64Array([1, 0, 100, 0, 1, 200,  0, 0, 1]);
+
+  it("reproduces the endpoints exactly at alpha 0 and 1", () => {
+    expect(Array.from(interpolateHomographies(T0, T100, 0))).toEqual(Array.from(T0));
+    expect(Array.from(interpolateHomographies(T0, T100, 1))).toEqual(Array.from(T100));
+  });
+
+  it("clamps alpha outside [0, 1] to the endpoints", () => {
+    expect(Array.from(interpolateHomographies(T0, T100, -5))).toEqual(Array.from(T0));
+    expect(Array.from(interpolateHomographies(T0, T100, 9))).toEqual(Array.from(T100));
+  });
+
+  it("blends a pure translation linearly at the midpoint", () => {
+    const mid = interpolateHomographies(T0, T100, 0.5);
+    const p = applyHomographyMatrix(mid, 0, 0);
+    expect(p.x).toBeCloseTo(50);
+    expect(p.y).toBeCloseTo(100);
+  });
+
+  it("interpolates a uniform scale (linear in scale)", () => {
+    // prettier-ignore
+    const S1 = new Float64Array([1, 0, 0,   0, 1, 0,   0, 0, 1]);
+    // prettier-ignore
+    const S3 = new Float64Array([3, 0, 0,   0, 3, 0,   0, 0, 1]);
+    const mid = interpolateHomographies(S1, S3, 0.5);
+    const p = applyHomographyMatrix(mid, 10, 10);
+    // scale halfway between 1 and 3 = 2×
+    expect(p.x).toBeCloseTo(20);
+    expect(p.y).toBeCloseTo(20);
+  });
+
+  it("slerps rotation along the shortest arc", () => {
+    const rot = (deg: number): Float64Array => {
+      const r = (deg * Math.PI) / 180;
+      // prettier-ignore
+      return new Float64Array([Math.cos(r), -Math.sin(r), 0,   Math.sin(r), Math.cos(r), 0,   0, 0, 1]);
+    };
+    const mid = interpolateHomographies(rot(0), rot(90), 0.5);
+    // A point on the +x axis should land at 45°.
+    const p = applyHomographyMatrix(mid, 1, 0);
+    expect(p.x).toBeCloseTo(Math.cos(Math.PI / 4));
+    expect(p.y).toBeCloseTo(Math.sin(Math.PI / 4));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// homographyAtTime
+// ---------------------------------------------------------------------------
+
+describe("homographyAtTime", () => {
+  const kf = (timestamp: number, tx: number): KeyframeHomography => ({
+    timestamp,
+    // prettier-ignore
+    h: new Float64Array([1, 0, tx, 0, 1, 0, 0, 0, 1]),
+  });
+
+  it("throws when no keyframes are supplied", () => {
+    expect(() => homographyAtTime([], 0)).toThrow();
+  });
+
+  it("returns the single keyframe regardless of time", () => {
+    const only = kf(5, 42);
+    expect(homographyAtTime([only], 0)).toBe(only.h);
+    expect(homographyAtTime([only], 99)).toBe(only.h);
+  });
+
+  it("clamps before the first and after the last keyframe", () => {
+    const a = kf(1, 10);
+    const b = kf(3, 30);
+    expect(homographyAtTime([a, b], 0)).toBe(a.h);
+    expect(homographyAtTime([a, b], 5)).toBe(b.h);
+  });
+
+  it("interpolates between the bracketing keyframes by time fraction", () => {
+    const a = kf(1, 0);
+    const b = kf(3, 100);
+    // t = 2 is halfway between 1 and 3 → tx 50.
+    const mid = homographyAtTime([a, b], 2);
+    expect(applyHomographyMatrix(mid, 0, 0).x).toBeCloseTo(50);
+  });
+
+  it("selects the correct pair across three keyframes", () => {
+    const a = kf(0, 0);
+    const b = kf(2, 20);
+    const c = kf(4, 100);
+    // t = 3 is halfway between b(20) and c(100) → 60.
+    const mid = homographyAtTime([a, b, c], 3);
+    expect(applyHomographyMatrix(mid, 0, 0).x).toBeCloseTo(60);
   });
 });
 

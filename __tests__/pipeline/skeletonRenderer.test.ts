@@ -8,6 +8,7 @@ import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
 
 vi.mock("@/pipeline/homography", () => ({
   computeHomography: vi.fn(),
+  homographyAtTime: vi.fn(() => new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1])),
 }));
 
 vi.mock("@/pipeline/skeletonOverlay", async (importOriginal) => {
@@ -18,12 +19,13 @@ vi.mock("@/pipeline/skeletonOverlay", async (importOriginal) => {
   };
 });
 
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography, homographyAtTime } from "@/pipeline/homography";
 import { buildTransformedKeypoints } from "@/pipeline/skeletonOverlay";
 
 import {
   buildSkeletonFrames,
   buildMultiSkeletonFrames,
+  buildPanningSkeletonFrames,
 } from "@/pipeline/skeletonRenderer";
 
 // ---------------------------------------------------------------------------
@@ -279,5 +281,62 @@ describe("buildMultiSkeletonFrames", () => {
     for (const f of result.layers[1].frames) {
       expect(Object.keys(f.keypoints)).toHaveLength(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPanningSkeletonFrames
+// ---------------------------------------------------------------------------
+
+describe("buildPanningSkeletonFrames", () => {
+  const kfHomographies = [
+    { timestamp: 0, h: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]) },
+    { timestamp: 1, h: new Float64Array([1, 0, 50, 0, 1, 0, 0, 0, 1]) },
+  ];
+
+  it("throws when no keyframe homographies are supplied", () => {
+    expect(() =>
+      buildPanningSkeletonFrames({
+        frames: [makePoseFrame(0)],
+        videoMeta,
+        keyframeHomographies: [],
+      }),
+    ).toThrow(/keyframe/i);
+  });
+
+  it("produces the expected number of output frames", () => {
+    const result = buildPanningSkeletonFrames({
+      frames: [makePoseFrame(0), makePoseFrame(0.5), makePoseFrame(1)],
+      videoMeta,
+      keyframeHomographies: kfHomographies,
+      targetFps: 10,
+    });
+    // duration 1s @ 10fps → 11 frames
+    expect(result.frames).toHaveLength(11);
+    expect(result.fps).toBe(10);
+  });
+
+  it("resolves a time-varying homography per output frame", () => {
+    buildPanningSkeletonFrames({
+      frames: [makePoseFrame(0), makePoseFrame(1)],
+      videoMeta,
+      keyframeHomographies: kfHomographies,
+      targetFps: 10,
+    });
+    // homographyAtTime is consulted once per non-blank output frame.
+    expect(homographyAtTime).toHaveBeenCalled();
+    // It is always passed the sorted keyframe list.
+    expect(vi.mocked(homographyAtTime).mock.calls[0][0]).toHaveLength(2);
+  });
+
+  it("emits blank keypoints for frames with no pose keypoints", () => {
+    const result = buildPanningSkeletonFrames({
+      frames: [{ timestamp: 0, keypoints: [] }],
+      videoMeta,
+      keyframeHomographies: kfHomographies,
+      targetFps: 10,
+    });
+    expect(Object.keys(result.frames[0].keypoints)).toHaveLength(0);
+    expect(buildTransformedKeypoints).not.toHaveBeenCalled();
   });
 });

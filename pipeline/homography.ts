@@ -218,3 +218,144 @@ export function applyHomographyMatrix(
     y: (h[3] * px + h[4] * py + h[5]) / w,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Per-keyframe homography interpolation (Panning Capture)
+// ---------------------------------------------------------------------------
+
+/**
+ * A homography mapping reference video-frame pixels → Route Photo pixels,
+ * anchored at a single **Keyframe**'s video timestamp. Panning Capture builds an
+ * ordered array of these (one per matchable Keyframe) and interpolates between
+ * the bracketing pair for every rendered frame.
+ */
+export interface KeyframeHomography {
+  /** Video timestamp (seconds) the homography was anchored at. */
+  timestamp: number;
+  /** Flat 9-element row-major 3×3 homography. */
+  h: Float64Array;
+}
+
+interface DecomposedHomography {
+  tx: number;
+  ty: number;
+  /** Rotation angle (radians) of the 2×2 linear part. */
+  theta: number;
+  /** Scale along the rotated x axis. */
+  sx: number;
+  /** Scale along the rotated y axis. */
+  sy: number;
+  /** Shear term coupling the two axes. */
+  shear: number;
+  /** Perspective coefficients (h6, h7) after normalising h8 = 1. */
+  px: number;
+  py: number;
+}
+
+/**
+ * Decompose a homography into translation, rotation, scale, shear and
+ * perspective via an RQ-style split of the 2×2 linear part
+ * (`A = R(θ) · [[sx, shear], [0, sy]]`). Lossless: {@link recomposeHomography}
+ * inverts it exactly.
+ */
+function decomposeHomography(h: Float64Array): DecomposedHomography {
+  // Normalise so the homogeneous scale h8 = 1.
+  const s = h[8] !== 0 ? 1 / h[8] : 1;
+  const a = h[0] * s, b = h[1] * s, tx = h[2] * s;
+  const c = h[3] * s, d = h[4] * s, ty = h[5] * s;
+  const px = h[6] * s, py = h[7] * s;
+
+  const sx = Math.hypot(a, c);
+  const theta = Math.atan2(c, a);
+  const cos = Math.cos(theta);
+  const sin = Math.sin(theta);
+  // Rotate the second column back by -θ to recover shear / sy.
+  const shear = cos * b + sin * d;
+  const sy = -sin * b + cos * d;
+
+  return { tx, ty, theta, sx, sy, shear, px, py };
+}
+
+/** Recompose a homography from its decomposed components. */
+function recomposeHomography(p: DecomposedHomography): Float64Array {
+  const cos = Math.cos(p.theta);
+  const sin = Math.sin(p.theta);
+  const a = cos * p.sx;
+  const c = sin * p.sx;
+  const b = cos * p.shear - sin * p.sy;
+  const d = sin * p.shear + cos * p.sy;
+  return new Float64Array([a, b, p.tx, c, d, p.ty, p.px, p.py, 1]);
+}
+
+/** Linear interpolation. */
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+/** Interpolate an angle along the shortest arc (slerp for a 2-D rotation). */
+function lerpAngle(a: number, b: number, t: number): number {
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return a + d * t;
+}
+
+/**
+ * Interpolate between two photo-homographies by decomposing each into
+ * translation / rotation / scale / shear / perspective, blending each component
+ * (shortest-arc slerp for the rotation, linear for the rest) by `alpha`, then
+ * recomposing. `alpha` is clamped to [0, 1]; the endpoints reproduce `a` and `b`.
+ *
+ * Pure math — no OpenCV required.
+ */
+export function interpolateHomographies(
+  a: Float64Array,
+  b: Float64Array,
+  alpha: number,
+): Float64Array {
+  const t = alpha <= 0 ? 0 : alpha >= 1 ? 1 : alpha;
+  if (t === 0) return new Float64Array(a);
+  if (t === 1) return new Float64Array(b);
+  const da = decomposeHomography(a);
+  const db = decomposeHomography(b);
+  return recomposeHomography({
+    tx: lerp(da.tx, db.tx, t),
+    ty: lerp(da.ty, db.ty, t),
+    theta: lerpAngle(da.theta, db.theta, t),
+    sx: lerp(da.sx, db.sx, t),
+    sy: lerp(da.sy, db.sy, t),
+    shear: lerp(da.shear, db.shear, t),
+    px: lerp(da.px, db.px, t),
+    py: lerp(da.py, db.py, t),
+  });
+}
+
+/**
+ * Resolve the homography to apply at video time `t` from an ordered list of
+ * per-keyframe homographies. Before the first / after the last keyframe the
+ * nearest endpoint is held (clamped); between two keyframes the pair is
+ * decompose-interpolated by time fraction.
+ *
+ * @param keyframes - Non-empty, ascending by `timestamp`.
+ */
+export function homographyAtTime(
+  keyframes: KeyframeHomography[],
+  t: number,
+): Float64Array {
+  const n = keyframes.length;
+  if (n === 0) throw new Error("homographyAtTime: no keyframe homographies.");
+  if (n === 1 || t <= keyframes[0].timestamp) return keyframes[0].h;
+  if (t >= keyframes[n - 1].timestamp) return keyframes[n - 1].h;
+
+  // Find the bracketing pair (last keyframe with timestamp ≤ t).
+  let lo = 0;
+  for (let i = 1; i < n; i++) {
+    if (keyframes[i].timestamp <= t) lo = i;
+    else break;
+  }
+  const a = keyframes[lo];
+  const b = keyframes[lo + 1];
+  const dt = b.timestamp - a.timestamp;
+  const alpha = dt > 0 ? (t - a.timestamp) / dt : 0;
+  return interpolateHomographies(a.h, b.h, alpha);
+}

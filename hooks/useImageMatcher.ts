@@ -8,10 +8,11 @@ import {
   downscaleImageData,
   rescaleFeaturesToNative,
   queryMaxEdgeFor,
+  PANNING_QUERY_MAX_EDGE,
   type OrbMatch,
   type OrbFeatures,
 } from "@/pipeline/orbDetector";
-import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor } from "@/pipeline/homography";
+import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
 import { cropImageData } from "@/utils/cvHelpers";
 import { capToPixelBudget } from "@/utils/imageHelpers";
 import { getAttempt } from "@/storage/sessionStore";
@@ -38,6 +39,13 @@ export interface ImageMatchResult {
    * crop box. The returned matches and queryOrb reflect the re-anchored result.
    */
   reanchorApplied: boolean;
+  /**
+   * Panning Capture only: per-keyframe homographies (reference video-frame →
+   * photo), ascending by timestamp, with un-matchable keyframes dropped. Present
+   * and non-empty only when the attempt stored keyframes and at least one passed
+   * the match/validity gate; the render path uses these instead of `matches`.
+   */
+  keyframeHomographies?: KeyframeHomography[];
 }
 
 export type MatchStatus = "idle" | "matching" | "done" | "error";
@@ -82,7 +90,13 @@ export function useImageMatcher(): ImageMatcherResult {
       // resolution. Downscale the query to a reference-aware longest-edge target
       // before extraction; keypoints are mapped back to native coordinates after
       // so homography and the re-anchor pass operate in full-resolution space.
-      const maxEdge = queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
+      // Panning Capture is detected from stored keyframes. The photo is kept at
+      // higher resolution (PANNING_QUERY_MAX_EDGE) so each Keyframe's close-up
+      // section still has detail to match against its small region of the photo.
+      const panningMatch = (attempt.keyframes?.length ?? 0) > 0;
+      const maxEdge = panningMatch
+        ? PANNING_QUERY_MAX_EDGE
+        : queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
       const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
 
       // When the user specified a crop region, extract ORB features only from
@@ -110,7 +124,11 @@ export function useImageMatcher(): ImageMatcherResult {
       const reproj = ransacReprojThresholdFor(Math.max(imageData.width, imageData.height));
       const gate = { srcWidth: attempt.videoMeta.width, srcHeight: attempt.videoMeta.height };
 
+      // Skip the re-anchor crop pass for Panning Capture: it would replace the
+      // full-photo queryOrb with a sub-region (anchored to the frame-0 crop),
+      // but every keyframe must match against the whole photo.
       if (
+        !panningMatch &&
         matches.length < MIN_REANCHOR_THRESHOLD &&
         matches.length >= 4 &&
         attempt.orbFeatures.cropBox
@@ -157,12 +175,36 @@ export function useImageMatcher(): ImageMatcherResult {
         }
       }
 
+      // Panning Capture: match every stored Keyframe to the (whole) photo and
+      // compute its photo-homography. Keyframes with too few matches or a
+      // degenerate transform are dropped — homographyAtTime interpolates across
+      // the gaps at render time. The photo is the global reference, so each
+      // keyframe is anchored independently (drift-free, no chaining).
+      let keyframeHomographies: KeyframeHomography[] | undefined;
+      if (panningMatch && attempt.keyframes) {
+        const kfs: KeyframeHomography[] = [];
+        for (const kf of attempt.keyframes) {
+          const kfMatches = matchOrbFeatures(cv, kf.features, queryOrb);
+          if (kfMatches.length < 4) continue;
+          const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
+            ransacReprojThreshold: reproj,
+            gate,
+          });
+          if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
+          kfs.push({ timestamp: kf.timestamp, h });
+        }
+        if (kfs.length > 0) {
+          keyframeHomographies = kfs.sort((a, b) => a.timestamp - b.timestamp);
+        }
+      }
+
       setResult({
         matches,
         queryKeypoints: queryOrb.keypoints.length,
         referenceKeypoints: attempt.orbFeatures.keypoints.length,
         queryOrb,
         reanchorApplied,
+        keyframeHomographies,
       });
       setStatus("done");
     } catch (err) {
