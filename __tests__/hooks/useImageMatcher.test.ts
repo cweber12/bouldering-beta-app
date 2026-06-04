@@ -18,6 +18,7 @@ vi.mock("@/pipeline/orbDetector", () => ({
 vi.mock("@/pipeline/homography", () => ({
   computeHomography: vi.fn(),
   applyHomographyMatrix: vi.fn(),
+  ransacReprojThresholdFor: vi.fn().mockReturnValue(3),
 }));
 
 vi.mock("@/utils/cvHelpers", () => ({

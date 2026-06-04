@@ -22,6 +22,14 @@ import { cropImageData } from "@/utils/cvHelpers";
 const ORB_FEATURES = 3000;
 const ORB_DESCRIPTOR_BYTES = 32;
 const LOWE_RATIO = 0.75;
+/**
+ * Absolute Hamming-distance ceiling (out of 256 bits) for an accepted match.
+ * The Lowe ratio test alone can pass two mutually-bad candidates when the
+ * second-nearest is even worse; this hard cap rejects matches whose descriptors
+ * simply are not close, regardless of the runner-up. ~64/256 = a quarter of the
+ * bits differing.
+ */
+const HAMMING_MAX_DISTANCE = 64;
 
 export interface OrbKeypoint {
   pt: { x: number; y: number };
@@ -483,7 +491,7 @@ export function matchOrbFeatures(
       if (pair.size() < 2) continue;
       const m = pair.get(0);
       const n = pair.get(1);
-      if (m.distance < LOWE_RATIO * n.distance) {
+      if (m.distance <= HAMMING_MAX_DISTANCE && m.distance < LOWE_RATIO * n.distance) {
         results.push({
           queryIdx: m.queryIdx,
           trainIdx: m.trainIdx,

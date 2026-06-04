@@ -23,7 +23,8 @@ type CV = any;
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography, ransacReprojThresholdFor } from "@/pipeline/homography";
+import { capToPixelBudget } from "@/utils/imageHelpers";
 import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 
 export type { SkeletonStyle };
@@ -103,18 +104,28 @@ export async function renderPoseVideo({
     throw new Error("MediaRecorder is not supported in this browser.");
   }
 
-  const h = computeHomography(cv, matches, orbFeatures, queryOrb);
+  const imageBitmap = await createImageBitmap(imageFile);
+
+  // Mirror useImageMatcher's decode-time cap so the canvas the photo is drawn on
+  // shares the pixel space the query ORB features (and therefore the homography)
+  // were computed in. Without this, a >MAX_DECODE_PIXELS photo would render at
+  // full size while the keypoints live in capped space, mis-placing the overlay.
+  const { width: canvasW, height: canvasH } = capToPixelBudget(imageBitmap.width, imageBitmap.height);
+
+  const h = computeHomography(cv, matches, orbFeatures, queryOrb, {
+    ransacReprojThreshold: ransacReprojThresholdFor(Math.max(canvasW, canvasH)),
+    gate: { srcWidth: videoMeta.width, srcHeight: videoMeta.height },
+  });
   if (!h) {
+    imageBitmap.close();
     throw new Error(
       `Not enough matches to compute homography — need ≥ 4, got ${matches.length}.`,
     );
   }
 
-  const imageBitmap = await createImageBitmap(imageFile);
-
   const canvas = document.createElement("canvas");
-  canvas.width = imageBitmap.width;
-  canvas.height = imageBitmap.height;
+  canvas.width = canvasW;
+  canvas.height = canvasH;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -171,7 +182,7 @@ export async function renderPoseVideo({
           floorIdx++;
         }
 
-        ctx.drawImage(imageBitmap, 0, 0);
+        ctx.drawImage(imageBitmap, 0, 0, canvasW, canvasH);
 
         // Compute / reuse transformed keypoints for floor frame.
         if (cachedFloorAt !== floorIdx) {

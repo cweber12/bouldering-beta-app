@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { applyHomographyMatrix } from "@/pipeline/homography";
+import {
+  applyHomographyMatrix,
+  isValidHomography,
+  ransacReprojThresholdFor,
+  RANSAC_BASE_THRESHOLD,
+} from "@/pipeline/homography";
 import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { PoseFrame } from "@/pipeline/poseDetection";
 
@@ -52,6 +57,85 @@ describe("applyHomographyMatrix", () => {
     // x' = 2*3 + 10 = 16,  y' = 2*4 + 5 = 13,  w = 1
     expect(result.x).toBeCloseTo(16);
     expect(result.y).toBeCloseTo(13);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isValidHomography
+// ---------------------------------------------------------------------------
+
+describe("isValidHomography", () => {
+  // prettier-ignore
+  const IDENTITY = new Float64Array([1, 0, 0,   0, 1, 0,   0, 0, 1]);
+
+  it("accepts the identity transform over a frame rectangle", () => {
+    expect(isValidHomography(IDENTITY, 640, 480)).toBe(true);
+  });
+
+  it("accepts a translation + uniform scale", () => {
+    // prettier-ignore
+    const H = new Float64Array([1.5, 0, 100,   0, 1.5, 50,   0, 0, 1]);
+    expect(isValidHomography(H, 640, 480)).toBe(true);
+  });
+
+  it("rejects a horizontal flip (negative determinant)", () => {
+    // x -> -x maps the rectangle to negative-orientation winding.
+    // prettier-ignore
+    const FLIP = new Float64Array([-1, 0, 640,   0, 1, 0,   0, 0, 1]);
+    expect(isValidHomography(FLIP, 640, 480)).toBe(false);
+  });
+
+  it("rejects a degenerate (collinear) transform", () => {
+    // Collapses every point onto the x-axis — zero area.
+    // prettier-ignore
+    const DEGEN = new Float64Array([1, 0, 0,   0, 0, 0,   0, 0, 1]);
+    expect(isValidHomography(DEGEN, 640, 480)).toBe(false);
+  });
+
+  it("rejects a transform that scales beyond the bounds", () => {
+    // 0.001× linear scale — far below the default minScale.
+    // prettier-ignore
+    const TINY = new Float64Array([0.001, 0, 0,   0, 0.001, 0,   0, 0, 1]);
+    expect(isValidHomography(TINY, 640, 480)).toBe(false);
+  });
+
+  it("respects custom scale bounds", () => {
+    // prettier-ignore
+    const H = new Float64Array([3, 0, 0,   0, 3, 0,   0, 0, 1]);
+    expect(isValidHomography(H, 640, 480, { maxScale: 2 })).toBe(false);
+    expect(isValidHomography(H, 640, 480, { maxScale: 5 })).toBe(true);
+  });
+
+  it("rejects matrices with non-finite entries", () => {
+    const NAN = new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, NaN]);
+    expect(isValidHomography(NAN, 640, 480)).toBe(false);
+  });
+
+  it("rejects non-positive source dimensions", () => {
+    expect(isValidHomography(IDENTITY, 0, 480)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ransacReprojThresholdFor
+// ---------------------------------------------------------------------------
+
+describe("ransacReprojThresholdFor", () => {
+  it("returns the baseline threshold at the calibration resolution", () => {
+    expect(ransacReprojThresholdFor(1600)).toBeCloseTo(RANSAC_BASE_THRESHOLD);
+  });
+
+  it("scales up with resolution, clamped to 8px", () => {
+    expect(ransacReprojThresholdFor(3200)).toBeCloseTo(6);
+    expect(ransacReprojThresholdFor(100000)).toBe(8);
+  });
+
+  it("clamps small resolutions to the 2px floor", () => {
+    expect(ransacReprojThresholdFor(400)).toBe(2);
+  });
+
+  it("falls back to the baseline for non-positive input", () => {
+    expect(ransacReprojThresholdFor(0)).toBe(RANSAC_BASE_THRESHOLD);
   });
 });
 

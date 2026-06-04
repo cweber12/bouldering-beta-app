@@ -11,8 +11,9 @@ import {
   type OrbMatch,
   type OrbFeatures,
 } from "@/pipeline/orbDetector";
-import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
+import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor } from "@/pipeline/homography";
 import { cropImageData } from "@/utils/cvHelpers";
+import { capToPixelBudget } from "@/utils/imageHelpers";
 import { getAttempt } from "@/storage/sessionStore";
 import type { CropFraction } from "@/components/shared/CropBoxOverlay";
 
@@ -104,12 +105,20 @@ export function useImageMatcher(): ImageMatcherResult {
       // Re-anchor pass: if the initial match count is below the threshold and
       // the reference features include a known crop box, try estimating the
       // corresponding region in the query image and re-running ORB there.
+      // Reprojection threshold scales with the photo's native resolution; the
+      // validity gate rejects flipped/degenerate transforms of the video frame.
+      const reproj = ransacReprojThresholdFor(Math.max(imageData.width, imageData.height));
+      const gate = { srcWidth: attempt.videoMeta.width, srcHeight: attempt.videoMeta.height };
+
       if (
         matches.length < MIN_REANCHOR_THRESHOLD &&
         matches.length >= 4 &&
         attempt.orbFeatures.cropBox
       ) {
-        const roughH = computeHomography(cv, matches, attempt.orbFeatures, queryOrb);
+        const roughH = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
+          ransacReprojThreshold: reproj,
+          gate,
+        });
         if (roughH) {
           const box = attempt.orbFeatures.cropBox;
           // Map the 4 corners of the reference crop box to query-image space.
@@ -183,9 +192,14 @@ function loadImageAsImageData(file: File): Promise<ImageData> {
     const img = new Image();
 
     img.onload = () => {
+      // Decode-time pixel cap: never rasterise more than MAX_DECODE_PIXELS so a
+      // gigapixel / decompression-bomb upload can't exhaust memory or the WASM
+      // heap. The route-photo "native" pixel space the homography targets is
+      // this (possibly capped) canvas; the renderer caps identically to match.
+      const { width, height } = capToPixelBudget(img.naturalWidth, img.naturalHeight);
       const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext("2d");
 
       if (!ctx) {
@@ -194,8 +208,8 @@ function loadImageAsImageData(file: File): Promise<ImageData> {
         return;
       }
 
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, 0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, width, height);
       URL.revokeObjectURL(url);
       resolve(imageData);
     };
