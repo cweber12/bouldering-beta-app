@@ -15,6 +15,7 @@ import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 import { EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -150,9 +151,9 @@ export default function RouteConsole({
 
   // Measured height of the side-by-side stage — drives per-column width so the
   // portrait overlays size to the media and sit close together (not marooned in
-  // 50% cells). 0 until measured; columns fill until then.
-  const [stageH, setStageH] = useState(0);
-  const stageRef = useRef<HTMLDivElement>(null);
+  // 50% cells). 0 until measured; columns fill until then. The callback ref
+  // re-observes automatically when the stage element changes (view-mode switch).
+  const [stageRef, stageH] = useMeasuredHeight();
 
   // FramePlayer refs for master play control (side-by-side).
   const playerRefs = useRef<(FramePlayerHandle | null)[]>(
@@ -315,18 +316,6 @@ export default function RouteConsole({
     img.src = imagePreviewUrl;
     return () => { cancelled = true; };
   }, [imagePreviewUrl]);
-
-  // Track the side-by-side stage height so columns can be capped to the media
-  // width. Re-attaches when the stage mounts (view-mode switch).
-  useEffect(() => {
-    const el = stageRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) setStageH(e.contentRect.height);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [viewMode, imagePreviewUrl, refineOpen, consoleMode]);
 
   /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
   function setImageFileWithPreview(file: File | null) {
