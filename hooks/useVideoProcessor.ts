@@ -7,7 +7,7 @@ import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint,
 import { cropImageData } from "@/utils/cvHelpers";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
-import { applyOrbPreprocessing, applyPosePreprocessing } from "@/pipeline/framePreprocessor";
+import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
 import {
   mapKeypointsToFullFrame,
   type CropBox,
@@ -171,9 +171,9 @@ const KEYFRAME_INTERVAL_SEC = 0.75;
  * frames, interpolates across gaps, and applies EMA smoothing.
  *
  * Lighting is analysed automatically from the first frame and re-analysed
- * every {@link POSE_REANALYSIS_INTERVAL} detection frames.  Pose and ORB
- * preprocessing are applied through independent pipelines:
- *   - applyPosePreprocessing — adaptive gamma + optional equalisation blend
+ * every {@link POSE_REANALYSIS_INTERVAL} detection frames. The analysis drives
+ * ORB preprocessing only — MediaPipe detects on the raw colour frame, since
+ * grayscale/equalised input blinds its RGB-trained model:
  *   - applyOrbPreprocessing  — retinex LCN + equalisation for cross-condition
  *                              descriptor stability
  *
@@ -342,11 +342,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (!cctx) return null;
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
 
-          // Pose-specific preprocessing driven by the current lighting analysis.
-          // Applied to the detection canvas only — the main canvas stays pristine
-          // for ORB reference capture and lighting re-analysis.
-          if (currentAnalysis) applyPosePreprocessing(cv, cropCanvas, currentAnalysis);
-
+          // MediaPipe detects on the raw colour crop. We deliberately do NOT run
+          // pose preprocessing here: it converted the crop to grayscale +
+          // equalised it, which blinded MediaPipe's RGB-trained model and
+          // produced zero detections on any frame analyzeFrame flagged (backlit /
+          // exposed / low-contrast / blurry) — a data-dependent total failure.
+          // MediaPipe normalises lighting internally, so the colour frame is both
+          // safer and what worked before the preprocessing was introduced. ORB
+          // preprocessing (which legitimately wants grayscale) is unaffected.
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
