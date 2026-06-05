@@ -39,7 +39,11 @@ function baseProps(overrides: Partial<Props> = {}): Props {
     processingError: null,
     activeAttempt: makeAttempt(40, 240),
     firstFrameFile: null,
-    firstFrameSkeletonData: null,
+    firstFrameSkeletonData: {
+      frames: [{ timestamp: 0, keypoints: { nose: { x: 1, y: 1 } } }],
+      duration: 1,
+      fps: 30,
+    },
     topoStyle: { lineWidth: 2, pointRadius: 3 },
     onSkeletonStyleChange: () => {},
     onEditClimb: vi.fn(),
@@ -80,5 +84,17 @@ describe("StepViewLandmarks", () => {
 
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.getByText("Scan saved successfully")).toBeTruthy();
+  });
+
+  it("shows the no-detection empty state and hides Test/Save when no skeleton was built", () => {
+    render(<StepViewLandmarks {...baseProps({ firstFrameSkeletonData: null })} />);
+
+    expect(screen.getByText("No climber detected in this scan")).toBeTruthy();
+    // Save/Test are meaningless with nothing to project — they must be gone.
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Test" })).toBeNull();
+    // Recovery actions back to detection / a fresh scan are offered instead.
+    expect(screen.getByRole("button", { name: "Adjust detection" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Scan another" })).toBeTruthy();
   });
 });

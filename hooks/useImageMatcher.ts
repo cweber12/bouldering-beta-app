@@ -46,6 +46,14 @@ export interface ImageMatchResult {
    * the match/validity gate; the render path uses these instead of `matches`.
    */
   keyframeHomographies?: KeyframeHomography[];
+  /**
+   * Fixed Capture: the single gated reference video-frame → photo homography the
+   * Route Overlay is rendered through. Computed here (resolution-scaled RANSAC +
+   * validity gate) so a degenerate/flipped transform is rejected up front rather
+   * than silently projecting the skeleton off-photo at render time. Absent when
+   * {@link keyframeHomographies} drives the render (Panning Capture).
+   */
+  homography?: Float64Array;
 }
 
 export type MatchStatus = "idle" | "matching" | "done" | "error";
@@ -198,6 +206,26 @@ export function useImageMatcher(): ImageMatcherResult {
         }
       }
 
+      // Fixed Capture render homography: computed here, gated, so the Route
+      // Overlay never renders through a degenerate/flipped transform (which would
+      // project the skeleton off-photo with no error). Skipped when per-keyframe
+      // homographies drive the render. The fallback also covers a Panning attempt
+      // whose keyframes all failed to match — the render path then uses the
+      // frame-0 reference, which must still be gated.
+      let homography: Float64Array | undefined;
+      if (!keyframeHomographies) {
+        const h = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
+          ransacReprojThreshold: reproj,
+          gate,
+        });
+        if (!h) {
+          throw new Error(
+            "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
+          );
+        }
+        homography = h;
+      }
+
       setResult({
         matches,
         queryKeypoints: queryOrb.keypoints.length,
@@ -205,6 +233,7 @@ export function useImageMatcher(): ImageMatcherResult {
         queryOrb,
         reanchorApplied,
         keyframeHomographies,
+        homography,
       });
       setStatus("done");
     } catch (err) {

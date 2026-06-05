@@ -145,6 +145,13 @@ export interface VideoProcessorResult {
   totalFrames: number;
   /** The attempt ID written to sessionStore, available when status === "done". */
   attemptId: string | null;
+  /**
+   * The pristine first video frame as a PNG File, captured during the seek loop
+   * for the Detection Preview background. Available shortly after processing
+   * starts; null before. Reusing the already-decoded frame avoids a fragile
+   * second video decode on the review step.
+   */
+  firstFrameFile: File | null;
   errorMessage: string | null;
 }
 
@@ -178,6 +185,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
   const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
@@ -210,6 +218,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentFrame(0);
       setTotalFrames(0);
       setAttemptId(null);
+      setFirstFrameFile(null);
       setErrorMessage(null);
 
       const video = document.createElement("video");
@@ -413,6 +422,20 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
+
+            // Snapshot the pristine first frame to a File now, for the Detection
+            // Preview background. Drawing to a dedicated canvas avoids a toBlob
+            // race against the main canvas being overwritten by later frames, and
+            // removes the fragile second video decode the review step used to do.
+            const previewCanvas = document.createElement("canvas");
+            previewCanvas.width = videoWidth;
+            previewCanvas.height = videoHeight;
+            previewCanvas.getContext("2d")?.putImageData(referenceImageData, 0, 0);
+            previewCanvas.toBlob((blob) => {
+              if (blob && mountedRef.current) {
+                setFirstFrameFile(new File([blob], "first-frame.png", { type: "image/png" }));
+              }
+            }, "image/png");
           }
 
           if (i === middleIndex) {
@@ -747,6 +770,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentFrame(0);
       setTotalFrames(0);
       setAttemptId(null);
+      setFirstFrameFile(null);
       setErrorMessage(null);
     }
   }, []);
@@ -760,5 +784,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage };
 }

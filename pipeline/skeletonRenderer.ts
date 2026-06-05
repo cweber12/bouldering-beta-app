@@ -49,37 +49,29 @@ export interface MultiSkeletonFrameData {
 // ---------------------------------------------------------------------------
 
 export interface BuildSkeletonFramesParams {
-  cv: CV;
   frames: PoseFrame[];
   videoMeta: VideoMeta;
-  orbFeatures: OrbFeatures;
-  queryOrb: OrbFeatures;
-  matches: OrbMatch[];
+  /**
+   * The gated reference video-frame → photo homography to render through,
+   * computed and validated by the matcher (see useImageMatcher). Passing it in
+   * — rather than recomputing here — keeps a single, gated source of truth so a
+   * degenerate transform can never reach the render path.
+   */
+  homography: Float64Array;
   /** Output frame rate. Default 60. */
   targetFps?: number;
 }
 
 /**
- * Pre-compute transformed skeleton keypoints for every output timestamp.
- *
- * @throws When fewer than 4 matches are available for homography computation.
+ * Pre-compute transformed skeleton keypoints for every output timestamp, using
+ * the matcher-supplied homography.
  */
 export function buildSkeletonFrames({
-  cv,
   frames,
   videoMeta,
-  orbFeatures,
-  queryOrb,
-  matches,
+  homography: h,
   targetFps = 60,
 }: BuildSkeletonFramesParams): SkeletonFrameData {
-  const h = computeHomography(cv, matches, orbFeatures, queryOrb);
-  if (!h) {
-    throw new Error(
-      `Not enough matches to compute homography — need ≥ 4, got ${matches.length}.`,
-    );
-  }
-
   const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
   const firstTs = sorted.length > 0 ? sorted[0].timestamp : 0;
   const lastTs = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : 0;

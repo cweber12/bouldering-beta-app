@@ -127,7 +127,7 @@ function ScanPageInner() {
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
   const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
   const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant, maxPoses });
-  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage } =
+  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
   const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError } =
@@ -152,8 +152,9 @@ function ScanPageInner() {
   // Step-based navigation — always start fresh
   const [step, setStep] = useState<ScanStep>("pick");
 
-  // First-frame image for animated landmark preview (FramePlayer background)
-  const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
+  // First-frame image for the Detection Preview background is produced by
+  // useVideoProcessor during the seek loop (see `firstFrameFile` above) — no
+  // separate decode here.
 
   // Inline route photo overlay state
   const [routePhotoFile, setRoutePhotoFile] = useState<File | null>(null);
@@ -294,45 +295,6 @@ function ScanPageInner() {
     };
   }, []);
 
-  // Capture first video frame as a File for the animated landmark preview.
-  useEffect(() => {
-    if (step !== "landmarks" || !activeAttempt || !videoPreviewUrl) return;
-    const vw = activeAttempt.videoMeta.width;
-    const vh = activeAttempt.videoMeta.height;
-
-    let cancelled = false;
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = "auto";
-    video.src = videoPreviewUrl;
-
-    const onSeeked = () => {
-      if (cancelled) return;
-      const canvas = document.createElement("canvas");
-      canvas.width = vw;
-      canvas.height = vh;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, vw, vh);
-      canvas.toBlob((blob) => {
-        if (cancelled || !blob) return;
-        setFirstFrameFile(new File([blob], "first-frame.png", { type: "image/png" }));
-      }, "image/png");
-      video.removeEventListener("seeked", onSeeked);
-    };
-
-    video.addEventListener("seeked", onSeeked);
-    video.addEventListener("loadeddata", () => {
-      // Seek to a tiny non-zero offset so the seeked event always fires.
-      // Setting currentTime = 0 when the video is already at 0 is a no-op
-      // on many browsers and never fires seeked, leaving the preview blank.
-      video.currentTime = 0.001;
-    }, { once: true });
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, activeAttemptId, videoPreviewUrl]);
-
   // Build animated skeleton frames from all pose frames in video-pixel space.
   // Start from the first frame that has detected keypoints so playback begins
   // at the first real detection rather than showing a blank/frozen window for
@@ -370,7 +332,6 @@ function ScanPageInner() {
     setS3Saved(false);
     setSaveError(null);
     setSavedRouteDirHandle(null);
-    setFirstFrameFile(null);
     clearRoutePhoto();
   }
 
@@ -424,7 +385,6 @@ function ScanPageInner() {
 
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;
-    setFirstFrameFile(null);
     clearRoutePhoto();
     const cfg = getTierConfig(tier);
     process(pendingFile, model, cv, frameStep, {
@@ -449,7 +409,6 @@ function ScanPageInner() {
   }
 
   function handleEditClimb() {
-    setFirstFrameFile(null);
     clearRoutePhoto();
     setStep("detection");
   }
@@ -465,7 +424,6 @@ function ScanPageInner() {
     if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
     setVideoPreviewUrl(null);
     setPendingFile(null);
-    setFirstFrameFile(null);
     cachedPendingFile = null;
     cachedVideoUrl = null;
     clearRoutePhoto();

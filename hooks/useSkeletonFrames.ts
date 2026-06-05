@@ -57,12 +57,13 @@ export function useSkeletonFrames(
     }
 
     const attempt = getAttempt(attemptId);
-    // Panning Capture renders from per-keyframe homographies and does not need
-    // the single frame-0 reference; Fixed Capture requires orbFeatures.
+    // Panning Capture renders from per-keyframe homographies; Fixed Capture
+    // renders through the single gated homography the matcher computed. One of
+    // the two must be present (the matcher errors out before either is missing).
     const kfHomographies = matchResult.keyframeHomographies;
-    if (!kfHomographies?.length && !attempt?.orbFeatures) {
+    if (!kfHomographies?.length && !matchResult.homography) {
       setStatus("error");
-      setErrorMessage("No ORB reference features found for this attempt.");
+      setErrorMessage("Couldn't align the skeleton to this photo.");
       return;
     }
 
@@ -75,12 +76,9 @@ export function useSkeletonFrames(
             targetFps,
           })
         : buildSkeletonFrames({
-            cv,
             frames: attempt!.frames,
             videoMeta: attempt!.videoMeta,
-            orbFeatures: attempt!.orbFeatures!,
-            queryOrb: matchResult.queryOrb,
-            matches: matchResult.matches,
+            homography: matchResult.homography!,
             targetFps,
           });
       setData(result);

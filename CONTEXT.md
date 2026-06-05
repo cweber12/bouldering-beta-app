@@ -124,6 +124,21 @@ matched against it (ORB + homography) and the skeleton overlay is projected onto
 it. One per Route, optional, shared by every Run of the Route.
 _Avoid_: route image, background photo.
 
+### Overlay & review
+
+**Detection Preview**:
+The skeleton played back over the **Run**'s own first video frame, in raw
+video-pixel space with **no homography** applied. Its purpose is to review
+detection quality (did the pose pipeline track the **Climber** cleanly) before a
+**Route Photo** is involved. Shown on the review step immediately after a scan.
+_Avoid_: preview, landmark preview (ambiguous with the **Route Overlay**).
+
+**Route Overlay**:
+The skeleton projected onto the **Route Photo** through the homography (ORB
+match → `computeHomography`), so the climb is seen on the wall photo. Distinct
+from the **Detection Preview**, which never leaves video-pixel space.
+_Avoid_: preview, overlay (unqualified), projection.
+
 ## Relationships
 
 - A scan has exactly one **Climber** and zero or more **Bystanders**.
@@ -150,3 +165,7 @@ _Avoid_: route image, background photo.
   **Run** (one ascent) — prefer Route / Run when precision matters.
 - "attempt" is used for both a **Run** generically and the not-topped **Run Type**
   — resolved: a Run is a Run; "Attempt" is reserved for the Run Type opposite Send.
+- "preview"/"overlay" meant both the skeleton over the Run's own first frame and
+  the skeleton projected onto the Route Photo — resolved: **Detection Preview**
+  (video-pixel, no homography) vs **Route Overlay** (projected onto the Route
+  Photo). A bare "stuck on the preview" is ambiguous between the two.
