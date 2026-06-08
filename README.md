@@ -60,12 +60,17 @@ After estimation, two post-processing passes are applied:
 
 ### Skeleton overlay
 
-`drawSkeleton` accepts a `SkeletonStyle` object `{ limbColor, jointColor,
-lineWidth, pointRadius, skeletonEdges?, keypointNames? }` to customise the look
-of each rendered frame. Topology-aware edges and keypoint names are injected
-automatically based on the run’s `poseBackend` field so MediaPipe
-skeletons render correctly. The match page exposes a style panel
-(colour pickers + sliders) that feeds into the WebM render.
+`drawSkeleton` renders the pose as two passes: a translucent **Silhouette**
+(a single unioned body shape — limb/neck/foot capsules, a filled torso polygon,
+a filled head oval, mitten hand caps — flattened through an offscreen canvas so
+overlaps stay uniform) beneath a crisp **Skeleton** (thin lines + joint points).
+It accepts a `SkeletonStyle` object with `silhouetteVisible/Color/Opacity`,
+`limbThickness`, `linesVisible/lineColor/lineThickness`, and
+`jointsVisible/jointColor/jointRadius` (plus optional `skeletonEdges` /
+`keypointNames`). All sizes are multipliers of a per-frame body scale (shoulder
+width) so the overlay looks the same at any photo resolution. The style panel
+(three rows: Silhouette / Lines / Joints, each with a visibility toggle, colour,
+and unitless sliders) feeds the live preview and the WebM render.
 
 ## Pages
 
@@ -74,7 +79,7 @@ skeletons render correctly. The match page exposes a style panel
 | `/` | Landing page — choose Indoor or Outdoor mode | No |
 | `/login` | Sign in / sign up with email & password | No |
 | `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
-| `/compare` | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching, body-part highlighting and per-climb start-time alignment | Yes |
+| `/compare` | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment | Yes |
 | `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes |
 | `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal | Yes |
 | `/docs` | Usage guide | No |
@@ -126,12 +131,11 @@ is unaffected.
 
 On the **Compare** page, all climbs for a route sit under one grouped surface.
 Each climb shows a clean metadata line (colour swatch · date · time · a green
-send / amber attempt dot); the route grade is accented in the page header. The
-**Highlight** control emphasizes selected body regions (head, arms, hands,
-torso, legs, feet — optionally one side) and dims the rest of every skeleton to
-gray, while each climb keeps its identity colour. Use **Set start** on each
-side-by-side climb to flag the frame its sequence begins, then **Play all** runs
-every climb from its own start in sync.
+send / amber attempt dot); the route grade is accented in the page header. Each
+climb keeps its identity colour. Use **Set start** on each side-by-side climb to
+flag the frame its sequence begins, then **Play all** runs every climb from its
+own start in sync. (In the overlaid view the translucent Silhouette is suppressed
+so several climbers' skeletons stay legible.)
 
 ## Authentication
 

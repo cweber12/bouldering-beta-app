@@ -6,13 +6,21 @@ import { buildMultiSkeletonFrames } from "@/pipeline/skeletonRenderer";
 import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
-import { getTopology } from "@/utils/poseConstants";
-import { buildHighlightStyle, EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
+import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
 const JOINT_COLOR = "rgba(255,255,255,0.9)";
+
+/**
+ * Overlay style for one climb in the multi-climb composite. The Silhouette is
+ * disabled here — several overlapping translucent bodies would muddy into one
+ * another, so each climb shows as its slot-coloured Skeleton instead.
+ */
+function overlayStyle(slotColor: string): SkeletonStyle {
+  return { silhouetteVisible: false, lineColor: slotColor, jointColor: JOINT_COLOR };
+}
 
 // ---------------------------------------------------------------------------
 // Props
@@ -24,9 +32,6 @@ export interface CompareOverlayPlayerProps {
   attempts: (RouteAttempt | null)[];
   matchResults: (ImageMatchResult | null)[];
   slotColors: string[];
-  lineWidth: number;
-  pointRadius: number;
-  highlight?: HighlightSelection;
   /** Per-slot start anchor (seconds) — aligns each climb to a common start. */
   slotOffsets?: number[];
 }
@@ -41,9 +46,6 @@ export default function CompareOverlayPlayer({
   attempts,
   matchResults,
   slotColors,
-  lineWidth,
-  pointRadius,
-  highlight = EMPTY_HIGHLIGHT,
   slotOffsets,
 }: CompareOverlayPlayerProps) {
   // Pre-compute multi-layer skeleton frames (sync, instant).
@@ -77,25 +79,16 @@ export default function CompareOverlayPlayer({
     let layerIdx = 0;
     for (let i = 0; i < attempts.length; i++) {
       if (attempts[i] && matchResults[i]) {
-        const topo = getTopology(attempts[i]?.poseBackend ?? "mediapipe");
         layers.push({
           frames: multiData.layers[layerIdx].frames,
           timeOffset: slotOffsets?.[i] ?? 0,
-          style: buildHighlightStyle({
-            selection: highlight,
-            limbColor: slotColors[i],
-            jointColor: JOINT_COLOR,
-            lineWidth,
-            pointRadius,
-            skeletonEdges: topo.skeletonEdges,
-            keypointNames: topo.keypointNames,
-          }),
+          style: overlayStyle(slotColors[i]),
         });
         layerIdx++;
       }
     }
     return layers;
-  }, [multiData, attempts, matchResults, slotColors, lineWidth, pointRadius, highlight, slotOffsets]);
+  }, [multiData, attempts, matchResults, slotColors, slotOffsets]);
 
   // On-demand video export.
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -108,22 +101,13 @@ export default function CompareOverlayPlayer({
       const att = attempts[i];
       const mr = matchResults[i];
       if (!att?.orbFeatures || !mr) continue;
-      const topo = getTopology(att.poseBackend ?? "mediapipe");
       layerInputs.push({
         frames: att.frames,
         videoMeta: att.videoMeta,
         orbFeatures: att.orbFeatures,
         queryOrb: mr.queryOrb,
         matches: mr.matches,
-        skeletonStyle: buildHighlightStyle({
-          selection: highlight,
-          limbColor: slotColors[i],
-          jointColor: JOINT_COLOR,
-          lineWidth,
-          pointRadius,
-          skeletonEdges: topo.skeletonEdges,
-          keypointNames: topo.keypointNames,
-        }),
+        skeletonStyle: overlayStyle(slotColors[i]),
       });
     }
     if (layerInputs.length === 0) return;

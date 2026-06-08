@@ -11,10 +11,9 @@ import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import { getTopology } from "@/utils/poseConstants";
+import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import RunStatusDot from "@/components/run/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
-import { buildHighlightStyle, EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -39,11 +38,8 @@ export interface CompareSlotProps {
   imageCrop: CropFraction;
   matchTrigger: number;
   cv: CV;
+  /** This climb's identity colour — drives the Silhouette and Skeleton lines. */
   limbColor: string;
-  lineWidth: number;
-  pointRadius: number;
-  /** Body-part highlight focus (emphasize selected regions, dim the rest). */
-  highlight?: HighlightSelection;
   /** When true, the FramePlayer + download are hidden (overlay mode). */
   hidePlayer?: boolean;
   /** When true, the FramePlayer's built-in play button is hidden. */
@@ -78,9 +74,6 @@ export default function CompareSlot({
   matchTrigger,
   cv,
   limbColor,
-  lineWidth,
-  pointRadius,
-  highlight = EMPTY_HIGHLIGHT,
   hidePlayer = false,
   hidePlayButton = false,
   fillHeight = false,
@@ -116,21 +109,14 @@ export default function CompareSlot({
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
 
-  // This climb's styled skeleton — identity colour, shared sizing, and the
-  // body-part highlight focus. Derived once and reused for both the live player
+  // This climb's styled overlay — identity-coloured Silhouette + Skeleton, with
+  // white joints for contrast. Derived once and reused for both the live player
   // layer and the download/export render path.
-  const highlightStyle = useMemo(() => {
-    const topo = getTopology(attempt?.poseBackend ?? "mediapipe");
-    return buildHighlightStyle({
-      selection: highlight,
-      limbColor,
-      jointColor: JOINT_COLOR,
-      lineWidth,
-      pointRadius,
-      skeletonEdges: topo.skeletonEdges,
-      keypointNames: topo.keypointNames,
-    });
-  }, [attempt?.poseBackend, highlight, limbColor, lineWidth, pointRadius]);
+  const skeletonStyle = useMemo<SkeletonStyle>(() => ({
+    silhouetteColor: limbColor,
+    lineColor: limbColor,
+    jointColor: JOINT_COLOR,
+  }), [limbColor]);
 
   async function handleDownload() {
     if (!cv || !imageFile || !attempt || !matchResult) return;
@@ -148,7 +134,7 @@ export default function CompareSlot({
         orbFeatures: att.orbFeatures,
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
-        skeletonStyle: highlightStyle,
+        skeletonStyle,
         targetFps: 60,
         onProgress: (r, t) => setExportProgress(Math.round((r / t) * 100)),
       });
@@ -168,10 +154,9 @@ export default function CompareSlot({
   const isReady = skeletonStatus === "ready" && !!skeletonData;
   const isError = skeletonStatus === "error" || matchStatus === "error";
 
-  // Single styled layer for this climb — identity colour, shared sizing, and
-  // the body-part highlight focus (emphasize selected regions, dim the rest).
+  // Single styled layer for this climb — identity-coloured Silhouette + Skeleton.
   const playerLayers = skeletonData
-    ? [{ frames: skeletonData.frames, style: highlightStyle }]
+    ? [{ frames: skeletonData.frames, style: skeletonStyle }]
     : [];
 
   return (

@@ -1,7 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import CompareToolbar from "@/components/compare/CompareToolbar";
-import { EMPTY_HIGHLIGHT } from "@/utils/bodyRegions";
 
 function setup(overrides: Partial<React.ComponentProps<typeof CompareToolbar>> = {}) {
   const props = {
@@ -9,8 +8,6 @@ function setup(overrides: Partial<React.ComponentProps<typeof CompareToolbar>> =
     onViewMode: vi.fn(),
     masterPlaying: false,
     onTogglePlayAll: vi.fn(),
-    highlight: EMPTY_HIGHLIGHT,
-    onHighlightChange: vi.fn(),
     refineOpen: false,
     onToggleRefine: vi.fn(),
     ...overrides,

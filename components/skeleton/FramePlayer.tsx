@@ -202,12 +202,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 
     ctx.drawImage(bmp, 0, 0);
 
-    // Draw ORB reference keypoints as bright-red background dots.
+    // Draw ORB reference keypoints as bright-red background dots. Sized as a
+    // small fraction of the canvas so they stay visible at any photo resolution.
     const orb = orbKeypointsRef.current;
     if (orb.length > 0) {
-      const firstLayerStyle = layersRef.current[0]?.style;
-      const poseRadius = firstLayerStyle?.pointRadius ?? 5;
-      const orbRadius = Math.max(1, poseRadius / 2);
+      const orbRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.004);
       ctx.save();
       ctx.fillStyle = "#ff2020";
       for (const pt of orb) {

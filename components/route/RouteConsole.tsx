@@ -12,7 +12,6 @@ import CompareClimbRail from "@/components/compare/CompareClimbRail";
 import CompareToolbar, { type ViewMode } from "@/components/compare/CompareToolbar";
 import RunStatusDot from "@/components/run/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
-import { EMPTY_HIGHLIGHT, type HighlightSelection } from "@/utils/bodyRegions";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
@@ -127,14 +126,6 @@ export default function RouteConsole({
   const [slotOffsets, setSlotOffsets] = useState<number[]>(
     () => Array.from({ length: MAX_SLOTS }, () => 0),
   );
-
-  // Shared skeleton sizing applied to all slots simultaneously.
-  const skeletonLineWidth = 2.5;
-  const skeletonPointRadius = 2;
-
-  // Body-part highlight focus — emphasizes selected regions across all climbs
-  // and dims the rest. Empty = full-colour skeletons.
-  const [highlight, setHighlight] = useState<HighlightSelection>(EMPTY_HIGHLIGHT);
 
   // Crop box for ORB detection on the shared route photo.
   const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
@@ -456,8 +447,6 @@ export default function RouteConsole({
           else ref.pause();
         }
       }}
-      highlight={highlight}
-      onHighlightChange={setHighlight}
       refineOpen={refineOpen}
       onToggleRefine={() => setRefineOpen(v => !v)}
     />
@@ -668,9 +657,6 @@ export default function RouteConsole({
                     matchTrigger={matchTrigger}
                     cv={cv}
                     limbColor={slotColors[singleIdx]}
-                    lineWidth={skeletonLineWidth}
-                    pointRadius={skeletonPointRadius}
-                    highlight={highlight}
                     onMatchResult={handleMatchResult}
                     fillHeight
                     playerRef={(el) => { playerRefs.current[singleIdx] = el; }}
@@ -708,9 +694,6 @@ export default function RouteConsole({
                           matchTrigger={matchTrigger}
                           cv={cv}
                           limbColor={slotColors[i]}
-                          lineWidth={skeletonLineWidth}
-                          pointRadius={skeletonPointRadius}
-                          highlight={highlight}
                           startOffset={slotOffsets[i]}
                           onMatchResult={handleMatchResult}
                           onColorChange={handleColorChange}
@@ -746,9 +729,6 @@ export default function RouteConsole({
                         matchTrigger={matchTrigger}
                         cv={cv}
                         limbColor={slotColors[i]}
-                        lineWidth={skeletonLineWidth}
-                        pointRadius={skeletonPointRadius}
-                        highlight={highlight}
                         onMatchResult={handleMatchResult}
                         hidePlayer
                       />
@@ -763,9 +743,6 @@ export default function RouteConsole({
                     attempts={attempts}
                     cv={cv}
                     slotColors={slotColors}
-                    lineWidth={skeletonLineWidth}
-                    pointRadius={skeletonPointRadius}
-                    highlight={highlight}
                     slotOffsets={slotOffsets}
                   />
                 </div>

@@ -2,12 +2,22 @@
  * Skeleton overlay drawing for CanvasRenderingContext2D.
  *
  * Converts normalized PoseFrame keypoints to image-space pixel coordinates
- * via a homography matrix, then draws the skeleton (limbs + joints) onto
- * the canvas.
+ * via a homography matrix, then draws the overlay onto the canvas as two
+ * passes:
+ *
+ *  - **Silhouette** — a single, unioned, semi-transparent body shape (limb /
+ *    neck / foot capsules, a filled torso polygon, a filled head oval, mitten
+ *    hand caps). It is rendered opaque onto a reused offscreen scratch canvas
+ *    and composited once at the configured opacity, so overlapping pieces never
+ *    darken into seams. Always solid — confidence dimming never applies here.
+ *  - **Skeleton** — the thin pose lines + joint points, drawn crisply on top of
+ *    (inside) the Silhouette. Estimated-Landmark confidence dimming applies to
+ *    this pass only.
+ *
+ * All sizes are multipliers of a per-frame **body scale** (shoulder width, with
+ * fallbacks) so the overlay looks identical at any photo resolution / zoom.
  *
  * Uses MediaPipe Pose Landmarker (33 keypoints, BlazePose topology).
- * The caller may supply custom skeleton edges and keypoint names via
- * SkeletonStyle; defaults to MediaPipe topology.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
@@ -16,20 +26,38 @@ import type { PoseFrame } from "@/pipeline/poseDetection";
 import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
 import { applyHomographyMatrix } from "@/pipeline/homography";
 
-const JOINT_RADIUS = 5;
-const JOINT_COLOR = "rgba(34, 197, 94, 0.95)";   // accent green — theme cohesive
-const LIMB_COLOR  = "rgba(34, 197, 94, 0.65)";   // accent green, lower opacity for limbs
-const LIMB_WIDTH = 2.5;
+// ---------------------------------------------------------------------------
+// Defaults (all thickness/size values are × body scale unless noted)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_COLOR = "#00dc78"; // accent green — shared default for all passes
+const DEFAULT_SILHOUETTE_OPACITY = 0.5;
+/** Limb / neck capsule **radius** as a fraction of shoulder width. */
+const DEFAULT_LIMB_THICKNESS = 0.18;
+/** Skeleton line **radius** as a fraction of shoulder width. */
+const DEFAULT_LINE_THICKNESS = 0.015;
+/** Joint circle **radius** as a fraction of shoulder width (midpoint of the two). */
+const DEFAULT_JOINT_RADIUS = 0.09;
+
+/** Head oval: padding on the ear-to-ear width, and the height-to-width ratio. */
+const HEAD_WIDTH_PAD = 1.15;
+const HEAD_HEIGHT_RATIO = 1.4;
 
 /**
  * Confidence below which a keypoint is treated as an unreliable
- * **Estimated Landmark** and drawn dimmed. Detected joints and confidently
- * bridged/estimated joints sit above this; only weakly-extrapolated or
- * long-held joints fall below. Keypoints with no `score` are never dimmed.
+ * **Estimated Landmark** and drawn dimmed (in the Skeleton pass only).
  */
 const ESTIMATED_DIM_THRESHOLD = 0.4;
 /** Opacity multiplier applied to a dimmed Estimated Landmark / its limbs. */
 const ESTIMATED_DIM_OPACITY = 0.4;
+
+/** Keypoint names that make up the head — used to size the oval and to skip
+ *  the (now redundant) face edges in the Skeleton pass. */
+const HEAD_NAMES = new Set([
+  "nose", "left_eye_inner", "left_eye", "left_eye_outer",
+  "right_eye_inner", "right_eye", "right_eye_outer",
+  "left_ear", "right_ear", "mouth_left", "mouth_right",
+]);
 
 /** A transformed overlay point. `score` (when present) drives confidence dimming. */
 export interface OverlayPoint {
@@ -40,16 +68,37 @@ export interface OverlayPoint {
 }
 
 /**
- * Style options for the skeleton overlay.
- * All fields are optional; unset values fall back to built-in defaults.
+ * Style options for the skeleton overlay. All fields are optional; unset values
+ * fall back to built-in defaults. Sizes are multipliers of body scale.
  */
 export interface SkeletonStyle {
-  limbColor?: string;
+  // ── Silhouette pass (the translucent body) ──
+  /** Draw the Silhouette body shape. Default true. */
+  silhouetteVisible?: boolean;
+  /** Silhouette fill colour. Default {@link DEFAULT_COLOR}. */
+  silhouetteColor?: string;
+  /** Whole-Silhouette opacity in [0, 1]. Default {@link DEFAULT_SILHOUETTE_OPACITY}. */
+  silhouetteOpacity?: number;
+  /** Limb/neck/foot capsule radius × body scale. Default {@link DEFAULT_LIMB_THICKNESS}. */
+  limbThickness?: number;
+
+  // ── Skeleton pass — thin lines ──
+  /** Draw the thin connecting lines. Default true. */
+  linesVisible?: boolean;
+  /** Thin line colour. Default {@link DEFAULT_COLOR}. */
+  lineColor?: string;
+  /** Thin line radius × body scale. Default {@link DEFAULT_LINE_THICKNESS}. */
+  lineThickness?: number;
+
+  // ── Skeleton pass — joint points ──
+  /** Draw the joint points. Default true. */
+  jointsVisible?: boolean;
+  /** Joint colour. Default = {@link DEFAULT_COLOR} (same as lines). */
   jointColor?: string;
-  /** Line width in CSS pixels (1–10). Default 2.5. */
-  lineWidth?: number;
-  /** Joint circle radius in CSS pixels (1–15). Default 5. */
-  pointRadius?: number;
+  /** Joint radius × body scale. Default {@link DEFAULT_JOINT_RADIUS}. */
+  jointRadius?: number;
+
+  // ── Carried over, unchanged ──
   /**
    * Custom skeleton edges as [fromIndex, toIndex] pairs.
    * Defaults to MediaPipe MP_SKELETON_EDGES.
@@ -61,35 +110,12 @@ export interface SkeletonStyle {
    */
   keypointNames?: Record<number, string>;
   /**
-   * Per-keypoint color overrides keyed by keypoint name.
-   * When set, overrides `jointColor` for the named joint.
-   */
-  jointColorOverrides?: Partial<Record<string, string>>;
-  /**
-   * Per-keypoint radius overrides keyed by keypoint name.
-   * When set, overrides `pointRadius` for the named joint.
-   */
-  jointRadiusOverrides?: Partial<Record<string, number>>;
-  /**
-   * Per-edge color overrides. Key format: `"${fromIdx}-${toIdx}"` matching
-   * the indices used in `skeletonEdges`. Overrides `limbColor` for that edge.
-   */
-  edgeColorMap?: Partial<Record<string, string>>;
-  /**
-   * Per-edge line-width overrides. Same key format as `edgeColorMap`.
-   * Overrides `lineWidth` for that edge.
-   */
-  edgeWidthMap?: Partial<Record<string, number>>;
-  /**
-   * Confidence threshold below which a keypoint is dimmed as an unreliable
-   * Estimated Landmark. Default {@link ESTIMATED_DIM_THRESHOLD}; set to `0` to
-   * disable confidence dimming entirely.
+   * Confidence threshold below which a Skeleton keypoint is dimmed as an
+   * unreliable Estimated Landmark. Default {@link ESTIMATED_DIM_THRESHOLD};
+   * set to `0` to disable confidence dimming.
    */
   estimatedDimThreshold?: number;
-  /**
-   * Opacity multiplier for dimmed Estimated Landmarks.
-   * Default {@link ESTIMATED_DIM_OPACITY}.
-   */
+  /** Opacity multiplier for dimmed Estimated Landmarks. Default {@link ESTIMATED_DIM_OPACITY}. */
   estimatedDimOpacity?: number;
 }
 
@@ -164,68 +190,287 @@ function minScore(a: number | undefined, b: number | undefined): number | undefi
   return Math.min(a, b);
 }
 
+// ---------------------------------------------------------------------------
+// Geometry helpers
+// ---------------------------------------------------------------------------
+
+type Pt = { x: number; y: number };
+
+function midpoint(a: Pt | undefined, b: Pt | undefined): Pt | undefined {
+  if (a && b) return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  return a ?? b ?? undefined;
+}
+
+function dist(a: Pt, b: Pt): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
 /**
- * Draw a pose skeleton (limb lines + joint circles) onto a canvas 2D
- * context using image-space pixel coordinates.
+ * Per-frame body scale in image pixels. Prefers shoulder width, then torso
+ * height, then hip width, then a fraction of the canvas as a last resort, so
+ * the proportional overlay always has a sane reference even when the upper body
+ * is missing.
+ */
+function bodyScale(
+  kp: Record<string, OverlayPoint>,
+  canvasW: number,
+  canvasH: number,
+): number {
+  const ls = kp.left_shoulder, rs = kp.right_shoulder;
+  const lh = kp.left_hip, rh = kp.right_hip;
+
+  if (ls && rs) {
+    const d = dist(ls, rs);
+    if (d > 1) return d;
+  }
+  const sMid = midpoint(ls, rs);
+  const hMid = midpoint(lh, rh);
+  if (sMid && hMid) {
+    const d = dist(sMid, hMid);
+    if (d > 1) return d * 0.65; // torso height → shoulder-width equivalent
+  }
+  if (lh && rh) {
+    const d = dist(lh, rh);
+    if (d > 1) return d;
+  }
+  return Math.min(canvasW, canvasH) * 0.15;
+}
+
+// ---------------------------------------------------------------------------
+// Offscreen scratch canvas — reused so the Silhouette can be flattened to one
+// uniform translucency without allocating per frame.
+// ---------------------------------------------------------------------------
+
+let scratchCanvas: HTMLCanvasElement | null = null;
+
+function getScratch(
+  w: number,
+  h: number,
+): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  if (typeof document === "undefined") return null;
+  if (!scratchCanvas) scratchCanvas = document.createElement("canvas");
+  if (scratchCanvas.width !== w) scratchCanvas.width = w;
+  if (scratchCanvas.height !== h) scratchCanvas.height = h;
+  const ctx = scratchCanvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.clearRect(0, 0, w, h);
+  return { canvas: scratchCanvas, ctx };
+}
+
+// ---------------------------------------------------------------------------
+// Silhouette pass
+// ---------------------------------------------------------------------------
+
+/** Draw the head oval (filled, opaque) onto the scratch context. */
+function drawHeadOval(
+  sctx: CanvasRenderingContext2D,
+  kp: Record<string, OverlayPoint>,
+  scale: number,
+): void {
+  const le = kp.left_ear, re = kp.right_ear;
+  let cx: number, cy: number, angle: number, major: number;
+
+  if (le && re) {
+    cx = (le.x + re.x) / 2;
+    cy = (le.y + re.y) / 2;
+    angle = Math.atan2(re.y - le.y, re.x - le.x);
+    major = (dist(le, re) / 2) * HEAD_WIDTH_PAD;
+  } else {
+    // Fallback: eye-outer (or eye-centre) vector. Eyes are closer together, so
+    // pad the width more to approximate the full head.
+    const leo = kp.left_eye_outer ?? kp.left_eye;
+    const reo = kp.right_eye_outer ?? kp.right_eye;
+    if (leo && reo) {
+      cx = (leo.x + reo.x) / 2;
+      cy = (leo.y + reo.y) / 2;
+      angle = Math.atan2(reo.y - leo.y, reo.x - leo.x);
+      major = (dist(leo, reo) / 2) * HEAD_WIDTH_PAD * 1.4;
+    } else {
+      return; // fewer than two usable head points — skip the oval entirely
+    }
+  }
+
+  if (major < 1) major = scale * 0.3;
+  const minor = major * HEAD_HEIGHT_RATIO;
+
+  sctx.beginPath();
+  sctx.ellipse(cx, cy, major, minor, angle, 0, Math.PI * 2);
+  sctx.fill();
+}
+
+/** Draw the full Silhouette body shape (filled, opaque) onto the scratch context. */
+function drawSilhouette(
+  sctx: CanvasRenderingContext2D,
+  kp: Record<string, OverlayPoint>,
+  color: string,
+  scale: number,
+  limbThickness: number,
+): void {
+  const limbR = Math.max(0.5, limbThickness * scale);
+
+  sctx.save();
+  sctx.fillStyle = color;
+  sctx.strokeStyle = color;
+  sctx.lineCap = "round";
+  sctx.lineJoin = "round";
+
+  const capsule = (a: Pt | undefined, b: Pt | undefined, r: number): void => {
+    if (!a || !b) return;
+    sctx.lineWidth = 2 * r;
+    sctx.beginPath();
+    sctx.moveTo(a.x, a.y);
+    sctx.lineTo(b.x, b.y);
+    sctx.stroke();
+  };
+  const disc = (p: Pt | undefined, r: number): void => {
+    if (!p) return;
+    sctx.beginPath();
+    sctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    sctx.fill();
+  };
+
+  const ls = kp.left_shoulder, rs = kp.right_shoulder;
+  const lh = kp.left_hip, rh = kp.right_hip;
+
+  // Torso polygon (shoulders + hips quad).
+  if (ls && rs && lh && rh) {
+    sctx.beginPath();
+    sctx.moveTo(ls.x, ls.y);
+    sctx.lineTo(rs.x, rs.y);
+    sctx.lineTo(rh.x, rh.y);
+    sctx.lineTo(lh.x, lh.y);
+    sctx.closePath();
+    sctx.fill();
+  }
+
+  // Neck — shoulder-midpoint → ear-midpoint (or eye/nose fallback), limb width.
+  const sMid = midpoint(ls, rs);
+  const headTop =
+    midpoint(kp.left_ear, kp.right_ear) ??
+    midpoint(kp.left_eye, kp.right_eye) ??
+    kp.nose;
+  capsule(sMid, headTop, limbR);
+
+  // Arms.
+  capsule(ls, kp.left_elbow, limbR);
+  capsule(kp.left_elbow, kp.left_wrist, limbR);
+  capsule(rs, kp.right_elbow, limbR);
+  capsule(kp.right_elbow, kp.right_wrist, limbR);
+
+  // Legs.
+  capsule(lh, kp.left_knee, limbR);
+  capsule(kp.left_knee, kp.left_ankle, limbR);
+  capsule(rh, kp.right_knee, limbR);
+  capsule(kp.right_knee, kp.right_ankle, limbR);
+
+  // Hands — mitten cap at the wrist (no spindly finger capsules).
+  disc(kp.left_wrist, limbR * 1.1);
+  disc(kp.right_wrist, limbR * 1.1);
+
+  // Feet — capsule ankle → foot_index.
+  capsule(kp.left_ankle, kp.left_foot_index, limbR * 0.9);
+  capsule(kp.right_ankle, kp.right_foot_index, limbR * 0.9);
+
+  // Head oval.
+  drawHeadOval(sctx, kp, scale);
+
+  sctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Public draw entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw the two-pass pose overlay (Silhouette beneath, Skeleton on top) onto a
+ * canvas 2D context using image-space pixel coordinates.
  *
- * Edges with a missing endpoint are silently skipped (keypoint was below the
- * confidence threshold and filtered before storage).
+ * Edges with a missing endpoint are silently skipped. Face edges are dropped
+ * (the head oval replaces them); face joint points are still drawn.
  *
  * @param ctx       - Canvas 2D context to draw onto.
  * @param keypoints - Map of keypoint name → {x, y} in image pixel space.
- * @param options   - Optional style overrides (colors, line width, point radius).
+ * @param options   - Optional style overrides.
  */
 export function drawSkeleton(
   ctx: CanvasRenderingContext2D,
   keypoints: Record<string, OverlayPoint>,
   options?: SkeletonStyle,
 ): void {
-  const limbColor = options?.limbColor ?? LIMB_COLOR;
-  const jointColor = options?.jointColor ?? JOINT_COLOR;
-  const lineWidth = options?.lineWidth ?? LIMB_WIDTH;
-  const pointRadius = options?.pointRadius ?? JOINT_RADIUS;
+  const silhouetteVisible = options?.silhouetteVisible ?? true;
+  const silhouetteColor = options?.silhouetteColor ?? options?.lineColor ?? DEFAULT_COLOR;
+  const silhouetteOpacity = options?.silhouetteOpacity ?? DEFAULT_SILHOUETTE_OPACITY;
+  const limbThickness = options?.limbThickness ?? DEFAULT_LIMB_THICKNESS;
+
+  const linesVisible = options?.linesVisible ?? true;
+  const lineColor = options?.lineColor ?? DEFAULT_COLOR;
+  const lineThickness = options?.lineThickness ?? DEFAULT_LINE_THICKNESS;
+
+  const jointsVisible = options?.jointsVisible ?? true;
+  const jointColor = options?.jointColor ?? lineColor;
+  const jointRadius = options?.jointRadius ?? DEFAULT_JOINT_RADIUS;
+
   const edges = options?.skeletonEdges ?? MP_SKELETON_EDGES;
   const names: Record<number, string> = options?.keypointNames ?? MP_KP_NAMES;
-  const edgeColorMap = options?.edgeColorMap;
-  const edgeWidthMap = options?.edgeWidthMap;
-  const jointColorOverrides = options?.jointColorOverrides;
-  const jointRadiusOverrides = options?.jointRadiusOverrides;
   const dimThreshold = options?.estimatedDimThreshold ?? ESTIMATED_DIM_THRESHOLD;
   const dimOpacity = options?.estimatedDimOpacity ?? ESTIMATED_DIM_OPACITY;
+
+  const scale = bodyScale(keypoints, ctx.canvas.width, ctx.canvas.height);
+
+  // ── Silhouette pass — flattened via the offscreen scratch canvas so overlaps
+  //    never darken, then composited once at the configured opacity. ──
+  if (silhouetteVisible && silhouetteOpacity > 0) {
+    const scratch = getScratch(ctx.canvas.width, ctx.canvas.height);
+    if (scratch) {
+      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness);
+      ctx.save();
+      ctx.globalAlpha = silhouetteOpacity;
+      ctx.drawImage(scratch.canvas, 0, 0);
+      ctx.restore();
+    }
+  }
 
   // A point is dimmed when it carries a score below the threshold. Points with
   // no score (legacy callers, fully-detected joints) are never dimmed.
   const isDim = (p: OverlayPoint | undefined): boolean =>
     !!p && p.score !== undefined && p.score < dimThreshold;
 
-  // Draw limb lines first so joints render on top.
+  // ── Skeleton pass — thin lines (face edges dropped; oval replaces them). ──
   ctx.save();
   ctx.lineCap = "round";
 
-  for (const [fromIdx, toIdx] of edges) {
-    const from = keypoints[names[fromIdx]];
-    const to = keypoints[names[toIdx]];
-    if (!from || !to) continue;
+  if (linesVisible) {
+    const lineWidth = Math.max(0.5, 2 * lineThickness * scale);
+    ctx.strokeStyle = lineColor;
+    for (const [fromIdx, toIdx] of edges) {
+      const fromName = names[fromIdx];
+      const toName = names[toIdx];
+      // Both endpoints in the head → a face edge, now replaced by the oval.
+      if (HEAD_NAMES.has(fromName) && HEAD_NAMES.has(toName)) continue;
 
-    const edgeKey = `${fromIdx}-${toIdx}`;
-    ctx.strokeStyle = edgeColorMap?.[edgeKey] ?? limbColor;
-    ctx.lineWidth = edgeWidthMap?.[edgeKey] ?? lineWidth;
-    // Dim a limb if either endpoint is an unreliable Estimated Landmark.
-    ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
+      const from = keypoints[fromName];
+      const to = keypoints[toName];
+      if (!from || !to) continue;
 
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
+      ctx.lineWidth = lineWidth;
+      ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+    }
   }
 
-  // Draw joint circles — per-keypoint overrides take precedence.
-  for (const [name, pt] of Object.entries(keypoints)) {
-    ctx.fillStyle = jointColorOverrides?.[name] ?? jointColor;
-    ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, jointRadiusOverrides?.[name] ?? pointRadius, 0, Math.PI * 2);
-    ctx.fill();
+  // ── Skeleton pass — joint points. ──
+  if (jointsVisible) {
+    const r = Math.max(0.5, jointRadius * scale);
+    ctx.fillStyle = jointColor;
+    for (const pt of Object.values(keypoints)) {
+      ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   ctx.globalAlpha = 1;

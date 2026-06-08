@@ -1,8 +1,6 @@
 "use client";
 
 import { cn } from "@/utils/cn";
-import BodyPartHighlighter from "@/components/compare/BodyPartHighlighter";
-import type { HighlightSelection } from "@/utils/bodyRegions";
 import type { ConsoleMode } from "@/utils/compareUrl";
 
 export type ViewMode = "overlay" | "sidebyside";
@@ -16,13 +14,11 @@ export interface CompareToolbarProps {
   onViewMode: (mode: ViewMode) => void;
   masterPlaying: boolean;
   onTogglePlayAll: () => void;
-  highlight: HighlightSelection;
-  onHighlightChange: (next: HighlightSelection) => void;
   refineOpen: boolean;
   onToggleRefine: () => void;
   /**
    * Console mode. Multi-climb stage controls (view-mode, Play all) render only
-   * in `multiple`; single mode leaves just the focus tools (highlight, refine).
+   * in `multiple`; single mode leaves just the Refine disclosure.
    * The single/multiple switch itself lives in the climb rail, not here.
    */
   consoleMode?: ConsoleMode;
@@ -64,8 +60,6 @@ export default function CompareToolbar({
   onViewMode,
   masterPlaying,
   onTogglePlayAll,
-  highlight,
-  onHighlightChange,
   refineOpen,
   onToggleRefine,
   consoleMode = "multiple",
@@ -120,9 +114,6 @@ export default function CompareToolbar({
           <span className="mx-0.5 hidden h-5 w-px bg-edge/40 sm:block" aria-hidden="true" />
         </>
       )}
-
-      {/* Body-part highlighter — focus the comparison on specific parts */}
-      <BodyPartHighlighter selection={highlight} onChange={onHighlightChange} size="sm" />
 
       {/* Refine — secondary disclosure */}
       <button

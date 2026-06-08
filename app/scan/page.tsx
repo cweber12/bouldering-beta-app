@@ -167,13 +167,14 @@ function ScanPageInner() {
   const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
 
-  // Skeleton style for overlays
-  const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
+  // Skeleton style for overlays — SkeletonStylePanel emits a full style on mount;
+  // start from built-in defaults.
+  const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({});
 
   // On-demand video export state
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
-  const styleRef = useRef<SkeletonStyle>({ lineWidth: 2.5, pointRadius: 5 });
+  const styleRef = useRef<SkeletonStyle>({});
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
