@@ -20,12 +20,15 @@ away:
    absolute pixels.** `drawSkeleton` renders at the Route Photo's native
    resolution, so a fixed-pixel thickness looks like a fat body on a phone photo
    and a thread on a DSLR photo. Expressing limb/joint/line sizes as
-   `× shoulder-width` (within-frame fallback chain: shoulder→hip torso height,
-   then hip width, then a fraction of the canvas — kept stateless so compare
-   layers never bleed scale into each other) keeps the silhouette looking
-   identical across any resolution or zoom and lets it pulse correctly as the
-   climber moves toward/away from the camera. The cost is a scale reference +
-   fallback chain and abstract (unitless) panel sliders instead of a px readout.
+   `× body scale` keeps the silhouette looking identical across any resolution or
+   zoom. The scale is a **single sequence-stable constant** — the median
+   per-frame shoulder/torso measure across the whole clip (`computeStableBodyScale`,
+   with a shoulder→hip→canvas fallback chain) — so limb widths stay fixed and do
+   **not** pulse as the climber moves; only the climber-to-frame ratio sets the
+   width. Each rendered layer computes its own constant (callers inject it via
+   `SkeletonStyle.bodyScale`), so compare layers never bleed scale into each
+   other. The cost is precomputing the scale per sequence and abstract (unitless)
+   panel sliders instead of a px readout.
 
 ## Consequences
 

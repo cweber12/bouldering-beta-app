@@ -13,6 +13,7 @@ vi.mock("@/pipeline/homography", () => ({
 vi.mock("@/pipeline/skeletonOverlay", () => ({
   buildTransformedKeypoints: vi.fn().mockReturnValue(new Map()),
   drawSkeleton: vi.fn(),
+  computeStableBodyScale: vi.fn().mockReturnValue(100),
 }));
 
 import { computeHomography } from "@/pipeline/homography";

@@ -104,6 +104,15 @@ export interface SkeletonStyle {
   /** Joint radius × body scale. Default {@link DEFAULT_JOINT_RADIUS}. */
   jointRadius?: number;
 
+  // ── Sizing reference ──
+  /**
+   * Sequence-stable body scale (image px) that all sizes multiply against.
+   * Supply {@link computeStableBodyScale} so limb widths stay fixed and do not
+   * pulse with the climber's movement. When omitted, a per-frame scale is used
+   * (limbs will breathe with the pose — only sensible for one-off draws/tests).
+   */
+  bodyScale?: number;
+
   // ── Carried over, unchanged ──
   /**
    * Custom skeleton edges as [fromIndex, toIndex] pairs.
@@ -212,16 +221,12 @@ function dist(a: Pt, b: Pt): number {
 }
 
 /**
- * Per-frame body scale in image pixels. Prefers shoulder width, then torso
- * height, then hip width, then a fraction of the canvas as a last resort, so
- * the proportional overlay always has a sane reference even when the upper body
- * is missing.
+ * Body scale from a single frame's keypoints, in image pixels. Prefers shoulder
+ * width, then torso height, then hip width. Returns null when the upper body is
+ * missing so callers can fall back (per-frame to the canvas, or — preferred —
+ * to a sequence-stable scale).
  */
-function bodyScale(
-  kp: Record<string, OverlayPoint>,
-  canvasW: number,
-  canvasH: number,
-): number {
+function bodyScaleFromKp(kp: Record<string, { x: number; y: number }>): number | null {
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
   const lh = kp.left_hip, rh = kp.right_hip;
 
@@ -239,7 +244,41 @@ function bodyScale(
     const d = dist(lh, rh);
     if (d > 1) return d;
   }
-  return Math.min(canvasW, canvasH) * 0.15;
+  return null;
+}
+
+/** Per-frame body scale with a canvas-fraction fallback (used only when no
+ *  sequence-stable scale was supplied via {@link SkeletonStyle.bodyScale}). */
+function bodyScale(
+  kp: Record<string, OverlayPoint>,
+  canvasW: number,
+  canvasH: number,
+): number {
+  return bodyScaleFromKp(kp) ?? Math.min(canvasW, canvasH) * 0.15;
+}
+
+/**
+ * The climber's stable size in the frame: the median per-frame body scale across
+ * the whole rendered sequence. Because it is a single constant for the sequence,
+ * the Silhouette limbs (and joints/lines) keep a fixed width and do **not** pulse
+ * as the climber moves — only the climber-to-frame ratio sets the limb width.
+ *
+ * Pass the result as {@link SkeletonStyle.bodyScale} to {@link drawSkeleton}.
+ */
+export function computeStableBodyScale(
+  frames: { keypoints: Record<string, { x: number; y: number }> }[],
+  canvasW: number,
+  canvasH: number,
+): number {
+  const scales: number[] = [];
+  for (const f of frames) {
+    const s = bodyScaleFromKp(f.keypoints);
+    if (s !== null) scales.push(s);
+  }
+  if (scales.length === 0) return Math.min(canvasW, canvasH) * 0.15;
+  scales.sort((a, b) => a - b);
+  const mid = scales.length >> 1;
+  return scales.length % 2 ? scales[mid] : (scales[mid - 1] + scales[mid]) / 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -428,7 +467,9 @@ export function drawSkeleton(
   const dimThreshold = options?.estimatedDimThreshold ?? ESTIMATED_DIM_THRESHOLD;
   const dimOpacity = options?.estimatedDimOpacity ?? ESTIMATED_DIM_OPACITY;
 
-  const scale = bodyScale(keypoints, ctx.canvas.width, ctx.canvas.height);
+  // Prefer the sequence-stable scale so limb widths do not pulse with movement;
+  // fall back to a per-frame scale only when a caller draws without supplying one.
+  const scale = options?.bodyScale ?? bodyScale(keypoints, ctx.canvas.width, ctx.canvas.height);
 
   // ── Silhouette pass — flattened via the offscreen scratch canvas so overlaps
   //    never darken, then composited once at the configured opacity. ──

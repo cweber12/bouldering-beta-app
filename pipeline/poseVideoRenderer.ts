@@ -25,7 +25,7 @@ import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
 import { computeHomography, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
 import { capToPixelBudget } from "@/utils/imageHelpers";
-import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { buildPanningSkeletonFrames } from "@/pipeline/skeletonRenderer";
 
 export type { SkeletonStyle };
@@ -185,6 +185,21 @@ export async function renderPoseVideo({
       }).frames
     : null;
 
+  // Sequence-stable body scale so the Silhouette limb widths stay fixed across
+  // the clip rather than pulsing with the climber's movement.
+  const stableScale = panningFrames
+    ? computeStableBodyScale(panningFrames, canvasW, canvasH)
+    : computeStableBodyScale(
+        sortedFrames.map((f) => ({
+          keypoints: f.keypoints.length > 0
+            ? buildTransformedKeypoints(f, h!, videoMeta.width, videoMeta.height)
+            : {},
+        })),
+        canvasW,
+        canvasH,
+      );
+  const styleWithScale: SkeletonStyle = { ...skeletonStyle, bodyScale: stableScale };
+
   return new Promise<string>((resolve, reject) => {
     recorder.onstop = () => {
       imageBitmap.close();
@@ -221,7 +236,7 @@ export async function renderPoseVideo({
         // the single-homography caching path entirely.
         if (panningFrames) {
           const kp = panningFrames[i]?.keypoints;
-          if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, skeletonStyle);
+          if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, styleWithScale);
           onProgress?.(i + 1, totalOutputFrames);
           await new Promise<void>((r) => setTimeout(r, frameDelay));
           continue;
@@ -248,9 +263,9 @@ export async function renderPoseVideo({
           if (cachedCeilKp && ceilIdx !== floorIdx) {
             const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
             const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
-            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), skeletonStyle);
+            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), styleWithScale);
           } else {
-            drawSkeleton(ctx, cachedFloorKp, skeletonStyle);
+            drawSkeleton(ctx, cachedFloorKp, styleWithScale);
           }
         }
 
