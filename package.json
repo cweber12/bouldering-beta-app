@@ -13,23 +13,24 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "setup:opencv": "node scripts/fetch-opencv.mjs",
+    "setup:mediapipe-wasm": "node scripts/fetch-mediapipe-wasm.mjs",
     "setup:pose-models": "node scripts/fetch-mediapipe-models.mjs",
-    "setup:assets": "npm run setup:opencv && npm run setup:pose-models"
+    "setup:assets": "npm run setup:opencv && npm run setup:mediapipe-wasm && npm run setup:pose-models"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1018.0",
+    "@aws-sdk/client-s3": "^3.1063.0",
     "@mediapipe/tasks-vision": "^0.10.34",
     "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.100.1",
+    "@supabase/supabase-js": "^2.107.0",
     "@techstark/opencv-js": "^4.12.0-release.1",
     "@types/leaflet": "^1.9.21",
     "@types/leaflet.markercluster": "^1.5.6",
     "clsx": "^2.1.1",
-    "firebase": "^12.12.1",
-    "firebase-admin": "^13.8.0",
+    "firebase": "^12.14.0",
+    "firebase-admin": "^13.10.0",
     "leaflet": "^1.9.4",
     "leaflet.markercluster": "^1.5.3",
-    "next": "16.2.1",
+    "next": "^16.2.7",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-image-crop": "^11.0.10",
@@ -37,23 +38,35 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.3.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitejs/plugin-react": "^6.0.1",
-    "@vitest/coverage-v8": "^4.1.1",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9",
-    "eslint-config-next": "16.2.1",
+    "eslint-config-next": "^16.2.7",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5",
+    "vite": "^8.0.16",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^4.1.1"
+    "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "protobufjs": "7.5.9",
+    "@protobufjs/utf8": "1.1.1",
+    "@tootallnate/once": "2.0.1",
+    "minimatch@^3.1.5": {
+      "brace-expansion": "1.1.13"
+    },
+    "minimatch@^10.2.2": {
+      "brace-expansion": "5.0.6"
+    }
   }
 }

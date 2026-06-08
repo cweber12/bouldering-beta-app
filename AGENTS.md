@@ -197,15 +197,13 @@ npx vitest run <targeted test files>
 
 # 4. Stage and commit
 git add .
-git commit -m "<type>: <summary>
-
-<body bullets>"
+git commit
 ```
 
 Fix TypeScript errors before proceeding. Do not disable tsc checks.
 
 **The agent MUST run `npx tsc --noEmit`, `npx eslint .`, targeted `npx vitest run ...`,
-and `git add .` + `git commit -m "..."` after every code change session without waiting to be asked.**
+and `git add .` + `git commit` after every code change session without waiting to be asked.**
 
 ### README maintenance
 - When a code change adds, removes, or renames user-visible features, pages,
@@ -220,8 +218,16 @@ and `git add .` + `git commit -m "..."` after every code change session without 
 ```
 <type>: <imperative summary under 72 chars>
 
-<body — what changed and why, bullet points>
+- bullet describing what changed
+- bullet describing what changed
+
+one or two sentences explaining why the change was made
 ```
+
+Formatting rules:
+- No quotation marks anywhere in the commit message.
+- No explicit What, How, or Why labels.
+- Use a short summary line, then a blank line, then bullets, then a blank line, then a brief why paragraph.
 
 Types: `feat`, `fix`, `refactor`, `test`, `chore`
 <!-- END:nextjs-agent-rules -->

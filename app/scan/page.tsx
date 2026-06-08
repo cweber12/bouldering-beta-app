@@ -126,7 +126,11 @@ function ScanPageInner() {
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
   const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
-  const { model } = usePoseModel({ backend: "mediapipe", variant: modelVariant, maxPoses });
+  const poseModelConfig = useMemo(
+    () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
+    [modelVariant, maxPoses],
+  );
+  const { model } = usePoseModel(poseModelConfig);
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();

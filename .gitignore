@@ -43,6 +43,7 @@ next-env.d.ts
 
 # Large binary CV assets — download separately (see public/README.md)
 /public/opencv.js
+/public/mediapipe/wasm/*
 /public/models/pose/*.task
 
 

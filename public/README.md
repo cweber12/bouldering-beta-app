@@ -5,6 +5,7 @@
 The following files are intentionally not committed and must be generated or downloaded locally:
 
 - `public/opencv.js`
+- `public/mediapipe/wasm/*`
 - `public/models/pose/pose_landmarker_lite.task`
 - `public/models/pose/pose_landmarker_full.task`
 - `public/models/pose/pose_landmarker_heavy.task`
@@ -13,13 +14,14 @@ The following files are intentionally not committed and must be generated or dow
 
 ```powershell
 npm install          # installs @techstark/opencv-js and all other deps
-npm run setup:assets # copies opencv.js and downloads MediaPipe pose models
+npm run setup:assets # copies opencv.js + MediaPipe WASM runtime, downloads pose models
 ```
 
 You can also run setup scripts independently:
 
 ```powershell
 npm run setup:opencv
+npm run setup:mediapipe-wasm
 npm run setup:pose-models
 ```
 

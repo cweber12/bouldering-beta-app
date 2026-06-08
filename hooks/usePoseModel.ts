@@ -62,6 +62,7 @@ export const DEFAULT_POSE_MODEL: PoseModelConfig = {
 let cachedModel: PoseDetector | null = null;
 let cachedConfigKey: string | null = null;
 let loadPromise: Promise<void> | null = null;
+let loadingConfigKey: string | null = null;
 const listeners: Array<() => void> = [];
 
 function configKey(config: PoseModelConfig): string {
@@ -77,15 +78,8 @@ function notifyReady() {
 // MediaPipe Pose Landmarker loader
 // ---------------------------------------------------------------------------
 
-/** CDN base for MediaPipe WASM files. */
-const MP_TASKS_VISION_VERSION = "0.10.34";
-
-/**
- * Version-pinned CDN base for MediaPipe WASM runtime files.
- * Keep this in sync with @mediapipe/tasks-vision in package.json.
- */
-const MP_WASM_CDN =
-  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_TASKS_VISION_VERSION}/wasm`;
+/** Same-origin base for MediaPipe WASM runtime files. */
+const MP_WASM_BASE = "/mediapipe/wasm";
 
 /** Local static paths for each MediaPipe Pose Landmarker model variant. */
 const MP_MODEL_URLS: Record<MediaPipeVariant, string> = {
@@ -96,7 +90,7 @@ const MP_MODEL_URLS: Record<MediaPipeVariant, string> = {
 
 async function loadModelAssetBuffer(variant: MediaPipeVariant): Promise<Uint8Array> {
   const path = MP_MODEL_URLS[variant];
-  const response = await fetch(path, { cache: "force-cache" });
+  const response = await fetch(path, { cache: "no-store" });
 
   if (!response.ok) {
     throw new Error(
@@ -113,7 +107,7 @@ async function loadMediaPipe(variant: MediaPipeVariant, maxPoses: number): Promi
     "@mediapipe/tasks-vision"
   );
 
-  const vision = await FilesetResolver.forVisionTasks(MP_WASM_CDN);
+  const vision = await FilesetResolver.forVisionTasks(MP_WASM_BASE);
   const modelAssetBuffer = await loadModelAssetBuffer(variant);
 
   const landmarker = await PoseLandmarker.createFromOptions(vision, {
@@ -182,10 +176,32 @@ export function usePoseModel(
     const onReady = () => rerender((n) => n + 1);
     listeners.push(onReady);
 
-    if (!loadPromise || cachedConfigKey !== key) {
+    // In React dev StrictMode, effects can mount twice. Keep a single in-flight
+    // model load per config key to avoid racing MediaPipe WASM initialisation.
+    if (!loadPromise) {
+      loadingConfigKey = key;
       loadPromise = loadModel(config).catch((err) => {
         console.error("[usePoseModel] Failed to load model:", err);
+      }).finally(() => {
         loadPromise = null;
+        loadingConfigKey = null;
+      });
+    } else if (loadingConfigKey !== key && cachedConfigKey !== key) {
+      // A different config was requested while another model was loading.
+      // Queue one follow-up load after the current one settles.
+      const nextConfig = config;
+      const nextKey = key;
+      loadPromise = loadPromise.finally(() => {
+        if (cachedConfigKey === nextKey) return;
+        loadingConfigKey = nextKey;
+        return loadModel(nextConfig)
+          .catch((err) => {
+            console.error("[usePoseModel] Failed to load model:", err);
+          })
+          .finally(() => {
+            loadPromise = null;
+            loadingConfigKey = null;
+          });
       });
     }
 
