@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "setup:opencv": "node scripts/fetch-opencv.mjs"
+    "setup:opencv": "node scripts/fetch-opencv.mjs",
+    "setup:pose-models": "node scripts/fetch-mediapipe-models.mjs",
+    "setup:assets": "npm run setup:opencv && npm run setup:pose-models"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1018.0",

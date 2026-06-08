@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/utils/cn";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
@@ -44,16 +45,7 @@ export default function ClimbOptionsDropdown({ climbKey, state, area, route, tri
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close on any click outside the container
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useClickOutside(containerRef, () => setOpen(false), open);
 
   /** Opens the climb console, scoped to this route with this climb pre-loaded;
    *  the user switches to "Compare Multiple" on the page to add others. */

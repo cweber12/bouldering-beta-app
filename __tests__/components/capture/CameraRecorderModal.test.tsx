@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-import CameraRecorderModal from "@/components/shared/CameraRecorderModal";
+import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 
 // ---------------------------------------------------------------------------
 // Fakes for the media APIs jsdom does not provide.

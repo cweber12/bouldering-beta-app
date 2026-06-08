@@ -57,7 +57,10 @@ export function usePoseVideo(
     if (!cv || !imageFile || !attemptId || !matchResult) return;
 
     const attempt = getAttempt(attemptId);
-    if (!attempt?.orbFeatures) return;
+    // Panning Capture renders from per-keyframe homographies and needs no
+    // frame-0 reference; Fixed Capture requires orbFeatures.
+    const kfHomographies = matchResult.keyframeHomographies;
+    if (!attempt || (!kfHomographies?.length && !attempt.orbFeatures)) return;
 
     // Revoke the previous blob URL before creating a new one.
     if (prevUrlRef.current) {
@@ -81,6 +84,7 @@ export function usePoseVideo(
       orbFeatures: attempt.orbFeatures,
       queryOrb: matchResult.queryOrb,
       matches: matchResult.matches,
+      keyframeHomographies: kfHomographies,
       skeletonStyle: styleRef.current,
       targetFps: 30,
       onProgress: (rendered, total) => {

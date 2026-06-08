@@ -35,6 +35,8 @@ function fakeMatchResult(nMatches = 10) {
     queryKeypoints: nMatches,
     referenceKeypoints: nMatches,
     reanchorApplied: false,
+    // Fixed Capture: the matcher supplies the gated homography the renderer uses.
+    homography: new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
   };
 }
 
@@ -106,16 +108,13 @@ describe("useSkeletonFrames", () => {
     expect(result.current.errorMessage).toBeNull();
   });
 
-  it("returns error when attempt has no orbFeatures", () => {
-    vi.mocked(getAttempt).mockReturnValue({
-      ...fakeAttempt(),
-      orbFeatures: null,
-    });
+  it("returns error when the match result has no homography", () => {
+    const noHomography = { ...fakeMatchResult(), homography: undefined };
     const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", fakeMatchResult()),
+      useSkeletonFrames(mockCv, "a1", noHomography),
     );
     expect(result.current.status).toBe("error");
-    expect(result.current.errorMessage).toMatch(/ORB/i);
+    expect(result.current.errorMessage).toMatch(/align/i);
   });
 
   it("returns error when buildSkeletonFrames throws", () => {

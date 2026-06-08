@@ -1,5 +1,7 @@
-/** The two console modes: a focused single-climb viewer, or a 2–4 climb comparison. */
-export type ConsoleMode = "single" | "multiple";
+// ConsoleMode now lives with the dedicated route URL helper; re-exported here so
+// existing `@/utils/compareUrl` importers keep working through the migration.
+export type { ConsoleMode } from "./routeUrl";
+import type { ConsoleMode } from "./routeUrl";
 
 /**
  * Builds the `/compare` URL for one or more climb keys with optional route

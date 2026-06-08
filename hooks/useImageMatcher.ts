@@ -8,13 +8,15 @@ import {
   downscaleImageData,
   rescaleFeaturesToNative,
   queryMaxEdgeFor,
+  PANNING_QUERY_MAX_EDGE,
   type OrbMatch,
   type OrbFeatures,
 } from "@/pipeline/orbDetector";
-import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
+import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
 import { cropImageData } from "@/utils/cvHelpers";
+import { capToPixelBudget } from "@/utils/imageHelpers";
 import { getAttempt } from "@/storage/sessionStore";
-import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import type { CropFraction } from "@/utils/cropFraction";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -37,6 +39,21 @@ export interface ImageMatchResult {
    * crop box. The returned matches and queryOrb reflect the re-anchored result.
    */
   reanchorApplied: boolean;
+  /**
+   * Panning Capture only: per-keyframe homographies (reference video-frame →
+   * photo), ascending by timestamp, with un-matchable keyframes dropped. Present
+   * and non-empty only when the attempt stored keyframes and at least one passed
+   * the match/validity gate; the render path uses these instead of `matches`.
+   */
+  keyframeHomographies?: KeyframeHomography[];
+  /**
+   * Fixed Capture: the single gated reference video-frame → photo homography the
+   * Route Overlay is rendered through. Computed here (resolution-scaled RANSAC +
+   * validity gate) so a degenerate/flipped transform is rejected up front rather
+   * than silently projecting the skeleton off-photo at render time. Absent when
+   * {@link keyframeHomographies} drives the render (Panning Capture).
+   */
+  homography?: Float64Array;
 }
 
 export type MatchStatus = "idle" | "matching" | "done" | "error";
@@ -81,7 +98,13 @@ export function useImageMatcher(): ImageMatcherResult {
       // resolution. Downscale the query to a reference-aware longest-edge target
       // before extraction; keypoints are mapped back to native coordinates after
       // so homography and the re-anchor pass operate in full-resolution space.
-      const maxEdge = queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
+      // Panning Capture is detected from stored keyframes. The photo is kept at
+      // higher resolution (PANNING_QUERY_MAX_EDGE) so each Keyframe's close-up
+      // section still has detail to match against its small region of the photo.
+      const panningMatch = (attempt.keyframes?.length ?? 0) > 0;
+      const maxEdge = panningMatch
+        ? PANNING_QUERY_MAX_EDGE
+        : queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
       const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
 
       // When the user specified a crop region, extract ORB features only from
@@ -104,12 +127,24 @@ export function useImageMatcher(): ImageMatcherResult {
       // Re-anchor pass: if the initial match count is below the threshold and
       // the reference features include a known crop box, try estimating the
       // corresponding region in the query image and re-running ORB there.
+      // Reprojection threshold scales with the photo's native resolution; the
+      // validity gate rejects flipped/degenerate transforms of the video frame.
+      const reproj = ransacReprojThresholdFor(Math.max(imageData.width, imageData.height));
+      const gate = { srcWidth: attempt.videoMeta.width, srcHeight: attempt.videoMeta.height };
+
+      // Skip the re-anchor crop pass for Panning Capture: it would replace the
+      // full-photo queryOrb with a sub-region (anchored to the frame-0 crop),
+      // but every keyframe must match against the whole photo.
       if (
+        !panningMatch &&
         matches.length < MIN_REANCHOR_THRESHOLD &&
         matches.length >= 4 &&
         attempt.orbFeatures.cropBox
       ) {
-        const roughH = computeHomography(cv, matches, attempt.orbFeatures, queryOrb);
+        const roughH = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
+          ransacReprojThreshold: reproj,
+          gate,
+        });
         if (roughH) {
           const box = attempt.orbFeatures.cropBox;
           // Map the 4 corners of the reference crop box to query-image space.
@@ -148,12 +183,57 @@ export function useImageMatcher(): ImageMatcherResult {
         }
       }
 
+      // Panning Capture: match every stored Keyframe to the (whole) photo and
+      // compute its photo-homography. Keyframes with too few matches or a
+      // degenerate transform are dropped — homographyAtTime interpolates across
+      // the gaps at render time. The photo is the global reference, so each
+      // keyframe is anchored independently (drift-free, no chaining).
+      let keyframeHomographies: KeyframeHomography[] | undefined;
+      if (panningMatch && attempt.keyframes) {
+        const kfs: KeyframeHomography[] = [];
+        for (const kf of attempt.keyframes) {
+          const kfMatches = matchOrbFeatures(cv, kf.features, queryOrb);
+          if (kfMatches.length < 4) continue;
+          const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
+            ransacReprojThreshold: reproj,
+            gate,
+          });
+          if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
+          kfs.push({ timestamp: kf.timestamp, h });
+        }
+        if (kfs.length > 0) {
+          keyframeHomographies = kfs.sort((a, b) => a.timestamp - b.timestamp);
+        }
+      }
+
+      // Fixed Capture render homography: computed here, gated, so the Route
+      // Overlay never renders through a degenerate/flipped transform (which would
+      // project the skeleton off-photo with no error). Skipped when per-keyframe
+      // homographies drive the render. The fallback also covers a Panning attempt
+      // whose keyframes all failed to match — the render path then uses the
+      // frame-0 reference, which must still be gated.
+      let homography: Float64Array | undefined;
+      if (!keyframeHomographies) {
+        const h = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
+          ransacReprojThreshold: reproj,
+          gate,
+        });
+        if (!h) {
+          throw new Error(
+            "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
+          );
+        }
+        homography = h;
+      }
+
       setResult({
         matches,
         queryKeypoints: queryOrb.keypoints.length,
         referenceKeypoints: attempt.orbFeatures.keypoints.length,
         queryOrb,
         reanchorApplied,
+        keyframeHomographies,
+        homography,
       });
       setStatus("done");
     } catch (err) {
@@ -183,9 +263,14 @@ function loadImageAsImageData(file: File): Promise<ImageData> {
     const img = new Image();
 
     img.onload = () => {
+      // Decode-time pixel cap: never rasterise more than MAX_DECODE_PIXELS so a
+      // gigapixel / decompression-bomb upload can't exhaust memory or the WASM
+      // heap. The route-photo "native" pixel space the homography targets is
+      // this (possibly capped) canvas; the renderer caps identically to match.
+      const { width, height } = capToPixelBudget(img.naturalWidth, img.naturalHeight);
       const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext("2d");
 
       if (!ctx) {
@@ -194,8 +279,8 @@ function loadImageAsImageData(file: File): Promise<ImageData> {
         return;
       }
 
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, 0, 0, width, height);
+      const imageData = ctx.getImageData(0, 0, width, height);
       URL.revokeObjectURL(url);
       resolve(imageData);
     };

@@ -23,8 +23,10 @@ type CV = any;
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
+import { capToPixelBudget } from "@/utils/imageHelpers";
 import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { buildPanningSkeletonFrames } from "@/pipeline/skeletonRenderer";
 
 export type { SkeletonStyle };
 
@@ -33,11 +35,18 @@ export interface PoseVideoParams {
   imageFile: File;
   frames: PoseFrame[];
   videoMeta: VideoMeta;
-  /** ORB features from the reference video frame. */
-  orbFeatures: OrbFeatures;
+  /** ORB features from the reference video frame. Unused (and optional) in Panning Capture. */
+  orbFeatures?: OrbFeatures | null;
   /** ORB features from the uploaded route image. */
   queryOrb: OrbFeatures;
   matches: OrbMatch[];
+  /**
+   * Panning Capture only: per-keyframe homographies (reference video-frame →
+   * photo), ascending by timestamp. When present and non-empty, the overlay is
+   * projected through the time-interpolated keyframe homography per frame and
+   * `orbFeatures`/`queryOrb`/`matches` are not used for transform computation.
+   */
+  keyframeHomographies?: KeyframeHomography[];
   /**
    * Milliseconds between sampled video frames (the original sampling interval).
    * Used to compute the original sampling rate for informational purposes.
@@ -98,23 +107,46 @@ export async function renderPoseVideo({
   targetFps = 60,
   onProgress,
   skeletonStyle,
+  keyframeHomographies,
 }: PoseVideoParams): Promise<string> {
   if (typeof MediaRecorder === "undefined") {
     throw new Error("MediaRecorder is not supported in this browser.");
   }
 
-  const h = computeHomography(cv, matches, orbFeatures, queryOrb);
-  if (!h) {
-    throw new Error(
-      `Not enough matches to compute homography — need ≥ 4, got ${matches.length}.`,
-    );
-  }
-
   const imageBitmap = await createImageBitmap(imageFile);
 
+  // Mirror useImageMatcher's decode-time cap so the canvas the photo is drawn on
+  // shares the pixel space the query ORB features (and therefore the homography)
+  // were computed in. Without this, a >MAX_DECODE_PIXELS photo would render at
+  // full size while the keypoints live in capped space, mis-placing the overlay.
+  const { width: canvasW, height: canvasH } = capToPixelBudget(imageBitmap.width, imageBitmap.height);
+
+  const panning = (keyframeHomographies?.length ?? 0) > 0;
+
+  // Fixed Capture: a single frame-0 homography reused for every frame.
+  // Panning Capture skips this — it projects through the time-interpolated
+  // keyframe homography per frame (pre-computed below).
+  let h: Float64Array | null = null;
+  if (!panning) {
+    if (!orbFeatures) {
+      imageBitmap.close();
+      throw new Error("Fixed Capture rendering requires reference ORB features.");
+    }
+    h = computeHomography(cv, matches, orbFeatures, queryOrb, {
+      ransacReprojThreshold: ransacReprojThresholdFor(Math.max(canvasW, canvasH)),
+      gate: { srcWidth: videoMeta.width, srcHeight: videoMeta.height },
+    });
+    if (!h) {
+      imageBitmap.close();
+      throw new Error(
+        `Not enough matches to compute homography — need ≥ 4, got ${matches.length}.`,
+      );
+    }
+  }
+
   const canvas = document.createElement("canvas");
-  canvas.width = imageBitmap.width;
-  canvas.height = imageBitmap.height;
+  canvas.width = canvasW;
+  canvas.height = canvasH;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) {
@@ -140,6 +172,18 @@ export async function renderPoseVideo({
   const lastTs  = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].timestamp : 0;
   const duration = Math.max(lastTs - firstTs, 1 / fps);
   const totalOutputFrames = Math.ceil(duration * fps) + 1;
+
+  // Panning Capture: pre-compute the per-output-frame keypoints (pose blended in
+  // normalised space, projected through the time-interpolated keyframe
+  // homography). Uses the same fps/duration formula as the loop, so indices align.
+  const panningFrames = panning
+    ? buildPanningSkeletonFrames({
+        frames,
+        videoMeta,
+        keyframeHomographies: keyframeHomographies!,
+        targetFps: fps,
+      }).frames
+    : null;
 
   return new Promise<string>((resolve, reject) => {
     recorder.onstop = () => {
@@ -171,12 +215,22 @@ export async function renderPoseVideo({
           floorIdx++;
         }
 
-        ctx.drawImage(imageBitmap, 0, 0);
+        ctx.drawImage(imageBitmap, 0, 0, canvasW, canvasH);
+
+        // Panning Capture: draw the pre-computed time-varying overlay and skip
+        // the single-homography caching path entirely.
+        if (panningFrames) {
+          const kp = panningFrames[i]?.keypoints;
+          if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, skeletonStyle);
+          onProgress?.(i + 1, totalOutputFrames);
+          await new Promise<void>((r) => setTimeout(r, frameDelay));
+          continue;
+        }
 
         // Compute / reuse transformed keypoints for floor frame.
         if (cachedFloorAt !== floorIdx) {
           cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
-            ? buildTransformedKeypoints(sortedFrames[floorIdx], h, videoMeta.width, videoMeta.height)
+            ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
             : null;
           cachedFloorAt = floorIdx;
         }
@@ -186,7 +240,7 @@ export async function renderPoseVideo({
 
           if (cachedCeilAt !== ceilIdx) {
             cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
-              ? buildTransformedKeypoints(sortedFrames[ceilIdx], h, videoMeta.width, videoMeta.height)
+              ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
               : null;
             cachedCeilAt = ceilIdx;
           }

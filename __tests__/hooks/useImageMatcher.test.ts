@@ -18,6 +18,7 @@ vi.mock("@/pipeline/orbDetector", () => ({
 vi.mock("@/pipeline/homography", () => ({
   computeHomography: vi.fn(),
   applyHomographyMatrix: vi.fn(),
+  ransacReprojThresholdFor: vi.fn().mockReturnValue(3),
 }));
 
 vi.mock("@/utils/cvHelpers", () => ({
@@ -151,6 +152,12 @@ beforeEach(() => {
   );
   (rescaleFeaturesToNative as ReturnType<typeof vi.fn>).mockImplementation(
     (features: unknown) => features,
+  );
+  // Fixed Capture now computes a gated render homography; default it to a valid
+  // identity so happy-path cases reach "done". Degenerate-match cases override
+  // this to null to exercise the alignment-failed path.
+  (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(
+    new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]),
   );
 });
 
@@ -448,8 +455,31 @@ describe("useImageMatcher — reanchorApplied", () => {
     });
 
     expect(result.current.result?.reanchorApplied).toBe(false);
-    // computeHomography must not have been called.
-    expect(computeHomography).not.toHaveBeenCalled();
+    // Re-anchor needs ≥ 4 matches, so with 3 it is skipped: matchOrbFeatures
+    // runs once (no second re-anchor match) and computeHomography is called only
+    // for the final render homography (not the re-anchor's rough pass).
+    expect(matchOrbFeatures).toHaveBeenCalledTimes(1);
+    expect(computeHomography).toHaveBeenCalledTimes(1);
+  });
+
+  it("errors with an alignment message when the render homography is degenerate", async () => {
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const attempt = fakeAttempt(15);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
+    // Gate rejects the transform → computeHomography returns null.
+    (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.errorMessage).toMatch(/align/i);
+    expect(result.current.result).toBeNull();
   });
 });
 

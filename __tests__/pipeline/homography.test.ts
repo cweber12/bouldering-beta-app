@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
-import { applyHomographyMatrix } from "@/pipeline/homography";
+import {
+  applyHomographyMatrix,
+  isValidHomography,
+  ransacReprojThresholdFor,
+  interpolateHomographies,
+  homographyAtTime,
+  RANSAC_BASE_THRESHOLD,
+  type KeyframeHomography,
+} from "@/pipeline/homography";
 import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { PoseFrame } from "@/pipeline/poseDetection";
 
@@ -52,6 +60,184 @@ describe("applyHomographyMatrix", () => {
     // x' = 2*3 + 10 = 16,  y' = 2*4 + 5 = 13,  w = 1
     expect(result.x).toBeCloseTo(16);
     expect(result.y).toBeCloseTo(13);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isValidHomography
+// ---------------------------------------------------------------------------
+
+describe("isValidHomography", () => {
+  // prettier-ignore
+  const IDENTITY = new Float64Array([1, 0, 0,   0, 1, 0,   0, 0, 1]);
+
+  it("accepts the identity transform over a frame rectangle", () => {
+    expect(isValidHomography(IDENTITY, 640, 480)).toBe(true);
+  });
+
+  it("accepts a translation + uniform scale", () => {
+    // prettier-ignore
+    const H = new Float64Array([1.5, 0, 100,   0, 1.5, 50,   0, 0, 1]);
+    expect(isValidHomography(H, 640, 480)).toBe(true);
+  });
+
+  it("rejects a horizontal flip (negative determinant)", () => {
+    // x -> -x maps the rectangle to negative-orientation winding.
+    // prettier-ignore
+    const FLIP = new Float64Array([-1, 0, 640,   0, 1, 0,   0, 0, 1]);
+    expect(isValidHomography(FLIP, 640, 480)).toBe(false);
+  });
+
+  it("rejects a degenerate (collinear) transform", () => {
+    // Collapses every point onto the x-axis — zero area.
+    // prettier-ignore
+    const DEGEN = new Float64Array([1, 0, 0,   0, 0, 0,   0, 0, 1]);
+    expect(isValidHomography(DEGEN, 640, 480)).toBe(false);
+  });
+
+  it("rejects a transform that scales beyond the bounds", () => {
+    // 0.001× linear scale — far below the default minScale.
+    // prettier-ignore
+    const TINY = new Float64Array([0.001, 0, 0,   0, 0.001, 0,   0, 0, 1]);
+    expect(isValidHomography(TINY, 640, 480)).toBe(false);
+  });
+
+  it("respects custom scale bounds", () => {
+    // prettier-ignore
+    const H = new Float64Array([3, 0, 0,   0, 3, 0,   0, 0, 1]);
+    expect(isValidHomography(H, 640, 480, { maxScale: 2 })).toBe(false);
+    expect(isValidHomography(H, 640, 480, { maxScale: 5 })).toBe(true);
+  });
+
+  it("rejects matrices with non-finite entries", () => {
+    const NAN = new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, NaN]);
+    expect(isValidHomography(NAN, 640, 480)).toBe(false);
+  });
+
+  it("rejects non-positive source dimensions", () => {
+    expect(isValidHomography(IDENTITY, 0, 480)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ransacReprojThresholdFor
+// ---------------------------------------------------------------------------
+
+describe("ransacReprojThresholdFor", () => {
+  it("returns the baseline threshold at the calibration resolution", () => {
+    expect(ransacReprojThresholdFor(1600)).toBeCloseTo(RANSAC_BASE_THRESHOLD);
+  });
+
+  it("scales up with resolution, clamped to 8px", () => {
+    expect(ransacReprojThresholdFor(3200)).toBeCloseTo(6);
+    expect(ransacReprojThresholdFor(100000)).toBe(8);
+  });
+
+  it("clamps small resolutions to the 2px floor", () => {
+    expect(ransacReprojThresholdFor(400)).toBe(2);
+  });
+
+  it("falls back to the baseline for non-positive input", () => {
+    expect(ransacReprojThresholdFor(0)).toBe(RANSAC_BASE_THRESHOLD);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// interpolateHomographies
+// ---------------------------------------------------------------------------
+
+describe("interpolateHomographies", () => {
+  // prettier-ignore
+  const T0 = new Float64Array([1, 0, 0,    0, 1, 0,    0, 0, 1]);
+  // prettier-ignore
+  const T100 = new Float64Array([1, 0, 100, 0, 1, 200,  0, 0, 1]);
+
+  it("reproduces the endpoints exactly at alpha 0 and 1", () => {
+    expect(Array.from(interpolateHomographies(T0, T100, 0))).toEqual(Array.from(T0));
+    expect(Array.from(interpolateHomographies(T0, T100, 1))).toEqual(Array.from(T100));
+  });
+
+  it("clamps alpha outside [0, 1] to the endpoints", () => {
+    expect(Array.from(interpolateHomographies(T0, T100, -5))).toEqual(Array.from(T0));
+    expect(Array.from(interpolateHomographies(T0, T100, 9))).toEqual(Array.from(T100));
+  });
+
+  it("blends a pure translation linearly at the midpoint", () => {
+    const mid = interpolateHomographies(T0, T100, 0.5);
+    const p = applyHomographyMatrix(mid, 0, 0);
+    expect(p.x).toBeCloseTo(50);
+    expect(p.y).toBeCloseTo(100);
+  });
+
+  it("interpolates a uniform scale (linear in scale)", () => {
+    // prettier-ignore
+    const S1 = new Float64Array([1, 0, 0,   0, 1, 0,   0, 0, 1]);
+    // prettier-ignore
+    const S3 = new Float64Array([3, 0, 0,   0, 3, 0,   0, 0, 1]);
+    const mid = interpolateHomographies(S1, S3, 0.5);
+    const p = applyHomographyMatrix(mid, 10, 10);
+    // scale halfway between 1 and 3 = 2×
+    expect(p.x).toBeCloseTo(20);
+    expect(p.y).toBeCloseTo(20);
+  });
+
+  it("slerps rotation along the shortest arc", () => {
+    const rot = (deg: number): Float64Array => {
+      const r = (deg * Math.PI) / 180;
+      // prettier-ignore
+      return new Float64Array([Math.cos(r), -Math.sin(r), 0,   Math.sin(r), Math.cos(r), 0,   0, 0, 1]);
+    };
+    const mid = interpolateHomographies(rot(0), rot(90), 0.5);
+    // A point on the +x axis should land at 45°.
+    const p = applyHomographyMatrix(mid, 1, 0);
+    expect(p.x).toBeCloseTo(Math.cos(Math.PI / 4));
+    expect(p.y).toBeCloseTo(Math.sin(Math.PI / 4));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// homographyAtTime
+// ---------------------------------------------------------------------------
+
+describe("homographyAtTime", () => {
+  const kf = (timestamp: number, tx: number): KeyframeHomography => ({
+    timestamp,
+    // prettier-ignore
+    h: new Float64Array([1, 0, tx, 0, 1, 0, 0, 0, 1]),
+  });
+
+  it("throws when no keyframes are supplied", () => {
+    expect(() => homographyAtTime([], 0)).toThrow();
+  });
+
+  it("returns the single keyframe regardless of time", () => {
+    const only = kf(5, 42);
+    expect(homographyAtTime([only], 0)).toBe(only.h);
+    expect(homographyAtTime([only], 99)).toBe(only.h);
+  });
+
+  it("clamps before the first and after the last keyframe", () => {
+    const a = kf(1, 10);
+    const b = kf(3, 30);
+    expect(homographyAtTime([a, b], 0)).toBe(a.h);
+    expect(homographyAtTime([a, b], 5)).toBe(b.h);
+  });
+
+  it("interpolates between the bracketing keyframes by time fraction", () => {
+    const a = kf(1, 0);
+    const b = kf(3, 100);
+    // t = 2 is halfway between 1 and 3 → tx 50.
+    const mid = homographyAtTime([a, b], 2);
+    expect(applyHomographyMatrix(mid, 0, 0).x).toBeCloseTo(50);
+  });
+
+  it("selects the correct pair across three keyframes", () => {
+    const a = kf(0, 0);
+    const b = kf(2, 20);
+    const c = kf(4, 100);
+    // t = 3 is halfway between b(20) and c(100) → 60.
+    const mid = homographyAtTime([a, b, c], 3);
+    expect(applyHomographyMatrix(mid, 0, 0).x).toBeCloseTo(60);
   });
 });
 
@@ -187,5 +373,45 @@ describe("drawSkeleton", () => {
     drawSkeleton(ctx, {});
     expect(ctx.stroke).not.toHaveBeenCalled();
     expect(ctx.fill).not.toHaveBeenCalled();
+  });
+
+  it("dims a low-confidence Estimated Landmark joint", () => {
+    // Record the globalAlpha in effect at each joint fill.
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(ctx, {
+      nose: { x: 50, y: 50, score: 0.9 },       // confident → full alpha
+      left_eye_inner: { x: 40, y: 40, score: 0.1 }, // estimated → dimmed
+    });
+    expect(alphasByFill).toContain(1);
+    // The low-confidence joint is drawn at reduced opacity.
+    expect(alphasByFill.some(a => a < 1)).toBe(true);
+  });
+
+  it("never dims keypoints that carry no score (legacy callers)", () => {
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(ctx, { nose: { x: 50, y: 50 }, left_eye_inner: { x: 40, y: 40 } });
+    expect(alphasByFill.every(a => a === 1)).toBe(true);
+  });
+
+  it("estimatedDimThreshold: 0 disables confidence dimming", () => {
+    const alphasByFill: number[] = [];
+    const ctx = makeFakeCtx();
+    (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      alphasByFill.push(ctx.globalAlpha);
+    });
+    drawSkeleton(
+      ctx,
+      { nose: { x: 50, y: 50, score: 0.01 } },
+      { estimatedDimThreshold: 0 },
+    );
+    expect(alphasByFill.every(a => a === 1)).toBe(true);
   });
 });

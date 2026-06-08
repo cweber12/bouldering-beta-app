@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "npm run setup:opencv && next build",
+  "buildCommand": "npm run setup:assets && next build",
   "regions": ["iad1"]
 }

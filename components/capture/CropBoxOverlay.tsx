@@ -1,25 +1,16 @@
 "use client";
 
 import { useCallback, useRef } from "react";
+import { DEFAULT_CROP, type CropFraction } from "@/utils/cropFraction";
+
+// Re-export the plain-data crop types/constants (defined in utils/cropFraction
+// to keep the hook/pipeline layers free of React imports) so component callers
+// can keep importing them from this component.
+export { DEFAULT_CROP, type CropFraction };
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-/**
- * Crop region expressed as fractions of the container dimensions.
- * All values are in [0, 1] relative to the image/video natural dimensions.
- */
-export interface CropFraction {
-  /** Left edge fraction [0, 1] */
-  x: number;
-  /** Top edge fraction [0, 1] */
-  y: number;
-  /** Width fraction [0, 1] */
-  w: number;
-  /** Height fraction [0, 1] */
-  h: number;
-}
 
 interface CropBoxOverlayProps {
   box: CropFraction;
@@ -86,9 +77,6 @@ const SEG_LEN = 12;
 /** Thickness of handle line segments in px. */
 const SEG_W = 2;
 
-/** Default crop box: slight inset from edges. */
-export const DEFAULT_CROP: CropFraction = { x: 0.05, y: 0.05, w: 0.9, h: 0.9 };
-
 /**
  * Returns the inline style for the visible handle knob.
  * Handles have no individual box-shadow — contrast comes from the unified
@@ -142,7 +130,7 @@ export default function CropBoxOverlay({
   box,
   onChange,
   disabled = false,
-  borderRadius = "4px",
+  borderRadius = "2px",
   color = "rgba(255,255,255,0.90)",
   showGrid = false,
   onTap,

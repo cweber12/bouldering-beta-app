@@ -43,8 +43,101 @@ _Avoid_: background crop.
 
 **Quality Tier**:
 A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects the
-pose model variant and detection effort. (Planned — see ADR backlog.)
+pose model variant and detection effort (model variant, sampling density, and
+**Adaptive Refinement** budget). An advanced panel may override individual knobs
+after a tier is picked. Trades a slower **Scan** for a cleaner overlay.
 _Avoid_: mode, level, model setting.
+
+### Detection quality
+
+**Landmark Flip**:
+A frame in which the pose model mislabels the **Climber**'s left/right sides
+(e.g. `left_shoulder` jumps to the right side of the body) without the body
+actually having rotated — a detection glitch, _not_ a real movement. Detected by
+a fast, discontinuous sign-change in shoulder/hip separation; distinguished from
+a genuine torso rotation, which moves each labelled joint smoothly. Flipped
+frames are discarded (not relabelled — flips are often asymmetric) and re-detected.
+_Avoid_: rotation, twist (those are real motion), mirror.
+
+**Adaptive Refinement**:
+A second detection pass that densely re-samples only the segments that need it —
+where the Climber moves fast between sampled frames, or where a frame was
+discarded (e.g. a **Landmark Flip**) — stepping frame-by-frame until a clean pose
+is captured or a budget cap is hit. Static segments stay sparsely sampled. Spends
+**Scan** time where it changes the overlay, not uniformly.
+_Avoid_: gap recovery (that is one trigger of Adaptive Refinement, not the whole thing).
+
+**Estimated Landmark**:
+A keypoint whose position was inferred (from neighbouring frames or skeletal
+geometry) rather than detected, so the skeleton stays whole through brief
+dropouts/occlusion. Carried at reduced confidence; rendered dimmed only when the
+gap is too large to estimate reliably.
+_Avoid_: predicted point, fake landmark.
+
+### Capture mode
+
+**Fixed Capture**:
+A **Run** recorded with a static camera (tripod or propped). The whole **Route**
+stays in frame, so a single homography aligns the Run to the **Route Photo** for
+every frame. The original and default capture path.
+_Avoid_: tripod mode, static mode.
+
+**Panning Capture**:
+A **Run** recorded while deliberately panning the camera along a longer **Route**
+that does not fit in one frame. Aligned to the **Route Photo** per-**Keyframe**
+rather than by a single homography, so the skeleton overlay tracks the wall as
+the camera moves. Opt-in via a scan-setup toggle; it does not replace **Fixed
+Capture**.
+_Avoid_: handheld mode, moving-camera mode (it is specifically a _deliberate
+pan_, not shake/jitter correction — fast handheld shake is out of scope).
+
+**Keyframe**:
+A sampled video frame in a **Panning Capture** at which **Wall Crop** features
+(ORB) are extracted and stored, so each section of the pan can be matched to the
+**Route Photo** independently (the photo is the one image that overlaps every
+Keyframe, which keeps the alignment drift-free). In-between frames are placed by
+interpolating between adjacent Keyframes.
+_Avoid_: anchor frame, reference frame (the single Fixed-Capture reference frame
+is not a Keyframe).
+
+### Persistence & media
+
+**Route**:
+A single climbing problem, identified by its location `{State}/{Area}/{Route}`.
+Every recording of that problem belongs to one Route.
+_Avoid_: climb (the UI/code calls a Route a "climb" in places — ambiguous with a
+single **Run**).
+
+**Run**:
+One recorded ascent of a **Route** — a single capture-and-analysis session,
+classified by **Run Type** as a **Send** or an **Attempt**. A Route has many Runs.
+_Avoid_: climb, attempt (as the generic term — an Attempt is one Run Type, not the
+word for "a Run").
+
+**Run Type**:
+Whether a **Run** reached the top (**Send**) or did not (**Attempt**).
+_Avoid_: result, outcome.
+
+**Route Photo**:
+The single reference photograph of the wall for a **Route**. A **Run**'s pose is
+matched against it (ORB + homography) and the skeleton overlay is projected onto
+it. One per Route, optional, shared by every Run of the Route.
+_Avoid_: route image, background photo.
+
+### Overlay & review
+
+**Detection Preview**:
+The skeleton played back over the **Run**'s own first video frame, in raw
+video-pixel space with **no homography** applied. Its purpose is to review
+detection quality (did the pose pipeline track the **Climber** cleanly) before a
+**Route Photo** is involved. Shown on the review step immediately after a scan.
+_Avoid_: preview, landmark preview (ambiguous with the **Route Overlay**).
+
+**Route Overlay**:
+The skeleton projected onto the **Route Photo** through the homography (ORB
+match → `computeHomography`), so the climb is seen on the wall photo. Distinct
+from the **Detection Preview**, which never leaves video-pixel space.
+_Avoid_: preview, overlay (unqualified), projection.
 
 ## Relationships
 
@@ -68,3 +161,11 @@ _Avoid_: mode, level, model setting.
   resolved: **Manual Crop** (user-drawn) vs **Adaptive Crop** (auto-derived).
 - "user" meant both the account holder and the person climbing — resolved: the
   account holder is the **User**; the person climbing is the **Climber**.
+- "climb" is used in the UI/code for both the **Route** (a problem) and a single
+  **Run** (one ascent) — prefer Route / Run when precision matters.
+- "attempt" is used for both a **Run** generically and the not-topped **Run Type**
+  — resolved: a Run is a Run; "Attempt" is reserved for the Run Type opposite Send.
+- "preview"/"overlay" meant both the skeleton over the Run's own first frame and
+  the skeleton projected onto the Route Photo — resolved: **Detection Preview**
+  (video-pixel, no homography) vs **Route Overlay** (projected onto the Route
+  Photo). A bare "stuck on the preview" is ambiguous between the two.

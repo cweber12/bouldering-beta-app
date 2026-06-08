@@ -227,6 +227,15 @@ export function filterLandmarks(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Confidence multiplier applied to a keypoint that exists in only ONE of the two
+ * anchor frames. The joint is held at the anchor that has it (rather than dropped
+ * from the whole segment, which makes connectors flicker), but its score is
+ * attenuated so it reads as inferred — and so the renderer can dim it when the
+ * hold is long / low-confidence.
+ */
+const HELD_KEYPOINT_SCORE_FACTOR = 0.5;
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -257,26 +266,37 @@ function lowerBound(frames: PoseFrame[], target: number): number {
 /**
  * Linearly interpolate keypoints between two anchor frames.
  *
- * Only keypoints present in BOTH frames are included in the output; partially
- * detected poses are not extrapolated from side to side.
+ * Keypoints present in BOTH frames are interpolated. A keypoint present in only
+ * one anchor is *held* at that anchor's position with an attenuated score
+ * ({@link HELD_KEYPOINT_SCORE_FACTOR}) rather than dropped, so connectors do not
+ * flicker when a joint blinks out for part of a segment.
  *
  * @param from - Keypoints at the earlier anchor frame.
  * @param to   - Keypoints at the later anchor frame.
  * @param t    - Progress in [0, 1] between `from` (0) and `to` (1).
  */
 function interpolateKeypoints(from: Keypoint[], to: Keypoint[], t: number): Keypoint[] {
+  const fromMap = new Map(from.map(kp => [kp.name, kp]));
   const toMap = new Map(to.map(kp => [kp.name, kp]));
-  return from
-    .filter(kp => toMap.has(kp.name))
-    .map(kp => {
-      const b = toMap.get(kp.name)!;
-      return {
-        name: kp.name,
-        x: lerp(kp.x, b.x, t),
-        y: lerp(kp.y, b.y, t),
-        score: Math.min(kp.score, b.score),
-      };
-    });
+  const names = new Set<string>([...fromMap.keys(), ...toMap.keys()]);
+
+  const out: Keypoint[] = [];
+  for (const name of names) {
+    const a = fromMap.get(name);
+    const b = toMap.get(name);
+    if (a && b) {
+      out.push({
+        name,
+        x: lerp(a.x, b.x, t),
+        y: lerp(a.y, b.y, t),
+        score: Math.min(a.score, b.score),
+      });
+    } else {
+      const held = (a ?? b)!;
+      out.push({ name, x: held.x, y: held.y, score: held.score * HELD_KEYPOINT_SCORE_FACTOR });
+    }
+  }
+  return out;
 }
 
 /**
@@ -290,33 +310,47 @@ function catmullRomInterpolateKeypoints(
   p0: Keypoint[], p1: Keypoint[], p2: Keypoint[], p3: Keypoint[], t: number,
 ): Keypoint[] {
   const p0Map = new Map(p0.map(kp => [kp.name, kp]));
+  const p1Map = new Map(p1.map(kp => [kp.name, kp]));
   const p2Map = new Map(p2.map(kp => [kp.name, kp]));
   const p3Map = new Map(p3.map(kp => [kp.name, kp]));
 
-  return p1
-    .filter(kp => p2Map.has(kp.name))
-    .map(kp => {
-      const kp2 = p2Map.get(kp.name)!;
-      const kp0 = p0Map.get(kp.name);
-      const kp3 = p3Map.get(kp.name);
+  // The C1 curve runs through the middle anchors p1 → p2; a joint present in only
+  // one of them is held (attenuated) rather than dropped, matching the linear path.
+  const names = new Set<string>([...p1Map.keys(), ...p2Map.keys()]);
 
-      // Need all 4 control points for Catmull-Rom; fall back to linear otherwise.
-      if (!kp0 || !kp3) {
-        return {
-          name: kp.name,
-          x: lerp(kp.x, kp2.x, t),
-          y: lerp(kp.y, kp2.y, t),
-          score: Math.min(kp.score, kp2.score),
-        };
-      }
+  const out: Keypoint[] = [];
+  for (const name of names) {
+    const kp1 = p1Map.get(name);
+    const kp2 = p2Map.get(name);
 
-      return {
-        name: kp.name,
-        x: catmullRom(kp0.x, kp.x, kp2.x, kp3.x, t),
-        y: catmullRom(kp0.y, kp.y, kp2.y, kp3.y, t),
-        score: Math.min(kp.score, kp2.score),
-      };
+    if (!kp1 || !kp2) {
+      const held = (kp1 ?? kp2)!;
+      out.push({ name, x: held.x, y: held.y, score: held.score * HELD_KEYPOINT_SCORE_FACTOR });
+      continue;
+    }
+
+    const kp0 = p0Map.get(name);
+    const kp3 = p3Map.get(name);
+
+    // Need all 4 control points for Catmull-Rom; fall back to linear otherwise.
+    if (!kp0 || !kp3) {
+      out.push({
+        name,
+        x: lerp(kp1.x, kp2.x, t),
+        y: lerp(kp1.y, kp2.y, t),
+        score: Math.min(kp1.score, kp2.score),
+      });
+      continue;
+    }
+
+    out.push({
+      name,
+      x: catmullRom(kp0.x, kp1.x, kp2.x, kp3.x, t),
+      y: catmullRom(kp0.y, kp1.y, kp2.y, kp3.y, t),
+      score: Math.min(kp1.score, kp2.score),
     });
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -513,13 +547,48 @@ export function estimateMissingLandmarks(
 // ---------------------------------------------------------------------------
 
 /**
- * Apply a One-Euro adaptive low-pass filter across a dense PoseFrame sequence.
+ * Run a single directional One-Euro pass over a frame sequence.
+ *
+ * `timeOf` supplies the monotonic time used for each frame's filter step, so the
+ * same pass serves both directions: forward uses `+timestamp`, the reverse pass
+ * uses `-timestamp` (over a reversed array) to keep `dt` positive and equal in
+ * magnitude. Only keypoints present in a frame are filtered; absent keypoints
+ * stay absent and never carry state.
+ */
+function oneEuroPass(
+  frames: PoseFrame[],
+  minCutoff: number,
+  beta: number,
+  timeOf: (f: PoseFrame) => number,
+): PoseFrame[] {
+  const stateX = new Map<string, OneEuroState>();
+  const stateY = new Map<string, OneEuroState>();
+
+  return frames.map(frame => {
+    const t = timeOf(frame);
+    const smoothed: Keypoint[] = frame.keypoints.map(kp => {
+      const rx = oneEuroStep(kp.x, t, stateX.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
+      const ry = oneEuroStep(kp.y, t, stateY.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
+      stateX.set(kp.name, rx.state);
+      stateY.set(kp.name, ry.state);
+      return { ...kp, x: rx.value, y: ry.value };
+    });
+    return { ...frame, keypoints: smoothed };
+  });
+}
+
+/**
+ * Apply a **zero-phase** adaptive low-pass filter across a dense PoseFrame
+ * sequence (forward + backward One-Euro, filtfilt-style).
  *
  * The One-Euro filter adapts its effective cutoff frequency based on the speed
  * of each keypoint: when still, smoothing is heavy (removes jitter); when
- * moving fast, smoothing is light (preserves responsiveness). This is the
- * standard approach used in production pose-estimation pipelines (MediaPipe,
- * OpenPose).
+ * moving fast, smoothing is light (preserves responsiveness). A single forward
+ * pass is *causal* — it inherently lags the true motion, and can't undo a spike
+ * it has already emitted. Because the Scan is an offline batch (the full
+ * sequence is known), we run the filter forward, then backward over the result.
+ * The two passes cancel each other's phase lag, so the overlay tracks the real
+ * motion with no directional delay while jitter is suppressed twice as hard.
  *
  * Only keypoints already present in each frame are smoothed — missing keypoints
  * remain absent.
@@ -537,17 +606,12 @@ export function smoothPoseFrames(
 ): PoseFrame[] {
   if (frames.length === 0) return frames;
 
-  const stateX = new Map<string, OneEuroState>();
-  const stateY = new Map<string, OneEuroState>();
+  // Forward pass (causal): smooths but lags.
+  const forward = oneEuroPass(frames, minCutoff, beta, f => f.timestamp);
 
-  return frames.map(frame => {
-    const smoothed: Keypoint[] = frame.keypoints.map(kp => {
-      const rx = oneEuroStep(kp.x, frame.timestamp, stateX.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
-      const ry = oneEuroStep(kp.y, frame.timestamp, stateY.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
-      stateX.set(kp.name, rx.state);
-      stateY.set(kp.name, ry.state);
-      return { ...kp, x: rx.value, y: ry.value };
-    });
-    return { ...frame, keypoints: smoothed };
-  });
+  // Backward pass over the forward result cancels the forward lag (zero phase).
+  // Negate the timestamp so time still increases as we walk the reversed array.
+  const back = oneEuroPass([...forward].reverse(), minCutoff, beta, f => -f.timestamp);
+  back.reverse();
+  return back;
 }

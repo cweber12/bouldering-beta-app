@@ -37,12 +37,29 @@ hooks/           React hooks that wire pipeline modules to UI state
   useVideoProcessor.ts  seek loop → pose estimation → ORB extraction
   useImageMatcher.ts    upload image → extractFeatures → matchOrbFeatures
   usePoseVideo.ts  auto-renders annotated WebM from match result
+  useClickOutside.ts  close-on-outside-click seam (mousedown/pointerdown)
+  useEscapeKey.ts     ESC-to-close seam
+  useMeasuredHeight.ts  ResizeObserver callback ref → measured px height
+
+components/       React components grouped by why they live there
+  ui/        generic primitives (LoadingSpinner, ThemeToggle, InfoDropdown,
+             ComboInput, ImageCropper, LocationAutocomplete, Modal,
+             FullscreenModal)
+  layout/    app chrome & page shells (NavBar, AccountMenu, Preloader,
+             Providers, LoadingGate, ToolPageShell, ToolRouteHeader)
+  skeleton/  skeleton-overlay UI (FramePlayer, SkeletonStylePanel)
+  capture/   crop + camera (CropBoxOverlay, CameraRecorderModal)
+  run/       run-type domain primitives (RunTypeBadge, RunStatusDot)
+  scan/ compare/ route/ routes/ map/  feature-owned components
+  shared/    ClimbDetailModal only (pending removal in redesign)
 
 storage/
   sessionStore.ts  in-memory Map; exports RunType, RouteAttempt (includes runType, rating?, notes?)
 
 utils/
   poseConstants.ts  MP_KP indices, MP_KP_NAMES, MP_SKELETON_EDGES (MediaPipe/BlazePose topology)
+  cropFraction.ts   CropFraction type + DEFAULT_CROP (plain data, no React)
+  leaflet.ts        initLeafletMap() — CartoDB tiles + icon fix (ClimbsMap, MapPicker)
   cvHelpers.ts
 
 workers/         Legacy Web Worker files (keep, do not delete)
@@ -59,8 +76,8 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - Run-type chips: `bg-send/80 text-fg-inverse` (send) and `bg-attempt/80 text-fg-inverse` (attempt). Run-type badges: `bg-send-surface text-send` / `bg-attempt-surface text-attempt`.
 - Error banners: `bg-danger-surface border-danger-border text-danger`. Warning banners: `bg-caution-surface border-caution-border text-caution`.
 - Modal loading overlays: `bg-surface/70 backdrop-blur-sm` (not `bg-black/40`).
-- Theme is toggled via `useTheme()` from `hooks/useTheme.tsx`. `ThemeProvider` is mounted in `components/shared/Providers.tsx`.
-- `ThemeToggle` component lives in `components/shared/ThemeToggle.tsx` — import and place it in the NavBar right-side controls.
+- Theme is toggled via `useTheme()` from `hooks/useTheme.tsx`. `ThemeProvider` is mounted in `components/layout/Providers.tsx`.
+- `ThemeToggle` component lives in `components/ui/ThemeToggle.tsx` — import and place it in the NavBar right-side controls.
 - A FOUC-prevention inline script in `app/layout.tsx` reads `localStorage` and applies `theme-light` or `theme-dark` class to `<html>` before React hydrates.
 - Canvas drawing values (map pins, skeleton overlays) use `utils/theme.ts` `dark`/`light` objects — keep them in sync with `globals.css` tokens.
 
@@ -79,6 +96,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - Hooks consume pipeline functions; they own state transitions and error boundaries.
 - Expose `orbStatus: "idle" | "extracting" | "ready" | "failed"` from `useVideoProcessor` so the UI never shows image upload until ORB extraction has completed.
 - `imageFile` state lives in the parent component and is passed to `usePoseVideo` — hooks do not own File objects.
+- **Dismiss/modal seams** — do not hand-roll close-on-outside-click or ESC effects. Use `useClickOutside(ref, onOutside, enabled, eventType?)` and `useEscapeKey(onEscape, enabled?)`. For dialogs/sheets use `components/ui/Modal` (portal + backdrop) and for the crop fullscreen views `components/ui/FullscreenModal` — both already compose the two hooks.
 
 ### TypeScript
 - `eslint-disable-next-line @typescript-eslint/no-explicit-any` is acceptable **only** for `type CV = any` and `type PoseDetector = any` (WASM bindings have no TS types).
@@ -115,7 +133,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - All S3 API routes call `getAuthUserId()` (verifies the session cookie) and return 401 when unauthenticated.
 - `isValidKey()` and `isValidPrefix()` enforce that every S3 key is scoped to the authenticated user: `RouteData/{userId}/...`.
 - `hooks/useS3Storage.ts` derives user-scoped keys via `deriveS3Key(userId, attempt)`.
-- `components/shared/NavBar.tsx` shows `PUBLIC_TABS` (Home, Docs) for unauthenticated users and `AUTH_TABS` (all tabs) for authenticated users.
+- `components/layout/NavBar.tsx` shows `PUBLIC_TABS` (Home, Docs) for unauthenticated users and `AUTH_TABS` (all tabs) for authenticated users.
 
 ### Testing
 - Test files mirror the source tree under `__tests__/`.
@@ -138,6 +156,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
   // Media element: className="absolute inset-0 w-full h-full object-fill"
   ```
 - **Fullscreen pattern**: `fsMediaContainerStyle` uses `maxHeight: calc(100dvh - 8rem)`.
+- **Height-filling pattern** (scan flow Steps 2 & 3): fills the available vertical space `s` with the media, width following the aspect ratio and capped to `100%`. Both orientations reach the full height (landscape caps to viewport width only on narrow screens), so the media stays flush against the footer rather than leaving a vertical gap. Helpers in `utils/mediaContainerStyle.ts`: `fitMediaStyle(w, h, s)` / `fitMediaWidth(w, h, s)` take a **measured** `s` (px, via `useMeasuredHeight` on a `flex-1 min-h-0` stage); `fitMediaMaxWidth(w, h, offset)` is the dvh-calc variant for flow layouts. The scan video stage is flush (no border/radius/padding) and centered on `bg-surface`; the transport bar aligns to `fitMediaWidth`. Default the pre-load aspect ratio to portrait `{ w: 9, h: 16 }` (ascents are recorded vertically).
 - Detect natural size: `onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}` for images; `setSize({ w: video.videoWidth || 16, h: video.videoHeight || 9 })` in the `onLoadedData`/`canplay` handler for videos. Default to `{ w: 4, h: 3 }` or `{ w: 16, h: 9 }` before load.
 - Every media container with a crop overlay must have an **Expand** button that opens a fullscreen portal: `createPortal(<div className="fixed inset-0 z-fullscreen flex flex-col bg-surface" role="dialog" aria-modal="true">…</div>, document.body)`.
 - Add an ESC key `useEffect` that closes the fullscreen when `useEffect([…], [fsState])` is active.

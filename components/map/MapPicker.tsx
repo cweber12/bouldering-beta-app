@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Marker as LeafletMarker } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { initLeafletMap } from "@/utils/leaflet";
 
 export interface MapPickerProps {
   /** Initial position for the pin. If not set, defaults to North America centre. */
@@ -11,11 +12,6 @@ export interface MapPickerProps {
   onConfirm: (lat: number, lng: number) => void;
   onCancel: () => void;
 }
-
-const CARTO_TILE_URL =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /**
  * Full-screen-ish map that lets the user click to place a pin.
@@ -39,7 +35,21 @@ export default function MapPicker({
     if (!containerRef.current || mapRef.current) return;
 
     (async () => {
-      const L = (await import("leaflet")).default;
+      if (!containerRef.current) return;
+
+      const initLat = initialLat ?? 39;
+      const initLng = initialLng ?? -98;
+      const initZoom = initialLat != null ? 13 : 4;
+
+      // tap:false prevents Leaflet's own tap handler conflicting with drag on iOS.
+      // CartoDB tiles + stale-id clearing live in the shared util.
+      const { L, map } = await initLeafletMap(containerRef.current, {
+        scrollWheelZoom: true,
+        tap: false,
+        dragging: true,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+      map.setView([initLat, initLng], initZoom);
 
       // CSS-based custom marker — no CDN images required
       const pinIcon = L.divIcon({
@@ -49,35 +59,6 @@ export default function MapPicker({
         iconAnchor: [11, 11],
         popupAnchor: [0, -14],
       });
-
-      if (!containerRef.current) return;
-
-      // Clear stale Leaflet state from a previous mount (React strict mode
-      // or modal close → reopen). Without this, L.map() throws
-      // "Map container is already initialized".
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const el = containerRef.current as any;
-      if (el._leaflet_id) {
-        delete el._leaflet_id;
-      }
-
-      const initLat = initialLat ?? 39;
-      const initLng = initialLng ?? -98;
-      const initZoom = initialLat != null ? 13 : 4;
-
-      // tap:false prevents Leaflet's own tap handler conflicting with drag on iOS
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const map = L.map(containerRef.current, { scrollWheelZoom: true, tap: false, dragging: true } as any);
-      map.setView([initLat, initLng], initZoom);
-
-      L.tileLayer(CARTO_TILE_URL, {
-        attribution: CARTO_ATTRIBUTION,
-        subdomains: "abcd",
-        maxZoom: 19,
-        detectRetina: true,
-        keepBuffer: 4,
-        updateWhenIdle: false,
-      }).addTo(map);
 
       // Place initial marker if coords provided.
       if (initialLat != null && initialLng != null) {

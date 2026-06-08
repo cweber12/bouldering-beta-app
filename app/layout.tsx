@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
-import NavBar from "@/components/shared/NavBar";
-import Preloader from "@/components/shared/Preloader";
-import Providers from "@/components/shared/Providers";
+import NavBar from "@/components/layout/NavBar";
+import Preloader from "@/components/layout/Preloader";
+import Providers from "@/components/layout/Providers";
 import { cn } from "@/utils/cn";
 import "./globals.css";
 

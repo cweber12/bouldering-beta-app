@@ -9,9 +9,9 @@ import { useAuth } from "@/hooks/useAuth";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
-import ClimbOptionsDropdown from "@/components/shared/ClimbOptionsDropdown";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import ClimbOptionsDropdown from "@/components/routes/ClimbOptionsDropdown";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import RunTypeBadge from "@/components/run/RunTypeBadge";
 
 const ClimbsMap = dynamic(() => import("@/components/map/ClimbsMap"), { ssr: false });
 

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { cn } from "@/utils/cn";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import type { ConsoleMode } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
@@ -90,7 +90,7 @@ export default function CompareClimbRail({
     setLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ state, area, route, pageSize: "50", page: "1" });
+    const params = new URLSearchParams({ state, area, route, pageSize: "50", page: "1", exact: "1" });
 
     (async () => {
       try {

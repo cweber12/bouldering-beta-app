@@ -15,7 +15,7 @@ type CV = any;
 
 import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography, homographyAtTime, type KeyframeHomography } from "@/pipeline/homography";
 import { buildTransformedKeypoints, lerpKeypoints } from "@/pipeline/skeletonOverlay";
 
 /** Single output frame with pre-transformed keypoints in image-pixel space. */
@@ -49,37 +49,29 @@ export interface MultiSkeletonFrameData {
 // ---------------------------------------------------------------------------
 
 export interface BuildSkeletonFramesParams {
-  cv: CV;
   frames: PoseFrame[];
   videoMeta: VideoMeta;
-  orbFeatures: OrbFeatures;
-  queryOrb: OrbFeatures;
-  matches: OrbMatch[];
+  /**
+   * The gated reference video-frame → photo homography to render through,
+   * computed and validated by the matcher (see useImageMatcher). Passing it in
+   * — rather than recomputing here — keeps a single, gated source of truth so a
+   * degenerate transform can never reach the render path.
+   */
+  homography: Float64Array;
   /** Output frame rate. Default 60. */
   targetFps?: number;
 }
 
 /**
- * Pre-compute transformed skeleton keypoints for every output timestamp.
- *
- * @throws When fewer than 4 matches are available for homography computation.
+ * Pre-compute transformed skeleton keypoints for every output timestamp, using
+ * the matcher-supplied homography.
  */
 export function buildSkeletonFrames({
-  cv,
   frames,
   videoMeta,
-  orbFeatures,
-  queryOrb,
-  matches,
+  homography: h,
   targetFps = 60,
 }: BuildSkeletonFramesParams): SkeletonFrameData {
-  const h = computeHomography(cv, matches, orbFeatures, queryOrb);
-  if (!h) {
-    throw new Error(
-      `Not enough matches to compute homography — need ≥ 4, got ${matches.length}.`,
-    );
-  }
-
   const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
   const firstTs = sorted.length > 0 ? sorted[0].timestamp : 0;
   const lastTs = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : 0;
@@ -135,6 +127,107 @@ export function buildSkeletonFrames({
     const dt = sorted[ceilIdx].timestamp - sorted[floorIdx].timestamp;
     const alpha = dt > 0 ? (t - sorted[floorIdx].timestamp) / dt : 0;
     out.push({ timestamp: t - firstTs, keypoints: lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha) });
+  }
+
+  return { frames: out, duration, fps: targetFps };
+}
+
+// ---------------------------------------------------------------------------
+// Panning Capture builder (per-keyframe homographies)
+// ---------------------------------------------------------------------------
+
+/**
+ * Blend two PoseFrames in normalised [0,1] space by `alpha`. Keypoints present
+ * in both are linearly blended; those in only the floor frame pass through.
+ * Used before applying a time-varying homography so the pose itself is
+ * interpolated in image-independent coordinates.
+ */
+function blendPoseFramesNormalized(
+  floor: PoseFrame,
+  ceil: PoseFrame,
+  alpha: number,
+): PoseFrame {
+  const ceilByName = new Map(ceil.keypoints.map(kp => [kp.name, kp]));
+  const keypoints = floor.keypoints.map(kp => {
+    const c = ceilByName.get(kp.name);
+    if (!c) return kp;
+    return { ...kp, x: kp.x + alpha * (c.x - kp.x), y: kp.y + alpha * (c.y - kp.y) };
+  });
+  return { timestamp: floor.timestamp, keypoints };
+}
+
+export interface BuildPanningSkeletonFramesParams {
+  frames: PoseFrame[];
+  videoMeta: VideoMeta;
+  /**
+   * Per-keyframe homographies (reference video-frame pixels → photo pixels),
+   * ascending by timestamp. Keyframes that failed the match/validity gate are
+   * already absent — the gaps are interpolated across by {@link homographyAtTime}.
+   */
+  keyframeHomographies: KeyframeHomography[];
+  /** Output frame rate. Default 60. */
+  targetFps?: number;
+}
+
+/**
+ * Pre-compute transformed skeleton keypoints for Panning Capture: for each
+ * output timestamp the pose is interpolated in normalised space and projected
+ * through the **time-interpolated** keyframe homography, so the overlay tracks
+ * the wall as the camera pans. Drift-free because every keyframe anchored to the
+ * photo independently.
+ *
+ * @throws When no keyframe homographies are supplied.
+ */
+export function buildPanningSkeletonFrames({
+  frames,
+  videoMeta,
+  keyframeHomographies,
+  targetFps = 60,
+}: BuildPanningSkeletonFramesParams): SkeletonFrameData {
+  if (keyframeHomographies.length === 0) {
+    throw new Error("buildPanningSkeletonFrames: no keyframe homographies.");
+  }
+
+  const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
+  const sortedKf = [...keyframeHomographies].sort((a, b) => a.timestamp - b.timestamp);
+
+  const firstTs = sorted.length > 0 ? sorted[0].timestamp : 0;
+  const lastTs = sorted.length > 0 ? sorted[sorted.length - 1].timestamp : 0;
+  const duration = Math.max(lastTs - firstTs, 1 / targetFps);
+  const total = Math.ceil(duration * targetFps) + 1;
+
+  const out: RenderedSkeletonFrame[] = [];
+  let floorIdx = 0;
+
+  for (let i = 0; i < total; i++) {
+    const t = firstTs + i / targetFps;
+
+    while (floorIdx < sorted.length - 1 && sorted[floorIdx + 1].timestamp <= t) {
+      floorIdx++;
+    }
+
+    const floor = sorted[floorIdx];
+    if (!floor || floor.keypoints.length === 0) {
+      out.push({ timestamp: t - firstTs, keypoints: {} });
+      continue;
+    }
+
+    const ceilIdx = Math.min(floorIdx + 1, sorted.length - 1);
+    const ceil = sorted[ceilIdx];
+    const dt = ceil.timestamp - floor.timestamp;
+    const alpha = ceilIdx !== floorIdx && dt > 0 ? (t - floor.timestamp) / dt : 0;
+
+    const pose = ceilIdx !== floorIdx && ceil.keypoints.length > 0
+      ? blendPoseFramesNormalized(floor, ceil, alpha)
+      : floor;
+
+    // Homography is interpolated at absolute video time `t` so it stays locked
+    // to the wall section the climber is on, independent of the pose cadence.
+    const h = homographyAtTime(sortedKf, t);
+    out.push({
+      timestamp: t - firstTs,
+      keypoints: buildTransformedKeypoints(pose, h, videoMeta.width, videoMeta.height),
+    });
   }
 
   return { frames: out, duration, fps: targetFps };

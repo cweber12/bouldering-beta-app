@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import {
   REGIONS,
   EMPTY_HIGHLIGHT,
@@ -46,14 +47,7 @@ export default function BodyPartHighlighter({
 
   const active = selection.regions.length > 0;
 
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  useClickOutside(panelRef, () => setOpen(false), open);
 
   function toggleRegion(key: RegionKey) {
     const has = selection.regions.includes(key);

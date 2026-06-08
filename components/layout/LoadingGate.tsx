@@ -1,7 +1,7 @@
 "use client";
 
 import { useOpenCV } from "@/hooks/useOpenCV";
-import LoadingSpinner from "@/components/shared/LoadingSpinner";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 
 interface LoadingGateProps {
   children: React.ReactNode;

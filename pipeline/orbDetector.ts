@@ -22,6 +22,14 @@ import { cropImageData } from "@/utils/cvHelpers";
 const ORB_FEATURES = 3000;
 const ORB_DESCRIPTOR_BYTES = 32;
 const LOWE_RATIO = 0.75;
+/**
+ * Absolute Hamming-distance ceiling (out of 256 bits) for an accepted match.
+ * The Lowe ratio test alone can pass two mutually-bad candidates when the
+ * second-nearest is even worse; this hard cap rejects matches whose descriptors
+ * simply are not close, regardless of the runner-up. ~64/256 = a quarter of the
+ * bits differing.
+ */
+const HAMMING_MAX_DISTANCE = 64;
 
 export interface OrbKeypoint {
   pt: { x: number; y: number };
@@ -70,6 +78,22 @@ export interface OrbMatch {
   trainIdx: number;
   /** Hamming distance — lower is a better match. */
   distance: number;
+}
+
+/**
+ * ORB features extracted from a single **Keyframe** of a **Panning Capture**,
+ * tagged with the video timestamp the keyframe was sampled at.
+ *
+ * A Panning Capture stores an ordered array of these (Wall Crop features at
+ * ~0.5–1 s intervals) so each section of the pan can be matched to the Route
+ * Photo independently. Fixed Capture stores none — it relies on the single
+ * frame-0 `orbFeatures` instead.
+ */
+export interface KeyframeFeatures {
+  /** Video timestamp (seconds) of the frame this ORB set was extracted from. */
+  timestamp: number;
+  /** Wall Crop ORB features for this keyframe (full-frame pixel coordinates). */
+  features: OrbFeatures;
 }
 
 /**
@@ -174,6 +198,15 @@ export function extractFeaturesFromCrop(
 
 /** Hard upper bound (px) on the longest edge of a query photo fed to ORB. */
 export const QUERY_MAX_EDGE = 1600;
+
+/**
+ * Longest-edge target for the Route Photo in **Panning Capture**. Each Keyframe
+ * is a close-up that maps to a small region of the whole-route photo, so the
+ * photo is kept at higher resolution than the Fixed-path {@link QUERY_MAX_EDGE}
+ * (which targets the reference-frame resolution) to preserve matchable detail.
+ * Still bounded by the decode-time pixel cap.
+ */
+export const PANNING_QUERY_MAX_EDGE = 3200;
 
 /**
  * Floor (px) below which the query photo is never downscaled. Guards against
@@ -467,7 +500,7 @@ export function matchOrbFeatures(
       if (pair.size() < 2) continue;
       const m = pair.get(0);
       const n = pair.get(1);
-      if (m.distance < LOWE_RATIO * n.distance) {
+      if (m.distance <= HAMMING_MAX_DISTANCE && m.distance < LOWE_RATIO * n.distance) {
         results.push({
           queryIdx: m.queryIdx,
           trainIdx: m.trainIdx,

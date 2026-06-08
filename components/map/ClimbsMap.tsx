@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Map as LeafletMap, MarkerClusterGroup, LayerGroup } from "leaflet";
 import { cn } from "@/utils/cn";
+import { initLeafletMap } from "@/utils/leaflet";
 
 // Leaflet CSS — imported once at the client component boundary.
 import "leaflet/dist/leaflet.css";
@@ -24,17 +25,14 @@ export interface ClimbPin {
 
 export interface ClimbsMapProps {
   pins: ClimbPin[];
-  /** Tailwind / inline height (default 400 px). */
+  /** Tailwind / inline height (default 400 px). Ignored when `fill` is set. */
   height?: number;
+  /** Fill the parent's height (h-full) instead of using a fixed pixel height. */
+  fill?: boolean;
   className?: string;
   /** Called when a pin is clicked (if the pin has a key). */
   onPinClick?: (key: string) => void;
 }
-
-const CARTO_TILE_URL =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
-const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /** Build a custom SVG DivIcon for a user's climb pin. */
 function buildIcon(
@@ -140,6 +138,7 @@ async function fetchOsmClimbing(
 export default function ClimbsMap({
   pins,
   height = 400,
+  fill = false,
   className = "",
   onPinClick,
 }: ClimbsMapProps) {
@@ -176,41 +175,18 @@ export default function ClimbsMap({
     let resizeObs: ResizeObserver | null = null;
 
     (async () => {
-      // Dynamic imports keep Leaflet out of the SSR bundle.
-      const L = (await import("leaflet")).default;
-      await import("leaflet.markercluster");
-      if (aborted) return;
-
-      // Fix Leaflet's default icon path in webpack/bundler environments.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      delete (L.Icon.Default.prototype as any)["_getIconUrl"];
-      L.Icon.Default.mergeOptions({
-        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-        iconRetinaUrl:
-          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-        shadowUrl:
-          "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-      });
-
-      if (!containerRef.current || aborted) return;
-
-      // Guard against container already having a Leaflet map (HMR / strict mode).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((containerRef.current as any)._leaflet_id) return;
-
-      const map = L.map(containerRef.current, {
+      if (!containerRef.current) return;
+      // CartoDB tiles + icon fix live in the shared util; clustering stays here.
+      const { L, map } = await initLeafletMap(containerRef.current, {
         scrollWheelZoom: true,
         zoomControl: true,
       });
-
-      L.tileLayer(CARTO_TILE_URL, {
-        attribution: CARTO_ATTRIBUTION,
-        subdomains: "abcd",
-        maxZoom: 19,
-        detectRetina: true,    // substitute {r} → @2x on HiDPI displays
-        keepBuffer: 4,         // pre-load 4-tile buffer to reduce blank squares
-        updateWhenIdle: false, // stream tiles during pan, not only after settle
-      }).addTo(map);
+      // markercluster augments L (side-effect import); keep it out of SSR.
+      await import("leaflet.markercluster");
+      if (aborted) {
+        map.remove();
+        return;
+      }
 
       // MarkerClusterGroup is added to L by the side-effect import above.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -391,7 +367,7 @@ export default function ClimbsMap({
   return (
     // Outer wrapper is position:relative so we can overlay React controls (toggle
     // button, loading indicator) above the Leaflet canvas without being clipped.
-    <div className="relative w-full" style={{ height }}>
+    <div className={cn("relative w-full", fill && "h-full")} style={fill ? undefined : { height }}>
       {/* Leaflet map canvas */}
       <div
         ref={containerRef}

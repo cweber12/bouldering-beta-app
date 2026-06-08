@@ -296,3 +296,77 @@ describe("split round-trip", () => {
     expect(restored.orbFeatures!.descriptors).toEqual(attempt.orbFeatures!.descriptors);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Panning Capture keyframes
+// ---------------------------------------------------------------------------
+
+function makeKeyframes(): RouteAttempt["keyframes"] {
+  return [
+    {
+      timestamp: 0,
+      features: {
+        keypoints: [{ pt: { x: 1, y: 2 }, size: 5, angle: 0, response: 1, octave: 0 }],
+        descriptors: new Uint8Array([0x01, 0x02, 0x03, 0x04]),
+      },
+    },
+    {
+      timestamp: 0.75,
+      features: {
+        keypoints: [{ pt: { x: 9, y: 8 }, size: 7, angle: 90, response: 2, octave: 1 }],
+        descriptors: new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]),
+        cropBox: { x: 5, y: 5, width: 100, height: 200, srcWidth: 640, srcHeight: 480 },
+      },
+    },
+  ];
+}
+
+describe("keyframe serialisation", () => {
+  it("base64-encodes each keyframe's descriptors in the data payload", () => {
+    const data = serializeAttemptData(makeAttempt({ keyframes: makeKeyframes() }));
+    const kfs = data.keyframes as Array<Record<string, unknown>>;
+    expect(kfs).toHaveLength(2);
+    expect(kfs[0].timestamp).toBe(0);
+    const feats = kfs[1].features as Record<string, unknown>;
+    expect(typeof feats.descriptors).toBe("string");
+  });
+
+  it("keeps keyframes out of the queryable metadata payload", () => {
+    const meta = serializeAttemptMetadata(makeAttempt({ keyframes: makeKeyframes() }));
+    expect(meta.keyframes).toBeUndefined();
+  });
+
+  it("round-trips keyframes through the v2 split format", () => {
+    const attempt = makeAttempt({ keyframes: makeKeyframes() });
+    const meta = JSON.parse(JSON.stringify(serializeAttemptMetadata(attempt)));
+    const data = JSON.parse(JSON.stringify(serializeAttemptData(attempt)));
+    const restored = loadAttemptFromJson({ ...meta, ...data });
+    expect(restored.keyframes).toHaveLength(2);
+    expect(restored.keyframes![0].timestamp).toBe(0);
+    expect(restored.keyframes![1].timestamp).toBe(0.75);
+    expect(restored.keyframes![0].features.descriptors).toBeInstanceOf(Uint8Array);
+    expect(restored.keyframes![0].features.descriptors).toEqual(new Uint8Array([0x01, 0x02, 0x03, 0x04]));
+    expect(restored.keyframes![1].features.cropBox).toEqual({
+      x: 5, y: 5, width: 100, height: 200, srcWidth: 640, srcHeight: 480,
+    });
+  });
+
+  it("round-trips keyframes through the legacy v1 combined format", () => {
+    const attempt = makeAttempt({ keyframes: makeKeyframes() });
+    const serialized = JSON.parse(JSON.stringify(serializeAttemptForJson(attempt)));
+    const kfs = serialized.keyframes as Array<Record<string, unknown>>;
+    const feats = kfs[0].features as Record<string, unknown>;
+    expect(Array.isArray(feats.descriptors)).toBe(true);
+    const restored = loadAttemptFromJson(serialized);
+    expect(restored.keyframes![1].features.descriptors).toEqual(new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]));
+  });
+
+  it("loads a Fixed Capture / legacy attempt that has no keyframes field", () => {
+    const attempt = makeAttempt();
+    const data = JSON.parse(JSON.stringify(serializeAttemptData(attempt)));
+    const restored = loadAttemptFromJson(data);
+    // Absent keyframes serialise to null and load back as null — not an error.
+    expect(restored.keyframes ?? null).toBeNull();
+    expect(restored.orbFeatures!.descriptors).toEqual(attempt.orbFeatures!.descriptors);
+  });
+});

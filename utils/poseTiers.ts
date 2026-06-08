@@ -43,6 +43,18 @@ export interface TierConfig {
    * Looser for Fast, stricter for Accurate.
    */
   filterTolerance: number;
+  /**
+   * Centroid displacement (normalised, 0–1 of the frame) between adjacent
+   * detected anchors above which Adaptive Refinement densely re-samples the
+   * segment to capture fast motion. `Infinity` disables motion-triggered
+   * densification (Fast tier) so only flips / tracking-loss gaps are refined.
+   */
+  motionThreshold: number;
+  /**
+   * Frame stride used while refining a gap (1 = re-detect every frame). Larger
+   * = cheaper, coarser refinement.
+   */
+  refineStride: number;
 }
 
 /**
@@ -58,6 +70,9 @@ export const TIER_CONFIGS: Record<QualityTier, TierConfig> = {
     frameStep: 15,
     maxRecoveryFrames: 15,
     filterTolerance: 4,
+    // Motion densification off — only flips / tracking-loss gaps are refined.
+    motionThreshold: Infinity,
+    refineStride: 2,
   },
   balanced: {
     variant: "full",
@@ -65,6 +80,9 @@ export const TIER_CONFIGS: Record<QualityTier, TierConfig> = {
     frameStep: 10,
     maxRecoveryFrames: 30,
     filterTolerance: 3,
+    // Densify clearly-fast segments (centroid jump > ~6% of the frame per step).
+    motionThreshold: 0.06,
+    refineStride: 1,
   },
   accurate: {
     variant: "heavy",
@@ -72,6 +90,9 @@ export const TIER_CONFIGS: Record<QualityTier, TierConfig> = {
     frameStep: 5,
     maxRecoveryFrames: 45,
     filterTolerance: 2,
+    // Densify even moderately-fast segments for the cleanest trajectory.
+    motionThreshold: 0.04,
+    refineStride: 1,
   },
 };
 

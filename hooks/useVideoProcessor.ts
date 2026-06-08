@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type PoseFrame } from "@/pipeline/poseDetection";
 import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
-import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
-import { applyOrbPreprocessing, applyPosePreprocessing } from "@/pipeline/framePreprocessor";
+import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
 import {
   mapKeypointsToFullFrame,
   type CropBox,
@@ -28,9 +28,14 @@ import {
   estimateMissingLandmarks,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
+import {
+  detectFlips,
+  isLandmarkFlip,
+  DEFAULT_TELEPORT_THRESHOLD,
+} from "@/pipeline/flipDetection";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
-import type { CropFraction } from "@/components/shared/CropBoxOverlay";
+import type { CropFraction } from "@/utils/cropFraction";
 import type { PoseBackend } from "@/utils/poseConstants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -111,10 +116,23 @@ export interface VideoProcessorResult {
     cv: CV,
     frameStep?: number,
     meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point },
+    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean },
     startTime?: number,
     backend?: PoseBackend,
-    detection?: { maxRecoveryFrames?: number; filterTolerance?: number },
+    detection?: {
+      maxRecoveryFrames?: number;
+      filterTolerance?: number;
+      /** Base teleport threshold for flip detection (scaled by frameStep). */
+      flipTeleportBase?: number;
+      /**
+       * Centroid displacement (normalised) between adjacent detected anchors
+       * above which a segment is densified by Adaptive Refinement. Omit / set
+       * very high to disable motion-triggered densification (e.g. Fast tier).
+       */
+      motionThreshold?: number;
+      /** Frame stride used while refining a gap (1 = every frame). */
+      refineStride?: number;
+    },
   ) => Promise<void>;
   /** Abort any in-flight processing and reset all state back to idle. */
   reset: () => void;
@@ -127,10 +145,25 @@ export interface VideoProcessorResult {
   totalFrames: number;
   /** The attempt ID written to sessionStore, available when status === "done". */
   attemptId: string | null;
+  /**
+   * The pristine first video frame as a PNG File, captured during the seek loop
+   * for the Detection Preview background. Available shortly after processing
+   * starts; null before. Reusing the already-decoded frame avoids a fragile
+   * second video decode on the review step.
+   */
+  firstFrameFile: File | null;
   errorMessage: string | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
+
+/**
+ * Keyframe sampling interval (seconds) for Panning Capture. A Wall Crop ORB
+ * **Keyframe** is captured roughly every {@link KEYFRAME_INTERVAL_SEC} of video
+ * (fixed spacing, v1) so each section of the pan can be anchored to the Route
+ * Photo independently. Fixed Capture extracts none.
+ */
+const KEYFRAME_INTERVAL_SEC = 0.75;
 
 /**
  * Seeks through a video file frame-by-frame, runs pose estimation on every
@@ -138,9 +171,9 @@ const DEFAULT_FRAME_STEP = 5;
  * frames, interpolates across gaps, and applies EMA smoothing.
  *
  * Lighting is analysed automatically from the first frame and re-analysed
- * every {@link POSE_REANALYSIS_INTERVAL} detection frames.  Pose and ORB
- * preprocessing are applied through independent pipelines:
- *   - applyPosePreprocessing — adaptive gamma + optional equalisation blend
+ * every {@link POSE_REANALYSIS_INTERVAL} detection frames. The analysis drives
+ * ORB preprocessing only — MediaPipe detects on the raw colour frame, since
+ * grayscale/equalised input blinds its RGB-trained model:
  *   - applyOrbPreprocessing  — retinex LCN + equalisation for cross-condition
  *                              descriptor stability
  *
@@ -152,6 +185,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [totalFrames, setTotalFrames] = useState(0);
   const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
@@ -165,10 +199,16 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
       meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point } = {},
+      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
-      detection: { maxRecoveryFrames?: number; filterTolerance?: number } = {},
+      detection: {
+        maxRecoveryFrames?: number;
+        filterTolerance?: number;
+        flipTeleportBase?: number;
+        motionThreshold?: number;
+        refineStride?: number;
+      } = {},
     ) => {
       abortRef.current = false;
       const seekController = new AbortController();
@@ -178,6 +218,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentFrame(0);
       setTotalFrames(0);
       setAttemptId(null);
+      setFirstFrameFile(null);
       setErrorMessage(null);
 
       const video = document.createElement("video");
@@ -245,6 +286,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
           : undefined);
 
+        // Panning Capture: sample Wall Crop ORB at fixed keyframe intervals so
+        // each pan section anchors to the Route Photo independently. Zero-cost
+        // for Fixed Capture (panning false → keyframeWallBox null, no captures).
+        const panning = cropOptions.panning ?? false;
+        const keyframeWallBox: OrbCropBox | null = panning
+          ? (wallCropPx ?? { x: 0, y: 0, width: videoWidth, height: videoHeight, srcWidth: videoWidth, srcHeight: videoHeight })
+          : null;
+        const keyframes: KeyframeFeatures[] = [];
+        let nextKeyframeTime = -Infinity; // first qualifying frame becomes keyframe 0
+        const kfOrbCanvas = panning ? document.createElement("canvas") : null;
+        if (kfOrbCanvas) {
+          kfOrbCanvas.width = videoWidth;
+          kfOrbCanvas.height = videoHeight;
+        }
+
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
@@ -267,6 +323,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
         let lastMpTs = mpTimestampBase;
 
+        // TEMP DIAGNOSTIC counter — remove after the detected=0 investigation.
+        let diagCount = 0;
+
         /**
          * Detect every person in `region` (pixels; null = full frame), map them
          * back to full-frame coordinates, and return the pose matching the
@@ -286,14 +345,34 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (!cctx) return null;
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
 
-          // Pose-specific preprocessing driven by the current lighting analysis.
-          // Applied to the detection canvas only — the main canvas stays pristine
-          // for ORB reference capture and lighting re-analysis.
-          if (currentAnalysis) applyPosePreprocessing(cv, cropCanvas, currentAnalysis);
-
+          // MediaPipe detects on the raw colour crop. We deliberately do NOT run
+          // pose preprocessing here: it converted the crop to grayscale +
+          // equalised it, which blinded MediaPipe's RGB-trained model and
+          // produced zero detections on any frame analyzeFrame flagged (backlit /
+          // exposed / low-contrast / blurry) — a data-dependent total failure.
+          // MediaPipe normalises lighting internally, so the colour frame is both
+          // safer and what worked before the preprocessing was introduced. ORB
+          // preprocessing (which legitimately wants grayscale) is unaffected.
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
+
+          // TEMP DIAGNOSTIC — remove after the detected=0 investigation.
+          if (diagCount < 6) {
+            diagCount++;
+            let mean = -1;
+            try {
+              const d = cctx.getImageData(0, 0, Math.min(32, reg.width), Math.min(32, reg.height)).data;
+              let s = 0;
+              for (let p = 0; p < d.length; p += 4) s += (d[p] + d[p + 1] + d[p + 2]) / 3;
+              mean = s / (d.length / 4);
+            } catch { /* ignore */ }
+            console.info(
+              `[diag] detect: video=${videoWidth}x${videoHeight} region=${reg.width}x${reg.height} ` +
+              `rawPoses=${posesLocal.length} cropMean=${mean.toFixed(1)} mpTs=${mpTs.toFixed(3)}`,
+            );
+          }
+
           if (posesLocal.length === 0) return null;
 
           const posesFull: PoseFrame[] = posesLocal.map(p => ({
@@ -308,6 +387,37 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               : selectClimberPose(posesFull, null);
           }
           return selectClimberPose(posesFull, predicted, gate);
+        };
+
+        /**
+         * Capture a Panning Capture **Keyframe**: extract Wall Crop ORB from the
+         * frame currently drawn on `ctx` (full-frame coords), tagged with `ts`.
+         * Applies the same ORB preprocessing as the frame-0 reference. Per-frame
+         * climber masking is intentionally omitted (ADR scope) — the Wall Crop
+         * plus Lowe/RANSAC drop climber features when matched to the photo.
+         */
+        const captureKeyframe = (ts: number): void => {
+          if (!keyframeWallBox) return;
+          const full = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          let processed = full;
+          const kfCtx = kfOrbCanvas?.getContext("2d");
+          if (kfCtx && currentAnalysis) {
+            kfCtx.putImageData(full, 0, 0);
+            applyOrbPreprocessing(cv, kfOrbCanvas!, currentAnalysis);
+            processed = kfCtx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+          const cropped = cropImageData(processed, keyframeWallBox);
+          // normalizePixels only when ORB preprocessing did not already run.
+          const feats = extractFeatures(cv, cropped, !currentAnalysis);
+          const adjusted: OrbFeatures = {
+            ...feats,
+            keypoints: feats.keypoints.map(kp => ({
+              ...kp,
+              pt: { x: kp.pt.x + keyframeWallBox.x, y: kp.pt.y + keyframeWallBox.y },
+            })),
+            cropBox: keyframeWallBox,
+          };
+          keyframes.push({ timestamp: ts, features: adjusted });
         };
 
         for (let i = 0; i < frameCount; i++) {
@@ -335,10 +445,32 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
+
+            // Snapshot the pristine first frame to a File now, for the Detection
+            // Preview background. Drawing to a dedicated canvas avoids a toBlob
+            // race against the main canvas being overwritten by later frames, and
+            // removes the fragile second video decode the review step used to do.
+            const previewCanvas = document.createElement("canvas");
+            previewCanvas.width = videoWidth;
+            previewCanvas.height = videoHeight;
+            previewCanvas.getContext("2d")?.putImageData(referenceImageData, 0, 0);
+            previewCanvas.toBlob((blob) => {
+              if (blob && mountedRef.current) {
+                setFirstFrameFile(new File([blob], "first-frame.png", { type: "image/png" }));
+              }
+            }, "image/png");
           }
 
           if (i === middleIndex) {
             middleFrameImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+          }
+
+          // Panning Capture keyframe sampling (fixed ~KEYFRAME_INTERVAL_SEC
+          // spacing). Runs after the i===0 lighting seed so currentAnalysis is
+          // available for the first keyframe's ORB preprocessing.
+          if (panning && video.currentTime >= nextKeyframeTime) {
+            captureKeyframe(video.currentTime);
+            nextKeyframeTime = video.currentTime + KEYFRAME_INTERVAL_SEC;
           }
 
           allTimestamps.push(video.currentTime);
@@ -387,54 +519,95 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           setCurrentFrame(i + 1);
         }
 
+        if (detected.length >= 2) {
+          detected.sort((a, b) => a.timestamp - b.timestamp);
+        }
+
         // ---------------------------------------------------------------
-        // Gap recovery pass
+        // Landmark-flip pass (always-on)
         // ---------------------------------------------------------------
+        // Discard Climber frames whose left/right labels glitched, comparing
+        // each to the last accepted frame. The teleport threshold scales with
+        // frameStep — sparser sampling legitimately allows more real motion
+        // between detected frames. Discarded frames become gaps that Adaptive
+        // Refinement re-probes below.
+        const flipTeleportBase = detection.flipTeleportBase ?? DEFAULT_TELEPORT_THRESHOLD;
+        const flipScan = detectFlips(detected, {
+          teleportThreshold: flipTeleportBase * Math.max(1, frameStep / DEFAULT_FRAME_STEP),
+        });
+        const kept = flipScan.kept;
+        const flippedIdx = new Set<number>();
+
+        // ---------------------------------------------------------------
+        // Adaptive Refinement pass
+        // ---------------------------------------------------------------
+        // Densely re-detect only the segments that need it — fast inter-anchor
+        // motion, large tracking-loss gaps, or frames discarded as flips —
+        // stepping frame-by-frame and accepting identity- + flip-gated poses up
+        // to a per-gap budget. Static segments stay sparse. Reuses the seek
+        // loop; the budget / motion threshold come from the quality tier.
         const GAP_RECOVERY_THRESHOLD = 3 * frameStep;
         const MAX_RECOVERY_FRAMES = detection.maxRecoveryFrames ?? 30;
+        const MOTION_THRESHOLD = detection.motionThreshold ?? Infinity; // off by default
+        const REFINE_STRIDE = Math.max(1, detection.refineStride ?? 1);
+        // Refinement re-probes consecutive frames, so the flip gate there uses
+        // the tight (un-scaled) base threshold.
+        const refineFlipOptions = { teleportThreshold: flipTeleportBase };
 
-        if (detected.length >= 2 && !abortRef.current) {
-          detected.sort((a, b) => a.timestamp - b.timestamp);
-
+        if (kept.length >= 2 && MAX_RECOVERY_FRAMES > 0 && !abortRef.current) {
           const tsToIdx = new Map<number, number>();
           allTimestamps.forEach((ts, idx) => tsToIdx.set(ts, idx));
+          for (const ts of flipScan.flippedTimestamps) {
+            const fi = tsToIdx.get(ts);
+            if (fi !== undefined) flippedIdx.add(fi);
+          }
 
-          const gaps: Array<{ gapStart: number; gapEnd: number; prevCentroid: Point | null }> = [];
-          for (let d = 1; d < detected.length; d++) {
-            const prevTs = detected[d - 1].timestamp;
-            const currTs = detected[d].timestamp;
-            const prevIdx = tsToIdx.get(prevTs) ?? 0;
-            const currIdx = tsToIdx.get(currTs) ?? 0;
-            const gapSize = currIdx - prevIdx;
-            if (gapSize > GAP_RECOVERY_THRESHOLD) {
-              // Anchor recovery selection to the climber's position just before
-              // the gap, so a full-frame re-detection can't lock onto a bystander.
-              gaps.push({
-                gapStart: prevIdx + 1,
-                gapEnd: currIdx - 1,
-                prevCentroid: poseCentroid(detected[d - 1].keypoints),
-              });
+          const gaps: Array<{ gapStart: number; gapEnd: number; leftFrame: PoseFrame }> = [];
+          for (let d = 1; d < kept.length; d++) {
+            const prevFrame = kept[d - 1];
+            const currFrame = kept[d];
+            const prevIdx = tsToIdx.get(prevFrame.timestamp) ?? 0;
+            const currIdx = tsToIdx.get(currFrame.timestamp) ?? 0;
+            if (currIdx - prevIdx <= 1) continue; // adjacent samples — nothing to refine
+
+            // Trigger 1: large gap (tracking loss / discarded flip run).
+            const largeGap = currIdx - prevIdx > GAP_RECOVERY_THRESHOLD;
+            // Trigger 2: a flip was discarded inside this gap.
+            let hasFlip = false;
+            for (const fi of flippedIdx) {
+              if (fi > prevIdx && fi < currIdx) { hasFlip = true; break; }
+            }
+            // Trigger 3: fast motion between the two anchors (centroid jump).
+            const pc = poseCentroid(prevFrame.keypoints);
+            const cc = poseCentroid(currFrame.keypoints);
+            const fastMotion = pc && cc
+              ? Math.hypot(cc.x - pc.x, cc.y - pc.y) > MOTION_THRESHOLD
+              : false;
+
+            if (largeGap || hasFlip || fastMotion) {
+              gaps.push({ gapStart: prevIdx + 1, gapEnd: currIdx - 1, leftFrame: prevFrame });
             }
           }
 
           for (const gap of gaps) {
             if (abortRef.current) break;
-            const framesToProcess = Math.min(gap.gapEnd - gap.gapStart + 1, MAX_RECOVERY_FRAMES);
+            let prevAccepted: PoseFrame = gap.leftFrame;
+            let prevCentroid: Point | null = poseCentroid(gap.leftFrame.keypoints);
+            let budget = MAX_RECOVERY_FRAMES;
 
-            for (let g = 0; g < framesToProcess; g++) {
+            for (let tsIdx = gap.gapStart; tsIdx <= gap.gapEnd && budget > 0; tsIdx += REFINE_STRIDE) {
               if (abortRef.current) break;
-              const tsIdx = gap.gapStart + g;
               if (tsIdx >= allTimestamps.length) break;
               const seekTime = allTimestamps[tsIdx];
 
               try {
                 await seekVideo(video, Math.min(seekTime, duration), { signal: seekController.signal });
               } catch (seekErr) {
-                // User cancel → stop recovery entirely.
+                // User cancel → stop refinement entirely.
                 if (seekErr instanceof SeekAbortedError) { abortRef.current = true; break; }
-                // Decoder stall → skip this recovery candidate, try the next.
+                // Decoder stall → skip this candidate, try the next.
                 if (seekErr instanceof SeekTimeoutError) {
-                  console.warn(`[useVideoProcessor] recovery ${seekErr.message} — skipping`);
+                  console.warn(`[useVideoProcessor] refinement ${seekErr.message} — skipping`);
                   continue;
                 }
                 throw seekErr;
@@ -442,28 +615,31 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               ctx.drawImage(video, 0, 0, videoWidth, videoHeight);
 
-              // Full-frame re-detection, but selected by identity against the
-              // pre-gap position so bystanders are rejected.
-              const recoveryFrame = detectClimber(null, gap.prevCentroid, REACQUIRE_GATE);
-              if (recoveryFrame) {
-                recoveryFrame.timestamp = video.currentTime;
-                detected.push(recoveryFrame);
-                const c = poseCentroid(recoveryFrame.keypoints);
-                if (c) history.push(c);
-                break;
-              }
+              // Full-frame re-detection, selected by identity against the last
+              // accepted position so bystanders are rejected.
+              const candidate = detectClimber(null, prevCentroid, REACQUIRE_GATE);
+              if (!candidate) continue;
+              candidate.timestamp = video.currentTime;
+
+              // Flip gate: don't accept a re-detected frame that is itself a
+              // glitch flip relative to the last accepted pose.
+              if (isLandmarkFlip(prevAccepted, candidate, refineFlipOptions)) continue;
+
+              kept.push(candidate);
+              const c = poseCentroid(candidate.keypoints);
+              if (c) { history.push(c); prevCentroid = c; }
+              prevAccepted = candidate;
+              budget--;
             }
           }
 
-          if (gaps.length > 0) {
-            detected.sort((a, b) => a.timestamp - b.timestamp);
-          }
+          kept.sort((a, b) => a.timestamp - b.timestamp);
         }
 
         // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
         // Filtering is climbing-weighted; tolerance comes from the quality tier
         // (undefined → filterLandmarks' built-in default).
-        const goodFrames   = filterLandmarks(detected, 0.3, detection.filterTolerance);
+        const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
         const frames       = smoothPoseFrames(estimated);
@@ -473,6 +649,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           videoMeta,
           frames,
           orbFeatures: null,
+          keyframes: panning ? keyframes : null,
           matchesPerFrame: null,
           frameCaptures,
           poseBackend: backend,
@@ -487,7 +664,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         setStatus("done");
 
         console.info(
-          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} good=${goodFrames.length} frames=${frames.length}`,
+          `[useVideoProcessor] Done. attempt=${id} backend=${backend} detected=${detected.length} ` +
+            `flips=${flipScan.flippedTimestamps.length} kept=${kept.length} good=${goodFrames.length} frames=${frames.length}` +
+            (panning ? ` keyframes=${keyframes.length}` : ""),
         );
 
         await new Promise<void>(r => setTimeout(r, 0));
@@ -564,6 +743,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               videoMeta,
               frames,
               orbFeatures,
+              keyframes: panning ? keyframes : null,
               matchesPerFrame: null,
               frameCaptures,
               poseBackend: backend,
@@ -613,6 +793,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentFrame(0);
       setTotalFrames(0);
       setAttemptId(null);
+      setFirstFrameFile(null);
       setErrorMessage(null);
     }
   }, []);
@@ -626,5 +807,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, errorMessage };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage };
 }

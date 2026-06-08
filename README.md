@@ -5,9 +5,22 @@ estimation and **OpenCV.js** ORB feature matching — then save results to
 **Amazon S3** for access across devices.
 
 The app records skeleton poses frame-by-frame from a video using MediaPipe Pose
-Landmarker (GPU delegate), extracts **ORB reference features** (OpenCV.js WASM)
-from the first frame, then overlays the movement onto a static route photo via
-a perspective (homography) transform. The output is a downloadable **WebM** video.
+Landmarker (GPU delegate), extracts **ORB reference features** (OpenCV.js WASM),
+then overlays the movement onto a static route photo via a perspective
+(homography) transform. The output is a downloadable **WebM** video.
+
+Two capture modes share that pipeline:
+
+- **Fixed Capture** (default) — a static (tripod/propped) shot where the whole
+  route stays in frame. A single homography from the **first frame** aligns the
+  run to the route photo for every frame.
+- **Panning Capture** (opt-in "Long route / panning" toggle) — for a longer
+  route shot by deliberately panning the camera up the wall. The run stores ORB
+  **keyframes** (wall-crop features sampled ~every 0.75 s) and aligns each pan
+  section to the route photo independently, so the overlay tracks the wall as
+  the camera moves. The photo is the global reference, so the alignment is
+  drift-free; in-between frames decompose-interpolate the bracketing keyframe
+  homographies. Fast handheld shake is out of scope — use Fixed Capture there.
 
 Each run is classified as an **attempt** (did not top) or a **send** (topped).
 Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any run.
@@ -79,28 +92,34 @@ handles to resize it.
 | Climber crop | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
 | Route (ORB) crop | ORB feature extraction region on the first video frame. Focus on the wall texture and holds to improve match quality. |
 
-Click **Process video** after setting both crop regions.
+Click **Scan video** after setting the crop region.
 
 ## Guided scan flow
 
-The upload flow is a guided 4-step process designed to keep the core path fast
-while preserving full analysis quality:
+The upload flow is a guided 3-step wizard. Every step shares a common
+`ProcessFlowShell` chrome: a sticky header with a "Step _n_ of 3" progress bar
+and a sticky footer that always keeps the primary action visible, regardless of
+media aspect ratio (so the Scan/Save buttons never fall below the fold on
+portrait video):
 
-1. **Select source** — upload a video or record with camera.
+1. **Choose a video** — upload a clip or record with camera (both equal-weight).
 2. **Set detection** — tap the climber to lock tracking onto them (auto-crop;
-  drag to override), plus an optional wall texture crop; advanced model/stride
-  controls are available but secondary.
-3. **Review landmarks** — view processing output with a single pass/warn quality
-  checkpoint before saving.
-4. **Optional route overlay** — test the run against a route photo as an
-  optional branch, not a required step for saving.
+  drag to override), plus an optional wall-texture crop. Quality tier, pose
+  model, sampling stride, and the **Long route (panning)** toggle are pocketed
+  in a single **Settings** popover. The **Scan video** CTA lives in the sticky
+  footer.
+3. **Review your scan** — view processing output with a single pass/warn quality
+  checkpoint; **Save** lives in the sticky footer. From here an understated
+  secondary action, **Overlay on a route photo**, opens the optional overlay
+  view (titled "Overlay on photo") — it is a detour, not a required step.
 
-Metadata entry is essentials-first (location + run type), with optional details
-progressively disclosed in the save sheet.
+Metadata entry is essentials-first (location + run type, with location required
+for cloud upload — the Upload button stays disabled until it is filled), and
+optional details (grade, notes) progressively disclosed in the save sheet.
 
 **Match / Compare pages:**
 
-Drag the overlay on the uploaded route photo before clicking **Apply & Match**.
+Drag the overlay on the uploaded route photo before clicking **Project skeleton**.
 The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.
@@ -141,7 +160,11 @@ queryable metadata (location, run type, rating, notes, thumbnail, video meta)
 that the list/card/detail views read, while a sibling
 `run-{timestamp}-{attempt|send}.data.json` holds the heavy frames, per-frame ORB
 matches, and base64-encoded descriptors — fetched only when a run is actually
-opened. Legacy single-file runs (everything inline) still load transparently.
+opened. **Panning Capture** runs additionally store an ordered array of ORB
+**keyframe** feature sets (each with its video timestamp) in the data object; a
+longer route can run to a few MB (under the 25 MB upload cap). Fixed Capture runs
+omit the keyframes field. Legacy single-file runs (everything inline) still load
+transparently.
 The heavy data object is written **first** and the metadata object **last**, so a
 save that fails partway never leaves a metadata record pointing at missing
 frames; opening a run whose data sibling is absent surfaces a clear error rather
@@ -269,13 +292,13 @@ npx eslint .
 pipeline/   Framework-agnostic processing modules (no React)
 hooks/      React hooks wiring pipeline modules to UI state
 storage/    In-memory session store (swappable backend); exports RunType
-components/ Shared UI components (CropBoxOverlay, S3RoutePicker, ComboInput, …)
+components/ UI components grouped by kind/feature (ui, layout, skeleton, capture, run, scan, compare, route, routes, map)
 app/        Next.js App Router pages and layout
 app/api/s3/ S3 route handlers (put, get, list, delete) + shared utilities
 workers/    Legacy Web Worker files (kept for reference)
 utils/      Shared constants and helpers (poseConstants, cvHelpers, fsHelpers)
 __tests__/  Unit tests (mirror source tree)
-public/     Static assets (opencv.js WASM bundle)
+public/     Static assets (opencv.js + local MediaPipe pose .task models)
 ```
 
 See [docs](/docs) inside the running app for a full usage guide.
@@ -285,9 +308,9 @@ See [docs](/docs) inside the running app for a full usage guide.
 Deployments are handled by **Vercel's native GitHub integration** — every push
 to `main` triggers a production deploy automatically.
 
-The `buildCommand` in `vercel.json` runs `npm run setup:opencv` before
-`next build` so the gitignored `public/opencv.js` WASM file is always present
-in the production bundle.
+The `buildCommand` in `vercel.json` runs `npm run setup:assets` before
+`next build` so the gitignored `public/opencv.js` and local MediaPipe pose
+model files are always present in the production bundle.
 
 ### Required Vercel environment variables
 

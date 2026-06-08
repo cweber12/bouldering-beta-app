@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import RunTypeBadge from "@/components/shared/RunTypeBadge";
+import Modal from "@/components/ui/Modal";
+import RunTypeBadge from "@/components/run/RunTypeBadge";
 import { buildCompareUrl } from "@/utils/compareUrl";
 
 // ---------------------------------------------------------------------------
@@ -60,14 +60,6 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
     closeButtonRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
-
   const go = (url: string) => {
     onClose();
     router.push(url);
@@ -75,17 +67,15 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
 
   if (!mounted) return null;
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-1001 flex items-center justify-center bg-surface/70 backdrop-blur-sm px-4 py-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${climb.route} climb detail`}
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      ariaLabel={`${climb.route} climb detail`}
+      containerClassName="px-4 py-6"
+      panelClassName="w-full max-w-lg rounded-md border border-edge/50 bg-(--color-surface) shadow-xl"
+      zClassName="z-1001"
     >
-      <div className="relative w-full max-w-lg rounded-md border border-edge/50 bg-(--color-surface) shadow-xl">
         {/* Close button */}
         <button
           ref={closeButtonRef}
@@ -189,8 +179,6 @@ export default function ClimbDetailModal({ climb, onClose }: ClimbDetailModalPro
             />
           </div>
         </div>
-      </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }
