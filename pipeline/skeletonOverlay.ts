@@ -40,8 +40,14 @@ const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
 /** Head oval: padding on the ear-to-ear width, and the height-to-width ratio. */
-const HEAD_WIDTH_PAD = 1.15;
+const HEAD_WIDTH_PAD = 1.35;
 const HEAD_HEIGHT_RATIO = 1.4;
+/**
+ * Floor on the head-oval half-width as a fraction of body scale (shoulder
+ * width). Keeps the head a sensible size when the ears sit close together
+ * (frontal view) instead of shrinking to the landmark span.
+ */
+const HEAD_SCALE_FLOOR = 0.32;
 
 /**
  * Confidence below which a keypoint is treated as an unreliable
@@ -290,7 +296,9 @@ function drawHeadOval(
     }
   }
 
-  if (major < 1) major = scale * 0.3;
+  // Never let the landmark span alone size the head — floor it to body scale so
+  // a frontal head (ears nearly overlapping) still reads at a believable size.
+  major = Math.max(major, scale * HEAD_SCALE_FLOOR);
   const minor = major * HEAD_HEIGHT_RATIO;
 
   sctx.beginPath();
@@ -332,7 +340,10 @@ function drawSilhouette(
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
   const lh = kp.left_hip, rh = kp.right_hip;
 
-  // Torso polygon (shoulders + hips quad).
+  // Torso polygon (shoulders + hips quad). Fill it, then stroke its outline at
+  // the limb width so the body extends limbR past the joint-centre edges — this
+  // pads the torso to meet the limb capsules (which also extend limbR past the
+  // joints) instead of letting the limbs poke out beyond a flush torso edge.
   if (ls && rs && lh && rh) {
     sctx.beginPath();
     sctx.moveTo(ls.x, ls.y);
@@ -341,6 +352,8 @@ function drawSilhouette(
     sctx.lineTo(lh.x, lh.y);
     sctx.closePath();
     sctx.fill();
+    sctx.lineWidth = 2 * limbR;
+    sctx.stroke();
   }
 
   // Neck — shoulder-midpoint → ear-midpoint (or eye/nose fallback), limb width.
