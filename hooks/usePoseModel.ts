@@ -78,15 +78,35 @@ function notifyReady() {
 // ---------------------------------------------------------------------------
 
 /** CDN base for MediaPipe WASM files. */
-const MP_WASM_CDN =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+const MP_TASKS_VISION_VERSION = "0.10.34";
 
-/** CDN paths for each MediaPipe Pose Landmarker model variant. */
+/**
+ * Version-pinned CDN base for MediaPipe WASM runtime files.
+ * Keep this in sync with @mediapipe/tasks-vision in package.json.
+ */
+const MP_WASM_CDN =
+  `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_TASKS_VISION_VERSION}/wasm`;
+
+/** Local static paths for each MediaPipe Pose Landmarker model variant. */
 const MP_MODEL_URLS: Record<MediaPipeVariant, string> = {
-  lite: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-  full: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
-  heavy: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task",
+  lite: "/models/pose/pose_landmarker_lite.task",
+  full: "/models/pose/pose_landmarker_full.task",
+  heavy: "/models/pose/pose_landmarker_heavy.task",
 };
+
+async function loadModelAssetBuffer(variant: MediaPipeVariant): Promise<Uint8Array> {
+  const path = MP_MODEL_URLS[variant];
+  const response = await fetch(path, { cache: "force-cache" });
+
+  if (!response.ok) {
+    throw new Error(
+      `[usePoseModel] Failed to load local MediaPipe model (${variant}) from ${path} (${response.status}). ` +
+        "Run: npm run setup:pose-models",
+    );
+  }
+
+  return new Uint8Array(await response.arrayBuffer());
+}
 
 async function loadMediaPipe(variant: MediaPipeVariant, maxPoses: number): Promise<void> {
   const { FilesetResolver, PoseLandmarker } = await import(
@@ -94,10 +114,11 @@ async function loadMediaPipe(variant: MediaPipeVariant, maxPoses: number): Promi
   );
 
   const vision = await FilesetResolver.forVisionTasks(MP_WASM_CDN);
+  const modelAssetBuffer = await loadModelAssetBuffer(variant);
 
   const landmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: MP_MODEL_URLS[variant],
+      modelAssetBuffer,
       delegate: "GPU",
     },
     runningMode: "VIDEO",

@@ -323,6 +323,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
         let lastMpTs = mpTimestampBase;
 
+        // TEMP DIAGNOSTIC counter — remove after the detected=0 investigation.
+        let diagCount = 0;
+
         /**
          * Detect every person in `region` (pixels; null = full frame), map them
          * back to full-frame coordinates, and return the pose matching the
@@ -353,6 +356,23 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
+
+          // TEMP DIAGNOSTIC — remove after the detected=0 investigation.
+          if (diagCount < 6) {
+            diagCount++;
+            let mean = -1;
+            try {
+              const d = cctx.getImageData(0, 0, Math.min(32, reg.width), Math.min(32, reg.height)).data;
+              let s = 0;
+              for (let p = 0; p < d.length; p += 4) s += (d[p] + d[p + 1] + d[p + 2]) / 3;
+              mean = s / (d.length / 4);
+            } catch { /* ignore */ }
+            console.info(
+              `[diag] detect: video=${videoWidth}x${videoHeight} region=${reg.width}x${reg.height} ` +
+              `rawPoses=${posesLocal.length} cropMean=${mean.toFixed(1)} mpTs=${mpTs.toFixed(3)}`,
+            );
+          }
+
           if (posesLocal.length === 0) return null;
 
           const posesFull: PoseFrame[] = posesLocal.map(p => ({

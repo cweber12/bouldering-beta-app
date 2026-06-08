@@ -1,26 +1,38 @@
 # /public assets
 
-## opencv.js
+## Generated binary assets
 
-`opencv.js` is **not committed** to this repository — it is large (~10 MB) and must be generated locally from the npm package.
+The following files are intentionally not committed and must be generated or downloaded locally:
+
+- `public/opencv.js`
+- `public/models/pose/pose_landmarker_lite.task`
+- `public/models/pose/pose_landmarker_full.task`
+- `public/models/pose/pose_landmarker_heavy.task`
 
 ### How to set it up (one-time, after cloning)
 
 ```powershell
 npm install          # installs @techstark/opencv-js and all other deps
-npm run setup:opencv # copies opencv.js from node_modules into this folder
+npm run setup:assets # copies opencv.js and downloads MediaPipe pose models
+```
+
+You can also run setup scripts independently:
+
+```powershell
+npm run setup:opencv
+npm run setup:pose-models
 ```
 
 ### Why this approach?
 
 OpenCV.js uses an Emscripten WASM runtime that cannot be bundled through Next.js/webpack. It must be loaded via a plain `<script>` tag at runtime. Placing the file here serves it at `/opencv.js` as a static asset.
 
-The `@techstark/opencv-js` npm package provides the official prebuilt binary. The version is pinned in `package.json`, which keeps everyone on the same build without committing a large binary to git.
+The `@techstark/opencv-js` npm package provides the official prebuilt binary, and MediaPipe models are downloaded from official model storage. Versions and paths are controlled by scripts in `scripts/`.
 
-`opencv.js` is listed in `.gitignore` — do not force-commit it.
+These binary files are listed in `.gitignore` — do not force-commit them.
 
-### Upgrading OpenCV.js
+### Upgrading OpenCV.js / MediaPipe models
 
-1. Update `@techstark/opencv-js` in `package.json`.
-2. Delete `public/opencv.js`.
-3. Run `npm install ; npm run setup:opencv`.
+1. Update the relevant versions and/or source URLs in scripts and hooks.
+2. Delete old generated assets under `public/`.
+3. Run `npm install ; npm run setup:assets`.

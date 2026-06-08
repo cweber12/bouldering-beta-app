@@ -298,7 +298,7 @@ app/api/s3/ S3 route handlers (put, get, list, delete) + shared utilities
 workers/    Legacy Web Worker files (kept for reference)
 utils/      Shared constants and helpers (poseConstants, cvHelpers, fsHelpers)
 __tests__/  Unit tests (mirror source tree)
-public/     Static assets (opencv.js WASM bundle)
+public/     Static assets (opencv.js + local MediaPipe pose .task models)
 ```
 
 See [docs](/docs) inside the running app for a full usage guide.
@@ -308,9 +308,9 @@ See [docs](/docs) inside the running app for a full usage guide.
 Deployments are handled by **Vercel's native GitHub integration** — every push
 to `main` triggers a production deploy automatically.
 
-The `buildCommand` in `vercel.json` runs `npm run setup:opencv` before
-`next build` so the gitignored `public/opencv.js` WASM file is always present
-in the production bundle.
+The `buildCommand` in `vercel.json` runs `npm run setup:assets` before
+`next build` so the gitignored `public/opencv.js` and local MediaPipe pose
+model files are always present in the production bundle.
 
 ### Required Vercel environment variables
 
