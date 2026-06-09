@@ -148,10 +148,14 @@ from the **Detection Preview**, which never leaves video-pixel space.
 _Avoid_: preview, overlay (unqualified), projection.
 
 **Silhouette**:
-The semi-transparent, filled body shape of the **Climber** — a single unioned
-translucent form (head, torso, limbs, hands, feet) that reads as one solid
-avatar regardless of how its parts overlap. The lower of the two overlay passes.
-_Avoid_: blob, halo, thick line (it fills regions, it does not merely stroke).
+The semi-transparent body shape of the **Climber** — the skeleton drawn fat:
+every bone (arms, legs, neck, hands, feet) stroked as a round-capped capsule,
+plus two filled regions for the parts that are areas not bones (the **torso**
+quad and a **head** oval), all unioned into one translucent form that reads as a
+solid avatar and contrasts against the wall. Hand and foot strokes are thinner
+(half the limb width) per anatomical proportion. The lower of the two overlay
+passes.
+_Avoid_: blob, halo (it is a unioned body shape, not a single fat mark).
 
 **Skeleton**:
 The thin, crisp pose lines and joint points drawn on top of (inside) the

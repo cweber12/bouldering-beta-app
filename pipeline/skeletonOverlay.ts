@@ -5,11 +5,14 @@
  * via a homography matrix, then draws the overlay onto the canvas as two
  * passes:
  *
- *  - **Silhouette** — a single, unioned, semi-transparent body shape (limb /
- *    neck / foot capsules, a filled torso polygon, a filled head oval, mitten
- *    hand caps). It is rendered opaque onto a reused offscreen scratch canvas
- *    and composited once at the configured opacity, so overlapping pieces never
- *    darken into seams. Always solid — confidence dimming never applies here.
+ *  - **Silhouette** — the skeleton drawn fat: every bone (arms, legs, neck,
+ *    hands, feet) stroked as a round-capped capsule, plus two filled regions for
+ *    the parts that are areas not bones (the torso quad and a head oval), all
+ *    unioned into one body shape. Hand and foot edges are stroked at half the
+ *    limb width (anatomical proportion). It is rendered opaque onto a reused
+ *    offscreen scratch canvas and composited once at the configured opacity, so
+ *    overlapping pieces never darken into seams. Always solid — confidence
+ *    dimming never applies here.
  *  - **Skeleton** — the thin pose lines + joint points, drawn crisply on top of
  *    (inside) the Silhouette. Estimated-Landmark confidence dimming applies to
  *    this pass only.
@@ -32,28 +35,47 @@ import { applyHomographyMatrix } from "@/pipeline/homography";
 
 const DEFAULT_COLOR = "#00dc78"; // accent green — shared default for all passes
 const DEFAULT_SILHOUETTE_OPACITY = 0.5;
-/** Limb / neck capsule **radius** as a fraction of shoulder width. */
+/** Base limb (arm / leg / neck / torso-stroke) capsule **radius** as a fraction
+ *  of shoulder width. One width for every bone so joints line up with no step. */
 const DEFAULT_LIMB_THICKNESS = 0.18;
 /** Skeleton line **radius** as a fraction of shoulder width. */
 const DEFAULT_LINE_THICKNESS = 0.015;
 /** Joint circle **radius** as a fraction of shoulder width (midpoint of the two). */
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Head oval: padding on the ear-to-ear width, and the height-to-width ratio. */
-const HEAD_WIDTH_PAD = 1.35;
-const HEAD_HEIGHT_RATIO = 1.4;
-/**
- * Floor on the head-oval half-width as a fraction of body scale (shoulder
- * width). Keeps the head a sensible size when the ears sit close together
- * (frontal view) instead of shrinking to the landmark span.
- */
-const HEAD_SCALE_FLOOR = 0.32;
-/** Lift the head off the shoulders by this fraction of the oval's minor radius,
- *  along the head-up axis, so a neck becomes visible beneath the chin. */
-const HEAD_LIFT = 0.25;
-/** Neck radius as a fraction of the head half-width (capped at limb radius), so
- *  the neck reads clearly narrower than the head. */
-const NECK_WIDTH = 0.5;
+/** Hand / foot capsule radius as a fraction of the base limb radius. The half
+ *  width still unions the real landmark edges into a solid hand fan / foot. */
+const EXTREMITY_WIDTH_FACTOR = 0.5;
+
+/** Head oval half-width as a fraction of body scale (shoulder width). Fixed —
+ *  never the ear/eye span, which balloons in profile and collapses head-on. */
+const HEAD_HALF_WIDTH = 0.3;
+/** Head oval height-to-width ratio (the head is taller than it is wide). */
+const HEAD_HEIGHT_RATIO = 1.3;
+
+/** Bones stroked at the base limb width — arms and legs. */
+const LIMB_EDGES: [string, string][] = [
+  ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+  ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
+  ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
+];
+
+/** Hand + foot edges stroked at the reduced extremity width. These are the real
+ *  BlazePose landmark connections, unioned into a hand fan and a foot triangle
+ *  (heel + toe). A missing endpoint silently skips its edge. */
+const EXTREMITY_EDGES: [string, string][] = [
+  // Hands — wrist fan + the index↔pinky web.
+  ["left_wrist", "left_index"], ["left_wrist", "left_pinky"],
+  ["left_wrist", "left_thumb"], ["left_index", "left_pinky"],
+  ["right_wrist", "right_index"], ["right_wrist", "right_pinky"],
+  ["right_wrist", "right_thumb"], ["right_index", "right_pinky"],
+  // Feet — ankle→heel→toe triangle.
+  ["left_ankle", "left_heel"], ["left_ankle", "left_foot_index"],
+  ["left_heel", "left_foot_index"],
+  ["right_ankle", "right_heel"], ["right_ankle", "right_foot_index"],
+  ["right_heel", "right_foot_index"],
+];
 
 /**
  * Confidence below which a keypoint is treated as an unreliable
@@ -321,12 +343,18 @@ interface HeadGeometry {
   minor: number;
   /** In-plane roll, radians. */
   angle: number;
+  /** The oval's bottom-edge point (toward the neck) where the neck capsule
+   *  connects, so the head can never visually detach from the body. */
+  chin: Pt;
 }
 
 /**
- * Resolve the head oval: centred on the eyes (lifted off the shoulders so a neck
- * shows), tilted to the eye line, sized from the ear span. Returns null when
- * there are too few head points to place an oval.
+ * Resolve the head oval: centred on the eyes (so it follows the climber's gaze),
+ * tilted to the eye line, and sized from a fixed fraction of body scale — never
+ * the ear/eye span, so the head stays identical across frontal/profile views.
+ * Also returns the oval's bottom-edge point so the neck capsule can bridge to it
+ * (no artificial lift; the bridge is what keeps the head attached). Returns null
+ * when there are too few head points to place an oval.
  */
 function computeHeadGeometry(
   kp: Record<string, OverlayPoint>,
@@ -353,19 +381,13 @@ function computeHeadGeometry(
   else if (lEar && rEar) angle = Math.atan2(rEar.y - lEar.y, rEar.x - lEar.x);
   else angle = 0;
 
-  // Size from the ear span when available (eyes are closer together, so pad
-  // more); floored to body scale so a frontal head stays believable.
-  let major: number;
-  if (lEar && rEar) major = (dist(lEar, rEar) / 2) * HEAD_WIDTH_PAD;
-  else if (le && re) major = (dist(le, re) / 2) * HEAD_WIDTH_PAD * 1.4;
-  else major = scale * HEAD_SCALE_FLOOR;
-  major = Math.max(major, scale * HEAD_SCALE_FLOOR);
+  // Fixed body-scale size — independent of how far apart the ears/eyes land.
+  const major = scale * HEAD_HALF_WIDTH;
   const minor = major * HEAD_HEIGHT_RATIO;
 
-  // Lift the oval along the head-up axis (perpendicular to the eye line) so the
-  // chin clears the shoulders. Disambiguate "up" to point away from the
-  // shoulder-midpoint (handles a climber leaned back on an overhang); fall back
-  // to image-up when shoulders are absent.
+  // Head-up axis (perpendicular to the eye line), disambiguated to point away
+  // from the shoulder-midpoint (handles a climber leaned back on an overhang);
+  // fall back to image-up when shoulders are absent.
   let ux = Math.sin(angle), uy = -Math.cos(angle);
   const sMid = midpoint(kp.left_shoulder, kp.right_shoulder);
   if (sMid) {
@@ -373,11 +395,11 @@ function computeHeadGeometry(
   } else if (uy > 0) {
     ux = -ux; uy = -uy;
   }
-  const lift = HEAD_LIFT * minor;
-  cx += ux * lift;
-  cy += uy * lift;
 
-  return { cx, cy, major, minor, angle };
+  // Bottom edge of the oval, toward the neck — the neck capsule connects here.
+  const chin = { x: cx - ux * minor, y: cy - uy * minor };
+
+  return { cx, cy, major, minor, angle, chin };
 }
 
 /** Draw the full Silhouette body shape (filled, opaque) onto the scratch context. */
@@ -389,6 +411,7 @@ function drawSilhouette(
   limbThickness: number,
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
+  const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
 
   sctx.save();
   sctx.fillStyle = color;
@@ -404,20 +427,13 @@ function drawSilhouette(
     sctx.lineTo(b.x, b.y);
     sctx.stroke();
   };
-  const disc = (p: Pt | undefined, r: number): void => {
-    if (!p) return;
-    sctx.beginPath();
-    sctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-    sctx.fill();
-  };
 
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
   const lh = kp.left_hip, rh = kp.right_hip;
 
-  // Torso polygon (shoulders + hips quad). Fill it, then stroke its outline at
-  // the limb width so the body extends limbR past the joint-centre edges — this
-  // pads the torso to meet the limb capsules (which also extend limbR past the
-  // joints) instead of letting the limbs poke out beyond a flush torso edge.
+  // Torso — the one filled region. Fill the shoulders→hips quad, then stroke its
+  // perimeter at the limb width so the torso side edges meet the leg capsules at
+  // the hips and the top edge meets the arm capsules at the shoulders with no step.
   if (ls && rs && lh && rh) {
     sctx.beginPath();
     sctx.moveTo(ls.x, ls.y);
@@ -430,37 +446,17 @@ function drawSilhouette(
     sctx.stroke();
   }
 
+  // Bones — arms and legs at the base width, hands and feet (their real landmark
+  // edges) at the reduced extremity width. Every shared joint lines up because the
+  // adjacent capsules meet at the same point with round caps.
+  for (const [a, b] of LIMB_EDGES) capsule(kp[a], kp[b], limbR);
+  for (const [a, b] of EXTREMITY_EDGES) capsule(kp[a], kp[b], extremityR);
+
+  // Head oval + neck bridge. The neck runs from the shoulder-midpoint to the
+  // oval's bottom edge, so the head can never visually detach.
   const head = computeHeadGeometry(kp, scale);
-
-  // Neck — shoulder-midpoint → nose (fallback eye-midpoint), drawn clearly
-  // narrower than the head so it reads as a neck rather than a thick column.
-  const sMid = midpoint(ls, rs);
-  const neckTop = kp.nose ?? midpoint(kp.left_eye, kp.right_eye);
-  const neckR = head ? Math.min(NECK_WIDTH * head.major, limbR) : limbR;
-  capsule(sMid, neckTop, neckR);
-
-  // Arms.
-  capsule(ls, kp.left_elbow, limbR);
-  capsule(kp.left_elbow, kp.left_wrist, limbR);
-  capsule(rs, kp.right_elbow, limbR);
-  capsule(kp.right_elbow, kp.right_wrist, limbR);
-
-  // Legs.
-  capsule(lh, kp.left_knee, limbR);
-  capsule(kp.left_knee, kp.left_ankle, limbR);
-  capsule(rh, kp.right_knee, limbR);
-  capsule(kp.right_knee, kp.right_ankle, limbR);
-
-  // Hands — mitten cap at the wrist (no spindly finger capsules).
-  disc(kp.left_wrist, limbR * 1.1);
-  disc(kp.right_wrist, limbR * 1.1);
-
-  // Feet — capsule ankle → foot_index.
-  capsule(kp.left_ankle, kp.left_foot_index, limbR * 0.9);
-  capsule(kp.right_ankle, kp.right_foot_index, limbR * 0.9);
-
-  // Head oval.
   if (head) {
+    capsule(midpoint(ls, rs), head.chin, limbR);
     sctx.beginPath();
     sctx.ellipse(head.cx, head.cy, head.major, head.minor, head.angle, 0, Math.PI * 2);
     sctx.fill();

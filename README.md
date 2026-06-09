@@ -60,10 +60,11 @@ After estimation, two post-processing passes are applied:
 
 ### Skeleton overlay
 
-`drawSkeleton` renders the pose as two passes: a translucent **Silhouette**
-(a single unioned body shape — limb/neck/foot capsules, a filled torso polygon,
-a filled head oval, mitten hand caps — flattened through an offscreen canvas so
-overlaps stay uniform) beneath a crisp **Skeleton** (thin lines + joint points).
+`drawSkeleton` renders the pose as two passes: a translucent **Silhouette** (the
+skeleton drawn fat — every bone stroked as a round-capped capsule, hands and feet
+at half the limb width, plus two filled regions for the torso quad and a head
+oval — flattened through an offscreen canvas so overlaps stay uniform) beneath a
+crisp **Skeleton** (thin lines + joint points).
 It accepts a `SkeletonStyle` object with `silhouetteVisible/Color/Opacity`,
 `limbThickness`, `linesVisible/lineColor/lineThickness`, and
 `jointsVisible/jointColor/jointRadius` (plus optional `skeletonEdges` /
