@@ -5,11 +5,14 @@ import {
   ransacReprojThresholdFor,
   interpolateHomographies,
   homographyAtTime,
+  computeHomography,
   RANSAC_BASE_THRESHOLD,
   type KeyframeHomography,
 } from "@/pipeline/homography";
+import { emptyHomographyStats } from "@/pipeline/diagnostics";
 import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
 import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
 
 // ---------------------------------------------------------------------------
 // applyHomographyMatrix
@@ -413,5 +416,133 @@ describe("drawSkeleton", () => {
       { estimatedDimThreshold: 0 },
     );
     expect(alphasByFill.every(a => a === 1)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeHomography — stats out-param (OpenCV mocked at the cv boundary)
+// ---------------------------------------------------------------------------
+
+describe("computeHomography stats out-param", () => {
+  const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  const DEGENERATE = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+  interface FakeMat {
+    empty: () => boolean;
+    delete: () => void;
+    data64F?: Float64Array;
+  }
+
+  function makeFeatures(n: number): OrbFeatures {
+    return {
+      keypoints: Array.from({ length: n }, (_, i) => ({
+        pt: { x: i * 10, y: i * 7 },
+        size: 1,
+        angle: 0,
+        response: 0,
+        octave: 0,
+      })),
+      descriptors: new Uint8Array(0),
+    };
+  }
+
+  function makeMatches(n: number): OrbMatch[] {
+    return Array.from({ length: n }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+  }
+
+  function makeCv(opts: { homography: number[] | "empty" | null; inliers: number }) {
+    const makeH = (): FakeMat | null => {
+      if (opts.homography === null) return null;
+      if (opts.homography === "empty") return { empty: () => true, delete: vi.fn() };
+      return { empty: () => false, data64F: new Float64Array(opts.homography), delete: vi.fn() };
+    };
+    return {
+      CV_32FC2: 0,
+      RANSAC: 8,
+      matFromArray: vi.fn((): FakeMat => ({ empty: () => false, delete: vi.fn() })),
+      Mat: vi.fn(function (this: unknown): FakeMat {
+        return { empty: () => false, delete: vi.fn() };
+      }),
+      findHomography: vi.fn(makeH),
+      countNonZero: vi.fn(() => opts.inliers),
+    };
+  }
+
+  it("labels too_few_matches before touching OpenCV", () => {
+    const cv = makeCv({ homography: IDENTITY, inliers: 0 });
+    const stats = emptyHomographyStats();
+    const result = computeHomography(cv, makeMatches(3), makeFeatures(3), makeFeatures(3), { stats });
+
+    expect(result).toBeNull();
+    expect(cv.findHomography).not.toHaveBeenCalled();
+    expect(stats).toMatchObject({
+      matchCount: 3,
+      inlierCount: 0,
+      inlierRatio: 0,
+      homographyFound: false,
+      failureReason: "too_few_matches",
+    });
+  });
+
+  it("labels a null homography as degenerate", () => {
+    const cv = makeCv({ homography: null, inliers: 0 });
+    const stats = emptyHomographyStats();
+    const result = computeHomography(cv, makeMatches(8), makeFeatures(8), makeFeatures(8), { stats });
+
+    expect(result).toBeNull();
+    expect(stats.failureReason).toBe("degenerate");
+    expect(stats.homographyFound).toBe(false);
+    expect(stats.matchCount).toBe(8);
+  });
+
+  it("labels an empty homography as degenerate", () => {
+    const cv = makeCv({ homography: "empty", inliers: 0 });
+    const stats = emptyHomographyStats();
+    computeHomography(cv, makeMatches(8), makeFeatures(8), makeFeatures(8), { stats });
+    expect(stats.failureReason).toBe("degenerate");
+  });
+
+  it("labels a gate-failing homography as gate_rejected and still reports inliers", () => {
+    const cv = makeCv({ homography: DEGENERATE, inliers: 5 });
+    const stats = emptyHomographyStats();
+    const result = computeHomography(cv, makeMatches(10), makeFeatures(10), makeFeatures(10), {
+      gate: { srcWidth: 640, srcHeight: 480 },
+      stats,
+    });
+
+    expect(result).toBeNull();
+    expect(stats).toMatchObject({
+      matchCount: 10,
+      inlierCount: 5,
+      inlierRatio: 0.5,
+      homographyFound: false,
+      failureReason: "gate_rejected",
+    });
+  });
+
+  it("labels a valid homography ok with the inlier ratio", () => {
+    const cv = makeCv({ homography: IDENTITY, inliers: 8 });
+    const stats = emptyHomographyStats();
+    const result = computeHomography(cv, makeMatches(10), makeFeatures(10), makeFeatures(10), {
+      gate: { srcWidth: 640, srcHeight: 480 },
+      stats,
+    });
+
+    expect(result).toBeInstanceOf(Float64Array);
+    expect(stats).toMatchObject({
+      matchCount: 10,
+      inlierCount: 8,
+      inlierRatio: 0.8,
+      homographyFound: true,
+      failureReason: "ok",
+    });
+    // The inlier mask is passed as the 5th arg to findHomography.
+    expect(cv.findHomography.mock.calls[0]).toHaveLength(5);
+  });
+
+  it("works for existing callers that pass no stats (no signature break)", () => {
+    const cv = makeCv({ homography: IDENTITY, inliers: 8 });
+    const result = computeHomography(cv, makeMatches(10), makeFeatures(10), makeFeatures(10));
+    expect(result).toBeInstanceOf(Float64Array);
   });
 });

@@ -5,10 +5,12 @@ import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
+import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
+import type { ScanDiagnostics } from "@/pipeline/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -43,6 +45,8 @@ export interface StepViewLandmarksProps {
   saveError: string | null;
   /** Navigate to the user's saved scans after a successful upload. */
   onViewScans: () => void;
+  /** Dev-only detection diagnostics for the completed scan (panel is dev-gated). */
+  scanDiagnostics?: ScanDiagnostics | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,6 +74,7 @@ export default function StepViewLandmarks({
   s3Loading,
   saveError,
   onViewScans,
+  scanDiagnostics,
 }: StepViewLandmarksProps) {
   const routePhotoInputRef = useRef<HTMLInputElement>(null);
 
@@ -155,6 +160,7 @@ export default function StepViewLandmarks({
   ) : undefined;
 
   return (
+    <>
     <ProcessFlowShell
       step={3}
       totalSteps={3}
@@ -311,5 +317,7 @@ export default function StepViewLandmarks({
         )}
       </div>
     </ProcessFlowShell>
+    <DiagnosticsPanel record={scanDiagnostics ?? null} />
+    </>
   );
 }

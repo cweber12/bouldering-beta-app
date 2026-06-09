@@ -13,6 +13,7 @@
 type CV = any;
 
 import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+import type { HomographyStats, HomographyFailureReason } from "@/pipeline/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Resolution-scaled RANSAC reprojection threshold
@@ -138,6 +139,30 @@ export interface ComputeHomographyOptions {
    * typically the reference video-frame size.
    */
   gate?: { srcWidth: number; srcHeight: number } & HomographyGateOptions;
+  /**
+   * Optional out-param for detection diagnostics. When supplied, it is populated
+   * on every return path (including the three null cases) with the candidate
+   * match count, RANSAC inlier count/ratio, and a {@link HomographyFailureReason}
+   * — so a failed match is a labelled data point rather than an opaque `null`.
+   * Pre-allocate one with `emptyHomographyStats()`. Existing callers pass nothing
+   * and are unaffected.
+   */
+  stats?: HomographyStats;
+}
+
+/** Populate the {@link HomographyStats} out-param in place. */
+function fillHomographyStats(
+  stats: HomographyStats,
+  matchCount: number,
+  inlierCount: number,
+  homographyFound: boolean,
+  failureReason: HomographyFailureReason,
+): void {
+  stats.matchCount = matchCount;
+  stats.inlierCount = inlierCount;
+  stats.inlierRatio = matchCount > 0 ? inlierCount / matchCount : 0;
+  stats.homographyFound = homographyFound;
+  stats.failureReason = failureReason;
 }
 
 /**
@@ -171,27 +196,43 @@ export function computeHomography(
   }
 
   const n = srcFlat.length / 2;
-  if (n < 4) return null;
+  const matchCount = matches.length;
+  if (n < 4) {
+    if (opts.stats) fillHomographyStats(opts.stats, matchCount, 0, false, "too_few_matches");
+    return null;
+  }
 
   let srcMat = null;
   let dstMat = null;
   let H = null;
+  let mask = null;
 
   try {
     srcMat = cv.matFromArray(n, 1, cv.CV_32FC2, srcFlat);
     dstMat = cv.matFromArray(n, 1, cv.CV_32FC2, dstFlat);
-    H = cv.findHomography(srcMat, dstMat, cv.RANSAC, opts.ransacReprojThreshold ?? RANSAC_BASE_THRESHOLD);
+    // Pass an inlier mask so the diagnostics out-param can report how many of the
+    // candidate matches RANSAC actually kept (countNonZero below).
+    mask = new cv.Mat();
+    H = cv.findHomography(srcMat, dstMat, cv.RANSAC, opts.ransacReprojThreshold ?? RANSAC_BASE_THRESHOLD, mask);
 
-    if (!H || H.empty()) return null;
+    if (!H || H.empty()) {
+      if (opts.stats) fillHomographyStats(opts.stats, matchCount, 0, false, "degenerate");
+      return null;
+    }
+
+    const inlierCount = mask && !mask.empty() ? cv.countNonZero(mask) : 0;
 
     // Copy the 9 float64 values out of WASM memory before freeing the Mat.
     const out = new Float64Array(H.data64F);
 
     if (opts.gate && !isValidHomography(out, opts.gate.srcWidth, opts.gate.srcHeight, opts.gate)) {
+      if (opts.stats) fillHomographyStats(opts.stats, matchCount, inlierCount, false, "gate_rejected");
       return null;
     }
+    if (opts.stats) fillHomographyStats(opts.stats, matchCount, inlierCount, true, "ok");
     return out;
   } finally {
+    mask?.delete();
     H?.delete();
     dstMat?.delete();
     srcMat?.delete();

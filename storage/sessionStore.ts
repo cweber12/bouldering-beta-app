@@ -10,6 +10,7 @@ import type { PoseFrame } from "@/pipeline/poseDetection";
 import type { OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
 import type { CropBox } from "@/pipeline/cropDetector";
 import type { PoseBackend } from "@/utils/poseConstants";
+import type { ReferenceFrameMeta } from "@/pipeline/diagnostics";
 export type { OrbKeypoint, OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
 export type { CropBox } from "@/pipeline/cropDetector";
 export type { PoseBackend } from "@/utils/poseConstants";
@@ -99,6 +100,20 @@ export interface RouteAttempt {
   frameCaptures: FrameCapture[] | null;
   /** GPS coordinates tagged at upload time. Optional. */
   coordinates?: { lat: number; lng: number };
+  /**
+   * Reference Frame Metadata — the frame-0 condition stats + ORB keypoint count,
+   * written at scan time so it travels with the reference ORB features in S3 and
+   * can be read back at match time to build a Match Diagnostics record. Optional:
+   * legacy attempts predate it and load without it.
+   */
+  referenceFrameMeta?: ReferenceFrameMeta;
+  /**
+   * SHA-256 content hash of the source video, computed once at scan time. Stored
+   * so a Match Diagnostics record (built at match time, possibly from an attempt
+   * reloaded from S3 with no video File in hand) can stay keyed to the video.
+   * Optional: legacy attempts predate it.
+   */
+  videoHash?: string;
 }
 
 // Module-level store — shared across all hook/component instances.

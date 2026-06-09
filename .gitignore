@@ -48,3 +48,6 @@ next-env.d.ts
 
 
 .design/*
+
+# Dev-local detection diagnostics (JSONL, never collected server-side)
+/diagnostics/*.jsonl

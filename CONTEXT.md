@@ -139,6 +139,35 @@ match → `computeHomography`), so the climb is seen on the wall photo. Distinct
 from the **Detection Preview**, which never leaves video-pixel space.
 _Avoid_: preview, overlay (unqualified), projection.
 
+### Diagnostics
+
+**Scan Diagnostics**:
+The bundle of detection-quality measurements produced while analysing a single
+**Run** — pose-detection quality and ORB extraction quality, plus the
+conditions of the processed video frames (resolution, brightness, contrast,
+sharpness, condition flags). Persisted to a local, dev-machine-only file for
+trend analysis and rendered live in a dev panel. Self-contained by design: it
+never needs joining back to the Run's pose/ORB data to be useful.
+_Avoid_: logs, telemetry (those imply prod-side, server-collected streams).
+
+**Match Diagnostics**:
+The detection-quality measurements produced when a **Run**'s reference features
+are matched to one image — the reference frame's conditions, the matched image's
+conditions, and the resulting ORB matching quality (matches, inliers,
+homography found). One per Run×image, since a Run is matched to many images.
+Persisted locally alongside **Scan Diagnostics**; keyed by content hash of the
+video and the image so re-used files collapse to a stable key.
+_Avoid_: match log, overlay score.
+
+**Reference Frame Metadata**:
+The quality characteristics of a **Run**'s processed reference frame (resolution,
+the **overall**/**climber**/**wall** region brightness-contrast-sharpness stats,
+condition flags, ORB keypoint count) stored in S3 alongside the reference ORB
+features, so the features always travel with the conditions under which they were
+extracted. The one piece of diagnostic data that lives in S3 rather than locally;
+read back at match time to build a **Match Diagnostics** record.
+_Avoid_: frame stats (too generic).
+
 ## Relationships
 
 - A scan has exactly one **Climber** and zero or more **Bystanders**.

@@ -14,6 +14,8 @@ import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import FullscreenModal from "@/components/ui/FullscreenModal";
+import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
+import type { MatchDiagnostics } from "@/pipeline/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -53,6 +55,8 @@ export interface StepMatchRoutePhotoProps {
   savedRouteDirHandle: FileSystemDirectoryHandle | null;
   onDeleteFromDevice: () => void;
   saveError: string | null;
+  /** Dev-only detection diagnostics for the current match (panel is dev-gated). */
+  matchDiagnostics?: MatchDiagnostics | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +91,7 @@ export default function StepMatchRoutePhoto({
   savedRouteDirHandle,
   onDeleteFromDevice,
   saveError,
+  matchDiagnostics,
 }: StepMatchRoutePhotoProps) {
   const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
   const [routePhotoFullscreen,  setRoutePhotoFullscreen]  = useState(false);
@@ -361,6 +366,8 @@ export default function StepMatchRoutePhoto({
           <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
         </div>
       </FullscreenModal>
+
+      <DiagnosticsPanel record={matchDiagnostics ?? null} />
     </>
   );
 }

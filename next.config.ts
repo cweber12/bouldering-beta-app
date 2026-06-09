@@ -1,6 +1,27 @@
 import type { NextConfig } from "next";
+import { execSync } from "node:child_process";
+
+/**
+ * Short git SHA of the current checkout, resolved once at build/dev-server
+ * start and exposed to the app as NEXT_PUBLIC_APP_VERSION. Stamped onto every
+ * dev-local diagnostics record so trend analysis can attribute a quality shift
+ * to a code change vs. a capture condition. Falls back to "dev" outside git.
+ */
+function resolveAppVersion(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+  } catch {
+    return "dev";
+  }
+}
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_APP_VERSION: resolveAppVersion(),
+  },
+
   // Use Turbopack (default in Next.js 15+). The empty turbopack block silences
   // the "custom webpack config detected" warning while keeping zero custom
   // webpack configuration.

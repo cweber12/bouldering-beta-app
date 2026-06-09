@@ -37,6 +37,26 @@ import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
 import type { PoseBackend } from "@/utils/poseConstants";
+import {
+  buildScanDiagnostics,
+  buildReferenceFrameMeta,
+  detectBadStretches,
+  summarizeMinAvgMax,
+  type ScanDiagnostics,
+  type SampledFrameStatus,
+} from "@/pipeline/diagnostics";
+import { hashFile } from "@/utils/hashFile";
+import { shipDiagnostics } from "@/utils/shipDiagnostics";
+import { APP_VERSION } from "@/utils/appVersion";
+
+/** Minimum keypoint confidence the landmark filter keeps (see filterLandmarks). */
+const MIN_KEYPOINT_SCORE = 0.3;
+
+/**
+ * Detection diagnostics are dev-local only. Resolved at module scope because the
+ * `process` callback below shadows the global `process` inside the hook body.
+ */
+const DIAGNOSTICS_ENABLED = process.env.NODE_ENV === "development";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PoseDetector = any;
@@ -153,6 +173,11 @@ export interface VideoProcessorResult {
    */
   firstFrameFile: File | null;
   errorMessage: string | null;
+  /**
+   * Dev-local detection diagnostics for the completed scan, assembled after ORB
+   * extraction. Null until ready; consumed by the dev-only DiagnosticsPanel.
+   */
+  scanDiagnostics: ScanDiagnostics | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -187,6 +212,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [scanDiagnostics, setScanDiagnostics] = useState<ScanDiagnostics | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -220,6 +246,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setAttemptId(null);
       setFirstFrameFile(null);
       setErrorMessage(null);
+      setScanDiagnostics(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -309,6 +336,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let currentAnalysis: FrameAnalysis | null = null;
         let detectionFrameCount = 0;
 
+        // Diagnostics accumulators (dev-local detection diagnostics).
+        let referenceFrameAnalysis: FrameAnalysis | null = null; // frame-0 conditions
+        const sampledStatus: SampledFrameStatus[] = [];          // one row per pose-detection frame
+        const coverageSamples: number[] = [];                    // climber bbox area ÷ frame area
+        let recoveryFramesUsed = 0;                              // frames accepted in Adaptive Refinement
+        let gapsRefined = 0;                                     // gaps the refinement pass re-probed
+
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
         const allTimestamps: number[] = [];
@@ -322,9 +356,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         nextMpTimestampSec += duration + 2;
 
         let lastMpTs = mpTimestampBase;
-
-        // TEMP DIAGNOSTIC counter — remove after the detected=0 investigation.
-        let diagCount = 0;
 
         /**
          * Detect every person in `region` (pixels; null = full frame), map them
@@ -356,22 +387,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
-
-          // TEMP DIAGNOSTIC — remove after the detected=0 investigation.
-          if (diagCount < 6) {
-            diagCount++;
-            let mean = -1;
-            try {
-              const d = cctx.getImageData(0, 0, Math.min(32, reg.width), Math.min(32, reg.height)).data;
-              let s = 0;
-              for (let p = 0; p < d.length; p += 4) s += (d[p] + d[p + 1] + d[p + 2]) / 3;
-              mean = s / (d.length / 4);
-            } catch { /* ignore */ }
-            console.info(
-              `[diag] detect: video=${videoWidth}x${videoHeight} region=${reg.width}x${reg.height} ` +
-              `rawPoses=${posesLocal.length} cropMean=${mean.toFixed(1)} mpTs=${mpTs.toFixed(3)}`,
-            );
-          }
 
           if (posesLocal.length === 0) return null;
 
@@ -445,6 +460,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
+            // Snapshot the frame-0 conditions for diagnostics before currentAnalysis
+            // is re-assigned by the periodic re-analysis below.
+            referenceFrameAnalysis = currentAnalysis;
 
             // Snapshot the pristine first frame to a File now, for the Detection
             // Preview background. Drawing to a dedicated canvas avoids a toBlob
@@ -497,14 +515,34 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               chosen = detectClimber(null, predicted, REACQUIRE_GATE);
             }
 
+            let avgConfidence = 0;
+            let keypointCount = 0;
             if (chosen) {
               chosen.timestamp = video.currentTime;
               detected.push(chosen);
+              keypointCount = chosen.keypoints.length;
+              avgConfidence = keypointCount > 0
+                ? chosen.keypoints.reduce((s, kp) => s + kp.score, 0) / keypointCount
+                : 0;
               const c = poseCentroid(chosen.keypoints);
               if (c) history.push(c);
               const box = deriveClimberCrop(chosen.keypoints, videoWidth, videoHeight);
-              if (box) lastClimberBox = box;
+              if (box) {
+                lastClimberBox = box;
+                coverageSamples.push((box.width * box.height) / (videoWidth * videoHeight));
+              }
             }
+
+            // Diagnostics: one row per pose-detection frame (wasFlip filled in
+            // after the flip pass below).
+            sampledStatus.push({
+              timestamp: video.currentTime,
+              frameIndex: i,
+              detected: !!chosen,
+              avgConfidence,
+              keypointCount,
+              wasFlip: false,
+            });
 
             frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: region });
 
@@ -537,6 +575,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         });
         const kept = flipScan.kept;
         const flippedIdx = new Set<number>();
+
+        // Diagnostics: mark the sampled rows the flip pass discarded.
+        const flippedTsSet = new Set(flipScan.flippedTimestamps);
+        for (const row of sampledStatus) {
+          if (flippedTsSet.has(row.timestamp)) row.wasFlip = true;
+        }
 
         // ---------------------------------------------------------------
         // Adaptive Refinement pass
@@ -588,6 +632,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               gaps.push({ gapStart: prevIdx + 1, gapEnd: currIdx - 1, leftFrame: prevFrame });
             }
           }
+          gapsRefined = gaps.length;
 
           for (const gap of gaps) {
             if (abortRef.current) break;
@@ -626,6 +671,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               if (isLandmarkFlip(prevAccepted, candidate, refineFlipOptions)) continue;
 
               kept.push(candidate);
+              recoveryFramesUsed++;
               const c = poseCentroid(candidate.keypoints);
               if (c) { history.push(c); prevCentroid = c; }
               prevAccepted = candidate;
@@ -738,6 +784,27 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               : undefined;
             middleFrameImageData = null;
 
+            // Reference Frame Metadata — the frame-0 conditions + ORB keypoint
+            // count, stored in S3 so the conditions travel with the reference
+            // features (read back at match time for a Match Diagnostics record).
+            const referenceFrameMeta = referenceFrameAnalysis
+              ? buildReferenceFrameMeta(
+                  referenceFrameAnalysis,
+                  orbFeatures.keypoints.length,
+                  videoWidth,
+                  videoHeight,
+                )
+              : undefined;
+
+            // Detection diagnostics are dev-local only — never compute them (or
+            // the video content hash they need) for real users. Reference Frame
+            // Metadata above is always written: it rides on the S3 artifact so a
+            // dev Match Diagnostics record can read back the reference conditions.
+            // Content hash of the source video — stored on the attempt so a later
+            // Match Diagnostics record stays keyed to the video, and reused below
+            // for this scan's diagnostics (hashFile caches per File).
+            const videoHash = DIAGNOSTICS_ENABLED ? await hashFile(file) : undefined;
+
             saveAttempt({
               id,
               videoMeta,
@@ -754,12 +821,92 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               rating: meta.rating,
               notes: meta.notes,
               thumbnail: thumbnail || undefined,
+              referenceFrameMeta,
+              videoHash,
             });
             referenceImageData = null;
             setOrbStatus("ready");
             console.info(
               `[useVideoProcessor] ORB reference ready. keypoints=${orbFeatures.keypoints.length}`,
             );
+
+            // ── Assemble + ship the Scan Diagnostics record ──────────────────
+            // Self-contained: full input conditions, resolved config, appVersion,
+            // and result, keyed by the video's content hash. Shipped to the
+            // dev-only sink and surfaced to the DiagnosticsPanel.
+            if (DIAGNOSTICS_ENABLED && referenceFrameAnalysis && videoHash) {
+              try {
+                const detectedRows = sampledStatus.filter(r => r.detected);
+                // Average centroid displacement between consecutive detected
+                // anchors (normalised units, like MOTION_THRESHOLD).
+                let motionSum = 0;
+                let motionCount = 0;
+                let prevCentroid: Point | null = null;
+                for (const f of kept) {
+                  const c = poseCentroid(f.keypoints);
+                  if (c && prevCentroid) {
+                    motionSum += Math.hypot(c.x - prevCentroid.x, c.y - prevCentroid.y);
+                    motionCount++;
+                  }
+                  if (c) prevCentroid = c;
+                }
+                const motionMagnitude = motionCount > 0 ? motionSum / motionCount : 0;
+
+                const coverage = summarizeMinAvgMax(coverageSamples);
+
+                const diagnostics = buildScanDiagnostics({
+                  scanId: id,
+                  videoHash,
+                  appVersion: APP_VERSION,
+                  video: {
+                    width: videoWidth,
+                    height: videoHeight,
+                    durationSec: duration,
+                    frameCount,
+                    fileType: file.type,
+                    source: file.name.startsWith("recording-") ? "recorded" : "uploaded",
+                  },
+                  captureMode: panning ? "panning" : "fixed",
+                  referenceAnalysis: referenceFrameAnalysis,
+                  climberFrameCoverage: { min: coverage.min, avg: coverage.avg },
+                  motionMagnitude,
+                  config: {
+                    frameStep,
+                    frameIntervalMs,
+                    minScore: MIN_KEYPOINT_SCORE,
+                    maxRecoveryFrames: MAX_RECOVERY_FRAMES,
+                    motionThreshold: MOTION_THRESHOLD,
+                    filterTolerance: detection.filterTolerance ?? null,
+                    flipTeleportBase,
+                    refineStride: REFINE_STRIDE,
+                  },
+                  pose: {
+                    sampledFrames: sampledStatus.length,
+                    detectedFrames: detected.length,
+                    detectionRate: sampledStatus.length > 0 ? detected.length / sampledStatus.length : 0,
+                    flippedFrames: flipScan.flippedTimestamps.length,
+                    keptFrames: kept.length,
+                    goodFrames: goodFrames.length,
+                    confidence: summarizeMinAvgMax(detectedRows.map(r => r.avgConfidence)),
+                    avgKeypointCount: detectedRows.length > 0
+                      ? detectedRows.reduce((s, r) => s + r.keypointCount, 0) / detectedRows.length
+                      : 0,
+                    refinement: { gapsRefined, recoveryFramesUsed },
+                  },
+                  orb: {
+                    refKeypointCount: orbFeatures.keypoints.length,
+                    keyframeCount: keyframes.length,
+                    keyframeKeypoints: summarizeMinAvgMax(keyframes.map(kf => kf.features.keypoints.length)),
+                  },
+                  badStretches: detectBadStretches(sampledStatus, GAP_RECOVERY_THRESHOLD),
+                });
+
+                if (mountedRef.current) setScanDiagnostics(diagnostics);
+                shipDiagnostics(diagnostics);
+              } catch (diagErr) {
+                console.warn("[useVideoProcessor] diagnostics assembly failed:", diagErr);
+              }
+            }
           } catch (orbErr) {
             setOrbStatus("failed");
             console.warn("[useVideoProcessor] ORB reference extraction failed:", orbErr);
@@ -795,6 +942,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setAttemptId(null);
       setFirstFrameFile(null);
       setErrorMessage(null);
+      setScanDiagnostics(null);
     }
   }, []);
 
@@ -807,5 +955,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics };
 }

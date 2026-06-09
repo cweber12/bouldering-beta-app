@@ -131,10 +131,10 @@ function ScanPageInner() {
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage } =
+  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
-  const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError } =
+  const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
     useImageMatcher();
 
   const [state, setState]   = useState("");
@@ -646,6 +646,7 @@ function ScanPageInner() {
           s3Loading={s3Status === "loading"}
           saveError={saveError}
           onViewScans={() => router.push("/profile")}
+          scanDiagnostics={scanDiagnostics}
         />
       )}
 
@@ -684,6 +685,7 @@ function ScanPageInner() {
           savedRouteDirHandle={savedRouteDirHandle}
           onDeleteFromDevice={handleDeleteFromDevice}
           saveError={saveError}
+          matchDiagnostics={matchDiagnostics}
         />
       )}
 

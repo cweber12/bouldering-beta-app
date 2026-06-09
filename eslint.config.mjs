@@ -14,8 +14,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // Vendored WASM bundle — not our code.
+    // Vendored WASM bundles — not our code (downloaded separately, gitignored).
     "public/opencv.js",
+    "public/mediapipe/**",
     // Generated coverage report files.
     "coverage/**",
     // Legacy Web Worker files (kept for reference, not actively maintained).

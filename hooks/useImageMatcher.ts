@@ -13,8 +13,20 @@ import {
   type OrbFeatures,
 } from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
+import { analyzeFrame } from "@/pipeline/frameAnalyzer";
+import {
+  buildMatchDiagnostics,
+  emptyHomographyStats,
+  toFrameConditions,
+  type HomographyStats,
+  type MatchDiagnostics,
+  type MatchResultInput,
+} from "@/pipeline/diagnostics";
 import { cropImageData } from "@/utils/cvHelpers";
 import { capToPixelBudget } from "@/utils/imageHelpers";
+import { hashFile } from "@/utils/hashFile";
+import { shipDiagnostics } from "@/utils/shipDiagnostics";
+import { APP_VERSION } from "@/utils/appVersion";
 import { getAttempt } from "@/storage/sessionStore";
 import type { CropFraction } from "@/utils/cropFraction";
 
@@ -65,6 +77,11 @@ export interface ImageMatcherResult {
   status: MatchStatus;
   result: ImageMatchResult | null;
   errorMessage: string | null;
+  /**
+   * Dev-local Match Diagnostics for the most recent match (success or labelled
+   * failure). Null until a match runs; consumed by the dev-only DiagnosticsPanel.
+   */
+  matchDiagnostics: MatchDiagnostics | null;
 }
 
 /**
@@ -79,11 +96,13 @@ export function useImageMatcher(): ImageMatcherResult {
   const [status, setStatus] = useState<MatchStatus>("idle");
   const [result, setResult] = useState<ImageMatchResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [matchDiagnostics, setMatchDiagnostics] = useState<MatchDiagnostics | null>(null);
 
   const matchImage = useCallback(async (file: File, attemptId: string, cv: CV, userCrop?: CropFraction) => {
     setStatus("matching");
     setResult(null);
     setErrorMessage(null);
+    setMatchDiagnostics(null);
 
     try {
       const attempt = getAttempt(attemptId);
@@ -188,16 +207,31 @@ export function useImageMatcher(): ImageMatcherResult {
       // degenerate transform are dropped — homographyAtTime interpolates across
       // the gaps at render time. The photo is the global reference, so each
       // keyframe is anchored independently (drift-free, no chaining).
+      // Per-keyframe homography stats for the Match Diagnostics aggregate (one
+      // entry per attempted Keyframe, including those dropped for too few matches).
+      const perKeyframeStats: HomographyStats[] = [];
       let keyframeHomographies: KeyframeHomography[] | undefined;
       if (panningMatch && attempt.keyframes) {
         const kfs: KeyframeHomography[] = [];
         for (const kf of attempt.keyframes) {
           const kfMatches = matchOrbFeatures(cv, kf.features, queryOrb);
-          if (kfMatches.length < 4) continue;
+          if (kfMatches.length < 4) {
+            perKeyframeStats.push({
+              matchCount: kfMatches.length,
+              inlierCount: 0,
+              inlierRatio: 0,
+              homographyFound: false,
+              failureReason: "too_few_matches",
+            });
+            continue;
+          }
+          const kfStats = emptyHomographyStats();
           const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
             ransacReprojThreshold: reproj,
             gate,
+            stats: kfStats,
           });
+          perKeyframeStats.push(kfStats);
           if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
           kfs.push({ timestamp: kf.timestamp, h });
         }
@@ -213,17 +247,64 @@ export function useImageMatcher(): ImageMatcherResult {
       // whose keyframes all failed to match — the render path then uses the
       // frame-0 reference, which must still be gated.
       let homography: Float64Array | undefined;
+      let fixedStats: HomographyStats | null = null;
       if (!keyframeHomographies) {
-        const h = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
+        fixedStats = emptyHomographyStats();
+        homography = computeHomography(cv, matches, attempt.orbFeatures, queryOrb, {
           ransacReprojThreshold: reproj,
           gate,
-        });
-        if (!h) {
-          throw new Error(
-            "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
-          );
+          stats: fixedStats,
+        }) ?? undefined;
+      }
+
+      // Dev-local Match Diagnostics — assembled even on a failed match so the
+      // failure is a labelled data point rather than an opaque null. Gated to
+      // development so analyzeFrame/hashFile never run for real users.
+      if (process.env.NODE_ENV === "development") {
+        try {
+          const queryAnalysis = analyzeFrame(cv, imageData);
+          const imageHash = await hashFile(file);
+          const ref = attempt.referenceFrameMeta;
+          const match: MatchResultInput = panningMatch
+            ? { mode: "panning", perKeyframe: perKeyframeStats }
+            : { mode: "fixed", stats: fixedStats ?? emptyHomographyStats() };
+          const diagnostics = buildMatchDiagnostics({
+            scanId: attempt.id,
+            videoHash: attempt.videoHash ?? "",
+            imageHash,
+            appVersion: APP_VERSION,
+            reference: ref
+              ? {
+                  width: ref.width,
+                  height: ref.height,
+                  refKeypointCount: ref.refKeypointCount,
+                  wall: ref.wall,
+                  flags: ref.flags,
+                }
+              : null,
+            query: {
+              width: imageData.width,
+              height: imageData.height,
+              queryKeypointCount: queryOrb.keypoints.length,
+              overall: queryAnalysis.overall,
+              flags: toFrameConditions(queryAnalysis).flags,
+              downscaleApplied: scale,
+            },
+            match,
+          });
+          setMatchDiagnostics(diagnostics);
+          shipDiagnostics(diagnostics);
+        } catch (diagErr) {
+          console.warn("[useImageMatcher] diagnostics assembly failed:", diagErr);
         }
-        homography = h;
+      }
+
+      // A Fixed Capture (or panning fallback) with no valid homography cannot be
+      // rendered — surface the user-facing error after diagnostics are recorded.
+      if (!keyframeHomographies && !homography) {
+        throw new Error(
+          "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
+        );
       }
 
       setResult({
@@ -248,9 +329,10 @@ export function useImageMatcher(): ImageMatcherResult {
     setStatus("idle");
     setResult(null);
     setErrorMessage(null);
+    setMatchDiagnostics(null);
   }, []);
 
-  return { matchImage, reset, status, result, errorMessage };
+  return { matchImage, reset, status, result, errorMessage, matchDiagnostics };
 }
 
 /**
