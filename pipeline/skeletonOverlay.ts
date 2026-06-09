@@ -48,6 +48,12 @@ const HEAD_HEIGHT_RATIO = 1.4;
  * (frontal view) instead of shrinking to the landmark span.
  */
 const HEAD_SCALE_FLOOR = 0.32;
+/** Lift the head off the shoulders by this fraction of the oval's minor radius,
+ *  along the head-up axis, so a neck becomes visible beneath the chin. */
+const HEAD_LIFT = 0.25;
+/** Neck radius as a fraction of the head half-width (capped at limb radius), so
+ *  the neck reads clearly narrower than the head. */
+const NECK_WIDTH = 0.5;
 
 /**
  * Confidence below which a keypoint is treated as an unreliable
@@ -306,43 +312,72 @@ function getScratch(
 // Silhouette pass
 // ---------------------------------------------------------------------------
 
-/** Draw the head oval (filled, opaque) onto the scratch context. */
-function drawHeadOval(
-  sctx: CanvasRenderingContext2D,
+interface HeadGeometry {
+  cx: number;
+  cy: number;
+  /** Half-width (along the eye line). */
+  major: number;
+  /** Half-height (perpendicular — the head is taller than it is wide). */
+  minor: number;
+  /** In-plane roll, radians. */
+  angle: number;
+}
+
+/**
+ * Resolve the head oval: centred on the eyes (lifted off the shoulders so a neck
+ * shows), tilted to the eye line, sized from the ear span. Returns null when
+ * there are too few head points to place an oval.
+ */
+function computeHeadGeometry(
   kp: Record<string, OverlayPoint>,
   scale: number,
-): void {
-  const le = kp.left_ear, re = kp.right_ear;
-  let cx: number, cy: number, angle: number, major: number;
+): HeadGeometry | null {
+  const le = kp.left_eye, re = kp.right_eye;
+  const lEar = kp.left_ear, rEar = kp.right_ear;
 
+  // Centre on the eyes (fallback to the nose).
+  let cx: number, cy: number;
   if (le && re) {
     cx = (le.x + re.x) / 2;
     cy = (le.y + re.y) / 2;
-    angle = Math.atan2(re.y - le.y, re.x - le.x);
-    major = (dist(le, re) / 2) * HEAD_WIDTH_PAD;
+  } else if (kp.nose) {
+    cx = kp.nose.x;
+    cy = kp.nose.y;
   } else {
-    // Fallback: eye-outer (or eye-centre) vector. Eyes are closer together, so
-    // pad the width more to approximate the full head.
-    const leo = kp.left_eye_outer ?? kp.left_eye;
-    const reo = kp.right_eye_outer ?? kp.right_eye;
-    if (leo && reo) {
-      cx = (leo.x + reo.x) / 2;
-      cy = (leo.y + reo.y) / 2;
-      angle = Math.atan2(reo.y - leo.y, reo.x - leo.x);
-      major = (dist(leo, reo) / 2) * HEAD_WIDTH_PAD * 1.4;
-    } else {
-      return; // fewer than two usable head points — skip the oval entirely
-    }
+    return null; // no usable head anchor
   }
 
-  // Never let the landmark span alone size the head — floor it to body scale so
-  // a frontal head (ears nearly overlapping) still reads at a believable size.
+  // Tilt from the eye vector (fallback to the ear vector, else upright).
+  let angle: number;
+  if (le && re) angle = Math.atan2(re.y - le.y, re.x - le.x);
+  else if (lEar && rEar) angle = Math.atan2(rEar.y - lEar.y, rEar.x - lEar.x);
+  else angle = 0;
+
+  // Size from the ear span when available (eyes are closer together, so pad
+  // more); floored to body scale so a frontal head stays believable.
+  let major: number;
+  if (lEar && rEar) major = (dist(lEar, rEar) / 2) * HEAD_WIDTH_PAD;
+  else if (le && re) major = (dist(le, re) / 2) * HEAD_WIDTH_PAD * 1.4;
+  else major = scale * HEAD_SCALE_FLOOR;
   major = Math.max(major, scale * HEAD_SCALE_FLOOR);
   const minor = major * HEAD_HEIGHT_RATIO;
 
-  sctx.beginPath();
-  sctx.ellipse(cx, cy, major, minor, angle, 0, Math.PI * 2);
-  sctx.fill();
+  // Lift the oval along the head-up axis (perpendicular to the eye line) so the
+  // chin clears the shoulders. Disambiguate "up" to point away from the
+  // shoulder-midpoint (handles a climber leaned back on an overhang); fall back
+  // to image-up when shoulders are absent.
+  let ux = Math.sin(angle), uy = -Math.cos(angle);
+  const sMid = midpoint(kp.left_shoulder, kp.right_shoulder);
+  if (sMid) {
+    if (ux * (cx - sMid.x) + uy * (cy - sMid.y) < 0) { ux = -ux; uy = -uy; }
+  } else if (uy > 0) {
+    ux = -ux; uy = -uy;
+  }
+  const lift = HEAD_LIFT * minor;
+  cx += ux * lift;
+  cy += uy * lift;
+
+  return { cx, cy, major, minor, angle };
 }
 
 /** Draw the full Silhouette body shape (filled, opaque) onto the scratch context. */
@@ -395,13 +430,14 @@ function drawSilhouette(
     sctx.stroke();
   }
 
-  // Neck — shoulder-midpoint → ear-midpoint (or eye/nose fallback), limb width.
+  const head = computeHeadGeometry(kp, scale);
+
+  // Neck — shoulder-midpoint → nose (fallback eye-midpoint), drawn clearly
+  // narrower than the head so it reads as a neck rather than a thick column.
   const sMid = midpoint(ls, rs);
-  const headTop =
-    midpoint(kp.left_ear, kp.right_ear) ??
-    midpoint(kp.left_eye, kp.right_eye) ??
-    kp.nose;
-  capsule(sMid, headTop, limbR);
+  const neckTop = kp.nose ?? midpoint(kp.left_eye, kp.right_eye);
+  const neckR = head ? Math.min(NECK_WIDTH * head.major, limbR) : limbR;
+  capsule(sMid, neckTop, neckR);
 
   // Arms.
   capsule(ls, kp.left_elbow, limbR);
@@ -424,7 +460,11 @@ function drawSilhouette(
   capsule(kp.right_ankle, kp.right_foot_index, limbR * 0.9);
 
   // Head oval.
-  drawHeadOval(sctx, kp, scale);
+  if (head) {
+    sctx.beginPath();
+    sctx.ellipse(head.cx, head.cy, head.major, head.minor, head.angle, 0, Math.PI * 2);
+    sctx.fill();
+  }
 
   sctx.restore();
 }
