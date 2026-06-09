@@ -8,11 +8,13 @@
  *  - **Silhouette** — the skeleton drawn fat: every bone (arms, legs, neck,
  *    hands, feet) stroked as a round-capped capsule, plus two filled regions for
  *    the parts that are areas not bones (the torso quad and a head oval), all
- *    unioned into one body shape. Hand and foot edges are stroked at half the
- *    limb width (anatomical proportion). It is rendered opaque onto a reused
- *    offscreen scratch canvas and composited once at the configured opacity, so
- *    overlapping pieces never darken into seams. Always solid — confidence
- *    dimming never applies here.
+ *    unioned into one body shape. Hand and foot edges are stroked at 0.75× the
+ *    limb width (anatomical proportion). It is shaded for depth — a dark inner
+ *    rim along the union boundary fading to lighter limb cores, with radial fills
+ *    for the torso and head on top — all derived from the single silhouette
+ *    colour. It is rendered opaque onto a reused offscreen scratch canvas and
+ *    composited once at the configured opacity, so overlapping pieces never
+ *    darken into seams. Always solid — confidence dimming never applies here.
  *  - **Skeleton** — the thin pose lines + joint points, drawn crisply on top of
  *    (inside) the Silhouette. Estimated-Landmark confidence dimming applies to
  *    this pass only.
@@ -43,15 +45,49 @@ const DEFAULT_LINE_THICKNESS = 0.015;
 /** Joint circle **radius** as a fraction of shoulder width (midpoint of the two). */
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Hand / foot capsule radius as a fraction of the base limb radius. The half
- *  width still unions the real landmark edges into a solid hand fan / foot. */
-const EXTREMITY_WIDTH_FACTOR = 0.5;
+/** Hand / foot capsule radius as a fraction of the base limb radius. Three
+ *  quarters of the limb width (they read too small thinner); the strokes still
+ *  union the real landmark edges into a solid hand fan / foot. */
+const EXTREMITY_WIDTH_FACTOR = 0.75;
+
+/** Neck capsule radius as a fraction of the base limb radius (slightly wider). */
+const NECK_WIDTH_FACTOR = 1.25;
+/** Max head-centre distance from the shoulder-midpoint, × body scale. Past this
+ *  the head is pulled in along the neck axis so the neck cannot over-stretch on
+ *  big head tilts; the chin bridge still keeps the head attached. */
+const NECK_MAX_DIST = 0.85;
 
 /** Head oval half-width as a fraction of body scale (shoulder width). Fixed —
  *  never the ear/eye span, which balloons in profile and collapses head-on. */
-const HEAD_HALF_WIDTH = 0.3;
+const HEAD_HALF_WIDTH = 0.35;
 /** Head oval height-to-width ratio (the head is taller than it is wide). */
-const HEAD_HEIGHT_RATIO = 1.3;
+const HEAD_HEIGHT_RATIO = 1.2;
+
+// ── Depth shading (ADR-0005 update) — all derived from `silhouetteColor` ──
+// The Silhouette is shaded for depth: a dark inner rim along the union boundary
+// fading to a lighter core (limb cylinders), plus radial fills for the torso and
+// head on top. Shades are HSL lightness shifts of the single picked colour; the
+// strength constants are deliberately subtle so the effect reads as depth, not
+// noise. See docs/adr/0005-silhouette-overlay-rendering.md.
+/** Lightness delta for the dark rim / boundary (edges of every part). */
+const RIM_DARK_SHIFT = -0.18;
+/** Lightness delta for the light limb core (the lit centre of a cylinder). */
+const RIM_LIGHT_SHIFT = 0.12;
+/** Torso interior shade just inside the dark perimeter — lighter than the rim
+ *  dark, but not as light as a limb core. */
+const TORSO_EDGE_SHIFT = -0.02;
+/** Torso central highlight (the narrow sternum oval). */
+const TORSO_CORE_SHIFT = 0.08;
+/** Head radial: dark edge and light centre. */
+const HEAD_EDGE_SHIFT = -0.14;
+const HEAD_CORE_SHIFT = 0.12;
+/** Light-core capsule radius as a fraction of the part's full radius. The eroded
+ *  gap (1 − this) becomes the dark rim band, taken per-part so thin hands/feet
+ *  keep a light core instead of going fully dark. */
+const RIM_CORE_FRAC = 0.5;
+/** Blur radius for the light-core pass, × base limb radius — feathers the
+ *  dark→light step into a smooth gradient. */
+const RIM_BLUR_FRAC = 0.45;
 
 /** Bones stroked at the base limb width — arms and legs. */
 const LIMB_EDGES: [string, string][] = [
@@ -248,6 +284,77 @@ function dist(a: Pt, b: Pt): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
+// ---------------------------------------------------------------------------
+// Colour helpers — derive the depth-shading shades from the single picked
+// `silhouetteColor` by shifting its HSL lightness. Keeps one colour control.
+// ---------------------------------------------------------------------------
+
+/** Parse a `#rgb` / `#rrggbb` / `rgb(...)` / `rgba(...)` string to 0-255 RGB.
+ *  Falls back to the default accent green for anything unrecognised. */
+function parseRgb(css: string): { r: number; g: number; b: number } {
+  const s = css.trim();
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    const n = parseInt(h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  const rgb = /rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(s);
+  if (rgb) return { r: +rgb[1], g: +rgb[2], b: +rgb[3] };
+  return { r: 0, g: 220, b: 120 }; // DEFAULT_COLOR (#00dc78)
+}
+
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+
+function hueToRgb(p: number, q: number, t: number): number {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
+function hslToCss(h: number, s: number, l: number): string {
+  let r: number, g: number, b: number;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hueToRgb(p, q, h + 1 / 3);
+    g = hueToRgb(p, q, h);
+    b = hueToRgb(p, q, h - 1 / 3);
+  }
+  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+}
+
+/** `css` colour with its HSL lightness shifted by `delta` (clamped to [0, 1]). */
+function shiftLightness(css: string, delta: number): string {
+  const { r, g, b } = parseRgb(css);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  return hslToCss(h, s, Math.max(0, Math.min(1, l + delta)));
+}
+
+/** Does this 2D context support the `filter` property (blur)? jsdom and very old
+ *  engines do not — callers fall back to an unblurred (still seam-free) core. */
+function supportsFilter(ctx: CanvasRenderingContext2D): boolean {
+  return "filter" in ctx;
+}
+
 /**
  * Body scale from a single frame's keypoints, in image pixels. Prefers shoulder
  * width, then torso height, then hip width. Returns null when the upper body is
@@ -375,6 +482,20 @@ function computeHeadGeometry(
     return null; // no usable head anchor
   }
 
+  // Clamp the head distance from the shoulders so the neck cannot over-stretch
+  // on big head tilts; pull the head in along the neck axis past the cap. The
+  // chin bridge (below) still keeps the head attached to the body.
+  const sMid = midpoint(kp.left_shoulder, kp.right_shoulder);
+  if (sMid) {
+    const dx = cx - sMid.x, dy = cy - sMid.y;
+    const d = Math.hypot(dx, dy);
+    const maxD = scale * NECK_MAX_DIST;
+    if (d > maxD && d > 0) {
+      cx = sMid.x + (dx / d) * maxD;
+      cy = sMid.y + (dy / d) * maxD;
+    }
+  }
+
   // Tilt from the eye vector (fallback to the ear vector, else upright).
   let angle: number;
   if (le && re) angle = Math.atan2(re.y - le.y, re.x - le.x);
@@ -389,7 +510,6 @@ function computeHeadGeometry(
   // from the shoulder-midpoint (handles a climber leaned back on an overhang);
   // fall back to image-up when shoulders are absent.
   let ux = Math.sin(angle), uy = -Math.cos(angle);
-  const sMid = midpoint(kp.left_shoulder, kp.right_shoulder);
   if (sMid) {
     if (ux * (cx - sMid.x) + uy * (cy - sMid.y) < 0) { ux = -ux; uy = -uy; }
   } else if (uy > 0) {
@@ -402,7 +522,19 @@ function computeHeadGeometry(
   return { cx, cy, major, minor, angle, chin };
 }
 
-/** Draw the full Silhouette body shape (filled, opaque) onto the scratch context. */
+/**
+ * Draw the depth-shaded Silhouette body shape (opaque) onto the scratch context,
+ * in four passes (see ADR-0005 update). Everything below is composited once at
+ * the opacity slider by the caller — the shading is built entirely here.
+ *
+ *  1. Full union in the **dark** shade — crisp outer edge, dark base, the mask.
+ *  2. Eroded **light** bone cores, blurred + `source-atop`, so limbs read as lit
+ *     cylinders with dark edges. The dark rim is a property of the whole union,
+ *     so adjacent limbs share it and joints stay seam-free.
+ *  3. Torso radial fill on top (occludes limbs in the torso region): a mid-shade
+ *     interior with a narrow vertical highlight oval down the centre.
+ *  4. Head radial on top, drawn last (topmost): light centre → dark edge.
+ */
 function drawSilhouette(
   sctx: CanvasRenderingContext2D,
   kp: Record<string, OverlayPoint>,
@@ -412,12 +544,16 @@ function drawSilhouette(
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
   const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
+  const neckR = Math.max(0.5, limbR * NECK_WIDTH_FACTOR);
 
-  sctx.save();
-  sctx.fillStyle = color;
-  sctx.strokeStyle = color;
-  sctx.lineCap = "round";
-  sctx.lineJoin = "round";
+  const dark = shiftLightness(color, RIM_DARK_SHIFT);
+  const light = shiftLightness(color, RIM_LIGHT_SHIFT);
+
+  const ls = kp.left_shoulder, rs = kp.right_shoulder;
+  const lh = kp.left_hip, rh = kp.right_hip;
+  const hasTorso = !!(ls && rs && lh && rh);
+  const head = computeHeadGeometry(kp, scale);
+  const sMid = midpoint(ls, rs);
 
   const capsule = (a: Pt | undefined, b: Pt | undefined, r: number): void => {
     if (!a || !b) return;
@@ -428,41 +564,106 @@ function drawSilhouette(
     sctx.stroke();
   };
 
-  const ls = kp.left_shoulder, rs = kp.right_shoulder;
-  const lh = kp.left_hip, rh = kp.right_hip;
+  // Every bone capsule (arms/legs, hands/feet, neck), at `rScale × full radius`.
+  // Used at full width for the dark mask (pass 1) and eroded for the light cores
+  // (pass 2). Each shared joint lines up because adjacent capsules meet round-capped.
+  const bones = (rScale: number): void => {
+    for (const [a, b] of LIMB_EDGES) capsule(kp[a], kp[b], limbR * rScale);
+    for (const [a, b] of EXTREMITY_EDGES) capsule(kp[a], kp[b], extremityR * rScale);
+    if (head && sMid) capsule(sMid, head.chin, neckR * rScale);
+  };
 
-  // Torso — the one filled region. Fill the shoulders→hips quad, then stroke its
-  // perimeter at the limb width so the torso side edges meet the leg capsules at
-  // the hips and the top edge meets the arm capsules at the shoulders with no step.
-  if (ls && rs && lh && rh) {
+  const torsoPath = (): void => {
     sctx.beginPath();
-    sctx.moveTo(ls.x, ls.y);
-    sctx.lineTo(rs.x, rs.y);
-    sctx.lineTo(rh.x, rh.y);
-    sctx.lineTo(lh.x, lh.y);
+    sctx.moveTo(ls!.x, ls!.y);
+    sctx.lineTo(rs!.x, rs!.y);
+    sctx.lineTo(rh!.x, rh!.y);
+    sctx.lineTo(lh!.x, lh!.y);
     sctx.closePath();
+  };
+
+  // ── Pass 1 — full union in the dark shade. ──
+  sctx.save();
+  sctx.lineCap = "round";
+  sctx.lineJoin = "round";
+  sctx.fillStyle = dark;
+  sctx.strokeStyle = dark;
+  if (hasTorso) {
+    torsoPath();
     sctx.fill();
     sctx.lineWidth = 2 * limbR;
     sctx.stroke();
   }
-
-  // Bones — arms and legs at the base width, hands and feet (their real landmark
-  // edges) at the reduced extremity width. Every shared joint lines up because the
-  // adjacent capsules meet at the same point with round caps.
-  for (const [a, b] of LIMB_EDGES) capsule(kp[a], kp[b], limbR);
-  for (const [a, b] of EXTREMITY_EDGES) capsule(kp[a], kp[b], extremityR);
-
-  // Head oval + neck bridge. The neck runs from the shoulder-midpoint to the
-  // oval's bottom edge, so the head can never visually detach.
-  const head = computeHeadGeometry(kp, scale);
+  bones(1);
   if (head) {
-    capsule(midpoint(ls, rs), head.chin, limbR);
     sctx.beginPath();
     sctx.ellipse(head.cx, head.cy, head.major, head.minor, head.angle, 0, Math.PI * 2);
     sctx.fill();
   }
-
   sctx.restore();
+
+  // ── Pass 2 — eroded, blurred light bone cores over the dark base. `source-atop`
+  //    keeps the light within the union so the outer edge stays dark from pass 1.
+  //    Torso/head cores are skipped — their radial fills replace them. ──
+  sctx.save();
+  sctx.globalCompositeOperation = "source-atop";
+  sctx.lineCap = "round";
+  sctx.lineJoin = "round";
+  sctx.strokeStyle = light;
+  if (supportsFilter(sctx)) sctx.filter = `blur(${(limbR * RIM_BLUR_FRAC).toFixed(2)}px)`;
+  bones(RIM_CORE_FRAC);
+  sctx.restore();
+
+  // ── Pass 3 — torso radial fill on top. ──
+  if (hasTorso) {
+    const torsoEdge = shiftLightness(color, TORSO_EDGE_SHIFT);
+    const torsoCore = shiftLightness(color, TORSO_CORE_SHIFT);
+    const hMid = midpoint(lh, rh)!;
+    const halfLen = dist(sMid!, hMid) / 2;
+    const halfWid = dist(ls!, rs!) / 2;
+    sctx.save();
+    sctx.globalCompositeOperation = "source-atop";
+    // Mid-shade interior, just inside the pass-1 dark perimeter, then clip the
+    // highlight to the torso so it cannot bleed into the neck/arms.
+    torsoPath();
+    sctx.fillStyle = torsoEdge;
+    sctx.fill();
+    sctx.clip();
+    if (halfLen > 0.5 && halfWid > 0.5) {
+      const cx = (ls!.x + rs!.x + lh!.x + rh!.x) / 4;
+      const cy = (ls!.y + rs!.y + lh!.y + rh!.y) / 4;
+      const axis = Math.atan2(hMid.y - sMid!.y, hMid.x - sMid!.x);
+      sctx.translate(cx, cy);
+      sctx.rotate(axis);                    // local +x now runs shoulders→hips
+      sctx.scale(halfLen, halfWid * 0.5);   // tall along the torso, narrow across
+      const g = sctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      g.addColorStop(0, torsoCore);
+      g.addColorStop(1, torsoEdge);
+      sctx.fillStyle = g;
+      sctx.beginPath();
+      sctx.arc(0, 0, 1, 0, Math.PI * 2);
+      sctx.fill();
+    }
+    sctx.restore();
+  }
+
+  // ── Pass 4 — head radial on top, drawn last (topmost). ──
+  if (head) {
+    const headEdge = shiftLightness(color, HEAD_EDGE_SHIFT);
+    const headCore = shiftLightness(color, HEAD_CORE_SHIFT);
+    sctx.save();
+    sctx.translate(head.cx, head.cy);
+    sctx.rotate(head.angle);
+    sctx.scale(head.major, head.minor);     // unit circle → the head ellipse
+    const g = sctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    g.addColorStop(0, headCore);
+    g.addColorStop(1, headEdge);
+    sctx.fillStyle = g;
+    sctx.beginPath();
+    sctx.arc(0, 0, 1, 0, Math.PI * 2);
+    sctx.fill();
+    sctx.restore();
+  }
 }
 
 // ---------------------------------------------------------------------------

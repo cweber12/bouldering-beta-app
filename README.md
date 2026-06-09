@@ -62,9 +62,11 @@ After estimation, two post-processing passes are applied:
 
 `drawSkeleton` renders the pose as two passes: a translucent **Silhouette** (the
 skeleton drawn fat — every bone stroked as a round-capped capsule, hands and feet
-at half the limb width, plus two filled regions for the torso quad and a head
-oval — flattened through an offscreen canvas so overlaps stay uniform) beneath a
-crisp **Skeleton** (thin lines + joint points).
+at 0.75× the limb width, plus two filled regions for the torso quad and a head
+oval — flattened through an offscreen canvas so overlaps stay uniform, and shaded
+for depth with a dark boundary rim fading to lighter limb cores plus radial torso
+and head fills, all derived from the silhouette colour) beneath a crisp
+**Skeleton** (thin lines + joint points).
 It accepts a `SkeletonStyle` object with `silhouetteVisible/Color/Opacity`,
 `limbThickness`, `linesVisible/lineColor/lineThickness`, and
 `jointsVisible/jointColor/jointRadius` (plus optional `skeletonEdges` /
