@@ -252,105 +252,123 @@ function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): 
   );
 }
 
-/** Binary search: index of first element with timestamp >= target. */
-function lowerBound(frames: PoseFrame[], target: number): number {
-  let lo = 0, hi = frames.length;
+/**
+ * Largest temporal gap (seconds) across which a joint that drops out of the
+ * detector will still be bridged by interpolation. Beyond this the absence is
+ * treated as a genuine loss of tracking — the joint is omitted (leaving the gap
+ * for {@link estimateMissingLandmarks}' structural pass, or the renderer to skip)
+ * rather than drawing a long, possibly-wrong straight line through it.
+ *
+ * Anchor frames sit ~0.5 s apart at the default sampling, so this comfortably
+ * bridges a joint occluded across one or two consecutive anchors — the common
+ * "hand pressed to the wall" case — without inventing motion over multi-second
+ * dropouts.
+ */
+export const DEFAULT_MAX_BRIDGE_GAP = 1.0;
+
+/** One detection of a single keypoint, tagged with its source anchor index. */
+interface KeypointSample {
+  /** Index into the source `processedFrames` array. */
+  anchorIdx: number;
+  /** Anchor timestamp (seconds). */
+  t: number;
+  x: number;
+  y: number;
+  score: number;
+}
+
+/**
+ * Group every detection by keypoint name, preserving anchor order.
+ *
+ * Each joint gets its own timeline of real detections — anchors where the joint
+ * was occluded simply don't appear — so a joint can be interpolated across its
+ * OWN trajectory independently of joints that stayed visible. This is what lets
+ * a blinked-out wrist track smoothly between its real positions instead of being
+ * frozen while the connected elbow keeps moving.
+ *
+ * The per-name arrays inherit `processedFrames`' ascending-timestamp order.
+ */
+function buildKeypointTimelines(processedFrames: PoseFrame[]): Map<string, KeypointSample[]> {
+  const timelines = new Map<string, KeypointSample[]>();
+  processedFrames.forEach((frame, anchorIdx) => {
+    for (const kp of frame.keypoints) {
+      let series = timelines.get(kp.name);
+      if (!series) { series = []; timelines.set(kp.name, series); }
+      series.push({ anchorIdx, t: frame.timestamp, x: kp.x, y: kp.y, score: kp.score });
+    }
+  });
+  return timelines;
+}
+
+/** Binary search: index of the first sample with timestamp >= target. */
+function lowerBoundSample(samples: KeypointSample[], target: number): number {
+  let lo = 0, hi = samples.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (frames[mid].timestamp < target) lo = mid + 1;
+    if (samples[mid].t < target) lo = mid + 1;
     else hi = mid;
   }
   return lo;
 }
 
 /**
- * Linearly interpolate keypoints between two anchor frames.
+ * Sample one keypoint at `timestamp` from its own detection timeline.
  *
- * Keypoints present in BOTH frames are interpolated. A keypoint present in only
- * one anchor is *held* at that anchor's position with an attenuated score
- * ({@link HELD_KEYPOINT_SCORE_FACTOR}) rather than dropped, so connectors do not
- * flicker when a joint blinks out for part of a segment.
+ * - Exact hit on a detection → that detection (full score).
+ * - Between two detections → Catmull-Rom through the joint's neighbouring
+ *   detections (linear at the ends). If those two detections skip one or more
+ *   anchors (the joint was occluded between them) the value is *bridged*: it is
+ *   still interpolated smoothly, but its score is attenuated so the renderer can
+ *   dim it — and the bridge is refused entirely once the gap exceeds
+ *   `maxBridgeGap`, leaving the joint absent.
+ * - Before the joint's first detection → absent (no backward fill).
+ * - After the joint's last detection → held at the last position, attenuated.
  *
- * @param from - Keypoints at the earlier anchor frame.
- * @param to   - Keypoints at the later anchor frame.
- * @param t    - Progress in [0, 1] between `from` (0) and `to` (1).
+ * @returns The sampled keypoint, or `null` when the joint should be absent here.
  */
-function interpolateKeypoints(from: Keypoint[], to: Keypoint[], t: number): Keypoint[] {
-  const fromMap = new Map(from.map(kp => [kp.name, kp]));
-  const toMap = new Map(to.map(kp => [kp.name, kp]));
-  const names = new Set<string>([...fromMap.keys(), ...toMap.keys()]);
+function sampleKeypoint(
+  name: string,
+  samples: KeypointSample[],
+  timestamp: number,
+  maxBridgeGap: number,
+): Keypoint | null {
+  const n = samples.length;
+  const idx = lowerBoundSample(samples, timestamp);
 
-  const out: Keypoint[] = [];
-  for (const name of names) {
-    const a = fromMap.get(name);
-    const b = toMap.get(name);
-    if (a && b) {
-      out.push({
-        name,
-        x: lerp(a.x, b.x, t),
-        y: lerp(a.y, b.y, t),
-        score: Math.min(a.score, b.score),
-      });
-    } else {
-      const held = (a ?? b)!;
-      out.push({ name, x: held.x, y: held.y, score: held.score * HELD_KEYPOINT_SCORE_FACTOR });
-    }
+  // After the joint's final detection — hold (attenuated), don't extrapolate.
+  if (idx >= n) {
+    const last = samples[n - 1];
+    return { name, x: last.x, y: last.y, score: last.score * HELD_KEYPOINT_SCORE_FACTOR };
   }
-  return out;
-}
 
-/**
- * Catmull-Rom spline interpolation across four anchor frames.
- *
- * Produces a C1-continuous curve through the middle two frames (p1 → p2),
- * guided by the outer frames (p0, p3). Falls back to linear interpolation
- * per-keypoint when fewer than four anchor values are available for a joint.
- */
-function catmullRomInterpolateKeypoints(
-  p0: Keypoint[], p1: Keypoint[], p2: Keypoint[], p3: Keypoint[], t: number,
-): Keypoint[] {
-  const p0Map = new Map(p0.map(kp => [kp.name, kp]));
-  const p1Map = new Map(p1.map(kp => [kp.name, kp]));
-  const p2Map = new Map(p2.map(kp => [kp.name, kp]));
-  const p3Map = new Map(p3.map(kp => [kp.name, kp]));
-
-  // The C1 curve runs through the middle anchors p1 → p2; a joint present in only
-  // one of them is held (attenuated) rather than dropped, matching the linear path.
-  const names = new Set<string>([...p1Map.keys(), ...p2Map.keys()]);
-
-  const out: Keypoint[] = [];
-  for (const name of names) {
-    const kp1 = p1Map.get(name);
-    const kp2 = p2Map.get(name);
-
-    if (!kp1 || !kp2) {
-      const held = (kp1 ?? kp2)!;
-      out.push({ name, x: held.x, y: held.y, score: held.score * HELD_KEYPOINT_SCORE_FACTOR });
-      continue;
-    }
-
-    const kp0 = p0Map.get(name);
-    const kp3 = p3Map.get(name);
-
-    // Need all 4 control points for Catmull-Rom; fall back to linear otherwise.
-    if (!kp0 || !kp3) {
-      out.push({
-        name,
-        x: lerp(kp1.x, kp2.x, t),
-        y: lerp(kp1.y, kp2.y, t),
-        score: Math.min(kp1.score, kp2.score),
-      });
-      continue;
-    }
-
-    out.push({
-      name,
-      x: catmullRom(kp0.x, kp1.x, kp2.x, kp3.x, t),
-      y: catmullRom(kp0.y, kp1.y, kp2.y, kp3.y, t),
-      score: Math.min(kp1.score, kp2.score),
-    });
+  const b = samples[idx];
+  if (b.t === timestamp) {
+    return { name, x: b.x, y: b.y, score: b.score };
   }
-  return out;
+
+  // Before the joint's first detection — absent (no backward fill).
+  if (idx === 0) return null;
+
+  const a = samples[idx - 1];
+  const span = b.t - a.t;
+  // A bridge spans skipped anchors where the joint was occluded.
+  const bridged = b.anchorIdx - a.anchorIdx > 1;
+  if (bridged && span > maxBridgeGap) return null;
+
+  const t = span > 0 ? (timestamp - a.t) / span : 0;
+
+  // Catmull-Rom through this joint's own neighbouring detections for
+  // C1-continuous motion; linear at the timeline boundaries.
+  const p0 = idx - 2 >= 0 ? samples[idx - 2] : null;
+  const p3 = idx + 1 < n ? samples[idx + 1] : null;
+  const x = p0 && p3 ? catmullRom(p0.x, a.x, b.x, p3.x, t) : lerp(a.x, b.x, t);
+  const y = p0 && p3 ? catmullRom(p0.y, a.y, b.y, p3.y, t) : lerp(a.y, b.y, t);
+
+  const score = bridged
+    ? Math.min(a.score, b.score) * HELD_KEYPOINT_SCORE_FACTOR
+    : Math.min(a.score, b.score);
+
+  return { name, x, y, score };
 }
 
 // ---------------------------------------------------------------------------
@@ -360,73 +378,45 @@ function catmullRomInterpolateKeypoints(
 /**
  * Produce a dense PoseFrame array from a sparse set of detected frames.
  *
- * Uses binary search O(log n) per timestamp instead of linear scan.
+ * Each keypoint is interpolated independently along its own timeline of real
+ * detections (see {@link buildKeypointTimelines}), so a joint that the detector
+ * loses for an anchor or two tracks smoothly between its real positions instead
+ * of freezing while the rest of the body keeps moving — the cause of the
+ * "limb stretches then snaps" artefact. Anchors where a joint was occluded are
+ * skipped for that joint, not treated as the joint sitting still.
  *
- * Interior segments (with ≥ 2 anchors on each side) use Catmull-Rom spline
- * interpolation for C1-continuous motion, eliminating the velocity
- * discontinuities that make large frame-step values look jumpy.  Boundary
- * segments fall back to linear interpolation.
+ * Interior detections use Catmull-Rom for C1-continuous motion; the timeline
+ * boundaries fall back to linear. A joint absent across more than
+ * `maxBridgeGap` seconds is left out rather than bridged with a long straight
+ * line. Binary search keeps each sample O(log n).
  *
  * @param processedFrames - Pose frames returned by the detector (one per
  *                          N-th sampled video frame). Must be sorted by
  *                          ascending timestamp.
  * @param allTimestamps   - Timestamps for every sampled video frame (dense).
  *                          The output array is aligned to this sequence.
+ * @param maxBridgeGap    - Longest joint dropout (seconds) still bridged by
+ *                          interpolation. Default: {@link DEFAULT_MAX_BRIDGE_GAP}.
  * @returns One PoseFrame per entry in `allTimestamps`.
  */
 export function interpolatePoseFrames(
   processedFrames: PoseFrame[],
   allTimestamps: number[],
+  maxBridgeGap = DEFAULT_MAX_BRIDGE_GAP,
 ): PoseFrame[] {
   if (processedFrames.length === 0) {
     return allTimestamps.map(timestamp => ({ timestamp, keypoints: [] }));
   }
 
+  const timelines = buildKeypointTimelines(processedFrames);
+
   return allTimestamps.map(timestamp => {
-    const nextIdx = lowerBound(processedFrames, timestamp);
-
-    if (nextIdx >= processedFrames.length) {
-      return { timestamp, keypoints: processedFrames[processedFrames.length - 1].keypoints };
+    const keypoints: Keypoint[] = [];
+    for (const [name, samples] of timelines) {
+      const kp = sampleKeypoint(name, samples, timestamp, maxBridgeGap);
+      if (kp) keypoints.push(kp);
     }
-
-    if (nextIdx === 0) {
-      const next = processedFrames[0];
-      if (next.timestamp > timestamp) {
-        // Timestamp precedes all detected frames — return empty rather than
-        // "holding" the first detected pose backward in time. FramePlayer will
-        // show no skeleton for these early frames.
-        return { timestamp, keypoints: [] };
-      }
-      // Exact match with the first detected frame.
-      return { timestamp, keypoints: next.keypoints };
-    }
-
-    const next = processedFrames[nextIdx];
-
-    if (next.timestamp === timestamp) {
-      return { timestamp, keypoints: next.keypoints };
-    }
-
-    const prev = processedFrames[nextIdx - 1];
-    const t = (timestamp - prev.timestamp) / (next.timestamp - prev.timestamp);
-
-    // Interior segments: Catmull-Rom spline for smooth acceleration/deceleration
-    if (nextIdx >= 2 && nextIdx + 1 < processedFrames.length) {
-      const prevPrev = processedFrames[nextIdx - 2];
-      const nextNext = processedFrames[nextIdx + 1];
-      return {
-        timestamp,
-        keypoints: catmullRomInterpolateKeypoints(
-          prevPrev.keypoints, prev.keypoints, next.keypoints, nextNext.keypoints, t,
-        ),
-      };
-    }
-
-    // Boundary segments: linear interpolation
-    return {
-      timestamp,
-      keypoints: interpolateKeypoints(prev.keypoints, next.keypoints, t),
-    };
+    return { timestamp, keypoints };
   });
 }
 

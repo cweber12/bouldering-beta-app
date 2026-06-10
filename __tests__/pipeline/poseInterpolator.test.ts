@@ -105,6 +105,56 @@ describe("interpolatePoseFrames", () => {
     expect(result).toHaveLength(timestamps.length);
     result.forEach((f, i) => expect(f.timestamp).toBe(timestamps[i]));
   });
+
+  it("bridges a joint missing from an intermediate anchor instead of freezing it", () => {
+    // The wrist is detected at t=0 and t=2 but occluded (absent) at the t=1
+    // anchor; the elbow is present throughout and moving. The wrist must
+    // interpolate across its OWN detections (no freeze, no snap), not hold at
+    // the t=0 position while the elbow slides away — the limb-stretch bug.
+    const processed = [
+      frame(0.0, [["left_wrist", 0.2, 0.2], ["left_elbow", 0.2, 0.4]]),
+      frame(0.5, [["left_elbow", 0.5, 0.4]]), // wrist occluded here
+      frame(1.0, [["left_wrist", 0.8, 0.2], ["left_elbow", 0.8, 0.4]]),
+    ];
+    const result = interpolatePoseFrames(processed, [0, 0.25, 0.5, 0.75, 1.0]);
+
+    const wristAt = (i: number) =>
+      result[i].keypoints.find(k => k.name === "left_wrist");
+
+    // Wrist is present across the whole span (bridged), never dropped.
+    expect(wristAt(1)).toBeDefined(); // t=0.5
+    expect(wristAt(2)).toBeDefined(); // t=1.0 (the occluded anchor)
+    expect(wristAt(3)).toBeDefined(); // t=1.5
+
+    // It tracks its real trajectory 0.2 → 0.8 monotonically, not frozen at 0.2.
+    const xs = [wristAt(0)!.x, wristAt(1)!.x, wristAt(2)!.x, wristAt(3)!.x, wristAt(4)!.x];
+    for (let i = 1; i < xs.length; i++) {
+      expect(xs[i]).toBeGreaterThan(xs[i - 1]); // strictly increasing — no snap
+    }
+    // At t=1 the wrist sits near the elbow's mid-travel (0.5), not at 0.2.
+    expect(wristAt(2)!.x).toBeCloseTo(0.5, 1);
+
+    // Bridged (inferred) values are attenuated so the renderer can dim them.
+    expect(wristAt(2)!.score).toBeLessThan(0.9);
+  });
+
+  it("omits a joint absent for longer than maxBridgeGap rather than bridging it", () => {
+    // The wrist vanishes for 2 s (anchors 0 → 2) — too long to invent a path.
+    // With maxBridgeGap=1.0 the joint stays absent through the gap instead of
+    // sliding a fake straight line; the always-visible elbow is unaffected.
+    const processed = [
+      frame(0, [["left_wrist", 0.2, 0.2], ["left_elbow", 0.2, 0.4]]),
+      frame(1, [["left_elbow", 0.5, 0.4]]),
+      frame(2, [["left_wrist", 0.8, 0.2], ["left_elbow", 0.8, 0.4]]),
+    ];
+    const result = interpolatePoseFrames(processed, [0, 1, 2], 1.0);
+    // Mid-gap (the t=1 anchor): wrist omitted, elbow present.
+    expect(result[1].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
+    expect(result[1].keypoints.find(k => k.name === "left_elbow")).toBeDefined();
+    // Endpoints still carry their real detections.
+    expect(result[0].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
+    expect(result[2].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
