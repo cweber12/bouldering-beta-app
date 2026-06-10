@@ -58,7 +58,7 @@ function fakeInput(id = "attempt-1", matchCount = 10): MultiPoseInput {
       referenceKeypoints: matchCount,
       reanchorApplied: false,
     },
-    skeletonStyle: { limbColor: "#ff0000", jointColor: "white" },
+    skeletonStyle: { silhouetteColor: "#ff0000", lineColor: "#ff0000", jointColor: "white" },
   };
 }
 

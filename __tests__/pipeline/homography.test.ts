@@ -324,27 +324,32 @@ function makeFakeCtx() {
     stroke: vi.fn(),
     arc: vi.fn(),
     fill: vi.fn(),
+    drawImage: vi.fn(),
     lineWidth: 0,
     strokeStyle: "",
     fillStyle: "",
     lineCap: "",
+    // The renderer reads canvas dimensions to derive the proportional body
+    // scale; the Silhouette pass needs a real offscreen 2D context (null in
+    // jsdom) so it is skipped here and only the Skeleton pass draws.
+    canvas: { width: 100, height: 100 },
   } as unknown as CanvasRenderingContext2D;
 }
 
 describe("drawSkeleton", () => {
   it("draws limbs for connected keypoint pairs", () => {
     const ctx = makeFakeCtx();
-    // Use keypoints that share a direct edge in MediaPipe topology:
-    // left_eye_inner → nose → right_eye_inner
+    // Body edges (face edges are intentionally dropped — the head oval replaces
+    // them). left_shoulder → left_elbow → left_wrist share direct edges.
     const keypoints = {
-      nose: { x: 50, y: 50 },
-      left_eye_inner: { x: 40, y: 40 },
-      right_eye_inner: { x: 60, y: 40 },
+      left_shoulder: { x: 50, y: 50 },
+      left_elbow: { x: 60, y: 70 },
+      left_wrist: { x: 65, y: 90 },
     };
 
     drawSkeleton(ctx, keypoints);
 
-    // stroke() should be called at least once for the nose↔eye_inner edges.
+    // stroke() should be called at least once for the shoulder↔elbow↔wrist edges.
     expect(ctx.stroke).toHaveBeenCalled();
     // fill() is called once per keypoint for the joint circles.
     expect(ctx.fill).toHaveBeenCalledTimes(3);

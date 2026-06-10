@@ -70,9 +70,17 @@ _Avoid_: gap recovery (that is one trigger of Adaptive Refinement, not the whole
 **Estimated Landmark**:
 A keypoint whose position was inferred (from neighbouring frames or skeletal
 geometry) rather than detected, so the skeleton stays whole through brief
-dropouts/occlusion. Carried at reduced confidence; rendered dimmed only when the
-gap is too large to estimate reliably.
+dropouts/occlusion. Carried at reduced confidence; rendered dimmed (in the
+**Skeleton** pass only — the **Silhouette** never dims) when the gap is too large
+to estimate reliably. Distinct from an **Interpolated Landmark**.
 _Avoid_: predicted point, fake landmark.
+
+**Interpolated Landmark**:
+A keypoint produced by routine densification _between two confident detected
+samples_ (turning sparse pose frames into dense playback frames). It inherits the
+confidence of its endpoints and is **never dimmed** — interpolation is not a
+source of uncertainty, unlike an **Estimated Landmark**.
+_Avoid_: estimated, inferred (those imply reduced confidence).
 
 ### Capture mode
 
@@ -138,6 +146,23 @@ The skeleton projected onto the **Route Photo** through the homography (ORB
 match → `computeHomography`), so the climb is seen on the wall photo. Distinct
 from the **Detection Preview**, which never leaves video-pixel space.
 _Avoid_: preview, overlay (unqualified), projection.
+
+**Silhouette**:
+The semi-transparent body shape of the **Climber** — the skeleton drawn fat:
+every bone (arms, legs, neck, hands, feet) stroked as a round-capped capsule,
+plus two filled regions for the parts that are areas not bones (the **torso**
+quad and a **head** oval), all unioned into one translucent form that reads as a
+solid avatar and contrasts against the wall. Hand and foot strokes are thinner
+(half the limb width) per anatomical proportion. The lower of the two overlay
+passes.
+_Avoid_: blob, halo (it is a unioned body shape, not a single fat mark).
+
+**Skeleton**:
+The thin, crisp pose lines and joint points drawn on top of (inside) the
+**Silhouette** so the pose is legible within the body shape. The upper of the
+two overlay passes.
+_Avoid_: thin line, wireframe (the Skeleton is the lines+joints, distinct from
+the **Silhouette** fill beneath it).
 
 ### Diagnostics
 

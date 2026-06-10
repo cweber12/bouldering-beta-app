@@ -23,6 +23,7 @@ import {
   buildTransformedKeypoints,
   drawSkeleton,
   lerpKeypoints,
+  computeStableBodyScale,
   type SkeletonStyle,
 } from "@/pipeline/skeletonOverlay";
 
@@ -141,6 +142,21 @@ export async function renderMultiPoseVideo({
     throw new Error("Could not acquire 2D canvas context for video rendering.");
   }
 
+  // Per-layer sequence-stable body scale so each climber's Silhouette limb width
+  // stays fixed rather than pulsing with movement.
+  const layerStyles: SkeletonStyle[] = layers.map((layer, li) => {
+    const stable = computeStableBodyScale(
+      sortedLayerFrames[li].map((f) => ({
+        keypoints: f.keypoints.length > 0
+          ? buildTransformedKeypoints(f, homographies[li], layer.videoMeta.width, layer.videoMeta.height)
+          : {},
+      })),
+      canvas.width,
+      canvas.height,
+    );
+    return { ...layer.skeletonStyle, bodyScale: stable };
+  });
+
   const frameDelay = Math.round(1000 / fps);
   const stream = canvas.captureStream(fps);
   const mimeType = chooseMimeType();
@@ -218,9 +234,9 @@ export async function renderMultiPoseVideo({
           if (cachedCeilKp[li] && ci !== fi) {
             const dt = sf[ci].timestamp - sf[fi].timestamp;
             const alpha = dt > 0 ? (t - sf[fi].timestamp) / dt : 0;
-            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layers[li].skeletonStyle);
+            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layerStyles[li]);
           } else {
-            drawSkeleton(ctx, cachedFloorKp[li]!, layers[li].skeletonStyle);
+            drawSkeleton(ctx, cachedFloorKp[li]!, layerStyles[li]);
           }
         }
 

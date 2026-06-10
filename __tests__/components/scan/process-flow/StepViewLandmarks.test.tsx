@@ -44,7 +44,7 @@ function baseProps(overrides: Partial<Props> = {}): Props {
       duration: 1,
       fps: 30,
     },
-    topoStyle: { lineWidth: 2, pointRadius: 3 },
+    topoStyle: { lineThickness: 0.02, jointRadius: 0.09 },
     onSkeletonStyleChange: () => {},
     onEditClimb: vi.fn(),
     onScanAnother: vi.fn(),

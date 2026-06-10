@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { drawSkeleton, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { cn } from "@/utils/cn";
 
@@ -140,6 +140,9 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const layersRef = useRef(layers);
   const orbKeypointsRef = useRef<{ x: number; y: number }[]>([]);
   const timeRef = useRef(0);
+  // Cache the sequence-stable body scale per layer (keyed by its frames array)
+  // so limb widths stay fixed across the sequence and are computed once.
+  const scaleCacheRef = useRef(new WeakMap<RenderedSkeletonFrame[], number>());
   const startOffsetRef = useRef(startOffset);
   const playingRef = useRef(false);
   const animRef = useRef(0);
@@ -202,12 +205,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 
     ctx.drawImage(bmp, 0, 0);
 
-    // Draw ORB reference keypoints as bright-red background dots.
+    // Draw ORB reference keypoints as bright-red background dots. Sized as a
+    // small fraction of the canvas so they stay visible at any photo resolution.
     const orb = orbKeypointsRef.current;
     if (orb.length > 0) {
-      const firstLayerStyle = layersRef.current[0]?.style;
-      const poseRadius = firstLayerStyle?.pointRadius ?? 5;
-      const orbRadius = Math.max(1, poseRadius / 2);
+      const orbRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.004);
       ctx.save();
       ctx.fillStyle = "#ff2020";
       for (const pt of orb) {
@@ -221,7 +223,14 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     for (const layer of layersRef.current) {
       const nearest = findNearest(layer.frames, t + (layer.timeOffset ?? 0));
       if (nearest && Object.keys(nearest.keypoints).length > 0) {
-        drawSkeleton(ctx, nearest.keypoints, layer.style);
+        // Resolve (and cache) this layer's stable body scale so limb widths do
+        // not pulse as the climber moves.
+        let scale = scaleCacheRef.current.get(layer.frames);
+        if (scale === undefined) {
+          scale = computeStableBodyScale(layer.frames, canvas.width, canvas.height);
+          scaleCacheRef.current.set(layer.frames, scale);
+        }
+        drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
       }
     }
   }, []);
