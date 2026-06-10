@@ -15,7 +15,8 @@
     "setup:opencv": "node scripts/fetch-opencv.mjs",
     "setup:mediapipe-wasm": "node scripts/fetch-mediapipe-wasm.mjs",
     "setup:pose-models": "node scripts/fetch-mediapipe-models.mjs",
-    "setup:assets": "npm run setup:opencv && npm run setup:mediapipe-wasm && npm run setup:pose-models"
+    "setup:assets": "npm run setup:opencv && npm run setup:mediapipe-wasm && npm run setup:pose-models",
+    "diagnostics:report": "node scripts/diagnostics-report.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1063.0",
