@@ -5,6 +5,7 @@ import { type PoseFrame } from "@/pipeline/poseDetection";
 import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
 import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
+import { neutralizeColorCast } from "@/utils/colorBalance";
 import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
 import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
@@ -372,7 +373,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           const reg = region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight };
           cropCanvas.width = reg.width;
           cropCanvas.height = reg.height;
-          const cctx = cropCanvas.getContext("2d");
+          const cctx = cropCanvas.getContext("2d", { willReadFrequently: true });
           if (!cctx) return null;
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
 
@@ -384,6 +385,16 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           // MediaPipe normalises lighting internally, so the colour frame is both
           // safer and what worked before the preprocessing was introduced. ORB
           // preprocessing (which legitimately wants grayscale) is unaffected.
+          //
+          // One thing MediaPipe does NOT recover from is a strong global colour
+          // cast: HDR / BT.2020 (HLG/PQ) clips drawn onto an sRGB canvas come out
+          // heavily green and desaturated, and the RGB-trained detector then finds
+          // nobody (rawPoses=0 even on the full frame). Neutralise such a cast
+          // before detection. Self-gating: near-neutral frames are left untouched,
+          // so footage that already works is unaffected.
+          const frame = cctx.getImageData(0, 0, reg.width, reg.height);
+          if (neutralizeColorCast(frame.data)) cctx.putImageData(frame, 0, 0);
+
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
