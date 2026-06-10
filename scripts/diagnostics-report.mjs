@@ -14,12 +14,16 @@
  *   --no-dedupe          keep every line (default: collapse tag re-ships,
  *                        keeping the latest line per run / per run×image)
  *   --dir=<path>         diagnostics directory (default: ./diagnostics)
+ *   --csv                write one flat row per record to scans.csv /
+ *                        matches.csv (open directly in Excel) instead of the
+ *                        summary tables
+ *   --out=<path>         output directory for --csv (default: the --dir dir)
  *
  * The files are written only by `npm run dev` on the developer's machine and
  * are gitignored — see docs/adr/0006-dev-local-detection-diagnostics.md.
  */
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +46,8 @@ const opts = {
   app: getOpt("--app"),
   dedupe: !hasFlag("--no-dedupe"),
   dir: getOpt("--dir") ?? resolve(ROOT, "diagnostics"),
+  csv: hasFlag("--csv"),
+  out: getOpt("--out"),
 };
 
 // ---------------------------------------------------------------------------
@@ -296,6 +302,124 @@ function reportTags(records, field, title, summarise) {
 }
 
 // ---------------------------------------------------------------------------
+// CSV export — one flat row per record
+// ---------------------------------------------------------------------------
+
+/** Escape a single CSV cell. Null/undefined become empty; booleans 1/0. */
+function csvCell(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "boolean") return value ? "1" : "0";
+  const s = String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/** Build a CSV string from an array of {header,row} column definitions. */
+function toCsv(columns, records) {
+  const header = columns.map((c) => csvCell(c.header)).join(",");
+  const body = records.map((r) => columns.map((c) => csvCell(c.value(r))).join(","));
+  return [header, ...body].join("\r\n") + "\r\n"; // CRLF + trailing newline for Excel
+}
+
+const ratioParts = (r) =>
+  typeof r.result.inlierRatio === "number"
+    ? { avg: r.result.inlierRatio, min: "", max: "" }
+    : { avg: r.result.inlierRatio.avg, min: r.result.inlierRatio.min, max: r.result.inlierRatio.max };
+
+const SCAN_COLUMNS = [
+  { header: "scanId", value: (r) => r.scanId },
+  { header: "createdAt", value: (r) => r.createdAt },
+  { header: "appVersion", value: (r) => r.appVersion },
+  { header: "videoHash", value: (r) => r.videoHash },
+  { header: "source", value: (r) => r.input.video.source },
+  { header: "captureMode", value: (r) => r.input.captureMode },
+  { header: "width", value: (r) => r.input.video.width },
+  { header: "height", value: (r) => r.input.video.height },
+  { header: "durationSec", value: (r) => r.input.video.durationSec },
+  { header: "frameCount", value: (r) => r.input.video.frameCount },
+  { header: "refOverallMean", value: (r) => r.input.referenceFrame.overall.mean },
+  { header: "refOverallStdDev", value: (r) => r.input.referenceFrame.overall.stdDev },
+  { header: "refOverallSharpness", value: (r) => r.input.referenceFrame.overall.sharpness },
+  { header: "refClimberMean", value: (r) => r.input.referenceFrame.climber?.mean ?? "" },
+  { header: "refWallMean", value: (r) => r.input.referenceFrame.wall?.mean ?? "" },
+  { header: "flagOverexposed", value: (r) => r.input.referenceFrame.flags.isOverexposed },
+  { header: "flagUnderexposed", value: (r) => r.input.referenceFrame.flags.isUnderexposed },
+  { header: "flagBacklit", value: (r) => r.input.referenceFrame.flags.isBacklit },
+  { header: "flagLowContrast", value: (r) => r.input.referenceFrame.flags.isLowContrast },
+  { header: "flagBlurry", value: (r) => r.input.referenceFrame.flags.isBlurry },
+  { header: "coverageMin", value: (r) => r.input.climberFrameCoverage.min },
+  { header: "coverageAvg", value: (r) => r.input.climberFrameCoverage.avg },
+  { header: "motionMagnitude", value: (r) => r.input.motionMagnitude },
+  { header: "frameStep", value: (r) => r.config.frameStep },
+  { header: "frameIntervalMs", value: (r) => r.config.frameIntervalMs },
+  { header: "minScore", value: (r) => r.config.minScore },
+  { header: "maxRecoveryFrames", value: (r) => r.config.maxRecoveryFrames },
+  { header: "motionThreshold", value: (r) => r.config.motionThreshold },
+  { header: "filterTolerance", value: (r) => r.config.filterTolerance ?? "" },
+  { header: "flipTeleportBase", value: (r) => r.config.flipTeleportBase },
+  { header: "refineStride", value: (r) => r.config.refineStride },
+  { header: "sampledFrames", value: (r) => r.result.pose.sampledFrames },
+  { header: "detectedFrames", value: (r) => r.result.pose.detectedFrames },
+  { header: "detectionRate", value: (r) => r.result.pose.detectionRate },
+  { header: "flippedFrames", value: (r) => r.result.pose.flippedFrames },
+  { header: "keptFrames", value: (r) => r.result.pose.keptFrames },
+  { header: "goodFrames", value: (r) => r.result.pose.goodFrames },
+  { header: "confMin", value: (r) => r.result.pose.confidence.min },
+  { header: "confAvg", value: (r) => r.result.pose.confidence.avg },
+  { header: "confMax", value: (r) => r.result.pose.confidence.max },
+  { header: "avgKeypointCount", value: (r) => r.result.pose.avgKeypointCount },
+  { header: "gapsRefined", value: (r) => r.result.pose.refinement.gapsRefined },
+  { header: "recoveryFramesUsed", value: (r) => r.result.pose.refinement.recoveryFramesUsed },
+  { header: "refKeypointCount", value: (r) => r.result.orb.refKeypointCount },
+  { header: "keyframeCount", value: (r) => r.result.orb.keyframeCount },
+  { header: "keyframeKpMin", value: (r) => r.result.orb.keyframeKeypoints.min },
+  { header: "keyframeKpAvg", value: (r) => r.result.orb.keyframeKeypoints.avg },
+  { header: "keyframeKpMax", value: (r) => r.result.orb.keyframeKeypoints.max },
+  { header: "overlayQuality", value: (r) => r.result.overlayQuality ?? "" },
+  { header: "badStretchCount", value: (r) => r.result.badStretches.length },
+];
+
+const MATCH_COLUMNS = [
+  { header: "scanId", value: (r) => r.scanId },
+  { header: "createdAt", value: (r) => r.createdAt },
+  { header: "appVersion", value: (r) => r.appVersion },
+  { header: "videoHash", value: (r) => r.videoHash },
+  { header: "imageHash", value: (r) => r.imageHash },
+  { header: "captureMode", value: (r) => r.result.captureMode },
+  { header: "homographyFound", value: (r) => r.result.homographyFound },
+  { header: "failureReason", value: (r) => r.result.failureReason },
+  { header: "matchCount", value: (r) => r.result.matchCount },
+  { header: "inlierCount", value: (r) => r.result.inlierCount },
+  { header: "inlierRatio", value: (r) => ratioParts(r).avg },
+  { header: "inlierRatioMin", value: (r) => ratioParts(r).min },
+  { header: "inlierRatioMax", value: (r) => ratioParts(r).max },
+  { header: "keyframesMatched", value: (r) => r.result.keyframesMatched ?? "" },
+  { header: "queryWidth", value: (r) => r.input.query.width },
+  { header: "queryHeight", value: (r) => r.input.query.height },
+  { header: "queryKeypointCount", value: (r) => r.input.query.queryKeypointCount },
+  { header: "queryOverallMean", value: (r) => r.input.query.overall.mean },
+  { header: "queryDownscale", value: (r) => r.input.query.downscaleApplied },
+  { header: "queryFlagOverexposed", value: (r) => r.input.query.flags.isOverexposed },
+  { header: "queryFlagUnderexposed", value: (r) => r.input.query.flags.isUnderexposed },
+  { header: "queryFlagBacklit", value: (r) => r.input.query.flags.isBacklit },
+  { header: "queryFlagLowContrast", value: (r) => r.input.query.flags.isLowContrast },
+  { header: "queryFlagBlurry", value: (r) => r.input.query.flags.isBlurry },
+  { header: "refWidth", value: (r) => r.input.reference?.width ?? "" },
+  { header: "refHeight", value: (r) => r.input.reference?.height ?? "" },
+  { header: "refKeypointCount", value: (r) => r.input.reference?.refKeypointCount ?? "" },
+  { header: "refWallMean", value: (r) => r.input.reference?.wall?.mean ?? "" },
+  { header: "refFlagBacklit", value: (r) => r.input.reference?.flags.isBacklit ?? "" },
+  { header: "matchQuality", value: (r) => r.result.matchQuality ?? "" },
+];
+
+function writeCsv(name, columns, records) {
+  const dir = opts.out ?? opts.dir;
+  mkdirSync(dir, { recursive: true });
+  const path = resolve(dir, name);
+  writeFileSync(path, toCsv(columns, records), "utf8");
+  console.log(`  wrote ${records.length} rows → ${path}`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -309,12 +433,19 @@ function load(file, keyFn) {
 function main() {
   console.log(`Diagnostics report — ${opts.dir}${opts.app ? `  (appVersion=${opts.app})` : ""}`);
 
-  if (!opts.matchesOnly) {
-    reportScans(load("scans.jsonl", (r) => r.scanId));
+  const scans = opts.matchesOnly ? null : load("scans.jsonl", (r) => r.scanId);
+  const matches = opts.scansOnly ? null : load("matches.jsonl", (r) => `${r.scanId}|${r.imageHash}`);
+
+  if (opts.csv) {
+    console.log("Writing CSV (one flat row per record):");
+    if (scans) writeCsv("scans.csv", SCAN_COLUMNS, scans);
+    if (matches) writeCsv("matches.csv", MATCH_COLUMNS, matches);
+    console.log("");
+    return;
   }
-  if (!opts.scansOnly) {
-    reportMatches(load("matches.jsonl", (r) => `${r.scanId}|${r.imageHash}`));
-  }
+
+  if (scans) reportScans(scans);
+  if (matches) reportMatches(matches);
   console.log("");
 }
 
