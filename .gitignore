@@ -49,5 +49,7 @@ next-env.d.ts
 
 .design/*
 
-# Dev-local detection diagnostics (JSONL, never collected server-side)
+# Dev-local detection diagnostics (JSONL records + CSV exports, never collected
+# server-side). The whole output dir stays on the developer's machine.
 /diagnostics/*.jsonl
+/diagnostics/*.csv
