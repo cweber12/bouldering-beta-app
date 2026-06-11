@@ -95,6 +95,60 @@ function loadImageData(file: File): Promise<ImageData> {
   });
 }
 
+/**
+ * Decode an early frame of a video File into an ImageData, mirroring the
+ * reference frame useVideoProcessor extracts ORB from. Seeks to a small offset
+ * (not literally t=0) to dodge any black fade-in and guarantee a `seeked` event.
+ * Decode-pixel-capped.
+ */
+function loadVideoFrame0(file: File): Promise<ImageData> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    let done = false;
+    const cleanup = () => URL.revokeObjectURL(url);
+
+    const grab = () => {
+      if (done) return;
+      done = true;
+      const { width, height } = capToPixelBudget(video.videoWidth, video.videoHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        cleanup();
+        reject(new Error("no 2D context"));
+        return;
+      }
+      ctx.drawImage(video, 0, 0, width, height);
+      const data = ctx.getImageData(0, 0, width, height);
+      cleanup();
+      resolve(data);
+    };
+
+    video.onseeked = grab;
+    video.onloadeddata = () => {
+      const dur = Number.isFinite(video.duration) ? video.duration : 1;
+      video.currentTime = Math.min(0.1, dur / 2);
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error("video load failed"));
+    };
+    video.src = url;
+  });
+}
+
+/** Load a reference File — decodes frame 0 for video, else the image itself. */
+function loadReference(file: File): Promise<ImageData> {
+  return file.type.startsWith("video")
+    ? loadVideoFrame0(file)
+    : loadImageData(file);
+}
+
 /** Apply applyOrbPreprocessing to an ImageData and return the processed copy. */
 function preprocessForOrb(cv: CV, imageData: ImageData): ImageData {
   const canvas = document.createElement("canvas");
@@ -163,7 +217,7 @@ export default function OrbBenchPage() {
     setError(null);
     setResult(null);
     try {
-      const refData = await loadImageData(refFile);
+      const refData = await loadReference(refFile);
       const queryData = await loadImageData(queryFile);
 
       // Reference: preprocessed like the scan path, extracted normalizePixels=false.
@@ -213,8 +267,8 @@ export default function OrbBenchPage() {
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FilePicker label="Reference frame" file={refFile} onPick={setRefFile} />
-        <FilePicker label="Route photo (query)" file={queryFile} onPick={setQueryFile} />
+        <FilePicker label="Reference (video or frame)" accept="video/*,image/*" file={refFile} onPick={setRefFile} />
+        <FilePicker label="Route photo (query)" accept="image/*" file={queryFile} onPick={setQueryFile} />
       </div>
 
       <button
@@ -282,10 +336,12 @@ export default function OrbBenchPage() {
 
 function FilePicker({
   label,
+  accept,
   file,
   onPick,
 }: {
   label: string;
+  accept: string;
   file: File | null;
   onPick: (f: File | null) => void;
 }) {
@@ -294,7 +350,7 @@ function FilePicker({
       <span className="text-fg-muted">{label}</span>
       <input
         type="file"
-        accept="image/*"
+        accept={accept}
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
         className="block w-full text-xs text-fg file:mr-3 file:rounded-md file:border-0 file:bg-surface-alt file:px-3 file:py-1.5 file:text-fg"
       />
