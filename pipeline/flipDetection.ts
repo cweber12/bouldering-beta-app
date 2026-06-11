@@ -19,6 +19,18 @@
  * cost. Pure lateral translation moves both sides the same way, so swapping does
  * NOT help and the frame is left alone.
  *
+ * The left/right test above keys entirely off the *horizontal* ordering of the
+ * torso, so it is blind to the other glitch MediaPipe produces when the climber
+ * blends into the wall: it fits the whole skeleton **upside down** — head and
+ * shoulders landmarks placed at the feet end — while keeping left-on-left and
+ * right-on-right. No horizontal sign changes, so that path passes the inverted
+ * frame straight through. A second, independent **orientation** test catches it
+ * by the torso *up-vector* (shoulders centroid − hips centroid): a genuine
+ * inversion rotates that axis gradually and the centroids stay put frame-to-frame,
+ * whereas a glitch reverses the axis (>120°) in one step AND teleports the torso.
+ * Either test firing marks the frame a flip; the orientation test alone covers the
+ * vertical case the left/right swap geometry cannot see.
+ *
  * Flips are *discarded* rather than relabelled — real flips are frequently
  * asymmetric (only part of the body mislabels), so a clean left↔right swap would
  * produce a wrong pose. The caller re-detects across the resulting gap
@@ -49,11 +61,29 @@ export const DEFAULT_TELEPORT_THRESHOLD = 0.35;
  */
 export const DEFAULT_SWAP_MARGIN = 0.5;
 
+/**
+ * Cosine of the angle between the torso up-vectors of two consecutive accepted
+ * frames below which the pose is treated as vertically **inverted** (head end
+ * swapped with the feet end). -0.5 ⇒ the axis reversed by more than 120°, well
+ * past any plausible per-frame rotation of a climber on a near-vertical wall.
+ */
+export const DEFAULT_ORIENTATION_FLIP_COS = -0.5;
+
+/**
+ * Minimum torso length (normalised shoulders-to-hips centroid distance) required
+ * before the orientation test trusts the up-vector's direction. Below this the
+ * torso is too compact (heavily foreshortened / balled-up) for its axis to be
+ * meaningful, so sign noise is ignored rather than flagged as an inversion.
+ */
+export const MIN_TORSO_LENGTH = 0.05;
+
 export interface FlipDetectionOptions {
   /** See {@link DEFAULT_TELEPORT_THRESHOLD}. */
   teleportThreshold?: number;
   /** See {@link DEFAULT_SWAP_MARGIN}. */
   swapMargin?: number;
+  /** See {@link DEFAULT_ORIENTATION_FLIP_COS}. */
+  orientationFlipCos?: number;
 }
 
 export interface FlipScanResult {
@@ -77,8 +107,52 @@ interface Pair {
   r: Keypoint;
 }
 
-function dist(a: Keypoint, b: Keypoint): number {
+interface Pt {
+  x: number;
+  y: number;
+}
+
+function dist(a: Pt, b: Pt): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+/** Mean position of whichever of `names` are present in the map (null if none). */
+function centroidOf(m: Map<string, Keypoint>, names: readonly string[]): Pt | null {
+  let sx = 0;
+  let sy = 0;
+  let n = 0;
+  for (const name of names) {
+    const kp = m.get(name);
+    if (kp) {
+      sx += kp.x;
+      sy += kp.y;
+      n += 1;
+    }
+  }
+  return n > 0 ? { x: sx / n, y: sy / n } : null;
+}
+
+/**
+ * Torso shoulder/hip centroids and the up-vector between them (shoulders − hips).
+ * Requires at least one shoulder and one hip; returns null otherwise. Tolerant of
+ * a missing side so a half-occluded torso still yields an orientation.
+ */
+interface TorsoAxis {
+  shoulder: Pt;
+  hip: Pt;
+  upX: number;
+  upY: number;
+  length: number;
+}
+
+function torsoAxis(frame: PoseFrame): TorsoAxis | null {
+  const m = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+  const shoulder = centroidOf(m, [LEFT_SHOULDER, RIGHT_SHOULDER]);
+  const hip = centroidOf(m, [LEFT_HIP, RIGHT_HIP]);
+  if (!shoulder || !hip) return null;
+  const upX = shoulder.x - hip.x;
+  const upY = shoulder.y - hip.y;
+  return { shoulder, hip, upX, upY, length: Math.hypot(upX, upY) };
 }
 
 /** Extract the shoulder and hip left/right pairs from a frame (null if incomplete). */
@@ -107,6 +181,7 @@ export function isLandmarkFlip(
 ): boolean {
   const teleportThreshold = options.teleportThreshold ?? DEFAULT_TELEPORT_THRESHOLD;
   const swapMargin = options.swapMargin ?? DEFAULT_SWAP_MARGIN;
+  const orientationFlipCos = options.orientationFlipCos ?? DEFAULT_ORIENTATION_FLIP_COS;
 
   const p = torsoPairs(prev);
   const c = torsoPairs(cur);
@@ -126,13 +201,29 @@ export function isLandmarkFlip(
     anchors += 2;
   }
 
-  if (anchors === 0) return false;
-
+  // --- Left/right swap path: horizontal label glitch. ---
   // Threshold is expressed for the full four-anchor torso; scale to however many
   // anchors were actually available so a shoulders-only frame is judged fairly.
   const scaledTeleport = teleportThreshold * (anchors / 4);
+  const lrFlip =
+    anchors > 0 && signChanged && noSwap > scaledTeleport && swap < noSwap * swapMargin;
 
-  return signChanged && noSwap > scaledTeleport && swap < noSwap * swapMargin;
+  // --- Orientation path: vertical (upside-down) inversion. ---
+  // Independent of the horizontal ordering above: the up-vector (shoulders − hips)
+  // reverses by more than the configured angle AND the torso centroids teleport in
+  // a single step. A real inversion turns the axis gradually with the centroids
+  // staying put, so it fails the teleport guard and is left alone. Uses two anchors
+  // (shoulder + hip centroid), so it earns half the four-anchor teleport budget.
+  let orientationFlip = false;
+  const pa = torsoAxis(prev);
+  const ca = torsoAxis(cur);
+  if (pa && ca && pa.length > MIN_TORSO_LENGTH && ca.length > MIN_TORSO_LENGTH) {
+    const cos = (pa.upX * ca.upX + pa.upY * ca.upY) / (pa.length * ca.length);
+    const teleport = dist(pa.shoulder, ca.shoulder) + dist(pa.hip, ca.hip);
+    orientationFlip = cos < orientationFlipCos && teleport > teleportThreshold * 0.5;
+  }
+
+  return lrFlip || orientationFlip;
 }
 
 // ---------------------------------------------------------------------------

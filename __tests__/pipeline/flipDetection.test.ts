@@ -37,6 +37,26 @@ function torso(
 // Separation (right − left) is positive.
 const FACING = (t: number) => torso(t, 0.35, 0.65, 0.4, 0.6);
 
+/**
+ * Build a vertically-oriented torso. `shY` is the shoulders' y, `hipY` the hips'.
+ * Upright climbers have shoulders above hips (smaller y). Pass shoulders BELOW
+ * hips to simulate MediaPipe's upside-down fit, keeping left-on-left so no
+ * horizontal sign changes — exactly the case the left/right path cannot see.
+ */
+function vtorso(timestamp: number, shY: number, hipY: number): PoseFrame {
+  return frame(timestamp, [
+    ["left_shoulder", 0.42, shY],
+    ["right_shoulder", 0.58, shY],
+    ["left_hip", 0.44, hipY],
+    ["right_hip", 0.56, hipY],
+  ]);
+}
+
+// Upright: shoulders at y=0.30 (top), hips at y=0.60 (bottom).
+const UPRIGHT = (t: number) => vtorso(t, 0.3, 0.6);
+// Upside-down glitch: shoulders drop to y=0.60, hips rise to y=0.30, L/R intact.
+const INVERTED = (t: number) => vtorso(t, 0.6, 0.3);
+
 // ---------------------------------------------------------------------------
 // isLandmarkFlip
 // ---------------------------------------------------------------------------
@@ -95,6 +115,63 @@ describe("isLandmarkFlip", () => {
     const flipped = torso(1, 0.65, 0.35, 0.6, 0.4);
     // A very high threshold treats even a full teleport as plausible real motion.
     expect(isLandmarkFlip(prev, flipped, { teleportThreshold: 5 })).toBe(false);
+  });
+
+  // --- Vertical (upside-down) inversion -------------------------------------
+
+  it("flags an upside-down flip: torso up-vector reverses with L/R sides intact", () => {
+    // The case the left/right path is blind to: shoulders and hips swap their
+    // vertical positions in one step, but left stays left so no horizontal sign
+    // changes. Only the orientation test can catch this.
+    expect(isLandmarkFlip(UPRIGHT(0), INVERTED(1))).toBe(true);
+  });
+
+  it("does NOT flag a steady upright torso (up-vector unchanged)", () => {
+    expect(isLandmarkFlip(UPRIGHT(0), UPRIGHT(1))).toBe(false);
+  });
+
+  it("does NOT flag a gradual real inversion (axis turns, centroids stay put)", () => {
+    // Shoulders and hips converge toward a horizontal torso over one step — the
+    // axis rotates ~90° but the centroids barely move, so it is real motion.
+    const prev = vtorso(0, 0.4, 0.6);
+    const turning = vtorso(1, 0.48, 0.52);
+    expect(isLandmarkFlip(prev, turning)).toBe(false);
+  });
+
+  it("does NOT flag a compact torso whose up-vector is below the length floor", () => {
+    // Heavily foreshortened: shoulders and hips nearly coincident. Direction is
+    // meaningless, so a sign wobble must not register as an inversion.
+    const prev = vtorso(0, 0.49, 0.51);
+    const wobble = vtorso(1, 0.51, 0.49);
+    expect(isLandmarkFlip(prev, wobble)).toBe(false);
+  });
+
+  it("does NOT flag an upside-down pose under a permissive orientation cosine", () => {
+    // orientationFlipCos = -1 only fires on an exact 180° reversal; a clean
+    // inversion sits at cos ≈ -1 but the guard lets callers loosen it.
+    expect(
+      isLandmarkFlip(UPRIGHT(0), INVERTED(1), { orientationFlipCos: -1.5 }),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectFlips — upside-down sequences
+// ---------------------------------------------------------------------------
+
+describe("detectFlips — vertical inversion", () => {
+  it("discards a single upside-down glitch and recovers", () => {
+    const frames = [UPRIGHT(0), INVERTED(1), UPRIGHT(2)];
+    const result = detectFlips(frames);
+    expect(result.flippedTimestamps).toEqual([1]);
+    expect(result.kept.map(f => f.timestamp)).toEqual([0, 2]);
+  });
+
+  it("discards a sustained inversion run against the last accepted upright frame", () => {
+    const frames = [UPRIGHT(0), INVERTED(1), INVERTED(2), UPRIGHT(3)];
+    const result = detectFlips(frames);
+    expect(result.flippedTimestamps).toEqual([1, 2]);
+    expect(result.kept.map(f => f.timestamp)).toEqual([0, 3]);
   });
 });
 
