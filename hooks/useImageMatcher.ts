@@ -14,6 +14,7 @@ import {
 } from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
 import { analyzeFrame } from "@/pipeline/frameAnalyzer";
+import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
 import {
   buildMatchDiagnostics,
   emptyHomographyStats,
@@ -126,19 +127,29 @@ export function useImageMatcher(): ImageMatcherResult {
         : queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
       const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
 
+      // Symmetric ORB preprocessing: the reference frame and Panning keyframes
+      // are extracted from an applyOrbPreprocessing (retinex LCN + equalise)
+      // surface, so the query photo MUST be normalised the same way or the
+      // descriptors are built on a different intensity surface and Hamming
+      // distances inflate. Preprocess after downscaling (closest to the
+      // reference's resolution, where the σ=30 retinex blur behaves the same)
+      // and extract with normalizePixels=false since the LCN pass already
+      // equalised. See pipeline/framePreprocessor.applyOrbPreprocessing.
+      const scaledProcessed = preprocessForOrb(cv, scaled);
+
       // When the user specified a crop region, extract ORB features only from
       // that sub-region. Keypoints are offset back to full-image coordinates
       // by extractFeaturesFromCrop so homography computation is unaffected.
       let queryOrb = userCrop
-        ? extractFeaturesFromCrop(cv, scaled, {
+        ? extractFeaturesFromCrop(cv, scaledProcessed, {
             x: Math.round(userCrop.x * scaled.width),
             y: Math.round(userCrop.y * scaled.height),
             width: Math.round(userCrop.w * scaled.width),
             height: Math.round(userCrop.h * scaled.height),
             srcWidth: scaled.width,
             srcHeight: scaled.height,
-          })
-        : extractFeatures(cv, scaled);
+          }, false)
+        : extractFeatures(cv, scaledProcessed, false);
       queryOrb = rescaleFeaturesToNative(queryOrb, scale);
       let matches = matchOrbFeatures(cv, attempt.orbFeatures, queryOrb);
       let reanchorApplied = false;
@@ -185,7 +196,8 @@ export function useImageMatcher(): ImageMatcherResult {
 
           if (qWidth > 0 && qHeight > 0) {
             const queryCropData = cropImageData(imageData, { x: qx, y: qy, width: qWidth, height: qHeight });
-            const queryCropOrb  = extractFeatures(cv, queryCropData);
+            // Same symmetric preprocessing as the primary query pass.
+            const queryCropOrb  = extractFeatures(cv, preprocessForOrb(cv, queryCropData), false);
             // Offset keypoints back to full-image coordinates.
             const offsetKp = queryCropOrb.keypoints.map(kp => ({
               ...kp,
@@ -333,6 +345,26 @@ export function useImageMatcher(): ImageMatcherResult {
   }, []);
 
   return { matchImage, reset, status, result, errorMessage, matchDiagnostics };
+}
+
+/**
+ * Apply the ORB preprocessing pipeline (retinex LCN + histogram equalisation,
+ * plus a blur-triggered unsharp pass) to an ImageData and return the processed
+ * copy, leaving the input untouched. Mirrors the reference-frame / keyframe
+ * preprocessing in useVideoProcessor so query descriptors are extracted from
+ * the same intensity surface. Returns the input unchanged if a 2D context is
+ * unavailable.
+ */
+function preprocessForOrb(cv: CV, imageData: ImageData): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return imageData;
+  ctx.putImageData(imageData, 0, 0);
+  const analysis = analyzeFrame(cv, imageData);
+  applyOrbPreprocessing(cv, canvas, analysis);
+  return ctx.getImageData(0, 0, imageData.width, imageData.height);
 }
 
 /**
