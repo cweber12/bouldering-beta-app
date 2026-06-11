@@ -268,3 +268,34 @@ export function expandCropBox(
   const y1 = Math.min(frameH, box.y + box.height + dy);
   return { x, y, width: Math.max(1, x1 - x), height: Math.max(1, y1 - y) };
 }
+
+/**
+ * Choose the detection region for the next frame, in priority order:
+ *
+ *   1. An established track → the last climber box, slack-expanded, so the
+ *      crop follows the climber frame-to-frame.
+ *   2. No track yet but a climber crop is known → that crop, used as the
+ *      acquisition seed. **This holds even when the climber was tapped:** the
+ *      tap drives identity selection (selectClimberByPoint), not the search
+ *      area. Acquiring on the crop keeps a small / distant climber large enough
+ *      in the detection input for MediaPipe's person detector to find them.
+ *      Searching the whole frame instead leaves a climber at the base of a tall
+ *      boulder below the detector's size floor, so no pose is acquired until
+ *      they climb large enough — the "detection starts late" failure.
+ *   3. Otherwise null → the caller searches the full frame.
+ *
+ * When the seed crop misses (e.g. the tap landed off the climber), the caller's
+ * full-frame re-acquire fallback still recovers the pose, so seeding with the
+ * crop is never worse than the full-frame search it replaces.
+ */
+export function pickAcquisitionRegion(
+  lastClimberBox: CropBox | null,
+  climberCropPx: CropBox | null,
+  frameW: number,
+  frameH: number,
+  slack = 0.15,
+): CropBox | null {
+  if (lastClimberBox) return expandCropBox(lastClimberBox, frameW, frameH, slack);
+  if (climberCropPx) return climberCropPx;
+  return null;
+}
