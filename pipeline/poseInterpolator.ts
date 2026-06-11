@@ -545,6 +545,21 @@ export function estimateMissingLandmarks(
  */
 export const PERSISTENT_GAP_SCORE_FACTOR = 0.35;
 
+/**
+ * Longest dropout (seconds) across which {@link fillPersistentGaps} will bridge a
+ * bracketed joint. The no-gap guarantee exists for genuine occlusions — a hand
+ * pressed to the wall, a foot tucked behind the body — which last a second or two.
+ * A multi-second absence is not an occlusion: the detector has lost the climber
+ * entirely (they shrank below the size floor, blended into the wall, left frame).
+ * Bridging that draws a full skeleton linearly morphing between the poses on either
+ * side of the blackout — the torso visibly squashing and limbs stretching as it
+ * interpolates across motion the climber actually made. Past this cap the joint is
+ * left absent so the overlay simply shows nothing while tracking is lost, which is
+ * honest rather than wrong. Comfortably longer than interpolatePoseFrames' own
+ * {@link DEFAULT_MAX_BRIDGE_GAP} so ordinary occlusions are still covered.
+ */
+export const DEFAULT_PERSISTENT_FILL_MAX_GAP = 2.5;
+
 /** Largest sample index strictly less than `i` in an ascending index array. */
 function bracketBefore(idxs: number[], i: number): number | null {
   let lo = 0, hi = idxs.length, ans: number | null = null;
@@ -598,12 +613,15 @@ function bracketAfter(idxs: number[], i: number): number | null {
  * Run after {@link estimateMissingLandmarks} and before {@link smoothPoseFrames}
  * so the filled joints are smoothed with the rest of the pose.
  *
- * @param frames  - Dense PoseFrame array (output of estimateMissingLandmarks).
- * @param backend - Pose backend, selects the skeleton topology. Default mediapipe.
+ * @param frames       - Dense PoseFrame array (output of estimateMissingLandmarks).
+ * @param backend      - Pose backend, selects the skeleton topology. Default mediapipe.
+ * @param maxBridgeGap - Longest dropout (seconds) still filled; beyond it the joint
+ *                       is left absent. Default {@link DEFAULT_PERSISTENT_FILL_MAX_GAP}.
  */
 export function fillPersistentGaps(
   frames: PoseFrame[],
   backend?: PoseBackend,
+  maxBridgeGap = DEFAULT_PERSISTENT_FILL_MAX_GAP,
 ): PoseFrame[] {
   if (frames.length < 3) return frames;
 
@@ -628,6 +646,10 @@ export function fillPersistentGaps(
       const prevI = bracketBefore(idxs, i);
       const nextI = bracketAfter(idxs, i);
       if (prevI === null || nextI === null) continue; // not bracketed → leave absent
+      // Genuine occlusion vs. lost tracking: only bridge across a bounded dropout.
+      // A longer absence is a blackout — leave the joint absent so the overlay
+      // hides rather than morphing a squashed skeleton across it.
+      if (frames[nextI].timestamp - frames[prevI].timestamp > maxBridgeGap) continue;
       gaps.push({ name, prevI, nextI });
     }
     if (gaps.length === 0) return frame;

@@ -673,6 +673,35 @@ describe("fillPersistentGaps", () => {
     );
   });
 
+  it("does NOT bridge a joint across a dropout longer than the gap cap", () => {
+    // Regression for the post-blackout distortion: when the detector loses the
+    // climber for several seconds, bridging the gap morphs a squashed skeleton
+    // across it. Past the cap the joint must stay absent so the overlay hides.
+    const frames: PoseFrame[] = [
+      frame(0, [["left_wrist", 0.2, 0.4, 0.9]]),
+      { timestamp: 1, keypoints: [] },
+      { timestamp: 2, keypoints: [] },
+      { timestamp: 3, keypoints: [] }, // 4 s blackout between detections
+      frame(4, [["left_wrist", 0.8, 0.9, 0.9]]),
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    // Interior frames span a 4 s bracket (> 2.5 s default) → left absent.
+    expect(filled[1].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
+    expect(filled[2].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
+    expect(filled[3].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
+  });
+
+  it("still bridges a dropout within a raised gap cap", () => {
+    // The cap is configurable: the same 4 s gap fills when the caller allows it.
+    const frames: PoseFrame[] = [
+      frame(0, [["left_wrist", 0.2, 0.4, 0.9]]),
+      { timestamp: 2, keypoints: [] },
+      frame(4, [["left_wrist", 0.8, 0.8, 0.9]]),
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe", 5);
+    expect(filled[1].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
+  });
+
   it("closes a multi-second whole-limb dropout end-to-end (no winks)", () => {
     // Regression for the overlay glitch: an arm + leg occluded for ~1.5 s mid
     // sequence used to wink out — too long for interpolatePoseFrames to bridge

@@ -70,12 +70,32 @@ export const DEFAULT_SWAP_MARGIN = 0.5;
 export const DEFAULT_ORIENTATION_FLIP_COS = -0.5;
 
 /**
- * Minimum torso length (normalised shoulders-to-hips centroid distance) required
- * before the orientation test trusts the up-vector's direction. Below this the
- * torso is too compact (heavily foreshortened / balled-up) for its axis to be
- * meaningful, so sign noise is ignored rather than flagged as an inversion.
+ * Minimum torso length (normalised shoulders-to-hips centroid distance) the
+ * **reference** (previous) frame must have before the orientation test trusts its
+ * up-vector. Below this the anchor torso is too compact (heavily foreshortened /
+ * balled-up) for its axis to be meaningful, so sign noise is ignored.
  */
 export const MIN_TORSO_LENGTH = 0.05;
+
+/**
+ * Minimum up-vector length the **current** frame must have to be compared. Kept
+ * far below {@link MIN_TORSO_LENGTH} on purpose: a frame MediaPipe fitted upside
+ * down frequently collapses its torso (the centroids cross), so requiring a full
+ * torso here would let exactly the flips we want to catch slip through. We only
+ * need a non-degenerate direction to take the cosine against.
+ */
+export const MIN_UP_VECTOR_LENGTH = 0.01;
+
+/**
+ * Teleport budget for the orientation test, expressed in **torso lengths** rather
+ * than as a fraction of the frame. A real inversion swaps the shoulder and hip
+ * centroids, moving each by roughly one torso length, so the combined centroid
+ * displacement of a genuine flip is comfortably above one torso length. Scaling by
+ * the body — not the frame — is what makes the test fire for a small / distant
+ * climber whose whole torso spans under 0.1 of the frame: an absolute frame-fraction
+ * gate is enormous next to their body and never trips, even on a full 180° flip.
+ */
+export const ORIENTATION_TELEPORT_TORSO_FACTOR = 0.6;
 
 export interface FlipDetectionOptions {
   /** See {@link DEFAULT_TELEPORT_THRESHOLD}. */
@@ -210,17 +230,20 @@ export function isLandmarkFlip(
 
   // --- Orientation path: vertical (upside-down) inversion. ---
   // Independent of the horizontal ordering above: the up-vector (shoulders − hips)
-  // reverses by more than the configured angle AND the torso centroids teleport in
-  // a single step. A real inversion turns the axis gradually with the centroids
-  // staying put, so it fails the teleport guard and is left alone. Uses two anchors
-  // (shoulder + hip centroid), so it earns half the four-anchor teleport budget.
+  // reverses by more than the configured angle AND the torso centroids teleport by
+  // more than a torso length in a single step. A real inversion turns the axis
+  // gradually with the centroids staying put, so it fails the teleport guard and is
+  // left alone. The teleport budget is torso-relative (not a frame fraction) so the
+  // test fires for a small / distant climber as well as a large one.
   let orientationFlip = false;
   const pa = torsoAxis(prev);
   const ca = torsoAxis(cur);
-  if (pa && ca && pa.length > MIN_TORSO_LENGTH && ca.length > MIN_TORSO_LENGTH) {
+  if (pa && ca && pa.length > MIN_TORSO_LENGTH && ca.length > MIN_UP_VECTOR_LENGTH) {
     const cos = (pa.upX * ca.upX + pa.upY * ca.upY) / (pa.length * ca.length);
     const teleport = dist(pa.shoulder, ca.shoulder) + dist(pa.hip, ca.hip);
-    orientationFlip = cos < orientationFlipCos && teleport > teleportThreshold * 0.5;
+    const torsoScale = Math.max(pa.length, ca.length);
+    orientationFlip =
+      cos < orientationFlipCos && teleport > torsoScale * ORIENTATION_TELEPORT_TORSO_FACTOR;
   }
 
   return lrFlip || orientationFlip;

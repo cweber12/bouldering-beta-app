@@ -153,6 +153,33 @@ describe("isLandmarkFlip", () => {
       isLandmarkFlip(UPRIGHT(0), INVERTED(1), { orientationFlipCos: -1.5 }),
     ).toBe(false);
   });
+
+  it("flags a SMALL/distant climber's inversion an absolute gate would miss", () => {
+    // Real-data regression: a climber whose whole torso spans ~0.09 of the frame
+    // flips upside down. The centroids move only ~0.13 — far below any absolute
+    // frame-fraction teleport gate — but that is ~1.5 torso lengths, so the
+    // torso-relative gate catches it. Numbers taken from midnight_lightning_3.
+    const upright = frame(0, [
+      ["left_shoulder", 0.47, 0.47], ["right_shoulder", 0.45, 0.45],
+      ["left_hip", 0.49, 0.55], ["right_hip", 0.47, 0.54],
+    ]);
+    const inverted = frame(1, [
+      ["left_shoulder", 0.49, 0.57], ["right_shoulder", 0.47, 0.55],
+      ["left_hip", 0.45, 0.49], ["right_hip", 0.47, 0.50],
+    ]);
+    // Default teleportThreshold is 0.35 of the frame; the centroids move far less,
+    // so only a body-relative test can flag this.
+    expect(isLandmarkFlip(upright, inverted)).toBe(true);
+  });
+
+  it("flags an inversion whose torso COLLAPSES below the length floor", () => {
+    // MediaPipe's upside-down fits routinely crush the torso (centroids cross),
+    // dropping the current frame below MIN_TORSO_LENGTH. The reference frame is
+    // trusted for scale, the current frame only needs a non-degenerate direction.
+    const upright = vtorso(0, 0.4, 0.6); // healthy torso, length 0.2
+    const collapsedInverted = vtorso(1, 0.55, 0.51); // inverted, length ~0.04
+    expect(isLandmarkFlip(upright, collapsedInverted)).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
