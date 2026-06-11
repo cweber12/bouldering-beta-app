@@ -53,10 +53,12 @@ gate, so a passerby never steals the track. The per-frame detection crop is
 derived **automatically** from the climber's landmarks; if the climber is lost
 inside the crop, detection widens to the full frame and re-acquires by identity.
 
-After estimation, two post-processing passes are applied:
+After estimation, four post-processing passes are applied:
 
-1. **Interpolation** — for outdoor mode, `interpolatePoseFrames` fills the dense frame timeline from sparse keyframe detections using linear interpolation.
-2. **Smoothing** — `smoothPoseFrames` runs on every mode: forward-fill and backward-fill eliminate brief keypoint dropouts, then an exponential moving average (α = 0.3) reduces jitter.
+1. **Interpolation** — `interpolatePoseFrames` densifies the sparse detected frames onto the full timestamp list, interpolating each joint along its own detection timeline (Catmull-Rom). A joint occluded longer than the bridge gap is omitted rather than stretched in a straight line.
+2. **Estimation** — `estimateMissingLandmarks` fills short gaps using temporal interpolation and skeletal bone-vector geometry.
+3. **Persistent-gap fill** — `fillPersistentGaps` is the no-gap guarantee: any joint the detector saw both before and after a frame is always present in that frame (structurally off a visible neighbour where possible, else temporal lerp), at a dimmed confidence. This stops an occluded limb from winking out across a dropout too long to bridge or too degraded to estimate.
+4. **Smoothing** — `smoothPoseFrames` runs a zero-phase (forward + backward) One-Euro adaptive filter that suppresses jitter without lag.
 
 ### Skeleton overlay
 

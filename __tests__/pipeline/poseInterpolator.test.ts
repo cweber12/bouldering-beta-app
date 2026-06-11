@@ -4,10 +4,13 @@ import {
   smoothPoseFrames,
   filterLandmarks,
   estimateMissingLandmarks,
+  fillPersistentGaps,
+  PERSISTENT_GAP_SCORE_FACTOR,
   applyLandmarkEstimator,
   type LandmarkEstimator,
 } from "@/pipeline/poseInterpolator";
 import type { PoseFrame } from "@/pipeline/poseDetection";
+import { MP_KP_NAMES } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -572,5 +575,133 @@ describe("estimateMissingLandmarks", () => {
     const result = estimateMissingLandmarks(frames, 10, 5, "mediapipe");
     expect(result[0].keypoints).toHaveLength(33);
     expect(result[1].keypoints).toHaveLength(33);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fillPersistentGaps — the no-gap guarantee
+// ---------------------------------------------------------------------------
+
+const ALL_MP_NAMES = Object.values(MP_KP_NAMES);
+
+/** Count joints that go present → absent → present across a dense sequence
+ *  (the visual "limb winks out" glitch). Leading/trailing absence is ignored. */
+function countMidSequenceWinks(frames: PoseFrame[]): string[] {
+  const winked: string[] = [];
+  for (const name of ALL_MP_NAMES) {
+    const present = frames.map(f => f.keypoints.some(k => k.name === name));
+    const first = present.indexOf(true);
+    const last = present.lastIndexOf(true);
+    if (first < 0) continue;
+    for (let i = first; i <= last; i++) {
+      if (!present[i]) { winked.push(name); break; }
+    }
+  }
+  return winked;
+}
+
+describe("fillPersistentGaps", () => {
+  it("returns short sequences (< 3 frames) untouched", () => {
+    const frames = [frame(0, [["nose", 0.5, 0.5]]), { timestamp: 1, keypoints: [] }];
+    expect(fillPersistentGaps(frames)).toEqual(frames);
+  });
+
+  it("fills a joint bracketed by detections via temporal interpolation", () => {
+    // left_wrist seen at frame 0 and 2, absent at 1 — with no neighbour present
+    // at frame 1, it must be temporally interpolated to the midpoint.
+    const frames: PoseFrame[] = [
+      frame(0, [["left_wrist", 0.2, 0.4, 0.8]]),
+      { timestamp: 1, keypoints: [] },
+      frame(2, [["left_wrist", 0.4, 0.6, 0.8]]),
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    const wrist = filled[1].keypoints.find(k => k.name === "left_wrist");
+    expect(wrist).toBeDefined();
+    expect(wrist!.x).toBeCloseTo(0.3);
+    expect(wrist!.y).toBeCloseTo(0.5);
+    // Dimmed below the renderer's Estimated-Landmark threshold (0.4).
+    expect(wrist!.score).toBeCloseTo(0.8 * PERSISTENT_GAP_SCORE_FACTOR);
+    expect(wrist!.score).toBeLessThan(0.4);
+  });
+
+  it("places a gap joint structurally off a present neighbour, keeping it attached", () => {
+    // left_wrist drops at frame 1, but left_elbow (its neighbour) is present and
+    // has moved. The wrist must follow the elbow via the bone vector from a
+    // bracketing frame, not sit at the absolute temporal midpoint.
+    const frames: PoseFrame[] = [
+      frame(0, [["left_wrist", 0.20, 0.50, 0.9], ["left_elbow", 0.30, 0.30, 0.9]]),
+      frame(1, [["left_elbow", 0.60, 0.30, 0.9]]), // elbow jumped right; wrist gone
+      frame(2, [["left_wrist", 0.20, 0.50, 0.9], ["left_elbow", 0.30, 0.30, 0.9]]),
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    const wrist = filled[1].keypoints.find(k => k.name === "left_wrist");
+    expect(wrist).toBeDefined();
+    // Bone vector wrist-elbow = (-0.1, 0.2) applied to the current elbow (0.6, 0.3).
+    expect(wrist!.x).toBeCloseTo(0.5);
+    expect(wrist!.y).toBeCloseTo(0.5);
+  });
+
+  it("leaves a joint absent before its first detection (not bracketed)", () => {
+    const frames: PoseFrame[] = [
+      { timestamp: 0, keypoints: [] },
+      { timestamp: 1, keypoints: [] },
+      frame(2, [["nose", 0.5, 0.1]]),
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    expect(filled[0].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    expect(filled[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
+  });
+
+  it("leaves a joint absent after its last detection (not bracketed)", () => {
+    const frames: PoseFrame[] = [
+      frame(0, [["nose", 0.5, 0.1]]),
+      { timestamp: 1, keypoints: [] },
+      { timestamp: 2, keypoints: [] },
+    ];
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    expect(filled[2].keypoints.find(k => k.name === "nose")).toBeUndefined();
+  });
+
+  it("never invents a joint the detector never saw", () => {
+    const frames = [goodFrame(0), goodFrame(1), goodFrame(2)].map(f => ({
+      ...f,
+      keypoints: f.keypoints.filter(k => k.name !== "left_pinky"),
+    }));
+    const filled = fillPersistentGaps(frames, "mediapipe");
+    filled.forEach(f =>
+      expect(f.keypoints.find(k => k.name === "left_pinky")).toBeUndefined(),
+    );
+  });
+
+  it("closes a multi-second whole-limb dropout end-to-end (no winks)", () => {
+    // Regression for the overlay glitch: an arm + leg occluded for ~1.5 s mid
+    // sequence used to wink out — too long for interpolatePoseFrames to bridge
+    // and too degraded (9 joints) for estimateMissingLandmarks to touch.
+    const dropped = new Set([
+      "left_elbow", "left_wrist", "left_pinky", "left_index", "left_thumb",
+      "right_knee", "right_ankle", "right_heel", "right_foot_index",
+    ]);
+    const anchors: PoseFrame[] = [];
+    for (let k = 0; k <= 8; k++) {
+      const t = k * 0.5;
+      const base = goodFrame(t);
+      anchors.push(
+        t >= 1.5 && t <= 2.5
+          ? { ...base, keypoints: base.keypoints.filter(kp => !dropped.has(kp.name)) }
+          : base,
+      );
+    }
+    const allTs: number[] = [];
+    for (let t = 0; t <= 4.0001; t += 1 / 30) allTs.push(+t.toFixed(4));
+
+    const interp = interpolatePoseFrames(filterLandmarks(anchors, 0.3), allTs);
+    const est = estimateMissingLandmarks(interp, 10, 5, "mediapipe");
+
+    // Before the fill pass the limbs wink out…
+    expect(countMidSequenceWinks(est).length).toBeGreaterThan(0);
+
+    // …and after it, no joint that is seen on both sides is ever absent between.
+    const filled = fillPersistentGaps(est, "mediapipe");
+    expect(countMidSequenceWinks(smoothPoseFrames(filled))).toEqual([]);
   });
 });

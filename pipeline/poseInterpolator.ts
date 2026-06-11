@@ -533,6 +533,158 @@ export function estimateMissingLandmarks(
 }
 
 // ---------------------------------------------------------------------------
+// Persistent-gap fill (no-gap guarantee)
+// ---------------------------------------------------------------------------
+
+/**
+ * Confidence multiplier for a joint reconstructed by {@link fillPersistentGaps}.
+ *
+ * Kept deliberately below the renderer's Estimated-Landmark dim threshold (0.4)
+ * so every gap-filled joint reads as clearly inferred — a faint, dimmed limb
+ * rather than a crisp one the detector never actually saw.
+ */
+export const PERSISTENT_GAP_SCORE_FACTOR = 0.35;
+
+/** Largest sample index strictly less than `i` in an ascending index array. */
+function bracketBefore(idxs: number[], i: number): number | null {
+  let lo = 0, hi = idxs.length, ans: number | null = null;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (idxs[mid] < i) { ans = idxs[mid]; lo = mid + 1; }
+    else hi = mid;
+  }
+  return ans;
+}
+
+/** Smallest sample index strictly greater than `i` in an ascending index array. */
+function bracketAfter(idxs: number[], i: number): number | null {
+  let lo = 0, hi = idxs.length, ans: number | null = null;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (idxs[mid] > i) { ans = idxs[mid]; hi = mid; }
+    else lo = mid + 1;
+  }
+  return ans;
+}
+
+/**
+ * Guarantee that no joint **winks out** mid-sequence: any keypoint that the
+ * detector saw both *before* and *after* the current frame is always present in
+ * that frame, even across a dropout too long for {@link interpolatePoseFrames}
+ * to bridge or too degraded for {@link estimateMissingLandmarks} to touch.
+ *
+ * This is the final safety net in the pose chain. {@link interpolatePoseFrames}
+ * deliberately *omits* a joint absent for longer than its bridge gap (to avoid a
+ * stretched straight line), and {@link estimateMissingLandmarks} skips frames
+ * missing more than a handful of joints (an occluded arm + leg trivially exceeds
+ * it) — so an outdoor climber pressed to the wall leaves whole limbs absent for
+ * a second or more, which the overlay shows as a flickering glitch. This pass
+ * closes those holes:
+ *
+ *  - **Bracketed only.** A joint is filled only when it has a real detection on
+ *    *both* temporal sides. A joint never yet seen, or gone for the rest of the
+ *    clip (genuinely off-frame), is left absent — we never invent a limb the
+ *    detector had no evidence for.
+ *  - **Structural where possible.** When a skeleton neighbour is present in the
+ *    current frame and a bracketing reference frame holds both joints, the gap
+ *    joint is placed by that frame's bone vector off the *current* neighbour, so
+ *    it stays attached to the moving limb instead of sliding a straight line.
+ *  - **Temporal otherwise.** With no usable neighbour, the joint is linearly
+ *    interpolated between its bracketing detections.
+ *  - **Dimmed.** Every filled joint's score is attenuated by
+ *    {@link PERSISTENT_GAP_SCORE_FACTOR} below the renderer's dim threshold, so
+ *    reconstructed limbs render faint — honest about being inferred.
+ *
+ * Run after {@link estimateMissingLandmarks} and before {@link smoothPoseFrames}
+ * so the filled joints are smoothed with the rest of the pose.
+ *
+ * @param frames  - Dense PoseFrame array (output of estimateMissingLandmarks).
+ * @param backend - Pose backend, selects the skeleton topology. Default mediapipe.
+ */
+export function fillPersistentGaps(
+  frames: PoseFrame[],
+  backend?: PoseBackend,
+): PoseFrame[] {
+  if (frames.length < 3) return frames;
+
+  const adjacency = getAdjacency(backend);
+  const allNames = getAllKpNames(backend);
+
+  // Per-joint ascending list of frame indices where the joint is present.
+  const presentIdx = new Map<string, number[]>();
+  for (const name of allNames) presentIdx.set(name, []);
+  frames.forEach((f, i) => {
+    for (const kp of f.keypoints) presentIdx.get(kp.name)?.push(i);
+  });
+
+  return frames.map((frame, i) => {
+    // Resolve every missing-but-bracketed joint for this frame up front.
+    const present = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+    const gaps: { name: string; prevI: number; nextI: number }[] = [];
+    for (const name of allNames) {
+      if (present.has(name)) continue;
+      const idxs = presentIdx.get(name);
+      if (!idxs || idxs.length === 0) continue;
+      const prevI = bracketBefore(idxs, i);
+      const nextI = bracketAfter(idxs, i);
+      if (prevI === null || nextI === null) continue; // not bracketed → leave absent
+      gaps.push({ name, prevI, nextI });
+    }
+    if (gaps.length === 0) return frame;
+
+    const findKp = (idx: number, name: string): Keypoint | undefined =>
+      frames[idx].keypoints.find(k => k.name === name);
+
+    const added: Keypoint[] = [];
+    for (const { name, prevI, nextI } of gaps) {
+      const prevKp = findKp(prevI, name)!;
+      const nextKp = findKp(nextI, name)!;
+      const t = (i - prevI) / (nextI - prevI);
+
+      // Structural: keep the joint attached to a still-visible neighbour using a
+      // bone vector from whichever bracketing frame holds both. Prefer the
+      // temporally nearer reference so the limb pose is the most relevant one.
+      let filled: Keypoint | null = null;
+      const neighbours = adjacency.get(name);
+      if (neighbours) {
+        const refOrder = t <= 0.5 ? [prevI, nextI] : [nextI, prevI];
+        for (const neighbourName of neighbours) {
+          const current = present.get(neighbourName);
+          if (!current) continue;
+          for (const refI of refOrder) {
+            const refJoint = findKp(refI, name);
+            const refNeighbour = findKp(refI, neighbourName);
+            if (refJoint && refNeighbour) {
+              filled = {
+                name,
+                x: current.x + (refJoint.x - refNeighbour.x),
+                y: current.y + (refJoint.y - refNeighbour.y),
+                score: Math.min(prevKp.score, nextKp.score) * PERSISTENT_GAP_SCORE_FACTOR,
+              };
+              break;
+            }
+          }
+          if (filled) break;
+        }
+      }
+
+      // Temporal fallback — linear across the bracketing detections.
+      if (!filled) {
+        filled = {
+          name,
+          x: lerp(prevKp.x, nextKp.x, t),
+          y: lerp(prevKp.y, nextKp.y, t),
+          score: Math.min(prevKp.score, nextKp.score) * PERSISTENT_GAP_SCORE_FACTOR,
+        };
+      }
+      added.push(filled);
+    }
+
+    return { ...frame, keypoints: [...frame.keypoints, ...added] };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Adaptive smoothing (One-Euro filter)
 // ---------------------------------------------------------------------------
 

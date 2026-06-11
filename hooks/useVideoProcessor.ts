@@ -27,6 +27,7 @@ import {
   filterLandmarks,
   interpolatePoseFrames,
   estimateMissingLandmarks,
+  fillPersistentGaps,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
 import {
@@ -699,13 +700,17 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           kept.sort((a, b) => a.timestamp - b.timestamp);
         }
 
-        // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
+        // Pipeline: filter → interpolate → estimate → fill persistent gaps → smooth.
         // Filtering is climbing-weighted; tolerance comes from the quality tier
-        // (undefined → filterLandmarks' built-in default).
+        // (undefined → filterLandmarks' built-in default). The persistent-gap pass
+        // is the no-gap guarantee: any joint detected on both temporal sides is
+        // always present (dimmed), so an occluded limb cannot wink out mid-climb
+        // even across dropouts too long to bridge or too degraded to estimate.
         const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
-        const frames       = smoothPoseFrames(estimated);
+        const filled       = fillPersistentGaps(estimated, backend);
+        const frames       = smoothPoseFrames(filled);
 
         saveAttempt({
           id,
