@@ -39,14 +39,16 @@ import { applyHomographyMatrix } from "@/pipeline/homography";
 const DEFAULT_COLOR = "#b3e609"; // accent green — silhouette base colour
 /** Skeleton lines: a brighter variation of the accent so the thin pose reads
  *  crisply on top of the translucent silhouette. */
-const DEFAULT_SKELETON_COLOR = shiftLightness(DEFAULT_COLOR, 0.14);
+const DEFAULT_SKELETON_COLOR = shiftLightness(DEFAULT_COLOR, 0.5);
 /** Joint points: lighter still than the lines, so points read as highlights. */
-const DEFAULT_JOINT_COLOR = shiftLightness(DEFAULT_COLOR, 0.26);
+const DEFAULT_JOINT_COLOR = shiftLightness(DEFAULT_COLOR, 0.75);
 const DEFAULT_SILHOUETTE_OPACITY = 0.25;
-/** Hue shift (fraction of the wheel) applied to one side so left vs right limbs
- *  and joints read as subtly distinct. Left shifts +, right shifts −; centre
+/** Hue shifts (fraction of the wheel) that tint left vs right limbs and joints.
+ *  Both rotate the accent *toward* green — never toward yellow — so each side
+ *  reads as a distinct green; the right is simply the greener of the two. Centre
  *  bones (shoulder/hip spans) are left unshifted. */
-const SIDE_HUE_SHIFT = 0.05;
+const SIDE_HUE_SHIFT_LEFT = 0.04;
+const SIDE_HUE_SHIFT_RIGHT = 0.09;
 /** Opacity multiplier for the silhouette head. The head now floats free (the
  *  neck capsule was removed), so keep it faint to make the detachment subtle. */
 const HEAD_SILHOUETTE_OPACITY = 0.55;
@@ -383,11 +385,13 @@ function edgeSide(a: string, b: string): Side {
   return sa === sideOf(b) ? sa : "center";
 }
 
-/** Tint a colour for one body side — left warms, right cools — by a slight hue
- *  rotation. Centre bones/joints are returned unchanged. */
+/** Tint a colour for one body side by rotating the hue toward green — the right
+ *  side a touch more than the left — so the two sides read as distinct greens.
+ *  Centre bones/joints are returned unchanged. */
 function sideColor(css: string, side: Side): string {
-  if (side === "center") return css;
-  return shiftHue(css, side === "left" ? SIDE_HUE_SHIFT : -SIDE_HUE_SHIFT);
+  if (side === "left") return shiftHue(css, SIDE_HUE_SHIFT_LEFT);
+  if (side === "right") return shiftHue(css, SIDE_HUE_SHIFT_RIGHT);
+  return css;
 }
 
 /** Does this 2D context support the `filter` property (blur)? jsdom and very old
