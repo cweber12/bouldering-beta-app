@@ -313,10 +313,11 @@ export function useImageMatcher(): ImageMatcherResult {
 
       // A Fixed Capture (or panning fallback) with no valid homography cannot be
       // rendered — surface the user-facing error after diagnostics are recorded.
+      // The message is tailored to the failure reason so a viewpoint mismatch
+      // (the dominant real-world cause) gets actionable guidance rather than a
+      // generic "try a clearer photo".
       if (!keyframeHomographies && !homography) {
-        throw new Error(
-          "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
-        );
+        throw new Error(alignmentErrorMessage(fixedStats));
       }
 
       setResult({
@@ -345,6 +346,25 @@ export function useImageMatcher(): ImageMatcherResult {
   }, []);
 
   return { matchImage, reset, status, result, errorMessage, matchDiagnostics };
+}
+
+/**
+ * Build the user-facing alignment-failure message from the homography stats.
+ *
+ * The failure reason separates the two real-world causes a route photo fails to
+ * align (confirmed by the dev ORB bench against real footage):
+ *  - `gate_rejected` / `degenerate` — matches were found but they do not agree
+ *    on a single perspective. Almost always the photo and the video show the
+ *    wall from different angles/positions (e.g. a wide scenery shot of the
+ *    boulder vs a close climbing clip), so no homography exists.
+ *  - `too_few_matches` — too little shared detail to match at all: a
+ *    low-resolution or blurry photo, or a photo of a different wall.
+ */
+function alignmentErrorMessage(stats: HomographyStats | null): string {
+  if (stats && (stats.failureReason === "gate_rejected" || stats.failureReason === "degenerate")) {
+    return "This photo and the video look like different views of the wall, so the skeleton can't be aligned. Take the route photo from roughly the same angle and distance as the video, framing the same section of wall.";
+  }
+  return "Couldn't find enough matching detail between the photo and the video to align the skeleton. Use a sharp, high-resolution photo of the same part of the wall the video shows.";
 }
 
 /**

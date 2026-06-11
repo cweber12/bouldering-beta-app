@@ -487,13 +487,40 @@ describe("useImageMatcher — reanchorApplied", () => {
     expect(computeHomography).toHaveBeenCalledTimes(1);
   });
 
-  it("errors with an alignment message when the render homography is degenerate", async () => {
+  it("errors with a viewpoint-mismatch message when the render homography is gate-rejected", async () => {
     const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
     const attempt = fakeAttempt(15);
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
     (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
-    // Gate rejects the transform → computeHomography returns null.
+    // Matches found but the gate rejects the transform → computeHomography returns
+    // null and labels the stats out-param gate_rejected (the viewpoint-mismatch case).
+    (computeHomography as ReturnType<typeof vi.fn>).mockImplementation(
+      (_cv, _m, _r, _q, opts?: { stats?: { failureReason: string } }) => {
+        if (opts?.stats) opts.stats.failureReason = "gate_rejected";
+        return null;
+      },
+    );
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.errorMessage).toMatch(/different views/i);
+    expect(result.current.errorMessage).toMatch(/align/i);
+    expect(result.current.result).toBeNull();
+  });
+
+  it("errors with a not-enough-detail message when too few matches to align", async () => {
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const attempt = fakeAttempt(15);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
+    // No homography and the default too_few_matches reason → detail guidance.
     (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(null);
     stubLoadImageSuccess();
 
@@ -503,7 +530,7 @@ describe("useImageMatcher — reanchorApplied", () => {
     });
 
     expect(result.current.status).toBe("error");
-    expect(result.current.errorMessage).toMatch(/align/i);
+    expect(result.current.errorMessage).toMatch(/matching detail/i);
     expect(result.current.result).toBeNull();
   });
 });
