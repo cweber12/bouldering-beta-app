@@ -7,6 +7,7 @@ import {
   homographyAtTime,
   computeHomography,
   RANSAC_BASE_THRESHOLD,
+  RANSAC_RNG_SEED,
   type KeyframeHomography,
 } from "@/pipeline/homography";
 import { emptyHomographyStats } from "@/pipeline/diagnostics";
@@ -470,6 +471,7 @@ describe("computeHomography stats out-param", () => {
       }),
       findHomography: vi.fn(makeH),
       countNonZero: vi.fn(() => opts.inliers),
+      setRNGSeed: vi.fn(),
     };
   }
 
@@ -549,5 +551,16 @@ describe("computeHomography stats out-param", () => {
     const cv = makeCv({ homography: IDENTITY, inliers: 8 });
     const result = computeHomography(cv, makeMatches(10), makeFeatures(10), makeFeatures(10));
     expect(result).toBeInstanceOf(Float64Array);
+  });
+
+  it("seeds the RNG with a fixed value before findHomography for deterministic RANSAC", () => {
+    const cv = makeCv({ homography: IDENTITY, inliers: 8 });
+    computeHomography(cv, makeMatches(10), makeFeatures(10), makeFeatures(10));
+
+    expect(cv.setRNGSeed).toHaveBeenCalledWith(RANSAC_RNG_SEED);
+    // Seeding must precede the RANSAC estimate, or it has no effect.
+    expect(cv.setRNGSeed.mock.invocationCallOrder[0]).toBeLessThan(
+      cv.findHomography.mock.invocationCallOrder[0],
+    );
   });
 });

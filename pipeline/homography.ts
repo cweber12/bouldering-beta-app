@@ -25,6 +25,15 @@ export const RANSAC_BASE_THRESHOLD = 3.0;
 export const RANSAC_BASE_EDGE = 1600;
 
 /**
+ * Fixed seed for OpenCV's global RNG, set before every `findHomography` call.
+ * RANSAC samples minimal point sets from `cv`'s default RNG, whose state
+ * otherwise persists and advances across calls — so the same matches could
+ * yield slightly different homographies run-to-run. Re-seeding to a constant
+ * makes the estimate deterministic for a given set of matches.
+ */
+export const RANSAC_RNG_SEED = 0x5eed;
+
+/**
  * Scale the RANSAC reprojection threshold to the destination (query-photo)
  * resolution. The threshold lives in destination pixels, so a high-resolution
  * photo needs a proportionally larger tolerance to admit the same physical
@@ -213,6 +222,9 @@ export function computeHomography(
     // Pass an inlier mask so the diagnostics out-param can report how many of the
     // candidate matches RANSAC actually kept (countNonZero below).
     mask = new cv.Mat();
+    // Seed the global RNG so RANSAC is deterministic for these matches (guarded
+    // in case a build/mock lacks setRNGSeed).
+    cv.setRNGSeed?.(RANSAC_RNG_SEED);
     H = cv.findHomography(srcMat, dstMat, cv.RANSAC, opts.ransacReprojThreshold ?? RANSAC_BASE_THRESHOLD, mask);
 
     if (!H || H.empty()) {
