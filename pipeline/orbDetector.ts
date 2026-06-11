@@ -461,59 +461,96 @@ export function extractFeaturesExcludingClimber(
 }
 
 /**
+ * A BFMatcher (NORM_HAMMING) holding a single query feature set's descriptors.
+ * Build it once with {@link createQueryMatcher} and call {@link QueryMatcher.match}
+ * for each reference set — the query descriptor Mat and the matcher are allocated
+ * once and reused, instead of being rebuilt on every call as a bare
+ * {@link matchOrbFeatures} would. This matters when matching many references
+ * against one query (Panning Capture: every Keyframe vs the one Route Photo).
+ * Call {@link QueryMatcher.delete} when done to free the WASM allocations.
+ */
+export interface QueryMatcher {
+  /** Match a reference feature set against the trained query descriptors. */
+  match(ref: OrbFeatures): OrbMatch[];
+  /** Free the query Mat and BFMatcher. */
+  delete(): void;
+}
+
+/** Apply the Lowe ratio + Hamming-cap filter to a knnMatch result vector. */
+function collectMatches(knnMatches: CV): OrbMatch[] {
+  const results: OrbMatch[] = [];
+  for (let i = 0; i < knnMatches.size(); i++) {
+    const pair = knnMatches.get(i);
+    if (pair.size() < 2) continue;
+    const m = pair.get(0);
+    const n = pair.get(1);
+    if (m.distance <= HAMMING_MAX_DISTANCE && m.distance < LOWE_RATIO * n.distance) {
+      results.push({ queryIdx: m.queryIdx, trainIdx: m.trainIdx, distance: m.distance });
+    }
+  }
+  return results;
+}
+
+/**
+ * Build a {@link QueryMatcher} from a query feature set: allocates the query
+ * descriptor Mat and a NORM_HAMMING BFMatcher once. Returns null when the query
+ * has fewer than 2 rows (knnMatch with k=2 needs at least two train descriptors).
+ */
+export function createQueryMatcher(cv: CV, query: OrbFeatures): QueryMatcher | null {
+  const queryRows = query.descriptors.length / ORB_DESCRIPTOR_BYTES;
+  if (queryRows < 2) return null;
+
+  const queryMat = new cv.Mat(queryRows, ORB_DESCRIPTOR_BYTES, cv.CV_8UC1);
+  queryMat.data.set(query.descriptors.subarray(0, queryRows * ORB_DESCRIPTOR_BYTES));
+  const bf = new cv.BFMatcher(cv.NORM_HAMMING, false);
+
+  return {
+    match(ref: OrbFeatures): OrbMatch[] {
+      const refRows = ref.descriptors.length / ORB_DESCRIPTOR_BYTES;
+      if (refRows === 0) return [];
+
+      let refMat = null,
+        knnMatches = null;
+      try {
+        refMat = new cv.Mat(refRows, ORB_DESCRIPTOR_BYTES, cv.CV_8UC1);
+        refMat.data.set(ref.descriptors.subarray(0, refRows * ORB_DESCRIPTOR_BYTES));
+        knnMatches = new cv.DMatchVectorVector();
+        bf.knnMatch(refMat, queryMat, knnMatches, 2);
+        return collectMatches(knnMatches);
+      } finally {
+        knnMatches?.delete();
+        refMat?.delete();
+      }
+    },
+    delete(): void {
+      bf.delete();
+      queryMat.delete();
+    },
+  };
+}
+
+/**
  * Match two sets of ORB descriptors using BFMatcher (NORM_HAMMING) with
  * Lowe ratio test (k=2, ratio=0.75). Runs synchronously on the main thread.
  *
  * Returns an empty array immediately when either feature set is empty or
- * too small for knnMatch (requires at least 2 query rows).
+ * too small for knnMatch (requires at least 2 query rows). To match many
+ * reference sets against the same query, prefer {@link createQueryMatcher} so
+ * the query Mat is built once rather than per call.
  */
 export function matchOrbFeatures(
   cv: CV,
   ref: OrbFeatures,
   query: OrbFeatures,
 ): OrbMatch[] {
-  const refRows = ref.descriptors.length / ORB_DESCRIPTOR_BYTES;
-  const queryRows = query.descriptors.length / ORB_DESCRIPTOR_BYTES;
+  // Guard before allocating the matcher so a 0-keypoint reference does no work.
+  if (ref.descriptors.length / ORB_DESCRIPTOR_BYTES === 0) return [];
 
-  // knnMatch(k=2) requires at least 2 rows in the train set.
-  if (refRows === 0 || queryRows < 2) return [];
-
-  let refMat = null,
-    queryMat = null,
-    bf = null,
-    knnMatches = null;
-
+  const matcher = createQueryMatcher(cv, query);
+  if (!matcher) return [];
   try {
-    refMat = new cv.Mat(refRows, ORB_DESCRIPTOR_BYTES, cv.CV_8UC1);
-    refMat.data.set(ref.descriptors.subarray(0, refRows * ORB_DESCRIPTOR_BYTES));
-
-    queryMat = new cv.Mat(queryRows, ORB_DESCRIPTOR_BYTES, cv.CV_8UC1);
-    queryMat.data.set(query.descriptors.subarray(0, queryRows * ORB_DESCRIPTOR_BYTES));
-
-    bf = new cv.BFMatcher(cv.NORM_HAMMING, false);
-    knnMatches = new cv.DMatchVectorVector();
-    bf.knnMatch(refMat, queryMat, knnMatches, 2);
-
-    const results: OrbMatch[] = [];
-    for (let i = 0; i < knnMatches.size(); i++) {
-      const pair = knnMatches.get(i);
-      if (pair.size() < 2) continue;
-      const m = pair.get(0);
-      const n = pair.get(1);
-      if (m.distance <= HAMMING_MAX_DISTANCE && m.distance < LOWE_RATIO * n.distance) {
-        results.push({
-          queryIdx: m.queryIdx,
-          trainIdx: m.trainIdx,
-          distance: m.distance,
-        });
-      }
-    }
-
-    return results;
+    return matcher.match(ref);
   } finally {
-    knnMatches?.delete();
-    bf?.delete();
-    queryMat?.delete();
-    refMat?.delete();
+    matcher.delete();
   }
 }

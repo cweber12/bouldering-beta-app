@@ -10,6 +10,7 @@ vi.mock("@/pipeline/orbDetector", () => ({
   extractFeatures: vi.fn(),
   extractFeaturesFromCrop: vi.fn(),
   matchOrbFeatures: vi.fn(),
+  createQueryMatcher: vi.fn(),
   queryMaxEdgeFor: vi.fn(),
   downscaleImageData: vi.fn(),
   rescaleFeaturesToNative: vi.fn(),

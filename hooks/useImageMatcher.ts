@@ -5,6 +5,7 @@ import {
   extractFeatures,
   extractFeaturesFromCrop,
   matchOrbFeatures,
+  createQueryMatcher,
   downscaleImageData,
   rescaleFeaturesToNative,
   queryMaxEdgeFor,
@@ -225,27 +226,35 @@ export function useImageMatcher(): ImageMatcherResult {
       let keyframeHomographies: KeyframeHomography[] | undefined;
       if (panningMatch && attempt.keyframes) {
         const kfs: KeyframeHomography[] = [];
-        for (const kf of attempt.keyframes) {
-          const kfMatches = matchOrbFeatures(cv, kf.features, queryOrb);
-          if (kfMatches.length < 4) {
-            perKeyframeStats.push({
-              matchCount: kfMatches.length,
-              inlierCount: 0,
-              inlierRatio: 0,
-              homographyFound: false,
-              failureReason: "too_few_matches",
+        // Every keyframe matches against the same query photo, so build the query
+        // descriptor Mat + BFMatcher once and reuse it across keyframes instead of
+        // rebuilding the (large) query Mat on every match.
+        const queryMatcher = createQueryMatcher(cv, queryOrb);
+        try {
+          for (const kf of attempt.keyframes) {
+            const kfMatches = queryMatcher ? queryMatcher.match(kf.features) : [];
+            if (kfMatches.length < 4) {
+              perKeyframeStats.push({
+                matchCount: kfMatches.length,
+                inlierCount: 0,
+                inlierRatio: 0,
+                homographyFound: false,
+                failureReason: "too_few_matches",
+              });
+              continue;
+            }
+            const kfStats = emptyHomographyStats();
+            const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
+              ransacReprojThreshold: reproj,
+              gate,
+              stats: kfStats,
             });
-            continue;
+            perKeyframeStats.push(kfStats);
+            if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
+            kfs.push({ timestamp: kf.timestamp, h });
           }
-          const kfStats = emptyHomographyStats();
-          const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
-            ransacReprojThreshold: reproj,
-            gate,
-            stats: kfStats,
-          });
-          perKeyframeStats.push(kfStats);
-          if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
-          kfs.push({ timestamp: kf.timestamp, h });
+        } finally {
+          queryMatcher?.delete();
         }
         if (kfs.length > 0) {
           keyframeHomographies = kfs.sort((a, b) => a.timestamp - b.timestamp);
