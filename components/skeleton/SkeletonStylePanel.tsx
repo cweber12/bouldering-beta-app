@@ -12,8 +12,13 @@ import { useClickOutside } from "@/hooks/useClickOutside";
 // scale with the climber).
 // ---------------------------------------------------------------------------
 
-const DEFAULT_COLOR = "#00dc78";
-const DEFAULT_SILHOUETTE_OPACITY = 0.5;
+/** Silhouette base — the theme accent green. */
+const DEFAULT_SILHOUETTE_COLOR = "#b3e609";
+/** Skeleton lines — a brighter variation of the accent (accent +0.14 lightness). */
+const DEFAULT_LINE_COLOR = "#cdf73f";
+/** Joint points — lighter still than the lines (accent +0.26 lightness). */
+const DEFAULT_JOINT_COLOR = "#dcfa7a";
+const DEFAULT_SILHOUETTE_OPACITY = 0.25;
 const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
@@ -56,9 +61,9 @@ export interface SkeletonStylePanelProps {
  * 2. **Lines** — visibility, colour, thickness (the thin Skeleton lines).
  * 3. **Joints** — visibility, colour, size (the joint points).
  *
- * All three colours default to the same green; sliders are unitless multipliers
- * of body scale (the overlay sizes itself to the climber, so pixels would be
- * meaningless).
+ * The three colours default to a graded accent green — silhouette base, brighter
+ * lines, lighter joints; sliders are unitless multipliers of body scale (the
+ * overlay sizes itself to the climber, so pixels would be meaningless).
  */
 export default function SkeletonStylePanel({
   onChange,
@@ -73,18 +78,18 @@ export default function SkeletonStylePanel({
 
   // ── Silhouette pass ──
   const [silhouetteVisible, setSilhouetteVisible] = useState(true);
-  const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_COLOR);
+  const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_SILHOUETTE_COLOR);
   const [silhouetteOpacity, setSilhouetteOpacity] = useState(DEFAULT_SILHOUETTE_OPACITY);
   const [limbThickness,     setLimbThickness]     = useState(DEFAULT_LIMB_THICKNESS);
 
   // ── Skeleton lines ──
   const [linesVisible,  setLinesVisible]  = useState(true);
-  const [lineColor,     setLineColor]     = useState(DEFAULT_COLOR);
+  const [lineColor,     setLineColor]     = useState(DEFAULT_LINE_COLOR);
   const [lineThickness, setLineThickness] = useState(DEFAULT_LINE_THICKNESS);
 
   // ── Joints ──
   const [jointsVisible, setJointsVisible] = useState(true);
-  const [jointColor,    setJointColor]    = useState(DEFAULT_COLOR);
+  const [jointColor,    setJointColor]    = useState(DEFAULT_JOINT_COLOR);
   const [jointRadius,   setJointRadius]   = useState(DEFAULT_JOINT_RADIUS);
 
   // Stable ref for onChange to avoid re-emitting on every parent render.

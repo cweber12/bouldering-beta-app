@@ -5,6 +5,7 @@ import {
   extractFeatures,
   extractFeaturesFromCrop,
   matchOrbFeatures,
+  createQueryMatcher,
   downscaleImageData,
   rescaleFeaturesToNative,
   queryMaxEdgeFor,
@@ -14,6 +15,7 @@ import {
 } from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
 import { analyzeFrame } from "@/pipeline/frameAnalyzer";
+import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
 import {
   buildMatchDiagnostics,
   emptyHomographyStats,
@@ -126,19 +128,29 @@ export function useImageMatcher(): ImageMatcherResult {
         : queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
       const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
 
+      // Symmetric ORB preprocessing: the reference frame and Panning keyframes
+      // are extracted from an applyOrbPreprocessing (retinex LCN + equalise)
+      // surface, so the query photo MUST be normalised the same way or the
+      // descriptors are built on a different intensity surface and Hamming
+      // distances inflate. Preprocess after downscaling (closest to the
+      // reference's resolution, where the σ=30 retinex blur behaves the same)
+      // and extract with normalizePixels=false since the LCN pass already
+      // equalised. See pipeline/framePreprocessor.applyOrbPreprocessing.
+      const scaledProcessed = preprocessForOrb(cv, scaled);
+
       // When the user specified a crop region, extract ORB features only from
       // that sub-region. Keypoints are offset back to full-image coordinates
       // by extractFeaturesFromCrop so homography computation is unaffected.
       let queryOrb = userCrop
-        ? extractFeaturesFromCrop(cv, scaled, {
+        ? extractFeaturesFromCrop(cv, scaledProcessed, {
             x: Math.round(userCrop.x * scaled.width),
             y: Math.round(userCrop.y * scaled.height),
             width: Math.round(userCrop.w * scaled.width),
             height: Math.round(userCrop.h * scaled.height),
             srcWidth: scaled.width,
             srcHeight: scaled.height,
-          })
-        : extractFeatures(cv, scaled);
+          }, false)
+        : extractFeatures(cv, scaledProcessed, false);
       queryOrb = rescaleFeaturesToNative(queryOrb, scale);
       let matches = matchOrbFeatures(cv, attempt.orbFeatures, queryOrb);
       let reanchorApplied = false;
@@ -185,7 +197,8 @@ export function useImageMatcher(): ImageMatcherResult {
 
           if (qWidth > 0 && qHeight > 0) {
             const queryCropData = cropImageData(imageData, { x: qx, y: qy, width: qWidth, height: qHeight });
-            const queryCropOrb  = extractFeatures(cv, queryCropData);
+            // Same symmetric preprocessing as the primary query pass.
+            const queryCropOrb  = extractFeatures(cv, preprocessForOrb(cv, queryCropData), false);
             // Offset keypoints back to full-image coordinates.
             const offsetKp = queryCropOrb.keypoints.map(kp => ({
               ...kp,
@@ -213,27 +226,35 @@ export function useImageMatcher(): ImageMatcherResult {
       let keyframeHomographies: KeyframeHomography[] | undefined;
       if (panningMatch && attempt.keyframes) {
         const kfs: KeyframeHomography[] = [];
-        for (const kf of attempt.keyframes) {
-          const kfMatches = matchOrbFeatures(cv, kf.features, queryOrb);
-          if (kfMatches.length < 4) {
-            perKeyframeStats.push({
-              matchCount: kfMatches.length,
-              inlierCount: 0,
-              inlierRatio: 0,
-              homographyFound: false,
-              failureReason: "too_few_matches",
+        // Every keyframe matches against the same query photo, so build the query
+        // descriptor Mat + BFMatcher once and reuse it across keyframes instead of
+        // rebuilding the (large) query Mat on every match.
+        const queryMatcher = createQueryMatcher(cv, queryOrb);
+        try {
+          for (const kf of attempt.keyframes) {
+            const kfMatches = queryMatcher ? queryMatcher.match(kf.features) : [];
+            if (kfMatches.length < 4) {
+              perKeyframeStats.push({
+                matchCount: kfMatches.length,
+                inlierCount: 0,
+                inlierRatio: 0,
+                homographyFound: false,
+                failureReason: "too_few_matches",
+              });
+              continue;
+            }
+            const kfStats = emptyHomographyStats();
+            const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
+              ransacReprojThreshold: reproj,
+              gate,
+              stats: kfStats,
             });
-            continue;
+            perKeyframeStats.push(kfStats);
+            if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
+            kfs.push({ timestamp: kf.timestamp, h });
           }
-          const kfStats = emptyHomographyStats();
-          const h = computeHomography(cv, kfMatches, kf.features, queryOrb, {
-            ransacReprojThreshold: reproj,
-            gate,
-            stats: kfStats,
-          });
-          perKeyframeStats.push(kfStats);
-          if (!h) continue; // failed RANSAC or validity gate → skip, interpolated
-          kfs.push({ timestamp: kf.timestamp, h });
+        } finally {
+          queryMatcher?.delete();
         }
         if (kfs.length > 0) {
           keyframeHomographies = kfs.sort((a, b) => a.timestamp - b.timestamp);
@@ -301,10 +322,11 @@ export function useImageMatcher(): ImageMatcherResult {
 
       // A Fixed Capture (or panning fallback) with no valid homography cannot be
       // rendered — surface the user-facing error after diagnostics are recorded.
+      // The message is tailored to the failure reason so a viewpoint mismatch
+      // (the dominant real-world cause) gets actionable guidance rather than a
+      // generic "try a clearer photo".
       if (!keyframeHomographies && !homography) {
-        throw new Error(
-          "Couldn't align the skeleton to this photo. Try a clearer photo, or re-frame the wall texture over distinctive holds or features.",
-        );
+        throw new Error(alignmentErrorMessage(fixedStats));
       }
 
       setResult({
@@ -333,6 +355,45 @@ export function useImageMatcher(): ImageMatcherResult {
   }, []);
 
   return { matchImage, reset, status, result, errorMessage, matchDiagnostics };
+}
+
+/**
+ * Build the user-facing alignment-failure message from the homography stats.
+ *
+ * The failure reason separates the two real-world causes a route photo fails to
+ * align (confirmed by the dev ORB bench against real footage):
+ *  - `gate_rejected` / `degenerate` — matches were found but they do not agree
+ *    on a single perspective. Almost always the photo and the video show the
+ *    wall from different angles/positions (e.g. a wide scenery shot of the
+ *    boulder vs a close climbing clip), so no homography exists.
+ *  - `too_few_matches` — too little shared detail to match at all: a
+ *    low-resolution or blurry photo, or a photo of a different wall.
+ */
+function alignmentErrorMessage(stats: HomographyStats | null): string {
+  if (stats && (stats.failureReason === "gate_rejected" || stats.failureReason === "degenerate")) {
+    return "This photo and the video look like different views of the wall, so the skeleton can't be aligned. Take the route photo from roughly the same angle and distance as the video, framing the same section of wall.";
+  }
+  return "Couldn't find enough matching detail between the photo and the video to align the skeleton. Use a sharp, high-resolution photo of the same part of the wall the video shows.";
+}
+
+/**
+ * Apply the ORB preprocessing pipeline (retinex LCN + histogram equalisation,
+ * plus a blur-triggered unsharp pass) to an ImageData and return the processed
+ * copy, leaving the input untouched. Mirrors the reference-frame / keyframe
+ * preprocessing in useVideoProcessor so query descriptors are extracted from
+ * the same intensity surface. Returns the input unchanged if a 2D context is
+ * unavailable.
+ */
+function preprocessForOrb(cv: CV, imageData: ImageData): ImageData {
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return imageData;
+  ctx.putImageData(imageData, 0, 0);
+  const analysis = analyzeFrame(cv, imageData);
+  applyOrbPreprocessing(cv, canvas, analysis);
+  return ctx.getImageData(0, 0, imageData.width, imageData.height);
 }
 
 /**

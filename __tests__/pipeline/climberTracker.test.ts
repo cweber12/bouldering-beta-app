@@ -7,6 +7,7 @@ import {
   selectClimberByPoint,
   deriveClimberCrop,
   expandCropBox,
+  pickAcquisitionRegion,
   DEFAULT_GATE,
 } from "@/pipeline/climberTracker";
 import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
@@ -235,5 +236,32 @@ describe("expandCropBox", () => {
   it("does not exceed frame bounds at the edge", () => {
     const out = expandCropBox({ x: 0, y: 0, width: 1000, height: 1000 }, 1000, 1000, 0.5);
     expect(out).toEqual({ x: 0, y: 0, width: 1000, height: 1000 });
+  });
+});
+
+describe("pickAcquisitionRegion", () => {
+  const crop = { x: 100, y: 100, width: 300, height: 500 };
+
+  it("seeds acquisition with the climber crop even when the climber was tapped", () => {
+    // Regression: tapping previously forced a full-frame search (region=null),
+    // so a small / distant climber was never acquired until they grew large.
+    // The tap drives identity, not the search area, so the crop must win here.
+    const region = pickAcquisitionRegion(null, crop, 1280, 720);
+    expect(region).toEqual(crop);
+  });
+
+  it("uses the climber crop when there is no established track", () => {
+    expect(pickAcquisitionRegion(null, crop, 1280, 720)).toEqual(crop);
+  });
+
+  it("prefers the slack-expanded last climber box once a track exists", () => {
+    const last = { x: 200, y: 200, width: 100, height: 100 };
+    const region = pickAcquisitionRegion(last, crop, 1000, 1000, 0.1);
+    // Established track wins over the seed crop, expanded by 10% slack.
+    expect(region).toEqual(expandCropBox(last, 1000, 1000, 0.1));
+  });
+
+  it("returns null (full-frame search) when neither a track nor a crop exists", () => {
+    expect(pickAcquisitionRegion(null, null, 1280, 720)).toBeNull();
   });
 });

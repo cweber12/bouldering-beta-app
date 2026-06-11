@@ -1,5 +1,5 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, createQueryMatcher, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/orbDetector";
 import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/orbDetector";
 
 // ---------------------------------------------------------------------------
@@ -270,6 +270,62 @@ describe("matchOrbFeatures", () => {
     const cv = makeMockCv({ matchPairs: [] });
     matchOrbFeatures(cv, makeFeatures(3), makeFeatures(3));
 
+    expect(cv._bfMatcher.delete).toHaveBeenCalled();
+    for (const m of cv._matInstances) {
+      expect(m.delete).toHaveBeenCalled();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createQueryMatcher (reusable query-side matcher)
+// ---------------------------------------------------------------------------
+
+describe("createQueryMatcher", () => {
+  it("returns null when the query has fewer than 2 rows", () => {
+    const cv = makeMockCv();
+    expect(createQueryMatcher(cv, makeFeatures(1))).toBeNull();
+    expect(cv.BFMatcher).not.toHaveBeenCalled();
+  });
+
+  it("builds the query Mat and BFMatcher once and reuses them across matches", () => {
+    const pairs: Pair[] = [
+      [
+        { distance: 20, queryIdx: 0, trainIdx: 1 },
+        { distance: 80, queryIdx: 0, trainIdx: 2 },
+      ],
+    ];
+    const cv = makeMockCv({ matchPairs: pairs });
+    const matcher = createQueryMatcher(cv, makeFeatures(5));
+    expect(matcher).not.toBeNull();
+
+    // BFMatcher constructed exactly once at build time.
+    expect(cv.BFMatcher).toHaveBeenCalledTimes(1);
+    const matCountAfterBuild = cv.Mat.mock.calls.length;
+
+    const r1 = matcher!.match(makeFeatures(3));
+    const r2 = matcher!.match(makeFeatures(3));
+    expect(r1).toHaveLength(1);
+    expect(r2).toHaveLength(1);
+
+    // Still one BFMatcher; each match allocates only its own ref Mat (one per
+    // call), not a fresh query Mat — so two matches add exactly two Mats.
+    expect(cv.BFMatcher).toHaveBeenCalledTimes(1);
+    expect(cv.Mat.mock.calls.length).toBe(matCountAfterBuild + 2);
+  });
+
+  it("returns an empty array for a 0-keypoint reference without allocating a ref Mat", () => {
+    const cv = makeMockCv();
+    const matcher = createQueryMatcher(cv, makeFeatures(5));
+    const matCountAfterBuild = cv.Mat.mock.calls.length;
+    expect(matcher!.match(makeFeatures(0))).toEqual([]);
+    expect(cv.Mat.mock.calls.length).toBe(matCountAfterBuild);
+  });
+
+  it("frees the query Mat and BFMatcher on delete()", () => {
+    const cv = makeMockCv();
+    const matcher = createQueryMatcher(cv, makeFeatures(5));
+    matcher!.delete();
     expect(cv._bfMatcher.delete).toHaveBeenCalled();
     for (const m of cv._matInstances) {
       expect(m.delete).toHaveBeenCalled();

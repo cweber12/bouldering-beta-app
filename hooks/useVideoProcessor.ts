@@ -15,7 +15,7 @@ import {
 } from "@/pipeline/cropDetector";
 import {
   deriveClimberCrop,
-  expandCropBox,
+  pickAcquisitionRegion,
   poseCentroid,
   predictCentroid,
   selectClimberByPoint,
@@ -27,6 +27,7 @@ import {
   filterLandmarks,
   interpolatePoseFrames,
   estimateMissingLandmarks,
+  fillPersistentGaps,
   smoothPoseFrames,
 } from "@/pipeline/poseInterpolator";
 import {
@@ -509,14 +510,20 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             // Region selection (pixels):
             //  • established track → adaptive crop around the climber (slack-expanded)
-            //  • no track yet, no tap, manual/derived crop → use it as the seed region
-            //  • otherwise full frame, so the tap / all people can be found
-            let region: CropBox | null = null;
-            if (lastClimberBox) {
-              region = expandCropBox(lastClimberBox, videoWidth, videoHeight, 0.15);
-            } else if (!tappedPoint && climberCropPx) {
-              region = climberCropPx;
-            }
+            //  • no track yet but a climber crop is known → seed acquisition with
+            //    it, even when the climber was tapped (the tap drives identity,
+            //    not the search area). This keeps a small / distant climber large
+            //    enough in the detection input for MediaPipe; searching the full
+            //    frame leaves a climber at the base of a tall boulder undetectable
+            //    until they climb large enough.
+            //  • otherwise full frame.
+            // A missed seed crop still falls back to the full-frame re-acquire below.
+            const region = pickAcquisitionRegion(
+              lastClimberBox,
+              climberCropPx ?? null,
+              videoWidth,
+              videoHeight,
+            );
 
             let chosen = detectClimber(region, predicted);
 
@@ -693,13 +700,17 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           kept.sort((a, b) => a.timestamp - b.timestamp);
         }
 
-        // Pipeline: filter → interpolate → estimate missing landmarks → smooth.
+        // Pipeline: filter → interpolate → estimate → fill persistent gaps → smooth.
         // Filtering is climbing-weighted; tolerance comes from the quality tier
-        // (undefined → filterLandmarks' built-in default).
+        // (undefined → filterLandmarks' built-in default). The persistent-gap pass
+        // is the no-gap guarantee: any joint detected on both temporal sides is
+        // always present (dimmed), so an occluded limb cannot wink out mid-climb
+        // even across dropouts too long to bridge or too degraded to estimate.
         const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
-        const frames       = smoothPoseFrames(estimated);
+        const filled       = fillPersistentGaps(estimated, backend);
+        const frames       = smoothPoseFrames(filled);
 
         saveAttempt({
           id,

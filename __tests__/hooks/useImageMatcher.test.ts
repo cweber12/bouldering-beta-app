@@ -10,6 +10,7 @@ vi.mock("@/pipeline/orbDetector", () => ({
   extractFeatures: vi.fn(),
   extractFeaturesFromCrop: vi.fn(),
   matchOrbFeatures: vi.fn(),
+  createQueryMatcher: vi.fn(),
   queryMaxEdgeFor: vi.fn(),
   downscaleImageData: vi.fn(),
   rescaleFeaturesToNative: vi.fn(),
@@ -25,6 +26,16 @@ vi.mock("@/utils/cvHelpers", () => ({
   cropImageData: vi.fn().mockImplementation((src: ImageData) => src),
 }));
 
+// Symmetric query preprocessing (fix #1) — mocked to a no-op so the matcher's
+// extract/match behaviour is what the assertions exercise, not OpenCV calls.
+vi.mock("@/pipeline/framePreprocessor", () => ({
+  applyOrbPreprocessing: vi.fn(),
+}));
+
+vi.mock("@/pipeline/frameAnalyzer", () => ({
+  analyzeFrame: vi.fn().mockReturnValue({ isBlurry: false }),
+}));
+
 vi.mock("@/storage/sessionStore", () => ({
   getAttempt: vi.fn(),
 }));
@@ -38,6 +49,7 @@ import {
   rescaleFeaturesToNative,
 } from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
+import { cropImageData } from "@/utils/cvHelpers";
 import { getAttempt } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
@@ -112,9 +124,16 @@ function stubLoadImageSuccess(width = 100, height = 80) {
     colorSpace: "srgb",
   } as ImageData;
 
+  // preprocessForOrb draws an ImageData onto a canvas and reads it back; make
+  // the stub a faithful passthrough (getImageData returns whatever was last
+  // putImageData'd) so the symmetric-preprocessing pass preserves identity and
+  // arg assertions still see the downscaled/cropped ImageData. The image-decode
+  // path uses drawImage (no putImageData) and falls back to fakeImageData.
+  let lastPut: ImageData | null = null;
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
     drawImage: vi.fn(),
-    getImageData: vi.fn().mockReturnValue(fakeImageData),
+    putImageData: vi.fn((d: ImageData) => { lastPut = d; }),
+    getImageData: vi.fn(() => lastPut ?? fakeImageData),
   });
 
   return fakeImageData;
@@ -152,6 +171,11 @@ beforeEach(() => {
   );
   (rescaleFeaturesToNative as ReturnType<typeof vi.fn>).mockImplementation(
     (features: unknown) => features,
+  );
+  // resetAllMocks wipes the factory impl; restore the crop passthrough so the
+  // re-anchor path (and the symmetric preprocessing pass) get a real ImageData.
+  (cropImageData as ReturnType<typeof vi.fn>).mockImplementation(
+    (src: ImageData) => src,
   );
   // Fixed Capture now computes a gated render homography; default it to a valid
   // identity so happy-path cases reach "done". Degenerate-match cases override
@@ -219,7 +243,9 @@ describe("useImageMatcher — happy path", () => {
       await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
     });
 
-    expect(extractFeatures).toHaveBeenCalledWith(mockCv, fakeImageData);
+    // Symmetric preprocessing returns the canvas-stub ImageData (same fakeImageData
+    // reference); extraction skips its own equalise (normalizePixels=false).
+    expect(extractFeatures).toHaveBeenCalledWith(mockCv, fakeImageData, false);
   });
 
   it("downscales the query with a reference-aware max edge, then rescales features to native", async () => {
@@ -247,8 +273,8 @@ describe("useImageMatcher — happy path", () => {
     expect(queryMaxEdgeFor).toHaveBeenCalledWith(attempt.videoMeta.width, attempt.videoMeta.height);
     // Native-resolution image is downscaled before extraction.
     expect(downscaleImageData).toHaveBeenCalledWith(mockCv, loaded, 1280);
-    // ORB runs on the downscaled image…
-    expect(extractFeatures).toHaveBeenCalledWith(mockCv, scaledImageData);
+    // ORB runs on the (preprocessed) downscaled image…
+    expect(extractFeatures).toHaveBeenCalledWith(mockCv, scaledImageData, false);
     // …and detected keypoints are mapped back to native coords with the scale.
     expect(rescaleFeaturesToNative).toHaveBeenCalledWith(detectedOnScaled, 0.5);
     // The native features (not the scaled ones) feed matching.
@@ -462,13 +488,40 @@ describe("useImageMatcher — reanchorApplied", () => {
     expect(computeHomography).toHaveBeenCalledTimes(1);
   });
 
-  it("errors with an alignment message when the render homography is degenerate", async () => {
+  it("errors with a viewpoint-mismatch message when the render homography is gate-rejected", async () => {
     const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
     const attempt = fakeAttempt(15);
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
     (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
-    // Gate rejects the transform → computeHomography returns null.
+    // Matches found but the gate rejects the transform → computeHomography returns
+    // null and labels the stats out-param gate_rejected (the viewpoint-mismatch case).
+    (computeHomography as ReturnType<typeof vi.fn>).mockImplementation(
+      (_cv, _m, _r, _q, opts?: { stats?: { failureReason: string } }) => {
+        if (opts?.stats) opts.stats.failureReason = "gate_rejected";
+        return null;
+      },
+    );
+    stubLoadImageSuccess();
+
+    const { result } = renderHook(() => useImageMatcher());
+    await act(async () => {
+      await result.current.matchImage(fakeImageFile(), "attempt-1", mockCv);
+    });
+
+    expect(result.current.status).toBe("error");
+    expect(result.current.errorMessage).toMatch(/different views/i);
+    expect(result.current.errorMessage).toMatch(/align/i);
+    expect(result.current.result).toBeNull();
+  });
+
+  it("errors with a not-enough-detail message when too few matches to align", async () => {
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const attempt = fakeAttempt(15);
+    (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
+    (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
+    (matchOrbFeatures as ReturnType<typeof vi.fn>).mockReturnValue(tenMatches);
+    // No homography and the default too_few_matches reason → detail guidance.
     (computeHomography as ReturnType<typeof vi.fn>).mockReturnValue(null);
     stubLoadImageSuccess();
 
@@ -478,7 +531,7 @@ describe("useImageMatcher — reanchorApplied", () => {
     });
 
     expect(result.current.status).toBe("error");
-    expect(result.current.errorMessage).toMatch(/align/i);
+    expect(result.current.errorMessage).toMatch(/matching detail/i);
     expect(result.current.result).toBeNull();
   });
 });
@@ -514,7 +567,7 @@ describe("useImageMatcher — userCrop", () => {
       height: Math.round(0.5 * 150),
       srcWidth: 200,
       srcHeight: 150,
-    });
+    }, false);
     // extractFeatures should NOT be called when userCrop is set.
     expect(extractFeatures).not.toHaveBeenCalled();
     expect(result.current.status).toBe("done");
