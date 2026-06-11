@@ -5,10 +5,11 @@
  * via a homography matrix, then draws the overlay onto the canvas as two
  * passes:
  *
- *  - **Silhouette** — the skeleton drawn fat: every bone (arms, legs, neck,
- *    hands, feet) stroked as a round-capped capsule, plus two filled regions for
- *    the parts that are areas not bones (the torso quad and a head oval), all
- *    unioned into one body shape. Hand and foot edges are stroked at 0.75× the
+ *  - **Silhouette** — the skeleton drawn fat: every bone (arms, legs, hands,
+ *    feet) stroked as a round-capped capsule, plus two filled regions for the
+ *    parts that are areas not bones (the torso quad and a faint, detached head
+ *    oval — there is no neck capsule), all unioned into one body shape. Hand and
+ *    foot edges are stroked at 0.75× the
  *    limb width (anatomical proportion). It is shaded for depth — a dark inner
  *    rim along the union boundary fading to lighter limb cores, with radial fills
  *    for the torso and head on top — all derived from the single silhouette
@@ -35,10 +36,22 @@ import { applyHomographyMatrix } from "@/pipeline/homography";
 // Defaults (all thickness/size values are × body scale unless noted)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_COLOR = "#00dc78"; // accent green — shared default for all passes
-const DEFAULT_SILHOUETTE_OPACITY = 0.5;
-/** Base limb (arm / leg / neck / torso-stroke) capsule **radius** as a fraction
- *  of shoulder width. One width for every bone so joints line up with no step. */
+const DEFAULT_COLOR = "#b3e609"; // accent green — silhouette base colour
+/** Skeleton lines: a brighter variation of the accent so the thin pose reads
+ *  crisply on top of the translucent silhouette. */
+const DEFAULT_SKELETON_COLOR = shiftLightness(DEFAULT_COLOR, 0.14);
+/** Joint points: lighter still than the lines, so points read as highlights. */
+const DEFAULT_JOINT_COLOR = shiftLightness(DEFAULT_COLOR, 0.26);
+const DEFAULT_SILHOUETTE_OPACITY = 0.25;
+/** Hue shift (fraction of the wheel) applied to one side so left vs right limbs
+ *  and joints read as subtly distinct. Left shifts +, right shifts −; centre
+ *  bones (shoulder/hip spans) are left unshifted. */
+const SIDE_HUE_SHIFT = 0.05;
+/** Opacity multiplier for the silhouette head. The head now floats free (the
+ *  neck capsule was removed), so keep it faint to make the detachment subtle. */
+const HEAD_SILHOUETTE_OPACITY = 0.55;
+/** Base limb (arm / leg / torso-stroke) capsule **radius** as a fraction of
+ *  shoulder width. One width for every bone so joints line up with no step. */
 const DEFAULT_LIMB_THICKNESS = 0.18;
 /** Skeleton line **radius** as a fraction of shoulder width. */
 const DEFAULT_LINE_THICKNESS = 0.015;
@@ -50,11 +63,9 @@ const DEFAULT_JOINT_RADIUS = 0.09;
  *  union the real landmark edges into a solid hand fan / foot. */
 const EXTREMITY_WIDTH_FACTOR = 0.75;
 
-/** Neck capsule radius as a fraction of the base limb radius (slightly wider). */
-const NECK_WIDTH_FACTOR = 1.25;
 /** Max head-centre distance from the shoulder-midpoint, × body scale. Past this
- *  the head is pulled in along the neck axis so the neck cannot over-stretch on
- *  big head tilts; the chin bridge still keeps the head attached. */
+ *  the head is pulled in along the neck axis so it cannot drift too far on big
+ *  head tilts (the neck capsule that used to bridge it is gone). */
 const NECK_MAX_DIST = 0.85;
 
 /** Head oval half-width as a fraction of body scale (shoulder width). Fixed —
@@ -149,7 +160,7 @@ export interface SkeletonStyle {
   silhouetteColor?: string;
   /** Whole-Silhouette opacity in [0, 1]. Default {@link DEFAULT_SILHOUETTE_OPACITY}. */
   silhouetteOpacity?: number;
-  /** Limb/neck/foot capsule radius × body scale. Default {@link DEFAULT_LIMB_THICKNESS}. */
+  /** Limb/foot capsule radius × body scale. Default {@link DEFAULT_LIMB_THICKNESS}. */
   limbThickness?: number;
 
   // ── Skeleton pass — thin lines ──
@@ -349,6 +360,36 @@ function shiftLightness(css: string, delta: number): string {
   return hslToCss(h, s, Math.max(0, Math.min(1, l + delta)));
 }
 
+/** `css` colour with its HSL hue rotated by `delta` (wrapped to [0, 1)). */
+function shiftHue(css: string, delta: number): string {
+  const { r, g, b } = parseRgb(css);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  return hslToCss((h + delta + 1) % 1, s, l);
+}
+
+type Side = "left" | "right" | "center";
+
+/** Which body side a keypoint belongs to, from its `left_`/`right_` name prefix. */
+function sideOf(name: string): Side {
+  if (name.startsWith("left_")) return "left";
+  if (name.startsWith("right_")) return "right";
+  return "center";
+}
+
+/** The side of an edge: a side only when both endpoints share it, else centre
+ *  (spanning bones like shoulder↔shoulder stay unshifted). */
+function edgeSide(a: string, b: string): Side {
+  const sa = sideOf(a);
+  return sa === sideOf(b) ? sa : "center";
+}
+
+/** Tint a colour for one body side — left warms, right cools — by a slight hue
+ *  rotation. Centre bones/joints are returned unchanged. */
+function sideColor(css: string, side: Side): string {
+  if (side === "center") return css;
+  return shiftHue(css, side === "left" ? SIDE_HUE_SHIFT : -SIDE_HUE_SHIFT);
+}
+
 /** Does this 2D context support the `filter` property (blur)? jsdom and very old
  *  engines do not — callers fall back to an unblurred (still seam-free) core. */
 function supportsFilter(ctx: CanvasRenderingContext2D): boolean {
@@ -544,7 +585,6 @@ function drawSilhouette(
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
   const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
-  const neckR = Math.max(0.5, limbR * NECK_WIDTH_FACTOR);
 
   const dark = shiftLightness(color, RIM_DARK_SHIFT);
   const light = shiftLightness(color, RIM_LIGHT_SHIFT);
@@ -564,13 +604,13 @@ function drawSilhouette(
     sctx.stroke();
   };
 
-  // Every bone capsule (arms/legs, hands/feet, neck), at `rScale × full radius`.
-  // Used at full width for the dark mask (pass 1) and eroded for the light cores
+  // Every bone capsule (arms/legs, hands/feet), at `rScale × full radius`. Used
+  // at full width for the dark mask (pass 1) and eroded for the light cores
   // (pass 2). Each shared joint lines up because adjacent capsules meet round-capped.
+  // No neck capsule — the head floats free (drawn faint below).
   const bones = (rScale: number): void => {
     for (const [a, b] of LIMB_EDGES) capsule(kp[a], kp[b], limbR * rScale);
     for (const [a, b] of EXTREMITY_EDGES) capsule(kp[a], kp[b], extremityR * rScale);
-    if (head && sMid) capsule(sMid, head.chin, neckR * rScale);
   };
 
   const torsoPath = (): void => {
@@ -596,6 +636,8 @@ function drawSilhouette(
   }
   bones(1);
   if (head) {
+    // Faint — the head floats free now the neck capsule is gone.
+    sctx.globalAlpha = HEAD_SILHOUETTE_OPACITY;
     sctx.beginPath();
     sctx.ellipse(head.cx, head.cy, head.major, head.minor, head.angle, 0, Math.PI * 2);
     sctx.fill();
@@ -652,6 +694,7 @@ function drawSilhouette(
     const headEdge = shiftLightness(color, HEAD_EDGE_SHIFT);
     const headCore = shiftLightness(color, HEAD_CORE_SHIFT);
     sctx.save();
+    sctx.globalAlpha = HEAD_SILHOUETTE_OPACITY;
     sctx.translate(head.cx, head.cy);
     sctx.rotate(head.angle);
     sctx.scale(head.major, head.minor);     // unit circle → the head ellipse
@@ -692,11 +735,11 @@ export function drawSkeleton(
   const limbThickness = options?.limbThickness ?? DEFAULT_LIMB_THICKNESS;
 
   const linesVisible = options?.linesVisible ?? true;
-  const lineColor = options?.lineColor ?? DEFAULT_COLOR;
+  const lineColor = options?.lineColor ?? DEFAULT_SKELETON_COLOR;
   const lineThickness = options?.lineThickness ?? DEFAULT_LINE_THICKNESS;
 
   const jointsVisible = options?.jointsVisible ?? true;
-  const jointColor = options?.jointColor ?? lineColor;
+  const jointColor = options?.jointColor ?? DEFAULT_JOINT_COLOR;
   const jointRadius = options?.jointRadius ?? DEFAULT_JOINT_RADIUS;
 
   const edges = options?.skeletonEdges ?? MP_SKELETON_EDGES;
@@ -732,7 +775,6 @@ export function drawSkeleton(
 
   if (linesVisible) {
     const lineWidth = Math.max(0.5, 2 * lineThickness * scale);
-    ctx.strokeStyle = lineColor;
     for (const [fromIdx, toIdx] of edges) {
       const fromName = names[fromIdx];
       const toName = names[toIdx];
@@ -743,6 +785,7 @@ export function drawSkeleton(
       const to = keypoints[toName];
       if (!from || !to) continue;
 
+      ctx.strokeStyle = sideColor(lineColor, edgeSide(fromName, toName));
       ctx.lineWidth = lineWidth;
       ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
       ctx.beginPath();
@@ -755,8 +798,8 @@ export function drawSkeleton(
   // ── Skeleton pass — joint points. ──
   if (jointsVisible) {
     const r = Math.max(0.5, jointRadius * scale);
-    ctx.fillStyle = jointColor;
-    for (const pt of Object.values(keypoints)) {
+    for (const [name, pt] of Object.entries(keypoints)) {
+      ctx.fillStyle = sideColor(jointColor, sideOf(name));
       ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
