@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
@@ -23,6 +24,10 @@ const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
+/** Holds pass defaults — mirror the tokens in globals.css / pipeline/holdsOverlay.ts. */
+const DEFAULT_HAND_HOLD_COLOR = "#22d3ee"; // cyan
+const DEFAULT_FOOT_HOLD_COLOR = "#fb923c"; // orange
+
 /** Best-effort hex extraction from a CSS color string (rgba / hex). */
 function cssToHex(css: string): string {
   const hex = css.trim();
@@ -41,7 +46,13 @@ function cssToHex(css: string): string {
 export interface SkeletonStylePanelProps {
   /** Called whenever any style setting changes. */
   onChange: (style: SkeletonStyle) => void;
-  /** Label for the trigger button. Defaults to "Style". */
+  /**
+   * Called whenever any Holds setting changes. When supplied, the panel shows a
+   * fourth **Holds** row (visibility + Hand/Foot colours); when omitted, the
+   * Holds row is hidden (e.g. surfaces with no Route Overlay).
+   */
+  onHoldsChange?: (style: HoldStyle) => void;
+  /** Label for the trigger button. Defaults to "Overlay". */
   label?: string;
   className?: string;
   /** "sm" renders a compact toolbar-height button (px-3 py-1.5 text-xs). Default is "md". */
@@ -67,7 +78,8 @@ export interface SkeletonStylePanelProps {
  */
 export default function SkeletonStylePanel({
   onChange,
-  label = "Style",
+  onHoldsChange,
+  label = "Overlay",
   className = "",
   size = "md",
   openUpward = false,
@@ -92,9 +104,16 @@ export default function SkeletonStylePanel({
   const [jointColor,    setJointColor]    = useState(DEFAULT_JOINT_COLOR);
   const [jointRadius,   setJointRadius]   = useState(DEFAULT_JOINT_RADIUS);
 
-  // Stable ref for onChange to avoid re-emitting on every parent render.
+  // ── Holds pass (independent of the pose overlay) ──
+  const [holdsVisible, setHoldsVisible] = useState(true);
+  const [handColor,    setHandColor]    = useState(DEFAULT_HAND_HOLD_COLOR);
+  const [footColor,    setFootColor]    = useState(DEFAULT_FOOT_HOLD_COLOR);
+
+  // Stable refs for the callbacks to avoid re-emitting on every parent render.
   const onChangeRef = useRef(onChange);
   useEffect(() => { onChangeRef.current = onChange; });
+  const onHoldsChangeRef = useRef(onHoldsChange);
+  useEffect(() => { onHoldsChangeRef.current = onHoldsChange; });
 
   // Emit updated style whenever any setting changes.
   useEffect(() => {
@@ -109,6 +128,11 @@ export default function SkeletonStylePanel({
     jointsVisible, jointColor, jointRadius,
   ]);
 
+  // Emit the Holds style whenever any Holds setting changes.
+  useEffect(() => {
+    onHoldsChangeRef.current?.({ holdsVisible, handColor, footColor });
+  }, [holdsVisible, handColor, footColor]);
+
   // Close when clicking outside.
   useClickOutside(panelRef, () => setOpen(false), open);
 
@@ -121,8 +145,8 @@ export default function SkeletonStylePanel({
           className="ui-icon-btn flex h-8 w-8 items-center justify-center"
           aria-expanded={open}
           aria-haspopup="dialog"
-          aria-label="Skeleton style"
-          title="Skeleton style"
+          aria-label="Overlay"
+          title="Overlay"
         >
           <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
@@ -158,7 +182,7 @@ export default function SkeletonStylePanel({
       {open && (
         <div
           role="dialog"
-          aria-label="Skeleton style options"
+          aria-label="Overlay options"
           className={cn(
             "absolute z-30 w-72 overflow-y-auto max-h-[80vh] rounded-(--radius-panel) border border-edge bg-card p-3 shadow-xl flex flex-col gap-3",
             openUpward ? "bottom-full mb-1" : "top-full mt-1",
@@ -227,6 +251,34 @@ export default function SkeletonStylePanel({
               className="flex-1 accent-accent" aria-label="Joint size"
               title="Joint size" />
           </div>
+
+          {/* ── Holds (independent overlay pass) ── */}
+          {onHoldsChange && (
+            <div className="flex flex-col gap-2 border-t border-edge/60 pt-3">
+              <div className="flex items-center gap-2">
+                <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={holdsVisible}
+                    onChange={e => setHoldsVisible(e.target.checked)}
+                    className="accent-accent rounded" />
+                  Holds
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
+                  <input type="color" value={cssToHex(handColor)}
+                    onChange={e => setHandColor(e.target.value)}
+                    className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
+                    title="Hand Hold colour" />
+                  Hands
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
+                  <input type="color" value={cssToHex(footColor)}
+                    onChange={e => setFootColor(e.target.value)}
+                    className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
+                    title="Foot Hold colour" />
+                  Feet
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

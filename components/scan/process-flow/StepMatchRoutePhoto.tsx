@@ -8,6 +8,8 @@ import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { HoldStyle } from "@/pipeline/holdsOverlay";
+import type { Hold } from "@/pipeline/holdDetection";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
@@ -37,8 +39,12 @@ export interface StepMatchRoutePhotoProps {
   topoStyle: SkeletonStyle;
   isFrameReady: boolean;
   isMatching: boolean;
+  // Holds overlay
+  holds: Hold[];
+  holdStyle: HoldStyle;
   // Skeleton style
   onSkeletonStyleChange: (s: SkeletonStyle) => void;
+  onHoldsStyleChange: (h: HoldStyle) => void;
   // Export
   exportStatus: "idle" | "rendering" | "done";
   exportProgress: number;
@@ -77,7 +83,10 @@ export default function StepMatchRoutePhoto({
   topoStyle,
   isFrameReady,
   isMatching,
+  holds,
+  holdStyle,
   onSkeletonStyleChange,
+  onHoldsStyleChange,
   exportStatus,
   exportProgress,
   onApplyMatch,
@@ -240,7 +249,7 @@ export default function StepMatchRoutePhoto({
       </div>
     ) : isFrameReady && skeletonData ? (
       <div className="ml-auto flex items-center gap-1">
-        <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" variant="icon" />
+        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="" variant="icon" />
         {matchStatsControl}
         {exportBtn}
       </div>
@@ -300,6 +309,8 @@ export default function StepMatchRoutePhoto({
                 imageFile={routePhotoFile}
                 layers={[{ frames: skeletonData.frames, style: topoStyle }]}
                 duration={skeletonData.duration}
+                holds={holds}
+                holdStyle={holdStyle}
                 autoPlay
               />
 

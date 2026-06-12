@@ -73,9 +73,27 @@ It accepts a `SkeletonStyle` object with `silhouetteVisible/Color/Opacity`,
 `limbThickness`, `linesVisible/lineColor/lineThickness`, and
 `jointsVisible/jointColor/jointRadius` (plus optional `skeletonEdges` /
 `keypointNames`). All sizes are multipliers of a per-frame body scale (shoulder
-width) so the overlay looks the same at any photo resolution. The style panel
-(three rows: Silhouette / Lines / Joints, each with a visibility toggle, colour,
-and unitless sliders) feeds the live preview and the WebM render.
+width) so the overlay looks the same at any photo resolution. The Overlay panel
+(rows: Silhouette / Lines / Joints, each with a visibility toggle, colour, and
+unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
+
+### Holds overlay
+
+A third overlay pass, **Holds**, marks where the climber's hands and feet were
+used on the wall — numbered in the order they were first used, Hand Holds cyan
+and Foot Holds orange. Each marker is a filled disc with a dark ring and a white
+number, and reveals progressively (a marker pops in when the limb first lands and
+persists). Holds are **inferred from Dwells** (a limb held still long enough, in
+Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
+whose knee straightens or braces), never detected on the route photo. They are
+derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the
+`useHolds` hook from the same pose frames the Skeleton uses and the same gated
+homography / per-keyframe path — so there is no S3 or schema change, and every
+existing Run gets Holds for free. `drawHolds` (`pipeline/holdsOverlay.ts`)
+renders them on the **Route Overlay** only, on top of the Skeleton, toggled
+independently from the Overlay panel's Holds row. They are excluded from the
+Detection Preview (no homography) and from the auto-rendered WebM (static, so a
+baked-in Holds layer could not be toggled off).
 
 ## Pages
 

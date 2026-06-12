@@ -3,6 +3,8 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
+import { drawHolds, type HoldStyle } from "@/pipeline/holdsOverlay";
+import type { Hold } from "@/pipeline/holdDetection";
 import { cn } from "@/utils/cn";
 
 /** A single layer of pre-computed skeleton data with optional visual style. */
@@ -66,6 +68,20 @@ interface FramePlayerProps {
    * native resolution of `imageFile`). Half the configured joint point radius.
    */
   orbKeypoints?: { x: number; y: number }[];
+  /**
+   * Detected Holds drawn as the **Holds** overlay pass on top of the skeleton
+   * layers (Route Overlay only). Coordinates are in image-pixel space; markers
+   * reveal progressively as playback time passes each Hold's `firstUseTime`.
+   */
+  holds?: Hold[];
+  /** Style for the Holds pass (colours, visibility). */
+  holdStyle?: HoldStyle;
+  /**
+   * Seconds added to the global playback time when gating Holds, matching the
+   * `timeOffset` of the layer the Holds belong to (aligned-start Compare slots).
+   * Default 0.
+   */
+  holdsTimeOffset?: number;
   className?: string;
 }
 
@@ -131,6 +147,9 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   autoPlay = false,
   startOffset = 0,
   orbKeypoints,
+  holds,
+  holdStyle,
+  holdsTimeOffset = 0,
   fit = "width",
   bare = false,
   className,
@@ -139,6 +158,9 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const layersRef = useRef(layers);
   const orbKeypointsRef = useRef<{ x: number; y: number }[]>([]);
+  const holdsRef = useRef<Hold[]>([]);
+  const holdStyleRef = useRef<HoldStyle | undefined>(undefined);
+  const holdsTimeOffsetRef = useRef(holdsTimeOffset);
   const timeRef = useRef(0);
   // Cache the sequence-stable body scale per layer (keyed by its frames array)
   // so limb widths stay fixed across the sequence and are computed once.
@@ -162,6 +184,17 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   useEffect(() => {
     orbKeypointsRef.current = orbKeypoints ?? [];
   }, [orbKeypoints]);
+
+  // Keep the Holds refs current without re-triggering the animation loop.
+  useEffect(() => {
+    holdsRef.current = holds ?? [];
+  }, [holds]);
+  useEffect(() => {
+    holdStyleRef.current = holdStyle;
+  }, [holdStyle]);
+  useEffect(() => {
+    holdsTimeOffsetRef.current = holdsTimeOffset;
+  }, [holdsTimeOffset]);
 
   // Keep the start-offset ref current; redraw if it moves while paused.
   useEffect(() => {
@@ -233,6 +266,20 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
       }
     }
+
+    // Holds pass — drawn after the skeleton layers, gated by playback time.
+    const holdsList = holdsRef.current;
+    if (holdsList.length > 0) {
+      const baseFrames = layersRef.current[0]?.frames;
+      let holdScale: number | undefined = baseFrames && scaleCacheRef.current.get(baseFrames);
+      if (holdScale === undefined) {
+        holdScale = baseFrames
+          ? computeStableBodyScale(baseFrames, canvas.width, canvas.height)
+          : Math.min(canvas.width, canvas.height) * 0.15;
+        if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
+      }
+      drawHolds(ctx, holdsList, t + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
+    }
   }, []);
 
   // rAF loop — runs at display refresh rate with no React re-renders per frame.
@@ -301,10 +348,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     return () => cancelAnimationFrame(id);
   }, [ready, drawFrame, autoPlay]);
 
-  // Re-draw current frame when layers change (e.g. style sliders) while paused.
+  // Re-draw current frame when layers or Holds change (e.g. style sliders,
+  // visibility toggles) while paused.
   useEffect(() => {
     if (ready && !playing) drawFrame(timeRef.current);
-  }, [layers, ready, playing, drawFrame]);
+  }, [layers, holds, holdStyle, ready, playing, drawFrame]);
 
   // Expose imperative controls to parent via ref.
   useImperativeHandle(ref, () => ({

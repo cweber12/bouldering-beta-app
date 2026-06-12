@@ -13,6 +13,7 @@ import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
+import { useHolds } from "@/hooks/useHolds";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -20,6 +21,7 @@ import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt, RunType } from "@/storage/sessionStore";
 import { sanitizeDirName, serializeAttemptForJson } from "@/utils/fsHelpers";
 import { type SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getTopology } from "@/utils/poseConstants";
@@ -170,6 +172,8 @@ function ScanPageInner() {
   // Skeleton style for overlays — SkeletonStylePanel emits a full style on mount;
   // start from built-in defaults.
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({});
+  // Holds overlay style — the Overlay panel emits a full HoldStyle on mount.
+  const [holdStyle, setHoldStyle] = useState<HoldStyle>({});
 
   // On-demand video export state
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -205,6 +209,9 @@ function ScanPageInner() {
   // Pre-compute skeleton frames for the inline route photo overlay
   const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
     useSkeletonFrames(cv, activeAttemptId0 || null, matchResult);
+
+  // Derive the Holds overlay on the fly from the same pose frames + match result.
+  const { holds } = useHolds(cv, activeAttemptId0 || null, matchResult);
 
   // GPS coordinate tagging
   const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | null>(null);
@@ -667,7 +674,10 @@ function ScanPageInner() {
           topoStyle={topoStyle}
           isFrameReady={isFrameReady}
           isMatching={isMatching}
+          holds={holds}
+          holdStyle={holdStyle}
           onSkeletonStyleChange={setSkeletonStyle}
+          onHoldsStyleChange={setHoldStyle}
           exportStatus={exportStatus}
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}

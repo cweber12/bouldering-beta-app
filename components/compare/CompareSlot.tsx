@@ -8,6 +8,7 @@ import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
+import { useHolds } from "@/hooks/useHolds";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -92,6 +93,9 @@ export default function CompareSlot({
     attempt?.id ?? null,
     matchResult,
   );
+
+  // Holds overlay — derived on the fly from the same frames + match result.
+  const { holds } = useHolds(cv, attempt?.id ?? null, matchResult);
 
   // Notify parent when match result changes
   useEffect(() => {
@@ -221,6 +225,8 @@ export default function CompareSlot({
             imageFile={imageFile}
             layers={playerLayers}
             duration={skeletonData.duration}
+            holds={holds}
+            holdsTimeOffset={startOffset}
             hidePlayButton={hidePlayButton}
             fit={fillHeight ? "contain" : "width"}
             bare={fillHeight}
