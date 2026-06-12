@@ -160,9 +160,46 @@ _Avoid_: blob, halo (it is a unioned body shape, not a single fat mark).
 **Skeleton**:
 The thin, crisp pose lines and joint points drawn on top of (inside) the
 **Silhouette** so the pose is legible within the body shape. The upper of the
-two overlay passes.
+two pose overlay passes.
 _Avoid_: thin line, wireframe (the Skeleton is the lines+joints, distinct from
 the **Silhouette** fill beneath it).
+
+**Holds** (overlay pass):
+A third overlay pass, independent of the **Silhouette**/**Skeleton**: numbered
+markers placed where the **Climber**'s hands and feet are inferred to have used a
+hold on the wall. Toggled separately from the pose overlay, so a viewer can show
+the pose, the Holds, both, or neither. Drawn on the **Route Overlay**.
+_Avoid_: grips, markers (unqualified), hold map.
+
+**Hold**:
+A single inferred place on the wall that the **Climber** used with a hand or a
+foot. It is **not** a hold detected on the **Route Photo**; it is inferred from
+where the limb stayed still long enough to be load-bearing (a **Dwell**). Each
+Hold is exactly one **Hand Hold** or **Foot Hold**, lives in Route Photo space,
+and is labelled with its rank in the order the Climber **first** used it (one
+combined hand+foot sequence). Repeated use of the same spot by the same limb kind
+— a re-grip, a two-hand match — is the same Hold, not a new one; a hand and a foot
+on the same spot are two different Holds.
+_Avoid_: grip, placement, contact (those name the raw evidence — see **Dwell** —
+not the inferred result); the physical wall hold (we never detect that).
+
+**Hand Hold**:
+A **Hold** used by a hand — a **Dwell** where the hand point stays still and sits
+above the wrist, reading as a grip rather than a hang or a press.
+_Avoid_: grip.
+
+**Foot Hold**:
+A **Hold** used by a foot — a **Dwell** where the foot point stays still and the
+leg is load-bearing: the knee straightens (the Climber stands up) or the leg is
+braced at a supportive angle, as opposed to a free hanging leg.
+_Avoid_: foothold as the code term (the type is Foot Hold); step.
+
+**Dwell**:
+One stretch of time over which a single limb's contact point stays within a small
+radius in Route Photo space — the raw evidence for a **Hold**. Measured in wall
+space (after homography) so a held limb still counts as a Dwell while the camera
+pans in **Panning Capture**. One Hold may gather several Dwells at the same spot.
+_Avoid_: pause, stop, hover.
 
 ### Diagnostics
 
@@ -200,6 +237,9 @@ _Avoid_: frame stats (too generic).
   frame; the **Adaptive Crop** is derived from that selected pose.
 - A **Manual Crop** (Climber) seeds or overrides the Adaptive Crop; the **Wall
   Crop** feeds route-photo matching, not pose tracking.
+- A **Hold** is inferred from one or more **Dwells** of the same limb kind at one
+  spot; **Holds** are derived from the same pose frames the **Skeleton** uses and
+  projected through the same homography onto the **Route Photo**.
 
 ## Example dialogue
 
@@ -219,6 +259,10 @@ _Avoid_: frame stats (too generic).
   **Run** (one ascent) — prefer Route / Run when precision matters.
 - "attempt" is used for both a **Run** generically and the not-topped **Run Type**
   — resolved: a Run is a Run; "Attempt" is reserved for the Run Type opposite Send.
+- "hold" could mean the physical hold on the wall or the app's inferred **Hold** —
+  resolved: a **Hold** is always the inferred place a limb used (from a **Dwell**);
+  the app never detects physical wall holds, so the bare word always means the
+  inferred one.
 - "preview"/"overlay" meant both the skeleton over the Run's own first frame and
   the skeleton projected onto the Route Photo — resolved: **Detection Preview**
   (video-pixel, no homography) vs **Route Overlay** (projected onto the Route
