@@ -33,9 +33,9 @@ const DEFAULT_LABEL_COLOR = "#ffffff";
 /** Number text — near-black for contrast on the white label. */
 const DEFAULT_NUMBER_COLOR = "#0b0f14";
 /** Disc radius × body scale (slightly larger so the marked spot is obvious). */
-const DEFAULT_HOLD_RADIUS = 0.34;
+const DEFAULT_HOLD_RADIUS = 0.35;
 /** Disc fill opacity — faint, so the actual wall hold reads through. */
-const DEFAULT_FILL_OPACITY = 0.3;
+const DEFAULT_FILL_OPACITY = 0.15;
 /** Ring stroke width as a fraction of the disc radius (thin border). */
 const RING_WIDTH_FRAC = 0.08;
 /** Glow blur as a fraction of the disc radius. */
@@ -215,7 +215,7 @@ export function drawHolds(
     // Thin opaque border (keeps the glow from the shadow on the stroke too).
     ctx.globalAlpha = 1;
     ctx.lineWidth = ringWidth;
-    ctx.strokeStyle = p.color;
+    ctx.strokeStyle = 'transparent';
     ctx.stroke();
     ctx.restore();
   }
@@ -241,7 +241,7 @@ export function drawHolds(
     ctx.fillStyle = labelColor;
     ctx.fill();
     ctx.lineWidth = Math.max(1, leaderWidth);
-    ctx.strokeStyle = p.color;
+    ctx.strokeStyle = "transparent";
     ctx.stroke();
 
     // Number — black, centred in the label.
