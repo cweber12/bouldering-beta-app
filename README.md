@@ -90,8 +90,9 @@ derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the
 `useHolds` hook from the same pose frames the Skeleton uses and the same gated
 homography / per-keyframe path — so there is no S3 or schema change, and every
 existing Run gets Holds for free. `drawHolds` (`pipeline/holdsOverlay.ts`)
-renders them on the **Route Overlay** only, on top of the Skeleton, toggled
-independently from the Overlay panel's Holds row. They are excluded from the
+renders them on the **Route Overlay** only, beneath the Skeleton (which stays
+legible on top), with a slightly transparent disc and a dark-outlined number;
+they are toggled independently from the Overlay panel's Holds row. They are excluded from the
 Detection Preview (no homography) and from the auto-rendered WebM (static, so a
 baked-in Holds layer could not be toggled off).
 

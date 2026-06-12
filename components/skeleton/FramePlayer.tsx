@@ -253,6 +253,21 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
       ctx.restore();
     }
 
+    // Holds pass — drawn beneath the skeleton layers (gated by playback time) so
+    // the pose lines stay legible on top of the markers.
+    const holdsList = holdsRef.current;
+    if (holdsList.length > 0) {
+      const baseFrames = layersRef.current[0]?.frames;
+      let holdScale: number | undefined = baseFrames && scaleCacheRef.current.get(baseFrames);
+      if (holdScale === undefined) {
+        holdScale = baseFrames
+          ? computeStableBodyScale(baseFrames, canvas.width, canvas.height)
+          : Math.min(canvas.width, canvas.height) * 0.15;
+        if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
+      }
+      drawHolds(ctx, holdsList, t + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
+    }
+
     for (const layer of layersRef.current) {
       const nearest = findNearest(layer.frames, t + (layer.timeOffset ?? 0));
       if (nearest && Object.keys(nearest.keypoints).length > 0) {
@@ -265,20 +280,6 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         }
         drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
       }
-    }
-
-    // Holds pass — drawn after the skeleton layers, gated by playback time.
-    const holdsList = holdsRef.current;
-    if (holdsList.length > 0) {
-      const baseFrames = layersRef.current[0]?.frames;
-      let holdScale: number | undefined = baseFrames && scaleCacheRef.current.get(baseFrames);
-      if (holdScale === undefined) {
-        holdScale = baseFrames
-          ? computeStableBodyScale(baseFrames, canvas.width, canvas.height)
-          : Math.min(canvas.width, canvas.height) * 0.15;
-        if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
-      }
-      drawHolds(ctx, holdsList, t + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
     }
   }, []);
 
