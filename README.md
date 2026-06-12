@@ -81,9 +81,12 @@ unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
 
 A third overlay pass, **Holds**, marks where the climber's hands and feet were
 used on the wall — numbered in the order they were first used, Hand Holds cyan
-and Foot Holds orange. Each marker is a filled disc with a dark ring and a white
-number, and reveals progressively (a marker pops in when the limb first lands and
-persists). Holds are **inferred from Dwells** (a limb held still long enough, in
+and Foot Holds orange. Each marker is a large, thin-bordered, faintly-filled disc
+with a soft colour glow that marks the spot without covering it; the number is
+set off to the side as black-on-white, tethered by a short leader line, and
+labels are placed in first-use order so they never overlap each other or another
+Hold's disc. Markers reveal progressively (a marker pops in when the limb first
+lands and persists). Holds are **inferred from Dwells** (a limb held still long enough, in
 Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
 whose knee straightens or braces), never detected on the route photo. They are
 derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the
