@@ -537,8 +537,8 @@ export default function StepSetDetection({
     <>
       <ProcessFlowShell
         step={2}
-        totalSteps={3}
-        stepName="Set detection"
+        totalSteps={4}
+        stepName="Mark detection"
         instruction={detectionInstruction}
         onBack={onBack}
         toolbar={hasCropFrame ? toolbarNode("inline") : undefined}

@@ -259,9 +259,9 @@ export default function StepMatchRoutePhoto({
   return (
     <>
       <ProcessFlowShell
-        step={3}
-        totalSteps={3}
-        stepName="Overlay on photo"
+        step={4}
+        totalSteps={4}
+        stepName="Place on route"
         instruction={instruction}
         onBack={onBack}
         toolbar={toolbarNode}

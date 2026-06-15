@@ -16,8 +16,8 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
   return (
     <ProcessFlowShell
       step={1}
-      totalSteps={3}
-      stepName="Choose a video"
+      totalSteps={4}
+      stepName="Choose clip"
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full divide-y divide-edge/40 overflow-hidden rounded-(--radius-panel) border border-edge/55">

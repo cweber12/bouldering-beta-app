@@ -172,8 +172,8 @@ export default function StepViewLandmarks({
     <>
     <ProcessFlowShell
       step={3}
-      totalSteps={3}
-      stepName={isProcessing ? "Scanning video" : "Review your scan"}
+      totalSteps={4}
+      stepName={isProcessing ? "Scanning video" : "Review climb"}
       instruction={isProcessing ? "detecting pose frame by frame" : undefined}
       onBack={showFooterActions ? onEditClimb : undefined}
       toolbar={toolbarActions}
