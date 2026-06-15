@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
+import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import {
   QUALITY_TIERS,
@@ -158,6 +159,10 @@ function DetectionSettings({
                 Aligns each pan section to the route photo by keyframe. Leave off for a fixed
                 (tripod) shot.
               </p>
+            </div>
+
+            <div className="border-t border-edge/60 pt-3">
+              <DeveloperViewToggle />
             </div>
           </div>
         </div>

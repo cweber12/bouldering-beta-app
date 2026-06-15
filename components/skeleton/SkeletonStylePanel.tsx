@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
@@ -63,6 +63,10 @@ export interface SkeletonStylePanelProps {
   /** "icon" renders a plateless icon-only trigger (`.ui-icon-btn`) for the top
    *  toolbar; "default" keeps the bordered chip trigger. */
   variant?: "default" | "icon";
+  /** Optional content rendered at the bottom of the open panel, under a divider.
+   *  Kept generic (the panel itself stays decoupled from app-level concerns) —
+   *  the scan flow passes its Developer-view toggle here. */
+  footer?: ReactNode;
 }
 
 /**
@@ -84,6 +88,7 @@ export default function SkeletonStylePanel({
   size = "md",
   openUpward = false,
   variant = "default",
+  footer,
 }: SkeletonStylePanelProps) {
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -278,6 +283,10 @@ export default function SkeletonStylePanel({
                 </label>
               </div>
             </div>
+          )}
+
+          {footer && (
+            <div className="border-t border-edge/60 pt-3">{footer}</div>
           )}
         </div>
       )}

@@ -5,7 +5,9 @@ import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
+import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
+import { useAdvancedView } from "@/hooks/useAdvancedView";
 import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
@@ -77,6 +79,7 @@ export default function StepViewLandmarks({
   scanDiagnostics,
 }: StepViewLandmarksProps) {
   const routePhotoInputRef = useRef<HTMLInputElement>(null);
+  const { advanced } = useAdvancedView();
 
   const showResults = !isProcessing && !!activeAttempt &&
     (orbStatus === "ready" || orbStatus === "failed");
@@ -127,7 +130,13 @@ export default function StepViewLandmarks({
   // is shown.
   const toolbarActions = showResults && hasSkeleton ? (
     <div className="ml-auto flex items-center gap-1">
-      <SkeletonStylePanel onChange={onSkeletonStyleChange} size="sm" label="" variant="icon" />
+      <SkeletonStylePanel
+        onChange={onSkeletonStyleChange}
+        size="sm"
+        label=""
+        variant="icon"
+        footer={<DeveloperViewToggle />}
+      />
     </div>
   ) : undefined;
 
@@ -297,7 +306,7 @@ export default function StepViewLandmarks({
                     layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                     duration={firstFrameSkeletonData.duration}
                     autoPlay
-                    orbKeypoints={activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt)}
+                    orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
                     bare
                     className="w-full rounded-none"
                   />

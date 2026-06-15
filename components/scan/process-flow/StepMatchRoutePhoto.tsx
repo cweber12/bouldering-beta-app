@@ -5,6 +5,7 @@ import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
+import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
@@ -249,7 +250,7 @@ export default function StepMatchRoutePhoto({
       </div>
     ) : isFrameReady && skeletonData ? (
       <div className="ml-auto flex items-center gap-1">
-        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="" variant="icon" />
+        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="" variant="icon" footer={<DeveloperViewToggle />} />
         {matchStatsControl}
         {exportBtn}
       </div>
