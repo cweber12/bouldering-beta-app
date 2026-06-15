@@ -3,6 +3,7 @@
 import { type ReactNode } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { AdvancedViewProvider } from "@/hooks/useAdvancedView";
 
 /**
  * Client boundary wrapper for providers that need React context.
@@ -11,7 +12,9 @@ import { ThemeProvider } from "@/hooks/useTheme";
 export default function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider>
-      <AuthProvider>{children}</AuthProvider>
+      <AdvancedViewProvider>
+        <AuthProvider>{children}</AuthProvider>
+      </AdvancedViewProvider>
     </ThemeProvider>
   );
 }
