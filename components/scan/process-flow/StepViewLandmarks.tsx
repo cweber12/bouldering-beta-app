@@ -37,7 +37,7 @@ export interface StepViewLandmarksProps {
   onEditClimb: () => void;
   /** Navigate back to video selection and start a fresh scan. */
   onScanAnother: () => void;
-  // Route photo overlay (the "Test" action)
+  // Route photo overlay (the "Place on route" hero action)
   orbReady: boolean;
   onViewOnRoutePhoto: (file: File) => void;
   // Save / upload
@@ -106,7 +106,11 @@ export default function StepViewLandmarks({
     ? "Here's your climb traced frame by frame. Looks right? Place it on the route."
     : undefined;
 
-  const saveButton = (
+  // "Save scan" stores the raw scan. It is the secondary action once a route
+  // photo overlay is possible (orbReady); when it is not, it becomes the only —
+  // and therefore primary — action.
+  const saveIsPrimary = !orbReady;
+  const saveScanButton = (
     <button
       type="button"
       onClick={onUpload}
@@ -115,9 +119,11 @@ export default function StepViewLandmarks({
         "motion-cta flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold",
         s3Loading
           ? "ui-control border-edge bg-surface-alt/45 text-fg-muted opacity-60 cursor-not-allowed"
-          : "ui-control-primary",
+          : saveIsPrimary
+            ? "ui-control-primary"
+            : "ui-control",
       )}
-      title="Save scan to cloud"
+      title="Save this scan without a route photo"
     >
       {s3Loading ? (
         <svg className="h-4 w-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -129,7 +135,7 @@ export default function StepViewLandmarks({
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
         </svg>
       )}
-      Save
+      Save scan
     </button>
   );
 
@@ -147,8 +153,9 @@ export default function StepViewLandmarks({
     </div>
   ) : undefined;
 
-  // Footer secondary — "Test on a route photo" forward action.
-  const secondaryActions = orbReady ? (
+  // Footer primary — the hero forward action: place the climb on a route photo.
+  // Only available once reference features are ready (orbReady).
+  const placeOnRouteButton = orbReady ? (
     <>
       <input
         ref={routePhotoInputRef}
@@ -164,13 +171,13 @@ export default function StepViewLandmarks({
       <button
         type="button"
         onClick={() => routePhotoInputRef.current?.click()}
-        className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-        title="Test the scan on a route photo"
+        className="motion-cta ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold"
+        title="Place your climb on a photo of the route"
       >
-        <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
         </svg>
-        Test
+        Place on route
       </button>
     </>
   ) : undefined;
@@ -185,8 +192,8 @@ export default function StepViewLandmarks({
       purpose={purpose}
       onBack={showFooterActions ? onEditClimb : undefined}
       toolbar={toolbarActions}
-      primaryAction={showFooterActions ? saveButton : undefined}
-      secondaryAction={showFooterActions ? secondaryActions : undefined}
+      primaryAction={showFooterActions ? (placeOnRouteButton ?? saveScanButton) : undefined}
+      secondaryAction={showFooterActions && placeOnRouteButton ? saveScanButton : undefined}
     >
       <div className="h-full overflow-hidden">
 

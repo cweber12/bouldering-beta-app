@@ -430,7 +430,7 @@ export default function StepSetDetection({
   function toolbarNode(variant: "inline" | "fullscreen") {
     return (
       <>
-        <div className="ui-segmented text-xs" role="group" aria-label="Crop target">
+        <div className="ui-segmented text-xs" role="group" aria-label="What to mark">
           <button
             type="button"
             onClick={handleSelectClimber}
@@ -445,7 +445,7 @@ export default function StepSetDetection({
             disabled={climberPoint == null}
             className="ui-segmented-button px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-40"
             aria-pressed={cropMode === "wall"}
-            title={climberPoint == null ? "Tap the climber first" : "Frame the wall texture"}
+            title={climberPoint == null ? "Tap the climber first" : "Frame a patch of wall"}
           >
             Wall
           </button>
@@ -527,7 +527,7 @@ export default function StepSetDetection({
 
   const detectionInstruction =
     cropMode === "wall"
-      ? "frame the wall texture"
+      ? "frame a patch of wall"
       : climberPoint == null
         ? "tap the climber to lock tracking"
         : "fine-tune the box, or scan";
