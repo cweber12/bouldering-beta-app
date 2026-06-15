@@ -263,6 +263,9 @@ export default function StepMatchRoutePhoto({
         totalSteps={4}
         stepName="Place on route"
         instruction={instruction}
+        purpose={!routeMatchTriggered && !isMatching
+          ? "Add a photo of the route to see your climb on it."
+          : undefined}
         onBack={onBack}
         toolbar={toolbarNode}
         primaryAction={routeMatchTriggered ? saveDropdown : projectButton}
@@ -277,7 +280,7 @@ export default function StepMatchRoutePhoto({
           {!routeMatchTriggered && !isMatching && (
             <div
               className="relative overflow-hidden rounded-(--radius-panel) border border-edge/50 bg-surface-alt/55 shadow-lg shadow-black/10"
-              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "11rem")}
+              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "13.5rem")}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img

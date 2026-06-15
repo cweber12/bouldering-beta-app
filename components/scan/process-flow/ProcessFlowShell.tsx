@@ -10,6 +10,11 @@ interface ProcessFlowShellProps {
   stepName: string;
   /** Dynamic, actionable instruction shown muted after the step name. Truncates. */
   instruction?: ReactNode;
+  /** Calm one-sentence statement of what this step is for and why, shown in a
+   *  slim band above the step content. Distinct from the terse footer
+   *  `instruction`: the purpose line is the stable "why", the instruction the
+   *  moment-to-moment "what to do now". */
+  purpose?: ReactNode;
   /** Compact status control (e.g. quality chip) rendered in the footer's right
    *  cluster. Any popover it owns should open upward (the bar sits at the bottom). */
   accessory?: ReactNode;
@@ -37,6 +42,7 @@ export default function ProcessFlowShell({
   totalSteps,
   stepName,
   instruction,
+  purpose,
   accessory,
   onBack,
   toolbar,
@@ -58,6 +64,18 @@ export default function ProcessFlowShell({
             {toolbar}
           </div>
         </header>
+      )}
+
+      {purpose && (
+        <div className="shrink-0 border-b border-edge/40 bg-surface px-4 py-2 sm:px-6">
+          <p
+            className="mx-auto w-full max-w-5xl text-sm text-fg-secondary"
+            role="status"
+            aria-live="polite"
+          >
+            {purpose}
+          </p>
+        </div>
       )}
 
       <div className="flex-1 min-h-0 motion-flow-enter">{children}</div>

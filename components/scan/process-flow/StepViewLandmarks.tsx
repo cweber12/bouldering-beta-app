@@ -94,10 +94,17 @@ export default function StepViewLandmarks({
   const vm = activeAttempt?.videoMeta;
   const previewW = vm && vm.height ? vm.width : 9;
   const previewH = vm && vm.height ? vm.height : 16;
-  const previewMaxWidth = fitMediaMaxWidth(previewW, previewH, "10rem");
+  // Larger offset accounts for the purpose band shown above the preview.
+  const previewMaxWidth = fitMediaMaxWidth(previewW, previewH, "12.5rem");
 
   // ── Footer actions — only once results exist (with a skeleton) and before upload ──
   const showFooterActions = showResults && !s3Saved && hasSkeleton;
+
+  // Purpose line — only while reviewing the traced climb (not during processing
+  // or empty/error states, which carry their own messaging).
+  const purpose = showResults && hasSkeleton && !s3Saved
+    ? "Here's your climb traced frame by frame. Looks right? Place it on the route."
+    : undefined;
 
   const saveButton = (
     <button
@@ -175,6 +182,7 @@ export default function StepViewLandmarks({
       totalSteps={4}
       stepName={isProcessing ? "Scanning video" : "Review climb"}
       instruction={isProcessing ? "detecting pose frame by frame" : undefined}
+      purpose={purpose}
       onBack={showFooterActions ? onEditClimb : undefined}
       toolbar={toolbarActions}
       primaryAction={showFooterActions ? saveButton : undefined}

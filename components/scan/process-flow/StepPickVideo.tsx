@@ -18,6 +18,7 @@ export default function StepPickVideo({ onFile, onCamera }: StepPickVideoProps) 
       step={1}
       totalSteps={4}
       stepName="Choose clip"
+      purpose="Film or pick a video of your climb — we'll trace your movement and place it on the route."
     >
       <div className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full divide-y divide-edge/40 overflow-hidden rounded-(--radius-panel) border border-edge/55">

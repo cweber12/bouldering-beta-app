@@ -532,6 +532,11 @@ export default function StepSetDetection({
         ? "tap the climber to lock tracking"
         : "fine-tune the box, or scan";
 
+  const detectionPurpose =
+    cropMode === "wall"
+      ? "Frame a patch of wall — this is how we match your climb to the route photo."
+      : "Tap the climber so we track the right person, not someone else in the frame.";
+
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <>
@@ -540,6 +545,7 @@ export default function StepSetDetection({
         totalSteps={4}
         stepName="Mark detection"
         instruction={detectionInstruction}
+        purpose={hasCropFrame ? detectionPurpose : undefined}
         onBack={onBack}
         toolbar={hasCropFrame ? toolbarNode("inline") : undefined}
         primaryAction={scanButton("footer")}
