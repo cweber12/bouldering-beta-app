@@ -293,6 +293,12 @@ export default function StepSetDetection({
   const [cropMode, setCropMode] = useState<CropMode>("climber");
   // Detection settings popover.
   const [showSettings, setShowSettings] = useState(false);
+  // True once the user has adjusted the wall box — drives the "now frame the
+  // wall" discoverability hint so it disappears after the second beat is done.
+  const [wallTouched, setWallTouched] = useState(false);
+  // Set when the user presses Scan with no climber marked: shows a soft nudge
+  // and relabels the button to "Scan anyway" rather than blocking the scan.
+  const [scanNudged, setScanNudged] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────
   function handleClimberCropChange(c: CropFraction) {
@@ -300,12 +306,14 @@ export default function StepSetDetection({
   }
 
   function handleWallCropChange(c: CropFraction) {
+    setWallTouched(true);
     onWallCropChange?.(c);
   }
 
   // Tap the climber to lock detection. Seeds a default portrait box around the
   // tap; processing refines it adaptively from the climber's landmarks.
   function handleClimberTap(p: { x: number; y: number }) {
+    setScanNudged(false);
     onClimberPointChange?.(p);
     const w = 0.34;
     const h = 0.6;
@@ -319,7 +327,7 @@ export default function StepSetDetection({
 
   function handleSelectClimber() { setCropMode("climber"); }
   function handleSelectWall()    { setCropMode("wall"); }
-  function handleReTap()         { onClimberPointChange?.(null); }
+  function handleReTap()         { setScanNudged(false); onClimberPointChange?.(null); }
 
   function handleCropVideoLoaded() {
     const video  = cropVideoRef.current;
@@ -360,9 +368,14 @@ export default function StepSetDetection({
     video.currentTime = Number(e.target.value);
   }
 
-  // Scan is always available; no warning if the climber was never tapped — the
-  // strongest detected pose is used. The footer instruction is the guidance.
+  // Scan never hard-blocks. If the climber was never tapped, the first press
+  // surfaces a soft nudge (and relabels the button to "Scan anyway"); a second
+  // press proceeds using the strongest detected pose.
   function doScan() {
+    if (climberPoint == null && !scanNudged) {
+      setScanNudged(true);
+      return;
+    }
     const t = (videoFullscreen ? fullscreenVideoRef.current?.currentTime : cropVideoRef.current?.currentTime) ?? 0;
     onScan(t > 0 ? t : 0);
   }
@@ -425,6 +438,43 @@ export default function StepSetDetection({
     />
   );
 
+  // Floating coaching pill over the stage. Pointer-events-none so it never
+  // blocks the tap surface beneath. Covers the three guidance moments:
+  // (1) tap affordance before a climber is marked, (2) the soft scan nudge,
+  // (3) wall-step discoverability once the climber is marked.
+  const stageHint: { text: string; tone: "info" | "caution" } | null = (() => {
+    if (!hasCropFrame || cropMode !== "climber") return null;
+    if (climberPoint == null) {
+      return scanNudged
+        ? { text: "Tap the climber to track them — or press Scan anyway", tone: "caution" }
+        : { text: "Tap the climber to track them", tone: "info" };
+    }
+    if (!wallTouched) {
+      return { text: "Climber set. Next, tap “Wall” above to frame a patch of wall", tone: "info" };
+    }
+    return null;
+  })();
+
+  const stageHintNode = stageHint ? (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3"
+      role="status"
+      aria-live="polite"
+    >
+      <span
+        className={cn(
+          "rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm",
+          stageHint.tone === "caution"
+            ? "border-caution-border bg-caution-surface text-caution"
+            : "border-edge/60 bg-surface/90 text-fg-secondary",
+          climberPoint == null && !scanNudged && "animate-pulse",
+        )}
+      >
+        {stageHint.text}
+      </span>
+    </div>
+  ) : null;
+
   // ── Toolbar — Climber|Wall toggle (left) + plateless utility icons (right).
   //    `variant` switches the trailing button between Expand and Exit. ──
   function toolbarNode(variant: "inline" | "fullscreen") {
@@ -442,10 +492,9 @@ export default function StepSetDetection({
           <button
             type="button"
             onClick={handleSelectWall}
-            disabled={climberPoint == null}
-            className="ui-segmented-button px-3 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+            className="ui-segmented-button px-3 py-1 font-medium"
             aria-pressed={cropMode === "wall"}
-            title={climberPoint == null ? "Tap the climber first" : "Frame a patch of wall"}
+            title="Frame a patch of wall — lines your climb up with the route photo"
           >
             Wall
           </button>
@@ -494,6 +543,8 @@ export default function StepSetDetection({
   //    tapped so the crop step reads as the prerequisite. ──
   function scanButton(size: "footer" | "fullscreen") {
     const accented = canScan && climberPoint != null;
+    const nudging = canScan && climberPoint == null && scanNudged;
+    const label = !canScan ? "Loading model…" : nudging ? "Scan anyway" : "Scan video";
     return (
       <button
         type="button"
@@ -508,7 +559,7 @@ export default function StepSetDetection({
               ? "ui-control-primary"
               : "ui-control",
         )}
-        title={canScan ? "Start pose detection" : "Loading model…"}
+        title={canScan ? (nudging ? "Scan without marking a climber" : "Start pose detection") : "Loading model…"}
       >
         {canScan ? (
           <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -520,7 +571,7 @@ export default function StepSetDetection({
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
         )}
-        {canScan ? "Scan video" : "Loading model…"}
+        {label}
       </button>
     );
   }
@@ -575,6 +626,7 @@ export default function StepSetDetection({
               />
               {cropOverlayNode}
               {hasCropFrame && climberMarker}
+              {stageHintNode}
               <canvas ref={cropCanvasRef} className="hidden" />
             </div>
           </div>
@@ -632,6 +684,7 @@ export default function StepSetDetection({
             />
             {cropOverlayNode}
             {hasCropFrame && climberMarker}
+            {stageHintNode}
           </div>
 
           {hasCropFrame && (
