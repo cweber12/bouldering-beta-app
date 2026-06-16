@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef } from "react";
+import { useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
+import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { useAdvancedView } from "@/hooks/useAdvancedView";
 import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
@@ -78,8 +79,8 @@ export default function StepViewLandmarks({
   onViewScans,
   scanDiagnostics,
 }: StepViewLandmarksProps) {
-  const routePhotoInputRef = useRef<HTMLInputElement>(null);
   const { advanced } = useAdvancedView();
+  const [showPhotoChooser, setShowPhotoChooser] = useState(false);
 
   const showResults = !isProcessing && !!activeAttempt &&
     (orbStatus === "ready" || orbStatus === "failed");
@@ -156,30 +157,17 @@ export default function StepViewLandmarks({
   // Footer primary — the hero forward action: place the climb on a route photo.
   // Only available once reference features are ready (orbReady).
   const placeOnRouteButton = orbReady ? (
-    <>
-      <input
-        ref={routePhotoInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onViewOnRoutePhoto(file);
-          e.target.value = "";
-        }}
-      />
-      <button
-        type="button"
-        onClick={() => routePhotoInputRef.current?.click()}
-        className="motion-cta ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold"
-        title="Place your climb on a photo of the route"
-      >
-        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-        </svg>
-        Place on route
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={() => setShowPhotoChooser(true)}
+      className="motion-cta ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold"
+      title="Place your climb on a photo of the route"
+    >
+      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      </svg>
+      Place on route
+    </button>
   ) : undefined;
 
   return (
@@ -341,6 +329,11 @@ export default function StepViewLandmarks({
         )}
       </div>
     </ProcessFlowShell>
+    <RoutePhotoChooser
+      open={showPhotoChooser}
+      onClose={() => setShowPhotoChooser(false)}
+      onPhoto={(file) => { setShowPhotoChooser(false); onViewOnRoutePhoto(file); }}
+    />
     <DiagnosticsPanel record={scanDiagnostics ?? null} />
     </>
   );

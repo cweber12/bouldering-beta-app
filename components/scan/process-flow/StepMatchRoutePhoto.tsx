@@ -6,6 +6,7 @@ import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxO
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
+import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
@@ -106,15 +107,11 @@ export default function StepMatchRoutePhoto({
   const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
   const [routePhotoFullscreen,  setRoutePhotoFullscreen]  = useState(false);
   const [showMatchStats,        setShowMatchStats]        = useState(false);
+  const [showPhotoChooser,      setShowPhotoChooser]      = useState(false);
   const matchStatsRef = useRef<HTMLDivElement>(null);
 
   // Close match stats when clicking outside.
   useClickOutside(matchStatsRef, () => setShowMatchStats(false), showMatchStats);
-
-  function handleChangePhotoInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) { onChangePhoto(file); e.target.value = ""; }
-  }
 
   const playerRatio = (routePhotoNaturalSize.w / routePhotoNaturalSize.h).toFixed(4);
   const playerMaxWidth = `min(100%, calc((100dvh - var(--nav-h) - 11rem) * ${playerRatio}))`;
@@ -157,8 +154,10 @@ export default function StepMatchRoutePhoto({
 
   // ── Plateless toolbar controls ────────────────────────────────────────────
   const changePhotoBtn = (
-    <label
-      className="ui-icon-btn flex h-8 w-8 cursor-pointer items-center justify-center"
+    <button
+      type="button"
+      onClick={() => setShowPhotoChooser(true)}
+      className="ui-icon-btn flex h-8 w-8 items-center justify-center"
       title="Change photo"
       aria-label="Change route photo"
     >
@@ -166,8 +165,7 @@ export default function StepMatchRoutePhoto({
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
       </svg>
-      <input type="file" accept="image/*" className="hidden" onChange={handleChangePhotoInput} />
-    </label>
+    </button>
   );
 
   const expandBtn = (
@@ -381,6 +379,12 @@ export default function StepMatchRoutePhoto({
           <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
         </div>
       </FullscreenModal>
+
+      <RoutePhotoChooser
+        open={showPhotoChooser}
+        onClose={() => setShowPhotoChooser(false)}
+        onPhoto={(file) => { setShowPhotoChooser(false); onChangePhoto(file); }}
+      />
 
       <DiagnosticsPanel record={matchDiagnostics ?? null} />
     </>
