@@ -85,10 +85,16 @@ and Foot Holds orange. Each marker is a large, thin-bordered, faintly-filled dis
 with a soft colour glow that marks the spot without covering it; the number is
 set off to the side as black-on-white, tethered by a short leader line, and
 labels are placed in first-use order so they never overlap each other or another
-Hold's disc. Markers reveal progressively (a marker pops in when the limb first
+Hold's disc. When a hand and a foot are used on the same spot, their two markers
+are co-drawn as one **split disc** — cyan top half, orange bottom half — with each
+number tethered to its own half; each half reveals at its own first-use time.
+Markers reveal progressively (a marker pops in when the limb first
 lands and persists). Holds are **inferred from Dwells** (a limb held still long enough, in
 Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
-whose knee straightens or braces), never detected on the route photo. They are
+whose leg forms a downward hip→knee→ankle stack and straightens or braces), never
+detected on the route photo. A Dwell survives a brief lift-off and return (so a
+re-grip is one Hold, not two), and the climber is taken to always be supported by
+at least one hand. They are
 derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the
 `useHolds` hook from the same pose frames the Skeleton uses and the same gated
 homography / per-keyframe path — so there is no S3 or schema change, and every

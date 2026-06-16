@@ -120,6 +120,63 @@ describe("detectHolds", () => {
     expect(holds).toHaveLength(0);
   });
 
+  it("rejects a tucked/swinging leg (bent knee, ankle not below the knee)", () => {
+    // Knee bent enough to pass the braced clause, but the ankle is drawn up level
+    // with the knee — the downward hip→knee→ankle stack is broken, so it is not a
+    // weight-bearing foot (ADR 0008).
+    const hip: [number, number] = [0.5, 0.5];
+    const knee: [number, number] = [0.5, 0.7];
+    const ankle: [number, number] = [0.6, 0.65]; // above the knee, tucked/swinging
+    const foot: [number, number] = [0.62, 0.6];
+    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(0);
+  });
+
+  it("treats a brief lift-off and return as one Dwell (gap-tolerant)", () => {
+    // Two 0.4s halves at one spot, each too short alone, bridged by a single
+    // out-of-radius excursion frame inside the 0.4s gap window — one Hold, not none
+    // (and not two stacked numbers) (ADR 0008).
+    const ts = [0, 0.2, 0.4, 0.6, 0.8];
+    const xs = [0.5, 0.5, 0.85, 0.5, 0.5]; // frame 2 lifts well outside the radius
+    const frames: PoseFrame[] = ts.map((t, i) => ({
+      timestamp: t,
+      keypoints: [
+        kp("left_index", xs[i], 0.45),
+        kp("left_pinky", xs[i], 0.45),
+        kp("left_wrist", xs[i], 0.5),
+      ],
+    }));
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].kind).toBe("hand");
+    // Located at the anchor, ignoring the excursion frame.
+    expect(holds[0].x).toBeCloseTo(500, 1);
+  });
+
+  it("recovers the stronger hand when both hands would be rejected at once", () => {
+    // Both hands are stationary, confident, but sit at the wrist (a hang/press, not
+    // a grip) so both fail the grip gate. Since both hands can never dangle at once,
+    // the stronger (left, higher score) is recovered (ADR 0008).
+    const left = handFrames({ side: "left", x: 0.3, handY: 0.5, wristY: 0.5, score: 0.85 });
+    const right = handFrames({ side: "right", x: 0.7, handY: 0.5, wristY: 0.5, score: 0.6 });
+    const frames: PoseFrame[] = DEFAULT_TS.map((t, i) => ({
+      timestamp: t,
+      keypoints: [...left[i].keypoints, ...right[i].keypoints],
+    }));
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].kind).toBe("hand");
+    expect(holds[0].x).toBeCloseTo(300, 1); // the left hand (stronger)
+  });
+
+  it("does not recover a lone hanging hand (the other hand is absent)", () => {
+    // A single hand at the wrist with no opposing candidate asserts nothing about
+    // support, so it stays rejected (guards the soft rule against over-recovery).
+    const holds = detectHolds(handFrames({ handY: 0.5, wristY: 0.5 }), project, BODY_SCALE);
+    expect(holds).toHaveLength(0);
+  });
+
   it("merges a two-hand match at one spot into a single numbered Hold", () => {
     // Left and right hands grip the same location — same kind + location, so the
     // two Dwells collapse into one Hold rather than two stacked numbers.

@@ -44,6 +44,13 @@ const GLOW_BLUR_FRAC = 0.55;
 const LEADER_WIDTH_FRAC = 0.06;
 /** Number label font size × body scale. */
 const LABEL_FONT_FRAC = 0.26;
+/**
+ * A Hand Hold and a Foot Hold whose centres fall within this fraction of body
+ * scale are co-drawn as one split disc (top hand, bottom foot). Mirrors the
+ * detection same-place merge radius factor (`DEFAULT_MERGE_RADIUS_FACTOR` in
+ * `holdDetection.ts`, ADR 0008) — keep the two in sync.
+ */
+const DEFAULT_COMBINE_FACTOR = 0.35;
 
 /** Style options for the Holds pass. All optional; unset fields use defaults. */
 export interface HoldStyle {
@@ -61,6 +68,8 @@ export interface HoldStyle {
   radius?: number;
   /** Disc fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
   fillOpacity?: number;
+  /** Cross-kind combine radius × body scale. Default {@link DEFAULT_COMBINE_FACTOR}. */
+  combineFactor?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,15 +100,40 @@ const LABEL_ANGLES = [
   (-3 * Math.PI) / 4, Math.PI / 2, Math.PI, (3 * Math.PI) / 4,
 ];
 
-interface Placed {
-  hold: Hold;
+/** A disc to draw: a full single-kind disc, or a split top(hand)/bottom(foot). */
+interface DiscUnit {
+  cx: number;
+  cy: number;
+  /** "full" until both halves of a pair are revealed, then "top"+"bottom". */
+  segments: { half: "full" | "top" | "bottom"; color: string }[];
+}
+
+/** A number label to place, tethered to a point on its disc by a leader. */
+interface LabelUnit {
+  order: number;
   color: string;
+  /** Disc centre (for the full-disc leader to start at the edge). */
+  dcx: number;
+  dcy: number;
+  /** Tether point the leader emanates from (half edge for a split disc). */
+  ax: number;
+  ay: number;
+  /** Preferred placement direction so a split disc's numbers sit by their half. */
+  prefer: "up" | "down" | "any";
+}
+
+interface Placed {
+  unit: LabelUnit;
   /** Label rect. */
   rect: Rect;
   /** Label centre. */
   cx: number;
   cy: number;
 }
+
+/** Candidate label directions biased upward / downward for split-disc halves. */
+const UP_ANGLES = [-Math.PI / 2, -Math.PI / 4, (-3 * Math.PI) / 4, 0, Math.PI];
+const DOWN_ANGLES = [Math.PI / 2, Math.PI / 4, (3 * Math.PI) / 4, 0, Math.PI];
 
 /** Path a (optionally rounded) rect, falling back to a plain rect on engines
  *  without `roundRect` (jsdom / older canvas). */
@@ -145,14 +179,81 @@ export function drawHolds(
   const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
   const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
 
+  const combineR = Math.max(1, (style?.combineFactor ?? DEFAULT_COMBINE_FACTOR) * bodyScale);
+
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
+  const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
+  const revealed = (hold: Hold) => hold.firstUseTime <= t && inBounds(hold);
 
-  // Visible, in-bounds Holds in first-use order (the order labels are placed).
-  const visible = holds
-    .filter((hold) => hold.firstUseTime <= t && hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h)
-    .sort((a, b) => a.order - b.order);
-  if (visible.length === 0) return;
+  // ── Pairing — a Hand Hold and its nearest Foot Hold within the combine radius
+  //    are co-drawn as one split disc. Same-kind Holds already merged in
+  //    detection, so pairing is strictly 1:1 hand↔foot (ADR 0008). ──
+  const partnerOf = new Map<string, Hold>();
+  const usedFoot = new Set<string>();
+  const feet = holds.filter((hold) => hold.kind === "foot");
+  for (const hand of holds.filter((hold) => hold.kind === "hand")) {
+    let best: Hold | null = null;
+    let bestD = Infinity;
+    for (const foot of feet) {
+      if (usedFoot.has(foot.id)) continue;
+      const d = Math.hypot(hand.x - foot.x, hand.y - foot.y);
+      if (d <= combineR && d < bestD) {
+        best = foot;
+        bestD = d;
+      }
+    }
+    if (best) {
+      partnerOf.set(hand.id, best);
+      partnerOf.set(best.id, hand);
+      usedFoot.add(best.id);
+    }
+  }
+
+  // ── Build the discs + labels actually visible at time `t`. Each half of a pair
+  //    reveals independently: a single-kind disc until the partner lands, then a
+  //    split disc at the midpoint (ADR 0008). ──
+  const discs: DiscUnit[] = [];
+  const labels: LabelUnit[] = [];
+  const done = new Set<string>();
+  const single = (hold: Hold, color: string) => {
+    discs.push({ cx: hold.x, cy: hold.y, segments: [{ half: "full", color }] });
+    labels.push({ order: hold.order, color, dcx: hold.x, dcy: hold.y, ax: hold.x, ay: hold.y, prefer: "any" });
+  };
+  for (const hold of [...holds].sort((a, b) => a.order - b.order)) {
+    if (done.has(hold.id)) continue;
+    const partner = partnerOf.get(hold.id);
+    if (!partner) {
+      done.add(hold.id);
+      if (revealed(hold)) single(hold, hold.kind === "hand" ? handColor : footColor);
+      continue;
+    }
+    done.add(hold.id);
+    done.add(partner.id);
+    const hand = hold.kind === "hand" ? hold : partner;
+    const foot = hold.kind === "hand" ? partner : hold;
+    const handVis = revealed(hand);
+    const footVis = revealed(foot);
+    if (handVis && footVis) {
+      const cx = (hand.x + foot.x) / 2;
+      const cy = (hand.y + foot.y) / 2;
+      discs.push({
+        cx,
+        cy,
+        segments: [
+          { half: "top", color: handColor },
+          { half: "bottom", color: footColor },
+        ],
+      });
+      labels.push({ order: hand.order, color: handColor, dcx: cx, dcy: cy, ax: cx, ay: cy - r, prefer: "up" });
+      labels.push({ order: foot.order, color: footColor, dcx: cx, dcy: cy, ax: cx, ay: cy + r, prefer: "down" });
+    } else if (handVis) {
+      single(hand, handColor);
+    } else if (footVis) {
+      single(foot, footColor);
+    }
+  }
+  if (discs.length === 0) return;
 
   ctx.save();
   ctx.textAlign = "center";
@@ -160,28 +261,29 @@ export function drawHolds(
   ctx.font = `bold ${fontPx}px sans-serif`;
 
   // ── Label placement — greedy, in first-use order, so earlier labels keep a
-  //    stable spot and never overlap a later one or another Hold's disc. ──
+  //    stable spot and never overlap a later one or a disc. ──
   const padX = fontPx * 0.55;
   const padY = fontPx * 0.34;
   const placed: Placed[] = [];
-  for (const hold of visible) {
-    const text = String(hold.order);
+  for (const unit of [...labels].sort((a, b) => a.order - b.order)) {
+    const text = String(unit.order);
     const tw = ctx.measureText(text).width;
     const lw = Math.max(tw + 2 * padX, fontPx + 2 * padY);
     const lh = fontPx + 2 * padY;
+    const angles = unit.prefer === "up" ? UP_ANGLES : unit.prefer === "down" ? DOWN_ANGLES : LABEL_ANGLES;
 
     let best: Rect | null = null;
     let bestC = { x: 0, y: 0 };
-    // Expanding rings of candidate offsets around the disc.
+    // Expanding rings of candidate offsets around the tether point.
     outer: for (let ring = 0; ring < 6; ring++) {
-      const off = r + (0.5 + ring * 0.75) * Math.max(lw, lh);
-      for (const angle of LABEL_ANGLES) {
-        const cx = hold.x + Math.cos(angle) * off;
-        const cy = hold.y + Math.sin(angle) * off;
+      const off = (0.5 + ring * 0.75) * Math.max(lw, lh);
+      for (const angle of angles) {
+        const cx = unit.ax + Math.cos(angle) * off;
+        const cy = unit.ay + Math.sin(angle) * off;
         const rect: Rect = { x: cx - lw / 2, y: cy - lh / 2, w: lw, h: lh };
         if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > w || rect.y + rect.h > h) continue;
         const hitsLabel = placed.some((p) => rectsOverlap(rect, p.rect));
-        const hitsDisc = visible.some((v) => rectCircleOverlap(rect, v.x, v.y, r));
+        const hitsDisc = discs.some((d) => rectCircleOverlap(rect, d.cx, d.cy, r));
         if (!hitsLabel && !hitsDisc) {
           best = rect;
           bestC = { x: cx, y: cy };
@@ -195,58 +297,91 @@ export function drawHolds(
       }
     }
     if (!best) {
-      const cx = hold.x + r + lw;
-      best = { x: cx - lw / 2, y: hold.y - lh / 2, w: lw, h: lh };
-      bestC = { x: cx, y: hold.y };
+      const cx = unit.ax + r + lw;
+      best = { x: cx - lw / 2, y: unit.ay - lh / 2, w: lw, h: lh };
+      bestC = { x: cx, y: unit.ay };
     }
-    placed.push({ hold, color: hold.kind === "hand" ? handColor : footColor, rect: best, cx: bestC.x, cy: bestC.y });
+    placed.push({ unit, rect: best, cx: bestC.x, cy: bestC.y });
   }
 
-  // ── Pass 1 — discs with a soft glow (drawn first so labels/leaders sit on top). ──
-  for (const p of placed) {
+  // ── Pass 1 — discs with a soft glow (drawn first so labels/leaders sit on top).
+  //    A split disc fills each half under a clip and draws a colour-coded ring per
+  //    half plus a divider so the hand/foot split reads at a glance. ──
+  for (const d of discs) {
+    for (const seg of d.segments) {
+      ctx.save();
+      if (seg.half !== "full") {
+        ctx.beginPath();
+        if (seg.half === "top") ctx.rect(d.cx - r, d.cy - r, 2 * r, r);
+        else ctx.rect(d.cx - r, d.cy, 2 * r, r);
+        ctx.clip();
+      }
+      ctx.shadowColor = seg.color;
+      ctx.shadowBlur = glowBlur;
+      ctx.globalAlpha = fillOpacity;
+      ctx.fillStyle = seg.color;
+      ctx.beginPath();
+      ctx.arc(d.cx, d.cy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Colour-coded ring (full circle, or two semicircle arcs + divider for a split).
     ctx.save();
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = glowBlur;
-    ctx.globalAlpha = fillOpacity;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.hold.x, p.hold.y, r, 0, Math.PI * 2);
-    ctx.fill();
-    // Thin opaque border (keeps the glow from the shadow on the stroke too).
-    ctx.globalAlpha = 1;
     ctx.lineWidth = ringWidth;
-    ctx.strokeStyle = 'transparent';
-    ctx.stroke();
+    if (d.segments.length === 1) {
+      ctx.strokeStyle = d.segments[0].color;
+      ctx.beginPath();
+      ctx.arc(d.cx, d.cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      const top = d.segments.find((s) => s.half === "top")!;
+      const bottom = d.segments.find((s) => s.half === "bottom")!;
+      ctx.strokeStyle = top.color;
+      ctx.beginPath();
+      ctx.arc(d.cx, d.cy, r, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = bottom.color;
+      ctx.beginPath();
+      ctx.arc(d.cx, d.cy, r, 0, Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(d.cx - r, d.cy);
+      ctx.lineTo(d.cx + r, d.cy);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
   // ── Pass 2 — leader lines + black-on-white number labels. ──
   for (const p of placed) {
-    // Leader from the disc edge toward the label centre; the opaque label is
-    // drawn on top, hiding the inner end of the line.
-    const dx = p.cx - p.hold.x;
-    const dy = p.cy - p.hold.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const ex = p.hold.x + (dx / len) * r;
-    const ey = p.hold.y + (dy / len) * r;
+    const { unit } = p;
+    // Leader toward the label centre. A full disc's tether is its centre, so the
+    // leader starts at the edge; a split half tethers at the half edge already.
+    let sx = unit.ax;
+    let sy = unit.ay;
+    if (unit.prefer === "any") {
+      const dx = p.cx - unit.dcx;
+      const dy = p.cy - unit.dcy;
+      const len = Math.hypot(dx, dy) || 1;
+      sx = unit.dcx + (dx / len) * r;
+      sy = unit.dcy + (dy / len) * r;
+    }
     ctx.lineWidth = leaderWidth;
-    ctx.strokeStyle = p.color;
+    ctx.strokeStyle = unit.color;
     ctx.beginPath();
-    ctx.moveTo(ex, ey);
+    ctx.moveTo(sx, sy);
     ctx.lineTo(p.cx, p.cy);
     ctx.stroke();
 
-    // Label background — white rounded rect with a thin tinted border.
+    // Label background — white rounded rect.
     pathRoundRect(ctx, p.rect, Math.min(p.rect.h / 2, fontPx * 0.4));
     ctx.fillStyle = labelColor;
     ctx.fill();
-    ctx.lineWidth = Math.max(1, leaderWidth);
-    ctx.strokeStyle = "transparent";
-    ctx.stroke();
 
-    // Number — black, centred in the label.
+    // Number — near-black, centred in the label.
     ctx.fillStyle = numberColor;
-    ctx.fillText(String(p.hold.order), p.cx, p.cy);
+    ctx.fillText(String(unit.order), p.cx, p.cy);
   }
 
   ctx.restore();

@@ -31,8 +31,23 @@ import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
 const DEFAULT_MIN_DWELL_SEC = 0.5;
 /** Stationary radius: a Dwell holds within this fraction of body scale. */
 const DEFAULT_STATIONARY_RADIUS_FACTOR = 0.18;
-/** Same-kind Holds within this fraction of body scale merge into one. */
-const DEFAULT_MERGE_RADIUS_FACTOR = 0.25;
+/** Same-kind Holds within this fraction of body scale merge into one (ADR 0008). */
+const DEFAULT_MERGE_RADIUS_FACTOR = 0.35;
+/**
+ * A Dwell survives a brief excursion outside the stationary radius this long
+ * before it ends: a re-grip or a foot reset that returns to the same spot is one
+ * Hold, not two (ADR 0008). Excursion frames are excluded from the averaged
+ * position but their elapsed time still counts toward the Dwell duration, so a
+ * *long* lift-off fails the confidence guard rather than being silently bridged.
+ */
+const DEFAULT_EXCURSION_GAP_SEC = 0.4;
+/**
+ * Downward-stack margin (× body scale): for a Foot Hold the hip must sit this far
+ * above the knee and the knee this far above the ankle, so a tucked/swinging leg
+ * (ankle level with or above the knee) is rejected even when its knee is bent
+ * (ADR 0008).
+ */
+const DEFAULT_STACK_MARGIN_FACTOR = 0.05;
 /** A Hand Hold's hand point must sit this far above the wrist (× body scale). */
 const DEFAULT_ABOVE_WRIST_FACTOR = 0.05;
 /** Knee-straighten gate: interior hip–knee–ankle angle must increase ≥ this. */
@@ -83,6 +98,8 @@ export interface HoldDetectionOptions {
   minDwellSec?: number;
   stationaryRadiusFactor?: number;
   mergeRadiusFactor?: number;
+  excursionGapSec?: number;
+  stackMarginFactor?: number;
   aboveWristFactor?: number;
   kneeStraightenDeg?: number;
   bracedKneeMaxDeg?: number;
@@ -198,6 +215,8 @@ interface ResolvedOptions {
   minDwellSec: number;
   stationaryRadius: number;
   mergeRadius: number;
+  excursionGapSec: number;
+  stackMargin: number;
   aboveWristMargin: number;
   kneeStraightenDeg: number;
   bracedKneeMaxDeg: number;
@@ -224,6 +243,22 @@ function handAboveWrist(run: LimbSample[], opts: ResolvedOptions): boolean {
   }
   if (handYs.length === 0) return false;
   return mean(handYs) < mean(wristYs) - opts.aboveWristMargin;
+}
+
+/**
+ * Weight-stacking gate: a planted foot forms a downward hip→knee→ankle stack
+ * (hip above knee above ankle, ankle clearly below the knee). A tucked or
+ * swinging leg breaks that stack — its ankle sits level with or above the knee —
+ * so it is rejected here even though its bent knee would pass {@link footLoadBearing}
+ * (ADR 0008).
+ */
+function footStacked(run: LimbSample[], opts: ResolvedOptions): boolean {
+  const withLeg = run.filter((s) => s.hip && s.knee && s.ankle);
+  if (withLeg.length === 0) return false;
+  const hipY = mean(withLeg.map((s) => s.hip!.y));
+  const kneeY = mean(withLeg.map((s) => s.knee!.y));
+  const ankleY = mean(withLeg.map((s) => s.ankle!.y));
+  return kneeY >= hipY + opts.stackMargin && ankleY >= kneeY + opts.stackMargin;
 }
 
 /** A Foot Hold needs the leg load-bearing: knee straightens OR braced. */
@@ -254,17 +289,19 @@ function footLoadBearing(run: LimbSample[], opts: ResolvedOptions): boolean {
 
 /**
  * Time-weighted confidence guard: the fraction of the dwell window during which
- * the contact keypoint was genuinely detected (score ≥ threshold) must clear the
- * minimum. Each sample is weighted by the gap to the next sample in the run, so a
- * few good frames cannot drag a mostly-estimated Dwell over the line.
+ * the contact keypoint was genuinely detected (score ≥ threshold) *and on the
+ * hold* must clear the minimum. Each sample is weighted by the gap to the next
+ * sample in the run, so a few good frames cannot drag a mostly-estimated Dwell
+ * over the line, and a bridged excursion (off-hold frames) counts against the
+ * fraction so a long lift-off fails (ADR 0008).
  */
-function confidencePasses(run: LimbSample[], opts: ResolvedOptions): boolean {
+function confidencePasses(run: LimbSample[], onHold: boolean[], opts: ResolvedOptions): boolean {
   const duration = run[run.length - 1].t - run[0].t;
   if (duration <= 0) return false;
   let goodTime = 0;
   for (let i = 0; i < run.length - 1; i++) {
     const dt = run[i + 1].t - run[i].t;
-    if (run[i].score >= opts.confidenceThreshold) goodTime += dt;
+    if (onHold[i] && run[i].score >= opts.confidenceThreshold) goodTime += dt;
   }
   return goodTime / duration >= opts.confidenceMinFraction;
 }
@@ -275,51 +312,96 @@ function confidencePasses(run: LimbSample[], opts: ResolvedOptions): boolean {
 
 interface Dwell {
   kind: "hand" | "foot";
+  side: "left" | "right";
   x: number;
   y: number;
   firstUseTime: number;
+  /** Absolute time of the last on-hold sample (for support-window overlap). */
+  endTime: number;
+  /** Mean on-hold confidence — the "stronger" tie-break for support recovery. */
+  score: number;
 }
 
-function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions): Dwell[] {
-  const dwells: Dwell[] = [];
+/** Accepted Dwells plus hand Dwells that cleared everything but the grip gate. */
+interface ScanResult {
+  accepted: Dwell[];
+  /** Stationary, confident, long-enough hand Dwells that failed handAboveWrist. */
+  handNearMiss: Dwell[];
+}
+
+function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions): ScanResult {
+  const accepted: Dwell[] = [];
+  const handNearMiss: Dwell[] = [];
   let i = 0;
   while (i < samples.length) {
     if (!samples[i].contact) {
       i++;
       continue;
     }
-    // Grow a maximal run that stays within the stationary radius of the anchor
-    // (the run's first valid contact), so total drift is capped at the radius.
+    // Grow a run anchored at the first valid contact. A sample within the
+    // stationary radius extends the run directly; a sample outside it is a
+    // potential excursion — bridged only if the limb returns to within the radius
+    // of the same anchor inside the gap window (ADR 0008). `j` tracks the last
+    // on-hold sample, so the run always ends on the hold.
     const anchor = samples[i].contact!;
     let j = i;
-    while (
-      j + 1 < samples.length &&
-      samples[j + 1].contact &&
-      dist(samples[j + 1].contact!, anchor) <= opts.stationaryRadius
-    ) {
-      j++;
+    let scan = i;
+    while (scan + 1 < samples.length) {
+      const next = samples[scan + 1];
+      if (next.contact && dist(next.contact, anchor) <= opts.stationaryRadius) {
+        scan++;
+        j = scan;
+        continue;
+      }
+      let look = scan + 1;
+      let back = -1;
+      while (look < samples.length && samples[look].t - samples[j].t <= opts.excursionGapSec) {
+        if (samples[look].contact && dist(samples[look].contact!, anchor) <= opts.stationaryRadius) {
+          back = look;
+          break;
+        }
+        look++;
+      }
+      if (back >= 0) {
+        scan = back;
+        j = back;
+      } else {
+        break;
+      }
     }
 
     const run = samples.slice(i, j + 1);
+    // On-hold mask: in-radius contact frames. Off-hold (bridged) frames are
+    // excluded from the averaged position and the confidence good-time.
+    const onHold = run.map((s) => !!s.contact && dist(s.contact!, anchor) <= opts.stationaryRadius);
     const duration = run[run.length - 1].t - run[0].t;
-    if (
-      duration >= opts.minDwellSec &&
-      confidencePasses(run, opts) &&
-      (spec.kind === "hand" ? handAboveWrist(run, opts) : footLoadBearing(run, opts))
-    ) {
-      const pts = run.filter((s) => s.contact).map((s) => s.contact!);
-      dwells.push({
+
+    if (duration >= opts.minDwellSec && confidencePasses(run, onHold, opts)) {
+      const onHoldRun = run.filter((_, k) => onHold[k]);
+      const pts = onHoldRun.map((s) => s.contact!);
+      const dwell: Dwell = {
         kind: spec.kind,
+        side: spec.side,
         x: mean(pts.map((p) => p.x)),
         y: mean(pts.map((p) => p.y)),
         firstUseTime: run[0].t,
-      });
+        endTime: run[run.length - 1].t,
+        score: mean(onHoldRun.map((s) => s.score)),
+      };
+
+      const loadBearing =
+        spec.kind === "hand"
+          ? handAboveWrist(onHoldRun, opts)
+          : footStacked(onHoldRun, opts) && footLoadBearing(onHoldRun, opts);
+
+      if (loadBearing) accepted.push(dwell);
+      else if (spec.kind === "hand") handNearMiss.push(dwell);
     }
 
     // Continue from the breaking sample so it can anchor the next run.
     i = j + 1;
   }
-  return dwells;
+  return { accepted, handNearMiss };
 }
 
 // ---------------------------------------------------------------------------
@@ -372,6 +454,8 @@ export function detectHolds(
     minDwellSec: opts.minDwellSec ?? DEFAULT_MIN_DWELL_SEC,
     stationaryRadius: (opts.stationaryRadiusFactor ?? DEFAULT_STATIONARY_RADIUS_FACTOR) * bodyScale,
     mergeRadius: (opts.mergeRadiusFactor ?? DEFAULT_MERGE_RADIUS_FACTOR) * bodyScale,
+    excursionGapSec: opts.excursionGapSec ?? DEFAULT_EXCURSION_GAP_SEC,
+    stackMargin: (opts.stackMarginFactor ?? DEFAULT_STACK_MARGIN_FACTOR) * bodyScale,
     aboveWristMargin: (opts.aboveWristFactor ?? DEFAULT_ABOVE_WRIST_FACTOR) * bodyScale,
     kneeStraightenDeg: opts.kneeStraightenDeg ?? DEFAULT_KNEE_STRAIGHTEN_DEG,
     bracedKneeMaxDeg: opts.bracedKneeMaxDeg ?? DEFAULT_BRACED_KNEE_MAX_DEG,
@@ -383,8 +467,27 @@ export function detectHolds(
   const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
 
   const dwells: Dwell[] = [];
+  const handNearMiss: Record<"left" | "right", Dwell[]> = { left: [], right: [] };
   for (const spec of LIMBS) {
-    dwells.push(...scanDwells(buildSamples(sorted, spec, project), spec, resolved));
+    const { accepted, handNearMiss: nm } = scanDwells(buildSamples(sorted, spec, project), spec, resolved);
+    dwells.push(...accepted);
+    if (spec.kind === "hand") handNearMiss[spec.side].push(...nm);
+  }
+
+  // Soft support rule (ADR 0008): both hands can never dangle at once. When both
+  // hands are stationary near-miss candidates over an overlapping window and
+  // neither hand has an accepted Hold there, the Climber must be hanging from one —
+  // recover the stronger so a real hang is not erased. A lone near-miss (the other
+  // hand absent) asserts nothing and stays rejected.
+  const overlaps = (a: Dwell, b: Dwell) => a.firstUseTime <= b.endTime && b.firstUseTime <= a.endTime;
+  for (const l of handNearMiss.left) {
+    for (const r of handNearMiss.right) {
+      if (!overlaps(l, r)) continue;
+      const supported = dwells.some((d) => d.kind === "hand" && (overlaps(d, l) || overlaps(d, r)));
+      if (supported) continue;
+      const stronger = l.score >= r.score ? l : r;
+      if (!dwells.includes(stronger)) dwells.push(stronger);
+    }
   }
 
   const merged = mergeDwells(dwells, resolved.mergeRadius);
