@@ -121,7 +121,7 @@ export default function StepMatchRoutePhoto({
   const instruction = isMatching
     ? "lining up your climb…"
     : !routeMatchTriggered
-      ? "frame a patch of wall, then place it"
+      ? "frame the route, then place it"
       : !isFrameReady
         ? "building your overlay…"
         : "review, then save";
@@ -264,7 +264,7 @@ export default function StepMatchRoutePhoto({
         stepName="Place on route"
         instruction={instruction}
         purpose={!routeMatchTriggered && !isMatching
-          ? "Add a photo of the route to see your climb on it."
+          ? "Add a photo of the route to place your climb on it."
           : undefined}
         onBack={onBack}
         toolbar={toolbarNode}
@@ -342,7 +342,7 @@ export default function StepMatchRoutePhoto({
         ariaLabel="Route photo crop — fullscreen"
         header={
           <header className="flex shrink-0 items-center justify-between border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
-            <p className="text-sm font-medium text-fg">Route photo &mdash; frame the wall to line things up</p>
+            <p className="text-sm font-medium text-fg">Route photo &mdash; frame the route</p>
             <button
               onClick={() => setRoutePhotoFullscreen(false)}
               className="ui-icon-btn flex h-8 w-8 items-center justify-center"

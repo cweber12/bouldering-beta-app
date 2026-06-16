@@ -299,6 +299,9 @@ export default function StepSetDetection({
   // Set when the user presses Scan with no climber marked: shows a soft nudge
   // and relabels the button to "Scan anyway" rather than blocking the scan.
   const [scanNudged, setScanNudged] = useState(false);
+  // Lets the user collapse the in-frame framing tip when it is in the way.
+  // Reset on target switch so each target's instruction surfaces once.
+  const [hintMinimized, setHintMinimized] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────
   function handleClimberCropChange(c: CropFraction) {
@@ -325,8 +328,8 @@ export default function StepSetDetection({
     });
   }
 
-  function handleSelectClimber() { setCropMode("climber"); }
-  function handleSelectWall()    { setCropMode("wall"); }
+  function handleSelectClimber() { setHintMinimized(false); setCropMode("climber"); }
+  function handleSelectWall()    { setHintMinimized(false); setCropMode("wall"); }
   function handleReTap()         { setScanNudged(false); onClimberPointChange?.(null); }
 
   function handleCropVideoLoaded() {
@@ -438,40 +441,72 @@ export default function StepSetDetection({
     />
   );
 
-  // Floating coaching pill over the stage. Pointer-events-none so it never
-  // blocks the tap surface beneath. Covers the three guidance moments:
-  // (1) tap affordance before a climber is marked, (2) the soft scan nudge,
-  // (3) wall-step discoverability once the climber is marked.
-  const stageHint: { text: string; tone: "info" | "caution" } | null = (() => {
-    if (!hasCropFrame || cropMode !== "climber") return null;
+  // Floating framing tip over the stage. The container is pointer-events-none so
+  // the bare "Tap the climber" cue never blocks the tap surface beneath; the
+  // longer, minimizable tips opt their pill back into pointer events for the
+  // minimize control. Copy is terse and imperative, manual-style.
+  const stageHint: { text: string; tone: "info" | "caution"; minimizable: boolean } | null = (() => {
+    if (!hasCropFrame) return null;
+    if (cropMode === "wall") {
+      return { text: "Frame only the route and the connected face.", tone: "info", minimizable: true };
+    }
     if (climberPoint == null) {
       return scanNudged
-        ? { text: "Tap the climber to track them — or press Scan anyway", tone: "caution" }
-        : { text: "Tap the climber to track them", tone: "info" };
+        ? { text: "Tap the climber, or Scan anyway.", tone: "caution", minimizable: false }
+        : { text: "Tap the climber.", tone: "info", minimizable: false };
     }
-    if (!wallTouched) {
-      return { text: "Climber set. Next, tap “Wall” above to frame a patch of wall", tone: "info" };
-    }
-    return null;
+    return {
+      text: wallTouched
+        ? "Size the box to the climber with room for the next move."
+        : "Size the box to the climber with room for the next move, then tap Route.",
+      tone: "info",
+      minimizable: true,
+    };
   })();
 
   const stageHintNode = stageHint ? (
-    <div
-      className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3"
-      role="status"
-      aria-live="polite"
-    >
-      <span
-        className={cn(
-          "max-w-full rounded-full border px-3 py-1.5 text-center text-xs font-medium shadow-lg backdrop-blur-sm",
-          stageHint.tone === "caution"
-            ? "border-caution-border bg-caution-surface text-caution"
-            : "border-edge/60 bg-surface/90 text-fg-secondary",
-          climberPoint == null && !scanNudged && "animate-pulse",
-        )}
-      >
-        {stageHint.text}
-      </span>
+    <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3">
+      {stageHint.minimizable && hintMinimized ? (
+        <button
+          type="button"
+          onClick={() => setHintMinimized(false)}
+          className="pointer-events-auto flex h-7 w-7 items-center justify-center rounded-full border border-edge/60 bg-surface/90 text-fg-secondary shadow-lg backdrop-blur-sm"
+          aria-label="Show framing tip"
+          title="Show tip"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+          </svg>
+        </button>
+      ) : (
+        <span
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1.5 text-center text-xs font-medium shadow-lg backdrop-blur-sm",
+            stageHint.tone === "caution"
+              ? "border-caution-border bg-caution-surface text-caution"
+              : "border-edge/60 bg-surface/90 text-fg-secondary",
+            climberPoint == null && !scanNudged && "animate-pulse",
+            stageHint.minimizable && "pointer-events-auto",
+          )}
+        >
+          <span>{stageHint.text}</span>
+          {stageHint.minimizable && (
+            <button
+              type="button"
+              onClick={() => setHintMinimized(true)}
+              className="-mr-1 shrink-0 rounded-full p-0.5 text-fg-muted transition hover:text-fg"
+              aria-label="Hide tip"
+              title="Hide tip"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </span>
+      )}
     </div>
   ) : null;
 
@@ -494,9 +529,9 @@ export default function StepSetDetection({
             onClick={handleSelectWall}
             className="ui-segmented-button px-3 py-1 font-medium"
             aria-pressed={cropMode === "wall"}
-            title="Frame a patch of wall — lines your climb up with the route photo"
+            title="Frame the route — include only the route and the connected face"
           >
-            Wall
+            Route
           </button>
         </div>
 
@@ -578,15 +613,15 @@ export default function StepSetDetection({
 
   const detectionInstruction =
     cropMode === "wall"
-      ? "frame a patch of wall"
+      ? "frame the route"
       : climberPoint == null
-        ? "tap the climber to lock tracking"
-        : "fine-tune the box, or scan";
+        ? "tap the climber"
+        : "size the box, then frame the route";
 
   const detectionPurpose =
     cropMode === "wall"
-      ? "Frame a patch of wall — this is how we match your climb to the route photo."
-      : "Tap the climber so we track the right person, not someone else in the frame.";
+      ? "Frame the route to align it with your route photo."
+      : "Mark the climber so tracking follows the right person.";
 
   // ── Render ────────────────────────────────────────────────────────────
   return (

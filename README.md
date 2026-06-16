@@ -122,9 +122,9 @@ handles to resize it.
 | Target | Purpose |
 |---|---|
 | Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
-| Wall | Feature-matching region on the first video frame. Frame a patch of wall texture and holds to line the climb up with the route photo. |
+| Route | Feature-matching region on the first video frame. Frame only the route and the connected face to line the climb up with the route photo. |
 
-Click **Scan video** after marking the climber and a patch of wall.
+Click **Scan video** after marking the climber and the route.
 
 ## Guided scan flow
 
@@ -139,7 +139,7 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
 1. **Choose clip** — upload a clip or record with camera (both equal-weight),
   with a one-line note on what makes a good video.
 2. **Mark detection** — tap the climber to lock tracking onto them (a coaching
-  pill on the media shows where to tap), then frame a patch of wall. Pressing
+  pill on the media shows where to tap), then frame the route. Pressing
   Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
   blocking. Quality tier, pose model, sampling stride, the **Long route
   (panning)** toggle, and the **Developer view** switch live in a single
@@ -149,7 +149,7 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
   route**, opens the route-photo overlay; **Save scan** (raw scan) is the
   secondary action.
 4. **Place on route** — add a route photo (**Take photo** on the spot or
-  **Choose from library**), frame the wall to line things up, then **Place on
+  **Choose from library**), frame the route, then **Place on
   route**. **Export video** downloads the annotated clip; match statistics are
   Developer-view only.
 
