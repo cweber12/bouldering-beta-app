@@ -117,33 +117,41 @@ Before processing, each upload and image-match workflow shows an interactive
 crop box overlay. Drag the interior to move the box and drag any of the 8
 handles to resize it.
 
-**Upload page — two crop modes:**
+**Mark detection — two targets:**
 
-| Mode | Purpose |
+| Target | Purpose |
 |---|---|
-| Climber crop | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
-| Route (ORB) crop | ORB feature extraction region on the first video frame. Focus on the wall texture and holds to improve match quality. |
+| Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
+| Wall | Feature-matching region on the first video frame. Frame a patch of wall texture and holds to line the climb up with the route photo. |
 
-Click **Scan video** after setting the crop region.
+Click **Scan video** after marking the climber and a patch of wall.
 
 ## Guided scan flow
 
-The upload flow is a guided 3-step wizard. Every step shares a common
-`ProcessFlowShell` chrome: a sticky header with a "Step _n_ of 3" progress bar
-and a sticky footer that always keeps the primary action visible, regardless of
-media aspect ratio (so the Scan/Save buttons never fall below the fold on
-portrait video):
+The upload flow is a guided 4-step wizard. Every step shares a common
+`ProcessFlowShell` chrome: a "Step _n_ of 4" indicator, an optional one-sentence
+**purpose line** stating what the step is for, and a sticky footer that always
+keeps the primary action visible regardless of media aspect ratio (so the
+Scan/Save buttons never fall below the fold on portrait video). All copy is
+goal-named — no pipeline jargon (ORB, homography, feature points) appears unless
+**Developer view** is enabled.
 
-1. **Choose a video** — upload a clip or record with camera (both equal-weight).
-2. **Set detection** — tap the climber to lock tracking onto them (auto-crop;
-  drag to override), plus an optional wall-texture crop. Quality tier, pose
-  model, sampling stride, and the **Long route (panning)** toggle are pocketed
-  in a single **Settings** popover. The **Scan video** CTA lives in the sticky
-  footer.
-3. **Review your scan** — view processing output with a single pass/warn quality
-  checkpoint; **Save** lives in the sticky footer. From here an understated
-  secondary action, **Overlay on a route photo**, opens the optional overlay
-  view (titled "Overlay on photo") — it is a detour, not a required step.
+1. **Choose clip** — upload a clip or record with camera (both equal-weight),
+  with a one-line note on what makes a good video.
+2. **Mark detection** — tap the climber to lock tracking onto them (a coaching
+  pill on the media shows where to tap), then frame a patch of wall. Pressing
+  Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
+  blocking. Quality tier, pose model, sampling stride, the **Long route
+  (panning)** toggle, and the **Developer view** switch live in a single
+  **Settings** popover.
+3. **Review climb** — watch the traced climb (clean by default; feature points
+  appear only in Developer view). The promoted primary action, **Place on
+  route**, opens the route-photo overlay; **Save scan** (raw scan) is the
+  secondary action.
+4. **Place on route** — add a route photo (**Take photo** on the spot or
+  **Choose from library**), frame the wall to line things up, then **Place on
+  route**. **Export video** downloads the annotated clip; match statistics are
+  Developer-view only.
 
 Metadata entry is essentials-first (location + run type, with location required
 for cloud upload — the Upload button stays disabled until it is filled), and
@@ -151,7 +159,7 @@ optional details (grade, notes) progressively disclosed in the save sheet.
 
 **Match / Compare pages:**
 
-Drag the overlay on the uploaded route photo before clicking **Project skeleton**.
+Drag the overlay on the uploaded route photo before clicking **Place on route**.
 The ORB features are extracted only from the cropped region; keypoints are
 offset back to full-image coordinates automatically, so homography computation
 is unaffected.

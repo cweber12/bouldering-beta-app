@@ -463,7 +463,7 @@ export default function StepSetDetection({
     >
       <span
         className={cn(
-          "rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-sm",
+          "max-w-full rounded-full border px-3 py-1.5 text-center text-xs font-medium shadow-lg backdrop-blur-sm",
           stageHint.tone === "caution"
             ? "border-caution-border bg-caution-surface text-caution"
             : "border-edge/60 bg-surface/90 text-fg-secondary",
