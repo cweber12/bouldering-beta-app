@@ -17,6 +17,7 @@ import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { useAdvancedView } from "@/hooks/useAdvancedView";
 import FullscreenModal from "@/components/ui/FullscreenModal";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import type { MatchDiagnostics } from "@/pipeline/diagnostics";
@@ -109,6 +110,7 @@ export default function StepMatchRoutePhoto({
   const [showMatchStats,        setShowMatchStats]        = useState(false);
   const [showPhotoChooser,      setShowPhotoChooser]      = useState(false);
   const matchStatsRef = useRef<HTMLDivElement>(null);
+  const { advanced } = useAdvancedView();
 
   // Close match stats when clicking outside.
   useClickOutside(matchStatsRef, () => setShowMatchStats(false), showMatchStats);
@@ -186,18 +188,18 @@ export default function StepMatchRoutePhoto({
     <button
       type="button"
       onClick={onExportVideo}
-      className="ui-icon-btn flex h-8 w-8 items-center justify-center"
-      aria-label={exportStatus === "done" ? "Re-export video" : "Export video"}
-      title={exportStatus === "done" ? "Re-export" : "Export"}
+      className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+      title="Download your climb as a video"
     >
       <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
       </svg>
+      {exportStatus === "done" ? "Re-export video" : "Export video"}
     </button>
   ) : null;
 
-  // ── Match stats popover (floating, after match) ──
-  const matchStatsControl = matchStatus === "done" && matchResult ? (
+  // ── Match stats popover (floating, after match) — Developer view only ──
+  const matchStatsControl = advanced && matchStatus === "done" && matchResult ? (
     <div ref={matchStatsRef} className="relative">
       <button
         type="button"

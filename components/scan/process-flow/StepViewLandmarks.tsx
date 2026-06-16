@@ -227,7 +227,7 @@ export default function StepViewLandmarks({
         {/* ── Post-processing state ── */}
         {!isProcessing && orbStatus === "extracting" && (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-fg-secondary">Extracting reference features&#8230;</p>
+            <p className="text-sm text-fg-secondary">Reading the wall texture&#8230;</p>
           </div>
         )}
 
@@ -237,7 +237,7 @@ export default function StepViewLandmarks({
 
             {!isProcessing && orbStatus === "failed" && (
               <p className="text-center text-sm text-caution">
-                Feature extraction failed &mdash; image matching will be unavailable.
+                We couldn&rsquo;t read the wall texture, so placing your climb on a route photo isn&rsquo;t available. You can still save the scan.
               </p>
             )}
 

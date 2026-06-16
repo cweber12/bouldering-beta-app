@@ -156,7 +156,7 @@ function DetectionSettings({
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-fg-muted">
-                Aligns each pan section to the route photo by keyframe. Leave off for a fixed
+                Lines up each part of the pan with the route photo. Leave off for a fixed
                 (tripod) shot.
               </p>
             </div>
