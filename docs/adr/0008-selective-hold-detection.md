@@ -24,17 +24,28 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
    radius is still nudged up (~0.25 → ~0.35 × body scale) as a backstop for a return
    that lands just outside the anchor.
 
-2. **Weighted-foot gate requires a downward hip→knee→ankle stack.** ADR 0007 option 4
-   gated a Foot Hold on knee-straighten **OR** "braced" (knee bent past a straight
-   dangle, or ankle offset from the hip plumb). The braced clause leaked: a leg
-   **tucked up and swinging** in the air also has a bent knee, so it registered a
-   false Foot Hold. The gate now additionally requires the leg to form a **downward
-   stack** — hip above knee above ankle, the ankle clearly *below* the knee — so the
-   foot is plausibly bearing weight rather than drawn up. A *straight* dangling leg
-   was already rejected (no stand-up, ankle under the hip); the stack requirement
-   closes the *tucked* dangling-leg case. Adding only a hip-above-ankle check was
-   rejected because a tucked leg can still satisfy it; a per-frame posture classifier
-   was rejected as overkill for a tunable geometric rule built from joints we already
+2. **Weighted-foot gate split by geometry: side support vs underneath.** ADR 0007
+   option 4 gated a Foot Hold on knee-straighten **OR** "braced" (knee bent past a
+   straight dangle, **OR** ankle offset from the hip plumb). The braced *bent-knee*
+   clause leaked: a leg **tucked up** under the body also has a bent knee, so it
+   registered a false Foot Hold. The gate is now three independent signals that
+   mirror how a foot actually bears load:
+   - **(A) Side support** — the ankle is offset from the hip plumb line. A leg shot
+     out from under the torso and held still is resting on a hold *even when the knee
+     barely bends*, so horizontal offset qualifies on its own. (An earlier revision
+     of this ADR required a vertical hip→knee→ankle stack; that was wrong — it
+     rejected exactly this side-extended foot, whose leg is roughly horizontal.)
+   - **(B) Stand-up underneath** — the interior hip–knee–ankle angle increases across
+     the dwell (the Climber pushes up on a foot under the body).
+   - **(C) Braced underneath** — a bent knee *with the foot planted below the knee*.
+     The below-knee test (ankle clearly lower than the knee) is what separates a
+     braced foothold from a tucked, dangling leg whose foot is drawn up level with or
+     above the knee — closing the leak without touching the side-support and stand-up
+     cases.
+
+   A straight, static leg under the body matches none of the three (no stand-up, no
+   offset, no bend) and is correctly read as hanging. A per-frame posture classifier
+   was rejected as overkill for tunable geometric rules built from joints we already
    project.
 
 3. **A soft "never reject both hands at once" support rule, not a hard invariant.**

@@ -42,12 +42,12 @@ const DEFAULT_MERGE_RADIUS_FACTOR = 0.35;
  */
 const DEFAULT_EXCURSION_GAP_SEC = 0.4;
 /**
- * Downward-stack margin (× body scale): for a Foot Hold the hip must sit this far
- * above the knee and the knee this far above the ankle, so a tucked/swinging leg
- * (ankle level with or above the knee) is rejected even when its knee is bent
- * (ADR 0008).
+ * Foot-below-knee margin (× body scale): a braced (bent-knee) Foot Hold underneath
+ * the body requires the ankle to sit at least this far below the knee, so a
+ * tucked/swinging leg (foot drawn up level with or above the knee) is rejected
+ * even when its knee is bent (ADR 0008).
  */
-const DEFAULT_STACK_MARGIN_FACTOR = 0.05;
+const DEFAULT_FOOT_BELOW_KNEE_FACTOR = 0.05;
 /** A Hand Hold's hand point must sit this far above the wrist (× body scale). */
 const DEFAULT_ABOVE_WRIST_FACTOR = 0.05;
 /** Knee-straighten gate: interior hip–knee–ankle angle must increase ≥ this. */
@@ -99,7 +99,7 @@ export interface HoldDetectionOptions {
   stationaryRadiusFactor?: number;
   mergeRadiusFactor?: number;
   excursionGapSec?: number;
-  stackMarginFactor?: number;
+  footBelowKneeFactor?: number;
   aboveWristFactor?: number;
   kneeStraightenDeg?: number;
   bracedKneeMaxDeg?: number;
@@ -216,7 +216,7 @@ interface ResolvedOptions {
   stationaryRadius: number;
   mergeRadius: number;
   excursionGapSec: number;
-  stackMargin: number;
+  footBelowKneeMargin: number;
   aboveWristMargin: number;
   kneeStraightenDeg: number;
   bracedKneeMaxDeg: number;
@@ -246,25 +246,26 @@ function handAboveWrist(run: LimbSample[], opts: ResolvedOptions): boolean {
 }
 
 /**
- * Weight-stacking gate: a planted foot forms a downward hip→knee→ankle stack
- * (hip above knee above ankle, ankle clearly below the knee). A tucked or
- * swinging leg breaks that stack — its ankle sits level with or above the knee —
- * so it is rejected here even though its bent knee would pass {@link footLoadBearing}
- * (ADR 0008).
+ * A Foot Hold needs the leg load-bearing. Three independent signals qualify
+ * (ADR 0008):
+ *
+ *  (B) **Stand-up underneath** — the interior hip–knee–ankle angle increases
+ *      across the dwell (the Climber pushes up on a foot under the body).
+ *  (A) **Side support** — the ankle is offset horizontally from the hip plumb
+ *      line: a leg shot out from under the torso and held still is resting on a
+ *      hold even when the knee barely bends, so offset alone qualifies.
+ *  (C) **Braced underneath** — a bent knee *with the foot planted below the knee*.
+ *      The below-knee test separates a braced foothold from a tucked/dangling leg
+ *      (foot drawn up level with or above the knee), which is rejected.
+ *
+ * A straight, static leg under the body matches none of these (no stand-up, no
+ * offset, no bend) and is correctly read as hanging.
  */
-function footStacked(run: LimbSample[], opts: ResolvedOptions): boolean {
+function footLoadBearing(run: LimbSample[], opts: ResolvedOptions): boolean {
   const withLeg = run.filter((s) => s.hip && s.knee && s.ankle);
   if (withLeg.length === 0) return false;
-  const hipY = mean(withLeg.map((s) => s.hip!.y));
-  const kneeY = mean(withLeg.map((s) => s.knee!.y));
-  const ankleY = mean(withLeg.map((s) => s.ankle!.y));
-  return kneeY >= hipY + opts.stackMargin && ankleY >= kneeY + opts.stackMargin;
-}
 
-/** A Foot Hold needs the leg load-bearing: knee straightens OR braced. */
-function footLoadBearing(run: LimbSample[], opts: ResolvedOptions): boolean {
-  // Knee-straighten: interior hip–knee–ankle angle increases across the dwell.
-  const withLeg = run.filter((s) => s.hip && s.knee && s.ankle);
+  // (B) Stand-up: interior hip–knee–ankle angle increases across the dwell.
   if (withLeg.length >= 2) {
     const first = withLeg[0];
     const last = withLeg[withLeg.length - 1];
@@ -274,16 +275,20 @@ function footLoadBearing(run: LimbSample[], opts: ResolvedOptions): boolean {
       return true;
     }
   }
-  // Braced: bent knee, or ankle offset horizontally from the hip plumb line.
-  const kneeAngles: number[] = [];
-  const offsets: number[] = [];
-  for (const s of withLeg) {
-    const ang = angleAt(s.hip!, s.knee!, s.ankle!);
-    if (Number.isFinite(ang)) kneeAngles.push(ang);
-    offsets.push(Math.abs(s.ankle!.x - s.hip!.x));
+
+  // (A) Side support: foot held out to the side of the hip plumb line.
+  const offsets = withLeg.map((s) => Math.abs(s.ankle!.x - s.hip!.x));
+  if (mean(offsets) >= opts.bracedOffset) return true;
+
+  // (C) Braced underneath: bent knee with the foot planted below the knee.
+  const kneeAngles = withLeg
+    .map((s) => angleAt(s.hip!, s.knee!, s.ankle!))
+    .filter((a) => Number.isFinite(a));
+  const footBelowKnee =
+    mean(withLeg.map((s) => s.ankle!.y)) >= mean(withLeg.map((s) => s.knee!.y)) + opts.footBelowKneeMargin;
+  if (kneeAngles.length > 0 && mean(kneeAngles) < opts.bracedKneeMaxDeg && footBelowKnee) {
+    return true;
   }
-  if (kneeAngles.length > 0 && mean(kneeAngles) < opts.bracedKneeMaxDeg) return true;
-  if (offsets.length > 0 && mean(offsets) >= opts.bracedOffset) return true;
   return false;
 }
 
@@ -390,9 +395,7 @@ function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions
       };
 
       const loadBearing =
-        spec.kind === "hand"
-          ? handAboveWrist(onHoldRun, opts)
-          : footStacked(onHoldRun, opts) && footLoadBearing(onHoldRun, opts);
+        spec.kind === "hand" ? handAboveWrist(onHoldRun, opts) : footLoadBearing(onHoldRun, opts);
 
       if (loadBearing) accepted.push(dwell);
       else if (spec.kind === "hand") handNearMiss.push(dwell);
@@ -455,7 +458,7 @@ export function detectHolds(
     stationaryRadius: (opts.stationaryRadiusFactor ?? DEFAULT_STATIONARY_RADIUS_FACTOR) * bodyScale,
     mergeRadius: (opts.mergeRadiusFactor ?? DEFAULT_MERGE_RADIUS_FACTOR) * bodyScale,
     excursionGapSec: opts.excursionGapSec ?? DEFAULT_EXCURSION_GAP_SEC,
-    stackMargin: (opts.stackMarginFactor ?? DEFAULT_STACK_MARGIN_FACTOR) * bodyScale,
+    footBelowKneeMargin: (opts.footBelowKneeFactor ?? DEFAULT_FOOT_BELOW_KNEE_FACTOR) * bodyScale,
     aboveWristMargin: (opts.aboveWristFactor ?? DEFAULT_ABOVE_WRIST_FACTOR) * bodyScale,
     kneeStraightenDeg: opts.kneeStraightenDeg ?? DEFAULT_KNEE_STRAIGHTEN_DEG,
     bracedKneeMaxDeg: opts.bracedKneeMaxDeg ?? DEFAULT_BRACED_KNEE_MAX_DEG,

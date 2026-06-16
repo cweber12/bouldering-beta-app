@@ -120,17 +120,31 @@ describe("detectHolds", () => {
     expect(holds).toHaveLength(0);
   });
 
-  it("rejects a tucked/swinging leg (bent knee, ankle not below the knee)", () => {
-    // Knee bent enough to pass the braced clause, but the ankle is drawn up level
-    // with the knee — the downward hip→knee→ankle stack is broken, so it is not a
-    // weight-bearing foot (ADR 0008).
+  it("rejects a tucked/swinging leg under the body (bent knee, foot drawn up)", () => {
+    // Foot under the hip plumb (no side offset), knee bent but the ankle is drawn
+    // up *above* the knee — a tucked, dangling leg, not a planted braced foot, so
+    // the below-knee test rejects it (ADR 0008).
     const hip: [number, number] = [0.5, 0.5];
-    const knee: [number, number] = [0.5, 0.7];
-    const ankle: [number, number] = [0.6, 0.65]; // above the knee, tucked/swinging
-    const foot: [number, number] = [0.62, 0.6];
+    const knee: [number, number] = [0.6, 0.68];
+    const ankle: [number, number] = [0.5, 0.6]; // above the knee, under the hip
+    const foot: [number, number] = [0.5, 0.58];
     const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(0);
+  });
+
+  it("infers a Foot Hold for a leg shot out to the side (offset, little knee bend)", () => {
+    // The Climber shoots a leg out from under the torso onto a foothold for
+    // support; the foot is held still well offset from the hip plumb, knee barely
+    // bending. Side offset alone makes it load-bearing (ADR 0008).
+    const hip: [number, number] = [0.5, 0.5];
+    const knee: [number, number] = [0.65, 0.5];
+    const ankle: [number, number] = [0.8, 0.55]; // far to the side of the hip
+    const foot: [number, number] = [0.82, 0.56];
+    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].kind).toBe("foot");
   });
 
   it("treats a brief lift-off and return as one Dwell (gap-tolerant)", () => {

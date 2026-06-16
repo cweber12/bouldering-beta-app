@@ -91,7 +91,8 @@ number tethered to its own half; each half reveals at its own first-use time.
 Markers reveal progressively (a marker pops in when the limb first
 lands and persists). Holds are **inferred from Dwells** (a limb held still long enough, in
 Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
-whose leg forms a downward hip→knee→ankle stack and straightens or braces), never
+that is either held out to the side of the hip, pushing up as the knee straightens,
+or braced with a bent knee planted below it), never
 detected on the route photo. A Dwell survives a brief lift-off and return (so a
 re-grip is one Hold, not two), and the climber is taken to always be supported by
 at least one hand. They are
