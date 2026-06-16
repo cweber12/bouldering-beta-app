@@ -27,8 +27,17 @@ import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
 // Balanced default constants (tune against real Runs — see ADR 0007)
 // ---------------------------------------------------------------------------
 
-/** Minimum time a limb must dwell to count as load-bearing. */
+/** Minimum time a *hand* must dwell to count as load-bearing. */
 const DEFAULT_MIN_DWELL_SEC = 0.5;
+/**
+ * Minimum time a *foot* must dwell — deliberately longer than a hand's. Climbers
+ * keep feet on footholds longer than hands, and a repositioning or swinging foot
+ * briefly satisfies the same geometry a settled placement does (a side-swing
+ * pause, or a tap-around before settling). Requiring a longer stationary stretch
+ * lets dwell duration discriminate the transient visits from the real placement
+ * (ADR 0008 — selectivity over recall).
+ */
+const DEFAULT_FOOT_MIN_DWELL_SEC = 1.0;
 /** Stationary radius: a Dwell holds within this fraction of body scale. */
 const DEFAULT_STATIONARY_RADIUS_FACTOR = 0.18;
 /** Same-kind Holds within this fraction of body scale merge into one (ADR 0008). */
@@ -96,6 +105,7 @@ export interface Hold {
 /** Overridable detection thresholds; unset fields fall back to Balanced. */
 export interface HoldDetectionOptions {
   minDwellSec?: number;
+  footMinDwellSec?: number;
   stationaryRadiusFactor?: number;
   mergeRadiusFactor?: number;
   excursionGapSec?: number;
@@ -213,6 +223,7 @@ function buildSamples(frames: PoseFrame[], spec: LimbSpec, project: HoldProjecto
 
 interface ResolvedOptions {
   minDwellSec: number;
+  footMinDwellSec: number;
   stationaryRadius: number;
   mergeRadius: number;
   excursionGapSec: number;
@@ -337,6 +348,8 @@ interface ScanResult {
 function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions): ScanResult {
   const accepted: Dwell[] = [];
   const handNearMiss: Dwell[] = [];
+  // Feet must dwell longer than hands to clear a transient pause / tap-around.
+  const minDwell = spec.kind === "foot" ? opts.footMinDwellSec : opts.minDwellSec;
   let i = 0;
   while (i < samples.length) {
     if (!samples[i].contact) {
@@ -381,7 +394,7 @@ function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions
     const onHold = run.map((s) => !!s.contact && dist(s.contact!, anchor) <= opts.stationaryRadius);
     const duration = run[run.length - 1].t - run[0].t;
 
-    if (duration >= opts.minDwellSec && confidencePasses(run, onHold, opts)) {
+    if (duration >= minDwell && confidencePasses(run, onHold, opts)) {
       const onHoldRun = run.filter((_, k) => onHold[k]);
       const pts = onHoldRun.map((s) => s.contact!);
       const dwell: Dwell = {
@@ -455,6 +468,7 @@ export function detectHolds(
 
   const resolved: ResolvedOptions = {
     minDwellSec: opts.minDwellSec ?? DEFAULT_MIN_DWELL_SEC,
+    footMinDwellSec: opts.footMinDwellSec ?? DEFAULT_FOOT_MIN_DWELL_SEC,
     stationaryRadius: (opts.stationaryRadiusFactor ?? DEFAULT_STATIONARY_RADIUS_FACTOR) * bodyScale,
     mergeRadius: (opts.mergeRadiusFactor ?? DEFAULT_MERGE_RADIUS_FACTOR) * bodyScale,
     excursionGapSec: opts.excursionGapSec ?? DEFAULT_EXCURSION_GAP_SEC,

@@ -93,7 +93,9 @@ lands and persists). Holds are **inferred from Dwells** (a limb held still long 
 Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
 that is either held out to the side of the hip, pushing up as the knee straightens,
 or braced with a bent knee planted below it), never
-detected on the route photo. A Dwell survives a brief lift-off and return (so a
+detected on the route photo. A foot must be held still longer than a hand, so a
+repositioning or swinging foot that briefly pauses is not mistaken for a placement.
+A Dwell survives a brief lift-off and return (so a
 re-grip is one Hold, not two), and the climber is taken to always be supported by
 at least one hand. They are
 derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the

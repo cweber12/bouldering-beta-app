@@ -59,7 +59,8 @@ CONTEXT.md for the language (**Hold**, **Hand Hold**, **Foot Hold**, **Dwell**).
 
 All distances/radii/margins are fractions of the sequence-stable `computeStableBodyScale`
 (photo-space shoulder width), as the Skeleton already does, so detection is
-resolution-independent. Default sensitivity is Balanced (min dwell 0.5 s, stationary
+resolution-independent. Default sensitivity is Balanced (hand min dwell 0.5 s, foot
+min dwell 1.0 s — see ADR 0008, stationary
 radius 0.18×scale, merge 0.25×scale, above-wrist 0.05×scale, knee-straighten +20°,
 braced knee < 160° or offset ≥ 0.15×scale); the constants live at the top of the
 module for easy tuning against real Runs.

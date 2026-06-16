@@ -20,8 +20,11 @@ function kp(name: string, x: number, y: number, score = 0.8): Keypoint {
   return { name, x, y, score };
 }
 
-/** Five evenly-spaced sample timestamps spanning 0.8s (> the 0.5s min dwell). */
+/** Five evenly-spaced sample timestamps spanning 0.8s (> the 0.5s hand min dwell). */
 const DEFAULT_TS = [0, 0.2, 0.4, 0.6, 0.8];
+
+/** Five evenly-spaced timestamps spanning 1.0s (≥ the 1.0s foot min dwell). */
+const FOOT_TS = [0, 0.25, 0.5, 0.75, 1.0];
 
 /** A stationary left-hand grip: index/pinky above the wrist, all detected. */
 function handFrames(opts: {
@@ -92,7 +95,7 @@ describe("detectHolds", () => {
     const foot: [number, number] = [0.5, 0.92];
     const kneeXs = [0.65, 0.62, 0.58, 0.54, 0.51];
     const frames = kneeXs.map((kx, i) =>
-      footFrame(DEFAULT_TS[i], { foot, ankle, knee: [kx, 0.675], hip }),
+      footFrame(FOOT_TS[i], { foot, ankle, knee: [kx, 0.675], hip }),
     );
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(1);
@@ -104,7 +107,7 @@ describe("detectHolds", () => {
     const ankle: [number, number] = [0.5, 0.85];
     const foot: [number, number] = [0.5, 0.92];
     const knee: [number, number] = [0.65, 0.675]; // bent, constant (angle < 160°)
-    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const frames = FOOT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(1);
     expect(holds[0].kind).toBe("foot");
@@ -115,7 +118,7 @@ describe("detectHolds", () => {
     const knee: [number, number] = [0.5, 0.7]; // straight (~180°)
     const ankle: [number, number] = [0.5, 0.9]; // directly below the hip
     const foot: [number, number] = [0.5, 0.95];
-    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const frames = FOOT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(0);
   });
@@ -128,9 +131,41 @@ describe("detectHolds", () => {
     const knee: [number, number] = [0.6, 0.68];
     const ankle: [number, number] = [0.5, 0.6]; // above the knee, under the hip
     const foot: [number, number] = [0.5, 0.58];
-    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const frames = FOOT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(0);
+  });
+
+  it("rejects a brief side-swing pause as a Foot Hold (transient, < foot dwell)", () => {
+    // A foot swung out to the side and held still for only 0.5s clears side-support
+    // geometry but not the 1.0s foot dwell — it is a transient pause, not a placement.
+    const hip: [number, number] = [0.5, 0.5];
+    const ts = [0, 0.25, 0.5];
+    const frames = ts.map((t) =>
+      footFrame(t, { foot: [0.82, 0.56], ankle: [0.8, 0.55], knee: [0.65, 0.5], hip }),
+    );
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(0);
+  });
+
+  it("drops a tap-around cluster and keeps only the settled Foot Hold", () => {
+    // The foot taps an area ~0.6s (below the 1.0s foot dwell), then settles on the
+    // real hold elsewhere for ~1.6s. Only the settled placement should register —
+    // the transient tap cluster must not become its own (earlier-numbered) Hold.
+    const hip: [number, number] = [0.5, 0.5];
+    const tapTs = [0, 0.2, 0.4, 0.6];
+    const tapX = [0.8, 0.81, 0.8, 0.81];
+    const taps = tapTs.map((t, i) =>
+      footFrame(t, { foot: [tapX[i], 0.56], ankle: [tapX[i] - 0.02, 0.55], knee: [0.65, 0.5], hip }),
+    );
+    const settleTs = [0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4];
+    const settle = settleTs.map((t) =>
+      footFrame(t, { foot: [0.3, 0.9], ankle: [0.3, 0.88], knee: [0.4, 0.7], hip }),
+    );
+    const holds = detectHolds([...taps, ...settle], project, BODY_SCALE);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].kind).toBe("foot");
+    expect(holds[0].x).toBeCloseTo(300, -1); // the settled spot, not the taps
   });
 
   it("infers a Foot Hold for a leg shot out to the side (offset, little knee bend)", () => {
@@ -141,7 +176,7 @@ describe("detectHolds", () => {
     const knee: [number, number] = [0.65, 0.5];
     const ankle: [number, number] = [0.8, 0.55]; // far to the side of the hip
     const foot: [number, number] = [0.82, 0.56];
-    const frames = DEFAULT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
+    const frames = FOOT_TS.map((t) => footFrame(t, { foot, ankle, knee, hip }));
     const holds = detectHolds(frames, project, BODY_SCALE);
     expect(holds).toHaveLength(1);
     expect(holds[0].kind).toBe("foot");
@@ -210,7 +245,7 @@ describe("detectHolds", () => {
     // A hand grip first (t≈0), then a foot stand-up later (t≈2). Numbering is a
     // single chronological sequence — colour distinguishes the kind.
     const hand = handFrames(); // t 0..0.8
-    const footTs = [2.0, 2.2, 2.4, 2.6, 2.8];
+    const footTs = [2.0, 2.25, 2.5, 2.75, 3.0];
     const hip: [number, number] = [0.2, 0.5];
     const ankle: [number, number] = [0.2, 0.85];
     const foot: [number, number] = [0.2, 0.92];

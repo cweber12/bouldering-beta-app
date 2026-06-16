@@ -81,6 +81,18 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
    once both are used was rejected (it regresses ADR 0007's "pops in when the limb first
    lands" behaviour by hiding the first marker for the whole interval between uses).
 
+6. **A longer dwell for feet than for hands.** A repositioning or swinging foot
+   briefly satisfies the same load-bearing geometry a settled placement does — a
+   side-swing pause clears side-support, and a *tap-around* before settling forms a
+   short stationary run that, anchored on its first contact, becomes its own
+   (earlier-numbered) Hold at a transient spot. Climbers keep feet on footholds
+   longer than hands and the right placement out-dwells the taps, so the foot
+   minimum dwell is raised to ~1.0 s (hands stay at 0.5 s) and dwell duration does
+   the discriminating. A per-kind threshold was chosen over tightening the
+   side-support gate (rejected for now — it risks dropping real, briefly-bent side
+   holds) and over re-anchoring the Dwell at its longest sub-cluster (a larger
+   change deferred until the threshold proves insufficient on real Runs).
+
 ## Consequences
 
 - **No schema or glossary change.** Detection stays a pure `detectHolds(frames)` derived
@@ -95,5 +107,6 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
   Overlay** feature; the auto-rendered annotated WebM stays pose-only (ADR 0007).
 - **Selectivity over recall.** These gates deliberately reject ambiguous contacts
   (tucked legs, brief touches, mid-flight limbs). A genuinely quick foot placement at
-  the 0.5 s boundary may still be missed; the dwell time was kept at 0.5 s rather than
-  raised so this trade stays mild.
+  the boundary may still be missed. The hand dwell stays at 0.5 s so that trade stays
+  mild for hands; the foot dwell is raised to ~1.0 s (option 6) because transient foot
+  visits are the dominant false-positive source and feet genuinely dwell longer.
