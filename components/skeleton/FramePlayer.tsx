@@ -162,6 +162,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const holdStyleRef = useRef<HoldStyle | undefined>(undefined);
   const holdsTimeOffsetRef = useRef(holdsTimeOffset);
   const timeRef = useRef(0);
+  // High-water mark for the Holds reveal: the furthest playback time reached
+  // since the last Reset. A Hold shows once time has *ever* reached its
+  // first-use time, so the first pass reveals Holds in order and they then stay
+  // shown across loops; Reset re-arms the sequential reveal (ADR 0009).
+  const holdsHighWaterRef = useRef(startOffset);
   // Cache the sequence-stable body scale per layer (keyed by its frames array)
   // so limb widths stay fixed across the sequence and are computed once.
   const scaleCacheRef = useRef(new WeakMap<RenderedSkeletonFrame[], number>());
@@ -253,8 +258,10 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
       ctx.restore();
     }
 
-    // Holds pass — drawn beneath the skeleton layers (gated by playback time) so
-    // the pose lines stay legible on top of the markers.
+    // Holds pass — drawn beneath the skeleton layers so the pose lines stay
+    // legible on top of the markers. Gated by the high-water mark (the furthest
+    // time reached since Reset), not the instantaneous time, so revealed Holds
+    // persist across loops and backward seeks (ADR 0009).
     const holdsList = holdsRef.current;
     if (holdsList.length > 0) {
       const baseFrames = layersRef.current[0]?.frames;
@@ -265,7 +272,8 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
           : Math.min(canvas.width, canvas.height) * 0.15;
         if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
       }
-      drawHolds(ctx, holdsList, t + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
+      if (t > holdsHighWaterRef.current) holdsHighWaterRef.current = t;
+      drawHolds(ctx, holdsList, holdsHighWaterRef.current + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
     }
 
     for (const layer of layersRef.current) {
@@ -342,6 +350,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   useEffect(() => {
     if (!ready) return;
     timeRef.current = startOffsetRef.current;
+    holdsHighWaterRef.current = startOffsetRef.current;
     setDisplayTime(timeRef.current);
     drawFrame(timeRef.current);
     if (!autoPlay) return;
@@ -369,6 +378,15 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 
   function togglePlay() {
     setPlaying((p) => !p);
+  }
+
+  // Replay the Holds reveal: seek back to the anchor and re-arm the high-water
+  // mark so Holds reveal in first-use order again (ADR 0009).
+  function handleResetHolds() {
+    timeRef.current = startOffsetRef.current;
+    holdsHighWaterRef.current = startOffsetRef.current;
+    setDisplayTime(startOffsetRef.current);
+    drawFrame(startOffsetRef.current);
   }
 
   function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -425,6 +443,19 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
                 <path d="M8 5v14l11-7z" />
               </svg>
             )}
+          </button>
+        )}
+
+        {(holds?.length ?? 0) > 0 && holdStyle?.holdsVisible !== false && (
+          <button
+            onClick={handleResetHolds}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-fg-secondary transition hover:text-fg"
+            aria-label="Replay holds"
+            title="Replay the holds reveal"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992V4.356M3.985 19.644v-4.992h4.992M19.5 9.348a8.25 8.25 0 00-15.357-2.34M4.5 14.652a8.25 8.25 0 0015.357 2.34" />
+            </svg>
           </button>
         )}
 

@@ -144,47 +144,52 @@ function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): 
 }
 
 // ---------------------------------------------------------------------------
-// Public draw entry point
+// Cached render plan
+//
+// The greedy label layout is the per-frame cost the static-Holds change removes
+// (ADR 0009). The plan — disc geometry + placed label rects — depends only on
+// the Holds, the canvas size, the style sizes, and *which* Holds are revealed.
+// With high-water reveal the revealed set only grows, so the plan is recomputed
+// at most once per reveal and reused on every frame in between, keyed per canvas.
 // ---------------------------------------------------------------------------
 
+/** The time-independent geometry rendered each frame for a given revealed set. */
+interface RenderPlan {
+  discs: DiscUnit[];
+  placed: Placed[];
+}
+
+interface PlanCacheEntry {
+  holds: Hold[];
+  sig: string;
+  plan: RenderPlan;
+}
+
+/** Per-canvas plan cache. WeakMap so a discarded canvas frees its entry. */
+const planCache = new WeakMap<HTMLCanvasElement, PlanCacheEntry>();
+
+/** Sizes the plan geometry depends on (derived from style + body scale). */
+interface PlanSizes {
+  r: number;
+  fontPx: number;
+  combineR: number;
+  handColor: string;
+  footColor: string;
+  w: number;
+  h: number;
+}
+
 /**
- * Draw the Holds markers gated by playback time.
- *
- * @param ctx       - Canvas 2D context (drawn in photo pixel space).
- * @param holds     - Detected Holds, each with a photo-space `{x, y}`, `order`,
- *                    and `firstUseTime` in the same clock as `t`.
- * @param t         - Current playback time (seconds). Holds first used after this
- *                    are not yet drawn (progressive, cumulative reveal).
- * @param style     - Optional colour / size overrides.
- * @param bodyScale - Photo-space body scale (px) the disc radius multiplies by.
+ * Build the disc + label geometry for the currently-revealed Holds. Pure
+ * geometry — no drawing — so the result can be cached and replayed each frame.
  */
-export function drawHolds(
+function buildHoldsPlan(
   ctx: CanvasRenderingContext2D,
   holds: Hold[],
-  t: number,
-  style: HoldStyle | undefined,
-  bodyScale: number,
-): void {
-  if (style?.holdsVisible === false) return;
-  if (holds.length === 0) return;
-
-  const handColor = style?.handColor ?? DEFAULT_HAND_COLOR;
-  const footColor = style?.footColor ?? DEFAULT_FOOT_COLOR;
-  const labelColor = style?.labelColor ?? DEFAULT_LABEL_COLOR;
-  const numberColor = style?.numberColor ?? DEFAULT_NUMBER_COLOR;
-  const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
-  const ringWidth = Math.max(1, r * RING_WIDTH_FRAC);
-  const leaderWidth = Math.max(1, r * LEADER_WIDTH_FRAC);
-  const glowBlur = r * GLOW_BLUR_FRAC;
-  const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
-  const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
-
-  const combineR = Math.max(1, (style?.combineFactor ?? DEFAULT_COMBINE_FACTOR) * bodyScale);
-
-  const w = ctx.canvas.width;
-  const h = ctx.canvas.height;
-  const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
-  const revealed = (hold: Hold) => hold.firstUseTime <= t && inBounds(hold);
+  revealed: (hold: Hold) => boolean,
+  sizes: PlanSizes,
+): RenderPlan {
+  const { r, fontPx, combineR, handColor, footColor, w, h } = sizes;
 
   // ── Pairing — a Hand Hold and its nearest Foot Hold within the combine radius
   //    are co-drawn as one split disc. Same-kind Holds already merged in
@@ -210,9 +215,9 @@ export function drawHolds(
     }
   }
 
-  // ── Build the discs + labels actually visible at time `t`. Each half of a pair
-  //    reveals independently: a single-kind disc until the partner lands, then a
-  //    split disc at the midpoint (ADR 0008). ──
+  // ── Build the discs + labels actually visible. Each half of a pair reveals
+  //    independently: a single-kind disc until the partner lands, then a split
+  //    disc at the midpoint (ADR 0008). ──
   const discs: DiscUnit[] = [];
   const labels: LabelUnit[] = [];
   const done = new Set<string>();
@@ -253,11 +258,9 @@ export function drawHolds(
       single(foot, footColor);
     }
   }
-  if (discs.length === 0) return;
+  if (discs.length === 0) return { discs, placed: [] };
 
-  ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
+  // Font must be set before measureText so label widths are correct.
   ctx.font = `bold ${fontPx}px sans-serif`;
 
   // ── Label placement — greedy, in first-use order, so earlier labels keep a
@@ -303,6 +306,74 @@ export function drawHolds(
     }
     placed.push({ unit, rect: best, cx: bestC.x, cy: bestC.y });
   }
+
+  return { discs, placed };
+}
+
+// ---------------------------------------------------------------------------
+// Public draw entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Draw the Holds markers gated by playback time.
+ *
+ * @param ctx       - Canvas 2D context (drawn in photo pixel space).
+ * @param holds     - Detected Holds, each with a photo-space `{x, y}`, `order`,
+ *                    and `firstUseTime` in the same clock as `t`.
+ * @param t         - Current playback time (seconds). Holds first used after this
+ *                    are not yet drawn (progressive, cumulative reveal).
+ * @param style     - Optional colour / size overrides.
+ * @param bodyScale - Photo-space body scale (px) the disc radius multiplies by.
+ */
+export function drawHolds(
+  ctx: CanvasRenderingContext2D,
+  holds: Hold[],
+  t: number,
+  style: HoldStyle | undefined,
+  bodyScale: number,
+): void {
+  if (style?.holdsVisible === false) return;
+  if (holds.length === 0) return;
+
+  const handColor = style?.handColor ?? DEFAULT_HAND_COLOR;
+  const footColor = style?.footColor ?? DEFAULT_FOOT_COLOR;
+  const labelColor = style?.labelColor ?? DEFAULT_LABEL_COLOR;
+  const numberColor = style?.numberColor ?? DEFAULT_NUMBER_COLOR;
+  const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
+  const ringWidth = Math.max(1, r * RING_WIDTH_FRAC);
+  const leaderWidth = Math.max(1, r * LEADER_WIDTH_FRAC);
+  const glowBlur = r * GLOW_BLUR_FRAC;
+  const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
+  const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
+
+  const combineR = Math.max(1, (style?.combineFactor ?? DEFAULT_COMBINE_FACTOR) * bodyScale);
+
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+  const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
+  const revealed = (hold: Hold) => hold.firstUseTime <= t && inBounds(hold);
+
+  // Build (or reuse) the render plan. The greedy label layout depends only on the
+  // Holds, the canvas, the style sizes, and which Holds are revealed; with
+  // high-water reveal that revealed set only grows, so the plan is recomputed at
+  // most once per reveal and reused on every frame in between (ADR 0009).
+  const revealedSig = holds.filter(revealed).map((hold) => hold.id).join(",");
+  const sig = `${w}x${h}|${r}|${fontPx}|${combineR}|${handColor}|${footColor}|${revealedSig}`;
+  const cached = planCache.get(ctx.canvas);
+  let plan: RenderPlan;
+  if (cached && cached.holds === holds && cached.sig === sig) {
+    plan = cached.plan;
+  } else {
+    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, combineR, handColor, footColor, w, h });
+    planCache.set(ctx.canvas, { holds, sig, plan });
+  }
+  const { discs, placed } = plan;
+  if (discs.length === 0) return;
+
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `bold ${fontPx}px sans-serif`;
 
   // ── Pass 1 — discs with a soft glow (drawn first so labels/leaders sit on top).
   //    A split disc fills each half under a clip and draws a colour-coded ring per
