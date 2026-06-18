@@ -139,6 +139,9 @@ The skeleton played back over the **Run**'s own first video frame, in raw
 video-pixel space with **no homography** applied. Its purpose is to review
 detection quality (did the pose pipeline track the **Climber** cleanly) before a
 **Route Photo** is involved. Shown on the review step immediately after a scan.
+It is also where **Holds** are reviewed, added, and removed before the Run is
+saved (Fixed Capture only — a Panning Capture Run has no single frame that shows
+the whole **Route**).
 _Avoid_: preview, landmark preview (ambiguous with the **Route Overlay**).
 
 **Route Overlay**:
@@ -166,20 +169,27 @@ the **Silhouette** fill beneath it).
 
 **Holds** (overlay pass):
 A third overlay pass, independent of the **Silhouette**/**Skeleton**: numbered
-markers placed where the **Climber**'s hands and feet are inferred to have used a
-hold on the wall. Toggled separately from the pose overlay, so a viewer can show
-the pose, the Holds, both, or neither. Drawn on the **Route Overlay**.
+markers placed where the **Climber**'s hands and feet used a hold. Toggled
+separately from the pose overlay, so a viewer can show the pose, the Holds, both,
+or neither. Drawn both on the **Detection Preview** — where the Holds are
+reviewed and edited at scan time — and on the **Route Overlay**. Markers reveal in
+first-use order on the first playback pass and then stay shown; a **Reset**
+control replays that reveal.
 _Avoid_: grips, markers (unqualified), hold map.
 
 **Hold**:
-A single inferred place on the wall that the **Climber** used with a hand or a
-foot. It is **not** a hold detected on the **Route Photo**; it is inferred from
-where the limb stayed still long enough to be load-bearing (a **Dwell**). Each
-Hold is exactly one **Hand Hold** or **Foot Hold**, lives in Route Photo space,
-and is labelled with its rank in the order the Climber **first** used it (one
-combined hand+foot sequence). Repeated use of the same spot by the same limb kind
-— a re-grip, a two-hand match — is the same Hold, not a new one; a hand and a foot
-on the same spot are two different Holds.
+A single place the **Climber** used with a hand or a foot. It is **not** a hold
+detected on the **Route Photo**. A Hold is usually inferred from where the limb
+stayed still long enough to be load-bearing (a **Dwell**), but the **User** may
+also **add or remove** Holds while reviewing a Run (a Hold is added by scrubbing
+to the frame where the limb is on the hold and snapping to that limb). Each Hold
+is exactly one **Hand Hold** or **Foot Hold**, anchored to where the limb was in
+the Run (and shown on the **Route Photo** through the overlay), and is labelled
+with its rank in the order it was **first** used (one combined hand+foot
+sequence). That rank is always re-derived from first-use order, so adding or
+removing a Hold renumbers the rest automatically. Repeated use of the same spot by
+the same limb kind — a re-grip, a two-hand match — is the same Hold, not a new
+one; a hand and a foot on the same spot are two different Holds.
 _Avoid_: grip, placement, contact (those name the raw evidence — see **Dwell** —
 not the inferred result); the physical wall hold (we never detect that).
 
@@ -238,8 +248,11 @@ _Avoid_: frame stats (too generic).
 - A **Manual Crop** (Climber) seeds or overrides the Adaptive Crop; the **Wall
   Crop** feeds route-photo matching, not pose tracking.
 - A **Hold** is inferred from one or more **Dwells** of the same limb kind at one
-  spot; **Holds** are derived from the same pose frames the **Skeleton** uses and
-  projected through the same homography onto the **Route Photo**.
+  spot, and may then be edited by the **User**. For a **Fixed Capture** Run the
+  Holds are detected and edited on the **Detection Preview** and saved with the
+  Run; for a **Panning Capture** or legacy Run they are derived on the fly from
+  the same pose frames the **Skeleton** uses. Either way they are projected
+  through the same homography onto the **Route Photo** for display.
 
 ## Example dialogue
 

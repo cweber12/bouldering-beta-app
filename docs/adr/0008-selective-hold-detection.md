@@ -1,5 +1,10 @@
 # Selective hold detection: gap-tolerant dwells, weighted-foot gate, split-disc co-render
 
+> **Context:** the detection gates below are unchanged by
+> [ADR 0009](0009-authored-persisted-holds.md); 0009 only moves *where* detection
+> runs (video-frame space at scan time, Fixed Capture) and makes the result
+> editable and persisted. The same-place merge and split-disc render still apply.
+
 Refines [ADR 0007](0007-hold-detection-overlay.md). The original Holds pass produced
 **too many Holds in the same place**: a limb that lifted off and came straight back
 made a second marker, a tucked or swinging leg passed the load-bearing gate, and a

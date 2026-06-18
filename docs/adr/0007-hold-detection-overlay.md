@@ -1,5 +1,12 @@
 # Hold detection and the Holds overlay
 
+> **Partially superseded by [ADR 0009](0009-authored-persisted-holds.md)** for
+> **Fixed Capture**: options 1 (wall-space detection) and 2 (derived-on-the-fly,
+> never persisted) and the "Holds cannot appear in the Detection Preview"
+> consequence are reversed there. Holds are now detected in video-frame space at
+> scan time, editable, and saved with the Run. Panning Capture and legacy Runs
+> still follow this ADR.
+
 A third overlay pass, **Holds**, marks where the **Climber**'s hands and feet were
 used on the wall, numbered in the order they were first used. A Hold is **inferred
 from a Dwell** (a limb held still long enough to be load-bearing) — the app never
