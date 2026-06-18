@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   detectHolds,
+  projectStoredHolds,
   computeProjectedBodyScale,
   type Hold,
   type HoldProjector,
@@ -24,14 +25,16 @@ export interface HoldsResult {
 }
 
 /**
- * Derives the **Holds** overlay on the fly from a Run's stored pose frames,
- * projected into Route Photo space — mirroring {@link useSkeletonFrames}.
+ * Resolves the **Holds** overlay for a Run, projected into Route Photo space —
+ * mirroring {@link useSkeletonFrames}.
  *
- * Nothing is persisted: a few ms of pure math (dwell scan + homography) over the
- * already-smoothed `attempt.frames` recomputes the Holds per load. The projector
- * is built from the match result — the single gated homography (Fixed Capture)
- * or the per-keyframe `homographyAtTime` path (Panning Capture) — so it is
- * correct for both capture modes.
+ * Two sources, saved wins (ADR 0009): a Run that carries authored Holds
+ * (`attempt.holds`, normalized video space, Fixed Capture) projects those
+ * through the match homography; a Run without them (every legacy Run, every
+ * Panning Capture Run) falls back to deriving Holds on the fly via
+ * {@link detectHolds} over the smoothed `attempt.frames`. Either way the
+ * projector is built from the match result — the single gated homography (Fixed
+ * Capture) or the per-keyframe `homographyAtTime` path (Panning Capture).
  *
  * `cv` is taken for parity with {@link useSkeletonFrames}'s dependency key; the
  * projection itself is pure math and does not call OpenCV.
@@ -49,7 +52,10 @@ export function useHolds(
   const depsKey = useMemo(() => {
     if (!cv || !attemptId || !matchResult) return null;
     const kf = matchResult.keyframeHomographies?.length ?? 0;
-    return `${attemptId}:${matchResult.matches.length}:${kf}`;
+    // Re-resolve when authored Holds are added/removed/reset on the scan stage.
+    const savedHolds = getAttempt(attemptId)?.holds;
+    const holdsSig = savedHolds === undefined ? "auto" : `n${savedHolds.length}`;
+    return `${attemptId}:${matchResult.matches.length}:${kf}:${holdsSig}`;
   }, [cv, attemptId, matchResult]);
 
   useEffect(() => {
@@ -80,8 +86,12 @@ export function useHolds(
         return applyHomographyMatrix(h, pt.x * width, pt.y * height);
       };
 
-      const bodyScale = computeProjectedBodyScale(attempt.frames, project);
-      const detected = detectHolds(attempt.frames, project, bodyScale);
+      // Saved Holds win when present (including an authored empty array, which
+      // means "no Holds" — not a fallback). Otherwise derive on the fly.
+      const detected =
+        attempt.holds !== undefined
+          ? projectStoredHolds(attempt.holds, project)
+          : detectHolds(attempt.frames, project, computeProjectedBodyScale(attempt.frames, project));
 
       // Rebase firstUseTime to the player clock: the rendered skeleton frames
       // start at 0 (firstTs subtracted), so Holds must too for time-gating.

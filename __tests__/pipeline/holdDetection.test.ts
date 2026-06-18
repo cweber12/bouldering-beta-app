@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { detectHolds, type HoldProjector } from "@/pipeline/holdDetection";
+import {
+  detectHolds,
+  detectHoldsVideoSpace,
+  projectStoredHolds,
+  type HoldProjector,
+} from "@/pipeline/holdDetection";
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+import type { StoredHold } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Test scaffolding
@@ -259,5 +265,51 @@ describe("detectHolds", () => {
     expect(byOrder[0]).toMatchObject({ kind: "hand", order: 1, id: "hold-1" });
     expect(byOrder[1]).toMatchObject({ kind: "foot", order: 2, id: "hold-2" });
     expect(byOrder[0].firstUseTime).toBeLessThan(byOrder[1].firstUseTime);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectHoldsVideoSpace — scan-time, normalized video-space output (ADR 0009)
+// ---------------------------------------------------------------------------
+
+describe("detectHoldsVideoSpace", () => {
+  it("returns the same Hold normalized to [0,1] video space", () => {
+    // Same gripped hand the photo-space test uses; here the 'photo' is the video
+    // frame itself, so a 1000×1000 frame projects normalized→pixel identically.
+    const stored = detectHoldsVideoSpace(handFrames(), 1000, 1000);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].kind).toBe("hand");
+    // Normalized contact point — not pixels, and no order/id stored.
+    expect(stored[0].x).toBeCloseTo(0.5, 3);
+    expect(stored[0].y).toBeCloseTo(0.45, 3);
+    expect(stored[0].firstUseTime).toBe(0);
+    expect("order" in stored[0]).toBe(false);
+  });
+
+  it("returns [] for empty frames or a zero-size frame", () => {
+    expect(detectHoldsVideoSpace([], 1000, 1000)).toEqual([]);
+    expect(detectHoldsVideoSpace(handFrames(), 0, 1000)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// projectStoredHolds — re-derive order in projected space (ADR 0009)
+// ---------------------------------------------------------------------------
+
+describe("projectStoredHolds", () => {
+  it("projects to pixel space and re-derives order from first-use time", () => {
+    const stored: StoredHold[] = [
+      { x: 0.7, y: 0.8, kind: "foot", firstUseTime: 2.5 },
+      { x: 0.25, y: 0.4, kind: "hand", firstUseTime: 1.2 },
+    ];
+    const holds = projectStoredHolds(stored, project);
+    // Sorted by firstUseTime: the hand (1.2s) ranks before the foot (2.5s).
+    expect(holds.map((h) => h.kind)).toEqual(["hand", "foot"]);
+    expect(holds[0]).toMatchObject({ order: 1, id: "hold-1", x: 250, y: 400 });
+    expect(holds[1]).toMatchObject({ order: 2, id: "hold-2", x: 700, y: 800 });
+  });
+
+  it("returns [] for an authored empty Holds set", () => {
+    expect(projectStoredHolds([], project)).toEqual([]);
   });
 });

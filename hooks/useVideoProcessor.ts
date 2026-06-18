@@ -35,7 +35,8 @@ import {
   isLandmarkFlip,
   DEFAULT_TELEPORT_THRESHOLD,
 } from "@/pipeline/flipDetection";
-import { saveAttempt, type VideoMeta, type FrameCapture, type RunType } from "@/storage/sessionStore";
+import { saveAttempt, type VideoMeta, type FrameCapture, type RunType, type StoredHold } from "@/storage/sessionStore";
+import { detectHoldsVideoSpace } from "@/pipeline/holdDetection";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
 import type { PoseBackend } from "@/utils/poseConstants";
@@ -712,10 +713,19 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const filled       = fillPersistentGaps(estimated, backend);
         const frames       = smoothPoseFrames(filled);
 
+        // Author Holds at scan time in the Run's own video space (Fixed Capture
+        // only). The result is persisted with the Run and editable on the
+        // Detection Preview; Panning Capture has no single whole-Route frame, so
+        // it keeps undefined holds and falls back to the on-the-fly path (ADR 0009).
+        const holds: StoredHold[] | undefined = panning
+          ? undefined
+          : detectHoldsVideoSpace(frames, videoMeta.width, videoMeta.height);
+
         saveAttempt({
           id,
           videoMeta,
           frames,
+          holds,
           orbFeatures: null,
           keyframes: panning ? keyframes : null,
           matchesPerFrame: null,
@@ -831,6 +841,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               id,
               videoMeta,
               frames,
+              holds,
               orbFeatures,
               keyframes: panning ? keyframes : null,
               matchesPerFrame: null,

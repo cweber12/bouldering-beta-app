@@ -22,6 +22,7 @@
  */
 
 import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+import type { StoredHold } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Balanced default constants (tune against real Runs — see ADR 0007)
@@ -520,6 +521,59 @@ export function detectHolds(
   );
 
   return merged.map((h, idx) => ({ ...h, order: idx + 1, id: `hold-${idx + 1}` }));
+}
+
+/**
+ * Detect Holds at **scan time** in the Run's own video-frame space (ADR 0009,
+ * Fixed Capture). The gates are unchanged — they are all fractions of a body
+ * scale, so they hold in video pixels just as in photo pixels — but the output
+ * lives in **normalized [0,1] video space** so it is resolution-independent and
+ * projects onto the Route Photo through the same homography the on-the-fly path
+ * uses. `firstUseTime` is the frames' own absolute video seconds.
+ *
+ * Order is intentionally not stored: it is re-derived from first-use order on
+ * load (see {@link projectStoredHolds}).
+ */
+export function detectHoldsVideoSpace(
+  frames: PoseFrame[],
+  width: number,
+  height: number,
+  opts: HoldDetectionOptions = {},
+): StoredHold[] {
+  if (frames.length === 0 || !(width > 0) || !(height > 0)) return [];
+  // Project a normalized [0,1] point into the Run's own video pixels — the
+  // space the climber actually appears in, with no homography (there is no
+  // Route Photo yet at scan time).
+  const project: HoldProjector = (pt) => ({ x: pt.x * width, y: pt.y * height });
+  const bodyScale = computeProjectedBodyScale(frames, project);
+  return detectHolds(frames, project, bodyScale, opts).map((h) => ({
+    x: h.x / width,
+    y: h.y / height,
+    kind: h.kind,
+    firstUseTime: h.firstUseTime,
+  }));
+}
+
+/**
+ * Project saved (normalized video-space) {@link StoredHold}s into Route Photo
+ * pixel space through `project`, re-deriving the 1-based first-use rank in that
+ * space with the same deterministic tie-break detection uses. Used by the Holds
+ * source path when a Run carries authored Holds (ADR 0009); legacy / Panning
+ * Capture Runs fall back to {@link detectHolds}.
+ */
+export function projectStoredHolds(stored: StoredHold[], project: HoldProjector): Hold[] {
+  const projected = stored.map((h) => {
+    const p = project({ x: h.x, y: h.y }, h.firstUseTime);
+    return { kind: h.kind, x: p.x, y: p.y, firstUseTime: h.firstUseTime };
+  });
+  projected.sort(
+    (a, b) =>
+      a.firstUseTime - b.firstUseTime ||
+      a.x - b.x ||
+      a.y - b.y ||
+      a.kind.localeCompare(b.kind),
+  );
+  return projected.map((h, idx) => ({ ...h, order: idx + 1, id: `hold-${idx + 1}` }));
 }
 
 /**
