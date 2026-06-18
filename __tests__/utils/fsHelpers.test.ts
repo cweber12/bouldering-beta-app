@@ -298,6 +298,44 @@ describe("split round-trip", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Authored, persisted Holds (ADR 0009)
+// ---------------------------------------------------------------------------
+
+describe("holds persistence", () => {
+  const holds = [
+    { x: 0.25, y: 0.4, kind: "hand" as const, firstUseTime: 1.2 },
+    { x: 0.7, y: 0.8, kind: "foot" as const, firstUseTime: 2.5 },
+  ];
+
+  it("rides in the queryable metadata payload, not the heavy data payload", () => {
+    const meta = serializeAttemptMetadata(makeAttempt({ holds }));
+    const data = serializeAttemptData(makeAttempt({ holds }));
+    expect(meta.holds).toEqual(holds);
+    expect("holds" in data).toBe(false);
+  });
+
+  it("round-trips through the v2 split format", () => {
+    const attempt = makeAttempt({ holds });
+    const meta = JSON.parse(JSON.stringify(serializeAttemptMetadata(attempt)));
+    const data = JSON.parse(JSON.stringify(serializeAttemptData(attempt)));
+    const restored = loadAttemptFromJson({ ...meta, ...data });
+    expect(restored.holds).toEqual(holds);
+  });
+
+  it("loads a legacy attempt with no holds field as undefined (on-the-fly fallback)", () => {
+    const restored = loadAttemptFromJson({ id: "a", frames: [] });
+    expect(restored.holds).toBeUndefined();
+  });
+
+  it("preserves an empty holds array (authored 'no holds', not a fallback)", () => {
+    const attempt = makeAttempt({ holds: [] });
+    const meta = JSON.parse(JSON.stringify(serializeAttemptMetadata(attempt)));
+    const restored = loadAttemptFromJson(meta);
+    expect(restored.holds).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Panning Capture keyframes
 // ---------------------------------------------------------------------------
 

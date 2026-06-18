@@ -48,6 +48,27 @@ export interface FrameCapture {
 /** Whether this run was a climbing attempt or a successful send. */
 export type RunType = "attempt" | "send";
 
+/**
+ * A **Hold** authored on the Detection Preview at scan time and persisted with
+ * the Run (Fixed Capture only). Stored in **normalized [0,1] video-frame space**
+ * so it is resolution-independent and projects onto the Route Photo through the
+ * same homography the on-the-fly path uses (see ADR 0009).
+ *
+ * Deliberately carries no `order`/`id`: the printed rank is always re-derived
+ * from first-use order on load, so adding or removing a Hold renumbers the rest
+ * automatically.
+ */
+export interface StoredHold {
+  /** Normalized [0,1] x in video-frame space. */
+  x: number;
+  /** Normalized [0,1] y in video-frame space. */
+  y: number;
+  /** Which limb kind used it — drives the marker colour. */
+  kind: "hand" | "foot";
+  /** Absolute video time (seconds) the Climber first used this Hold. */
+  firstUseTime: number;
+}
+
 export interface RouteAttempt {
   id: string;
   videoMeta: VideoMeta;
@@ -88,6 +109,14 @@ export interface RouteAttempt {
   rating?: string;
   /** Optional freeform notes about the run. */
   notes?: string;
+  /**
+   * **Holds** authored on the Detection Preview at scan time, in normalized
+   * [0,1] video space (Fixed Capture only). When present they win over the
+   * on-the-fly `detectHolds` path on every Holds surface; when absent (every
+   * legacy Run, every Panning Capture Run) the on-the-fly path is used. See
+   * ADR 0009.
+   */
+  holds?: StoredHold[];
   /**
    * Scaled-down PNG data URL of the middle video frame with ORB keypoints
    * drawn as green dots. Used as a preview thumbnail in the route picker.
