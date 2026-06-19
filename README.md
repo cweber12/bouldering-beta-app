@@ -88,25 +88,33 @@ labels are placed in first-use order so they never overlap each other or another
 Hold's disc. When a hand and a foot are used on the same spot, their two markers
 are co-drawn as one **split disc** — cyan top half, orange bottom half — with each
 number tethered to its own half; each half reveals at its own first-use time.
-Markers reveal progressively (a marker pops in when the limb first
-lands and persists). Holds are **inferred from Dwells** (a limb held still long enough, in
-Route Photo space, to be load-bearing — a gripped hand above the wrist, a foot
-that is either held out to the side of the hip, pushing up as the knee straightens,
-or braced with a bent knee planted below it), never
-detected on the route photo. A foot must be held still longer than a hand, so a
-repositioning or swinging foot that briefly pauses is not mistaken for a placement.
-A Dwell survives a brief lift-off and return (so a
-re-grip is one Hold, not two), and the climber is taken to always be supported by
-at least one hand. They are
-derived on the fly by `pipeline/holdDetection.ts` (`detectHolds`) via the
-`useHolds` hook from the same pose frames the Skeleton uses and the same gated
-homography / per-keyframe path — so there is no S3 or schema change, and every
-existing Run gets Holds for free. `drawHolds` (`pipeline/holdsOverlay.ts`)
-renders them on the **Route Overlay** only, beneath the Skeleton (which stays
-legible on top), with a slightly transparent disc and a dark-outlined number;
-they are toggled independently from the Overlay panel's Holds row. They are excluded from the
-Detection Preview (no homography) and from the auto-rendered WebM (static, so a
-baked-in Holds layer could not be toggled off).
+Markers reveal in first-use order on the first playback pass and then stay shown
+across loops; a **Replay** control on the player re-arms that reveal. Holds are
+**inferred from Dwells** (a limb held still long enough to be load-bearing — a
+gripped hand above the wrist, a foot that is either held out to the side of the
+hip, pushing up as the knee straightens, or braced with a bent knee planted below
+it), never detected on the route photo. A foot must be held still longer than a
+hand, so a repositioning or swinging foot that briefly pauses is not mistaken for
+a placement. A Dwell survives a brief lift-off and return (so a re-grip is one
+Hold, not two), and the climber is taken to always be supported by at least one
+hand.
+
+For a **Fixed Capture** Run, Holds are detected at scan time in the Run's own
+video-frame space and reviewed on the **Detection Preview**, where the User can
+**add** a Hold (scrub to the frame where the limb is on the hold, then snap it to
+one of the four extremities) and **remove** Holds (the rest renumber
+automatically). The result is saved with the Run in normalized `[0,1]` video
+space and projected — through the same homography as the Skeleton — onto the
+**Route Overlay** and in Compare, where it is read-only. A Run with no saved
+Holds (every legacy Run, every Panning Capture Run) falls back to deriving Holds
+on the fly via `pipeline/holdDetection.ts` (`detectHolds`) over the same pose
+frames the Skeleton uses. The Holds source path lives in the `useHolds` hook;
+scan-stage editing lives in `useScanHolds`. `drawHolds`
+(`pipeline/holdsOverlay.ts`) renders them beneath the Skeleton (which stays
+legible on top), caching the greedy label layout per reveal so playback stays
+cheap; they are toggled independently from the Overlay panel's Holds row. The
+auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
+be toggled off).
 
 ## Pages
 
@@ -204,8 +212,9 @@ Attempts are highlighted in amber and sends in emerald throughout the UI.
 Legacy `attempt-{timestamp}.json` files are still loadable (treated as attempts).
 
 Each run is stored as **two** objects: the `.json` above holds the small,
-queryable metadata (location, run type, rating, notes, thumbnail, video meta)
-that the list/card/detail views read, while a sibling
+queryable metadata (location, run type, rating, notes, thumbnail, video meta,
+and — for Fixed Capture — the authored **Holds** as normalized `[0,1]`
+video-space points) that the list/card/detail views read, while a sibling
 `run-{timestamp}-{attempt|send}.data.json` holds the heavy frames, per-frame ORB
 matches, and base64-encoded descriptors — fetched only when a run is actually
 opened. **Panning Capture** runs additionally store an ordered array of ORB

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
-import FramePlayer from "@/components/skeleton/FramePlayer";
+import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
+import HoldsEditor from "@/components/scan/controls/HoldsEditor";
+import { useScanHolds } from "@/hooks/useScanHolds";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
@@ -81,6 +83,17 @@ export default function StepViewLandmarks({
 }: StepViewLandmarksProps) {
   const { advanced } = useAdvancedView();
   const [showPhotoChooser, setShowPhotoChooser] = useState(false);
+  const previewPlayerRef = useRef<FramePlayerHandle>(null);
+
+  // Scan-stage Holds editing — Fixed Capture only (a Panning Capture Run, which
+  // carries keyframes, has no single whole-Route frame to author on; its Holds
+  // stay on the on-the-fly path). ADR 0009.
+  const holdsEditable = !!activeAttempt && !(activeAttempt.keyframes?.length);
+  const scanHolds = useScanHolds(activeAttempt, holdsEditable);
+
+  function handleAddHold(kind: "hand" | "foot", side: "left" | "right") {
+    scanHolds.addLimb(kind, side, previewPlayerRef.current?.getCurrentTime() ?? 0);
+  }
 
   const showResults = !isProcessing && !!activeAttempt &&
     (orbStatus === "ready" || orbStatus === "failed");
@@ -144,6 +157,13 @@ export default function StepViewLandmarks({
   // is shown.
   const toolbarActions = showResults && hasSkeleton ? (
     <div className="ml-auto flex items-center gap-1">
+      {holdsEditable && (
+        <HoldsEditor
+          entries={scanHolds.entries}
+          onAdd={handleAddHold}
+          onRemove={(entry) => scanHolds.removeHold(entry.hold)}
+        />
+      )}
       <SkeletonStylePanel
         onChange={onSkeletonStyleChange}
         size="sm"
@@ -305,10 +325,12 @@ export default function StepViewLandmarks({
               firstFrameFile && firstFrameSkeletonData ? (
                 <div className="mx-auto w-full" style={{ maxWidth: previewMaxWidth }}>
                   <FramePlayer
+                    ref={previewPlayerRef}
                     imageFile={firstFrameFile}
                     layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                     duration={firstFrameSkeletonData.duration}
                     autoPlay
+                    holds={scanHolds.previewHolds}
                     orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
                     bare
                     className="w-full rounded-none"

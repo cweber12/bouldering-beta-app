@@ -176,6 +176,24 @@ function contactOf(map: Map<string, Keypoint>, spec: LimbSpec): { pt: Point; sco
   return null;
 }
 
+/**
+ * Normalized [0,1] contact point of one extremity in a single pose frame, using
+ * the same fingers/toes→proximal fallback detection uses (hand = mean(index,
+ * pinky) → wrist; foot = mean(foot_index, heel) → ankle). Returns null when the
+ * limb is absent. Used by scan-stage Hold authoring to snap a new Hold to the
+ * limb the User picks (ADR 0009).
+ */
+export function limbContactAt(
+  frame: PoseFrame,
+  kind: "hand" | "foot",
+  side: "left" | "right",
+): Point | null {
+  const spec = LIMBS.find((l) => l.kind === kind && l.side === side);
+  if (!spec) return null;
+  const c = contactOf(nameMap(frame), spec);
+  return c ? c.pt : null;
+}
+
 // ---------------------------------------------------------------------------
 // Per-frame samples for one limb (projected into photo space)
 // ---------------------------------------------------------------------------
