@@ -136,7 +136,7 @@ function ScanPageInner() {
   const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
-  const { matchImage, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
+  const { matchImage, estimateCrop, autoFrameStatus, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
     useImageMatcher();
 
   const [state, setState]   = useState("");
@@ -168,6 +168,8 @@ function ScanPageInner() {
   const routePhotoPreviewUrlRef = useRef<string | null>(null);
   const [routePhotoCrop, setRoutePhotoCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
   const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
+  // True once a preliminary match auto-positioned the crop box over the photo.
+  const [autoFramed, setAutoFramed] = useState(false);
 
   // Skeleton style for overlays — SkeletonStylePanel emits a full style on mount;
   // start from built-in defaults.
@@ -366,9 +368,33 @@ function ScanPageInner() {
     setRoutePhotoWithPreview(null);
     setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
     setRouteMatchTriggered(false);
+    setAutoFramed(false);
     setExportStatus("idle");
     setExportProgress(0);
     resetMatcher();
+  }
+
+  /**
+   * Set (or change) the route photo, then run a preliminary match to auto-frame
+   * the route. On a confident estimate the crop box is positioned over the
+   * projected climb area; otherwise it defaults to a visible inset box and the
+   * user frames it manually (StepMatchRoutePhoto surfaces the failure hint).
+   */
+  async function handleSetRoutePhoto(file: File) {
+    resetMatcher();
+    setRoutePhotoWithPreview(file);
+    setRouteMatchTriggered(false);
+    setAutoFramed(false);
+    // Start from a visible inset box so the crop is grabbable before/without an
+    // auto-frame; an estimate overwrites it below.
+    setRoutePhotoCrop(DEFAULT_CROP);
+    if (cv && activeAttemptId) {
+      const estimate = await estimateCrop(file, activeAttemptId, cv);
+      if (estimate) {
+        setRoutePhotoCrop(estimate.crop);
+        setAutoFramed(true);
+      }
+    }
   }
 
   function handleApplyRouteMatch() {
@@ -413,11 +439,8 @@ function ScanPageInner() {
   }
 
   function handleViewOnRoutePhoto(file: File) {
-    resetMatcher();
-    setRoutePhotoWithPreview(file);
-    setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
-    setRouteMatchTriggered(false);
     setStep("match");
+    void handleSetRoutePhoto(file);
   }
 
   function handleEditClimb() {
@@ -663,8 +686,10 @@ function ScanPageInner() {
           routePhotoFile={routePhotoFile}
           routePhotoPreviewUrl={routePhotoPreviewUrl}
           routePhotoCrop={routePhotoCrop}
-          onRoutePhotoCropChange={setRoutePhotoCrop}
+          onRoutePhotoCropChange={(c) => { setRoutePhotoCrop(c); setAutoFramed(false); }}
           routeMatchTriggered={routeMatchTriggered}
+          autoFramed={autoFramed}
+          autoFrameStatus={autoFrameStatus}
           matchResult={matchResult}
           matchStatus={matchStatus}
           matchError={matchError}
@@ -682,12 +707,7 @@ function ScanPageInner() {
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}
           onExportVideo={handleExportVideo}
-          onChangePhoto={(file) => {
-            resetMatcher();
-            setRoutePhotoWithPreview(file);
-            setRoutePhotoCrop({ x: 0, y: 0, w: 1, h: 1 });
-            setRouteMatchTriggered(false);
-          }}
+          onChangePhoto={(file) => { void handleSetRoutePhoto(file); }}
           onBack={handleBackToLandmarks}
           onSaveToDevice={handleOpenSaveSheet}
           onUpload={handleOpenUploadSheet}

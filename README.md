@@ -166,9 +166,12 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
   route**, opens the route-photo overlay; **Save scan** (raw scan) is the
   secondary action.
 4. **Place on route** — add a route photo (**Take photo** on the spot or
-  **Choose from library**), frame the route, then **Place on
-  route**. **Export video** downloads the annotated clip; match statistics are
-  Developer-view only.
+  **Choose from library**). A preliminary match runs automatically and
+  auto-frames the climb by projecting the saved climber crop into the photo, so
+  the crop box lands over the route ready to confirm; adjust it if needed, then
+  **Place on route**. If the preliminary match is too weak to auto-frame, a hint
+  asks you to drag the box over the route area yourself. **Export video**
+  downloads the annotated clip; match statistics are Developer-view only.
 
 Metadata entry is essentials-first (location + run type, with location required
 for cloud upload — the Upload button stays disabled until it is filled), and

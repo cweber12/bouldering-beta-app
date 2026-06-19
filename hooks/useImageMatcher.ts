@@ -14,6 +14,7 @@ import {
   type OrbFeatures,
 } from "@/pipeline/orbDetector";
 import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
+import { estimateRouteCrop, type RouteCropEstimate } from "@/pipeline/routeCropEstimator";
 import { analyzeFrame } from "@/pipeline/frameAnalyzer";
 import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
 import {
@@ -72,8 +73,22 @@ export interface ImageMatchResult {
 
 export type MatchStatus = "idle" | "matching" | "done" | "error";
 
+/** Lifecycle of the preliminary auto-frame estimate (separate from the match). */
+export type AutoFrameStatus = "idle" | "estimating" | "done" | "failed";
+
 export interface ImageMatcherResult {
   matchImage: (file: File, attemptId: string, cv: CV, userCrop?: CropFraction) => Promise<void>;
+  /**
+   * Run a preliminary full-photo match and project the reference crop box into
+   * photo-space, returning a fractional crop the UI can pre-position for the user
+   * to confirm. Resolves `null` (caller should fall back to manual cropping) for
+   * Panning Capture, when there is no stored crop box, or when the preliminary
+   * match is too weak to yield a valid homography. Independent of {@link matchImage}
+   * — it never touches `status`/`result`.
+   */
+  estimateCrop: (file: File, attemptId: string, cv: CV) => Promise<RouteCropEstimate | null>;
+  /** Lifecycle of the most recent {@link estimateCrop} call. */
+  autoFrameStatus: AutoFrameStatus;
   /** Reset all state back to idle (no result, no error). */
   reset: () => void;
   status: MatchStatus;
@@ -99,6 +114,7 @@ export function useImageMatcher(): ImageMatcherResult {
   const [result, setResult] = useState<ImageMatchResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [matchDiagnostics, setMatchDiagnostics] = useState<MatchDiagnostics | null>(null);
+  const [autoFrameStatus, setAutoFrameStatus] = useState<AutoFrameStatus>("idle");
 
   const matchImage = useCallback(async (file: File, attemptId: string, cv: CV, userCrop?: CropFraction) => {
     setStatus("matching");
@@ -347,14 +363,56 @@ export function useImageMatcher(): ImageMatcherResult {
     }
   }, []);
 
+  const estimateCrop = useCallback(async (file: File, attemptId: string, cv: CV): Promise<RouteCropEstimate | null> => {
+    setAutoFrameStatus("estimating");
+    try {
+      const attempt = getAttempt(attemptId);
+      // Panning Capture has no single crop box to project (each keyframe matches
+      // the whole photo); fall back to manual cropping there. Likewise when the
+      // reference never stored a crop box.
+      if (!attempt?.orbFeatures?.cropBox || (attempt.keyframes?.length ?? 0) > 0) {
+        setAutoFrameStatus("failed");
+        return null;
+      }
+
+      // Mirror the full-photo (no userCrop) front-half of matchImage: downscale,
+      // symmetric ORB preprocessing, extract, rescale to native, then match.
+      const imageData = await loadImageAsImageData(file);
+      const maxEdge = queryMaxEdgeFor(attempt.videoMeta.width, attempt.videoMeta.height);
+      const { imageData: scaled, scale } = downscaleImageData(cv, imageData, maxEdge);
+      const scaledProcessed = preprocessForOrb(cv, scaled);
+      let queryOrb = extractFeatures(cv, scaledProcessed, false);
+      queryOrb = rescaleFeaturesToNative(queryOrb, scale);
+      const matches = matchOrbFeatures(cv, attempt.orbFeatures, queryOrb);
+
+      const reproj = ransacReprojThresholdFor(Math.max(imageData.width, imageData.height));
+      const estimate = estimateRouteCrop(
+        cv,
+        matches,
+        attempt.orbFeatures,
+        queryOrb,
+        imageData.width,
+        imageData.height,
+        { ransacReprojThreshold: reproj, gate: { srcWidth: attempt.videoMeta.width, srcHeight: attempt.videoMeta.height } },
+      );
+      setAutoFrameStatus(estimate ? "done" : "failed");
+      return estimate;
+    } catch (err) {
+      console.warn("[useImageMatcher] auto-frame estimate failed:", err);
+      setAutoFrameStatus("failed");
+      return null;
+    }
+  }, []);
+
   const reset = useCallback(() => {
     setStatus("idle");
     setResult(null);
     setErrorMessage(null);
     setMatchDiagnostics(null);
+    setAutoFrameStatus("idle");
   }, []);
 
-  return { matchImage, reset, status, result, errorMessage, matchDiagnostics };
+  return { matchImage, estimateCrop, autoFrameStatus, reset, status, result, errorMessage, matchDiagnostics };
 }
 
 /**

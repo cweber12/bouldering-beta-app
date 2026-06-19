@@ -14,7 +14,7 @@ import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import type { Hold } from "@/pipeline/holdDetection";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
-import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
+import type { ImageMatchResult, MatchStatus, AutoFrameStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useClickOutside } from "@/hooks/useClickOutside";
@@ -32,6 +32,10 @@ export interface StepMatchRoutePhotoProps {
   routePhotoCrop: CropFraction;
   onRoutePhotoCropChange: (c: CropFraction) => void;
   routeMatchTriggered: boolean;
+  /** True once a preliminary match auto-positioned the crop box over the route. */
+  autoFramed: boolean;
+  /** Lifecycle of the preliminary auto-frame estimate. */
+  autoFrameStatus: AutoFrameStatus;
   // Matching
   matchResult: ImageMatchResult | null;
   matchStatus: MatchStatus;
@@ -78,6 +82,8 @@ export default function StepMatchRoutePhoto({
   routePhotoCrop,
   onRoutePhotoCropChange,
   routeMatchTriggered,
+  autoFramed,
+  autoFrameStatus,
   matchResult,
   matchStatus,
   matchError,
@@ -122,7 +128,11 @@ export default function StepMatchRoutePhoto({
   const instruction = isMatching
     ? "lining up your climb…"
     : !routeMatchTriggered
-      ? "frame the route, then place it"
+      ? autoFrameStatus === "estimating"
+        ? "finding your route…"
+        : autoFramed
+          ? "we framed your climb — adjust if needed, then place it"
+          : "frame the route, then place it"
       : !isFrameReady
         ? "building your overlay…"
         : "review, then save";
@@ -272,6 +282,13 @@ export default function StepMatchRoutePhoto({
 
           {errorText && (
             <p className="feedback-banner feedback-banner-danger max-w-md text-center">{errorText}</p>
+          )}
+
+          {/* Auto-frame failed: prompt the user to draw the route area. */}
+          {!routeMatchTriggered && !isMatching && autoFrameStatus === "failed" && (
+            <p className="feedback-banner feedback-banner-caution max-w-md text-center">
+              Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route area yourself.
+            </p>
           )}
 
           {/* Before match: route photo with crop overlay */}
