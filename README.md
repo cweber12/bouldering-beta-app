@@ -81,13 +81,15 @@ unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
 
 A third overlay pass, **Holds**, marks where the climber's hands and feet were
 used on the wall — numbered in the order they were first used, Hand Holds cyan
-and Foot Holds orange. Each marker is a large, thin-bordered, faintly-filled disc
-with a soft colour glow that marks the spot without covering it; the number is
-set off to the side as black-on-white, tethered by a short leader line, and
-labels are placed in first-use order so they never overlap each other or another
-Hold's disc. When a hand and a foot are used on the same spot, their two markers
-are co-drawn as one **split disc** — cyan top half, orange bottom half — with each
-number tethered to its own half; each half reveals at its own first-use time.
+and Foot Holds orange. Each marker is a translucent **hand / foot glyph** of the
+limb that used it (borderless, with a soft colour glow) that marks the spot
+without covering it; the number is set off to the side as black-on-white,
+tethered by a leader line. Numbers are pushed to the route's **outer** side —
+Holds left of the holds' mean x get labels further left, those to the right get
+labels further right — so the digits sit clear of the holds, and labels are
+placed in first-use order so they never overlap each other or a glyph. Each
+glyph's left / right orientation follows the same mean-x split (the detected Hold
+carries only its kind, not which hand or foot used it).
 Markers reveal in first-use order on the first playback pass and then stay shown
 across loops; a **Replay** control on the player re-arms that reveal. Holds are
 **inferred from Dwells** (a limb held still long enough to be load-bearing — a

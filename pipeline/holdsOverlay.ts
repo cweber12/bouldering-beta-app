@@ -2,11 +2,19 @@
  * Holds overlay drawing for CanvasRenderingContext2D.
  *
  * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo. To
- * mark the spot the climber used *without covering it up*, the marker is a large,
- * thin-bordered, faintly-filled disc with a soft cyan (hand) / orange (foot)
- * glow; the number is set off to the side as black-on-white, tethered to the disc
- * by a short leader line. Labels are placed greedily in first-use order so they
- * never overlap one another or another Hold's disc.
+ * mark the spot the climber used *without covering it up*, the marker is a
+ * translucent hand / foot **glyph** (the limb that used the hold) tinted soft
+ * cyan (hand) / orange (foot) with a soft same-colour glow and **no border**. The
+ * number is set off to the side as black-on-white, tethered to the glyph by a
+ * leader line. Each Hold's number is pushed to the **outer** side of the route —
+ * left of the holds' mean x goes further left, right of it goes further right —
+ * so the digits sit away from the wall and the holds stay easy to see. Labels are
+ * placed greedily in first-use order so they never overlap one another or a glyph.
+ *
+ * The hand / foot shape comes from a single SVG path each (viewBox-square); the
+ * left variant is just the right one mirrored horizontally. Which side's glyph a
+ * Hold gets follows the same mean-x split as its label, since the detected Hold
+ * carries only its kind (hand / foot), not which hand or foot used it.
  *
  * Markers reveal progressively: only Holds whose `firstUseTime ≤ t` are drawn, so
  * a marker pops in when the limb first lands and persists to the end.
@@ -24,52 +32,93 @@ import type { Hold } from "@/pipeline/holdDetection";
 // Defaults (× body scale unless noted)
 // ---------------------------------------------------------------------------
 
-/** Hand Hold disc colour — cyan (mirrors `--color-hand-hold`). */
+/** Hand Hold glyph colour — cyan (mirrors `--color-hand-hold`). */
 const DEFAULT_HAND_COLOR = "#22d3ee";
-/** Foot Hold disc colour — orange (mirrors `--color-foot-hold`). */
+/** Foot Hold glyph colour — orange (mirrors `--color-foot-hold`). */
 const DEFAULT_FOOT_COLOR = "#fb923c";
 /** Number label background — white. */
 const DEFAULT_LABEL_COLOR = "#ffffff";
 /** Number text — near-black for contrast on the white label. */
 const DEFAULT_NUMBER_COLOR = "#0b0f14";
-/** Disc radius × body scale (slightly larger so the marked spot is obvious). */
+/** Glyph half-extent × body scale (the marked spot's footprint radius). */
 const DEFAULT_HOLD_RADIUS = 0.35;
-/** Disc fill opacity — faint, so the actual wall hold reads through. */
-const DEFAULT_FILL_OPACITY = 0.15;
-/** Ring stroke width as a fraction of the disc radius (thin border). */
-const RING_WIDTH_FRAC = 0.08;
-/** Glow blur as a fraction of the disc radius. */
-const GLOW_BLUR_FRAC = 0.55;
-/** Leader-line width as a fraction of the disc radius. */
+/**
+ * Glyph fill opacity. Translucent so the actual wall hold reads through, but
+ * solid enough that the silhouette is the clearly-visible marker now that there
+ * is no border ring carrying the colour.
+ */
+const DEFAULT_FILL_OPACITY = 0.55;
+/** Glow blur as a fraction of the glyph half-extent. */
+const GLOW_BLUR_FRAC = 0.45;
+/** Leader-line width as a fraction of the glyph half-extent. */
 const LEADER_WIDTH_FRAC = 0.06;
 /** Number label font size × body scale. */
 const LABEL_FONT_FRAC = 0.26;
-/**
- * A Hand Hold and a Foot Hold whose centres fall within this fraction of body
- * scale are co-drawn as one split disc (top hand, bottom foot). Mirrors the
- * detection same-place merge radius factor (`DEFAULT_MERGE_RADIUS_FACTOR` in
- * `holdDetection.ts`, ADR 0008) — keep the two in sync.
- */
-const DEFAULT_COMBINE_FACTOR = 0.35;
 
-/** Style options for the Holds pass. All optional; unset fields use defaults. */
-export interface HoldStyle {
-  /** Draw the Holds pass. Default true (callers usually gate via the panel). */
-  holdsVisible?: boolean;
-  /** Hand Hold disc colour. Default {@link DEFAULT_HAND_COLOR}. */
-  handColor?: string;
-  /** Foot Hold disc colour. Default {@link DEFAULT_FOOT_COLOR}. */
-  footColor?: string;
-  /** Number label background colour. Default {@link DEFAULT_LABEL_COLOR}. */
-  labelColor?: string;
-  /** Number text colour. Default {@link DEFAULT_NUMBER_COLOR}. */
-  numberColor?: string;
-  /** Disc radius × body scale. Default {@link DEFAULT_HOLD_RADIUS}. */
-  radius?: number;
-  /** Disc fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
-  fillOpacity?: number;
-  /** Cross-kind combine radius × body scale. Default {@link DEFAULT_COMBINE_FACTOR}. */
-  combineFactor?: number;
+// ---------------------------------------------------------------------------
+// Glyph geometry — hand / foot SVG path data
+//
+// One path per kind, taken from the source SVGs (square viewBox). The left
+// variant is the right path mirrored about the vertical centre line, so only the
+// "right" path is stored. Path2D is constructed lazily and cached; it is absent
+// in jsdom (no `canvas` package), so `glyphPath` returns null there and the draw
+// falls back to labels-only — exactly what the layout-caching tests rely on.
+// ---------------------------------------------------------------------------
+
+const HAND_PATH =
+  "M496 136s-40.486 85.32-51.442 128.988c-14.33 57.118 2.078 100.297-18.747 155.68-35.998 64.97-38.435 75.466-169.81 75.33-48.132-.044-186.02-36.76-186.02-36.76C50.97 454.35 16 457.23 16 435.997c0-21.232 24.88-36.736 46.97-36.787l87.03 7.642c21.14-1.326 43.286-13.71 43.96-41.36-.353-40.927-4.4-72.357-25.175-105.6l-80.67-125.864c-4.818-10.02-5.964-27.105 7.983-34.732 13.947-7.628 29.793 3.71 35.205 13.582l90.11 122.57c9.618 8.955 26.738 10.68 25.278-8.38L206.903 44.652c-2.478-12.96 4.1-28.654 19.1-28.654 19.687 0 31.795 7.515 31.413 19.413l43.75 179.984c3.42 8.76 15.545 7.59 18.807-.49l12.462-175.022c.64-5.583 7.922-15.314 21.9-13.286 13.976 2.027 22.035 17 20.555 22.793l-4.044 172.936c2.838 15.327 14.888 17.565 24.266 9.008l61.22-109.487c3.72-9.183 18.288-11.096 26.715-7.455 7.84 5.107 12.954 11.96 12.954 21.603z";
+const FOOT_PATH =
+  "M499.462,299.855c-39.996-28.544-83.584-51.755-129.57-69.001c-4.378-1.63-9.259,0.555-10.957,4.907c-15.787,40.491-58.377,64.486-101.214,57.062c-10.999-1.911-21-4.429-30.362-7.322l72.636-70.485c5.077-4.924,7.859-11.793,7.637-18.859c-0.222-7.057-3.422-13.747-8.789-18.347l-27.981-23.987c-13.568-11.639-33.297-11.639-46.865,0l-80.888,69.333c-20.045-16.256-50.185-35.422-93.372-50.654c-11.324-4.011-24.055,0.563-29.585,10.615c-5.965,10.846-2.816,24.26,7.313,31.198c20.881,14.285,59.162,44.535,83.823,75.725H35.59c-18.987,0-34.594,14.191-35.541,32.316c-0.495,9.472,2.825,18.458,9.327,25.318c6.417,6.758,15.445,10.633,24.764,10.633h102.4c26.982,0,55.552,1.399,84.915,4.156c40.508,3.814,97.527,4.378,127.898,4.378c53.495,0,116.599-10.812,150.05-25.702c7.023-3.123,11.546-9.114,12.39-16.435C512.816,315.915,508.336,306.571,499.462,299.855z";
+
+/** Source viewBox side length for each glyph (square). */
+const HAND_VB = 512;
+const FOOT_VB = 511.936;
+
+const path2dCache = new Map<"hand" | "foot", Path2D>();
+
+/** Lazily-built Path2D for a kind, or null where Path2D is unavailable (jsdom). */
+function glyphPath(kind: "hand" | "foot"): Path2D | null {
+  if (typeof Path2D === "undefined") return null;
+  let p = path2dCache.get(kind);
+  if (!p) {
+    p = new Path2D(kind === "hand" ? HAND_PATH : FOOT_PATH);
+    path2dCache.set(kind, p);
+  }
+  return p;
+}
+
+/**
+ * Draw one hand / foot glyph centred at `(cx, cy)`, scaled so its viewBox spans
+ * `size` px, mirrored horizontally for the left variant, tinted `color` at
+ * `opacity` with a soft same-colour glow and no border.
+ */
+function drawGlyph(
+  ctx: CanvasRenderingContext2D,
+  kind: "hand" | "foot",
+  side: "left" | "right",
+  cx: number,
+  cy: number,
+  size: number,
+  color: string,
+  opacity: number,
+  glowBlur: number,
+): void {
+  const path = glyphPath(kind);
+  if (!path) return;
+  const vb = kind === "hand" ? HAND_VB : FOOT_VB;
+  const s = size / vb;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(side === "left" ? -s : s, s);
+  ctx.translate(-vb / 2, -vb / 2);
+  ctx.globalAlpha = opacity;
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  // shadowBlur is applied in output (device) space, unaffected by the CTM, so
+  // pass the px blur directly rather than dividing by the glyph scale.
+  ctx.shadowBlur = glowBlur;
+  ctx.fill(path);
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -94,32 +143,28 @@ function rectCircleOverlap(r: Rect, cx: number, cy: number, cr: number): boolean
   return Math.hypot(cx - nx, cy - ny) < cr;
 }
 
-/** Candidate label directions, in preference order (up-right first). */
-const LABEL_ANGLES = [
-  -Math.PI / 4, 0, -Math.PI / 2, Math.PI / 4,
-  (-3 * Math.PI) / 4, Math.PI / 2, Math.PI, (3 * Math.PI) / 4,
-];
+/** Candidate label directions biased outward to the left / right of the route. */
+const LEFT_ANGLES = [Math.PI, (-3 * Math.PI) / 4, (3 * Math.PI) / 4, -Math.PI / 2, Math.PI / 2];
+const RIGHT_ANGLES = [0, -Math.PI / 4, Math.PI / 4, -Math.PI / 2, Math.PI / 2];
 
-/** A disc to draw: a full single-kind disc, or a split top(hand)/bottom(foot). */
-interface DiscUnit {
+/** A glyph to draw at a Hold. */
+interface GlyphUnit {
   cx: number;
   cy: number;
-  /** "full" until both halves of a pair are revealed, then "top"+"bottom". */
-  segments: { half: "full" | "top" | "bottom"; color: string }[];
+  kind: "hand" | "foot";
+  side: "left" | "right";
+  color: string;
 }
 
-/** A number label to place, tethered to a point on its disc by a leader. */
+/** A number label to place, tethered to its glyph by a leader. */
 interface LabelUnit {
   order: number;
   color: string;
-  /** Disc centre (for the full-disc leader to start at the edge). */
+  /** Glyph centre — the leader starts at the glyph edge toward the label. */
   dcx: number;
   dcy: number;
-  /** Tether point the leader emanates from (half edge for a split disc). */
-  ax: number;
-  ay: number;
-  /** Preferred placement direction so a split disc's numbers sit by their half. */
-  prefer: "up" | "down" | "any";
+  /** Side of the route's mean x this Hold sits on — labels push that way. */
+  prefer: "left" | "right";
 }
 
 interface Placed {
@@ -131,10 +176,6 @@ interface Placed {
   cy: number;
 }
 
-/** Candidate label directions biased upward / downward for split-disc halves. */
-const UP_ANGLES = [-Math.PI / 2, -Math.PI / 4, (-3 * Math.PI) / 4, 0, Math.PI];
-const DOWN_ANGLES = [Math.PI / 2, Math.PI / 4, (3 * Math.PI) / 4, 0, Math.PI];
-
 /** Path a (optionally rounded) rect, falling back to a plain rect on engines
  *  without `roundRect` (jsdom / older canvas). */
 function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): void {
@@ -144,10 +185,32 @@ function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): 
 }
 
 // ---------------------------------------------------------------------------
+// Style options
+// ---------------------------------------------------------------------------
+
+/** Style options for the Holds pass. All optional; unset fields use defaults. */
+export interface HoldStyle {
+  /** Draw the Holds pass. Default true (callers usually gate via the panel). */
+  holdsVisible?: boolean;
+  /** Hand Hold glyph colour. Default {@link DEFAULT_HAND_COLOR}. */
+  handColor?: string;
+  /** Foot Hold glyph colour. Default {@link DEFAULT_FOOT_COLOR}. */
+  footColor?: string;
+  /** Number label background colour. Default {@link DEFAULT_LABEL_COLOR}. */
+  labelColor?: string;
+  /** Number text colour. Default {@link DEFAULT_NUMBER_COLOR}. */
+  numberColor?: string;
+  /** Glyph half-extent × body scale. Default {@link DEFAULT_HOLD_RADIUS}. */
+  radius?: number;
+  /** Glyph fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
+  fillOpacity?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Cached render plan
 //
 // The greedy label layout is the per-frame cost the static-Holds change removes
-// (ADR 0009). The plan — disc geometry + placed label rects — depends only on
+// (ADR 0009). The plan — glyph geometry + placed label rects — depends only on
 // the Holds, the canvas size, the style sizes, and *which* Holds are revealed.
 // With high-water reveal the revealed set only grows, so the plan is recomputed
 // at most once per reveal and reused on every frame in between, keyed per canvas.
@@ -155,7 +218,7 @@ function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): 
 
 /** The time-independent geometry rendered each frame for a given revealed set. */
 interface RenderPlan {
-  discs: DiscUnit[];
+  glyphs: GlyphUnit[];
   placed: Placed[];
 }
 
@@ -172,7 +235,6 @@ const planCache = new WeakMap<HTMLCanvasElement, PlanCacheEntry>();
 interface PlanSizes {
   r: number;
   fontPx: number;
-  combineR: number;
   handColor: string;
   footColor: string;
   w: number;
@@ -180,7 +242,7 @@ interface PlanSizes {
 }
 
 /**
- * Build the disc + label geometry for the currently-revealed Holds. Pure
+ * Build the glyph + label geometry for the currently-revealed Holds. Pure
  * geometry — no drawing — so the result can be cached and replayed each frame.
  */
 function buildHoldsPlan(
@@ -189,82 +251,30 @@ function buildHoldsPlan(
   revealed: (hold: Hold) => boolean,
   sizes: PlanSizes,
 ): RenderPlan {
-  const { r, fontPx, combineR, handColor, footColor, w, h } = sizes;
+  const { r, fontPx, handColor, footColor, w, h } = sizes;
 
-  // ── Pairing — a Hand Hold and its nearest Foot Hold within the combine radius
-  //    are co-drawn as one split disc. Same-kind Holds already merged in
-  //    detection, so pairing is strictly 1:1 hand↔foot (ADR 0008). ──
-  const partnerOf = new Map<string, Hold>();
-  const usedFoot = new Set<string>();
-  const feet = holds.filter((hold) => hold.kind === "foot");
-  for (const hand of holds.filter((hold) => hold.kind === "hand")) {
-    let best: Hold | null = null;
-    let bestD = Infinity;
-    for (const foot of feet) {
-      if (usedFoot.has(foot.id)) continue;
-      const d = Math.hypot(hand.x - foot.x, hand.y - foot.y);
-      if (d <= combineR && d < bestD) {
-        best = foot;
-        bestD = d;
-      }
-    }
-    if (best) {
-      partnerOf.set(hand.id, best);
-      partnerOf.set(best.id, hand);
-      usedFoot.add(best.id);
-    }
-  }
+  // Mean x over *all* Holds (not just the revealed ones) so a Hold's side — and
+  // therefore its glyph orientation and label direction — stays fixed as the
+  // sequence reveals rather than jumping when a new Hold appears.
+  const meanX = holds.reduce((sum, hold) => sum + hold.x, 0) / holds.length;
 
-  // ── Build the discs + labels actually visible. Each half of a pair reveals
-  //    independently: a single-kind disc until the partner lands, then a split
-  //    disc at the midpoint (ADR 0008). ──
-  const discs: DiscUnit[] = [];
+  const glyphs: GlyphUnit[] = [];
   const labels: LabelUnit[] = [];
-  const done = new Set<string>();
-  const single = (hold: Hold, color: string) => {
-    discs.push({ cx: hold.x, cy: hold.y, segments: [{ half: "full", color }] });
-    labels.push({ order: hold.order, color, dcx: hold.x, dcy: hold.y, ax: hold.x, ay: hold.y, prefer: "any" });
-  };
   for (const hold of [...holds].sort((a, b) => a.order - b.order)) {
-    if (done.has(hold.id)) continue;
-    const partner = partnerOf.get(hold.id);
-    if (!partner) {
-      done.add(hold.id);
-      if (revealed(hold)) single(hold, hold.kind === "hand" ? handColor : footColor);
-      continue;
-    }
-    done.add(hold.id);
-    done.add(partner.id);
-    const hand = hold.kind === "hand" ? hold : partner;
-    const foot = hold.kind === "hand" ? partner : hold;
-    const handVis = revealed(hand);
-    const footVis = revealed(foot);
-    if (handVis && footVis) {
-      const cx = (hand.x + foot.x) / 2;
-      const cy = (hand.y + foot.y) / 2;
-      discs.push({
-        cx,
-        cy,
-        segments: [
-          { half: "top", color: handColor },
-          { half: "bottom", color: footColor },
-        ],
-      });
-      labels.push({ order: hand.order, color: handColor, dcx: cx, dcy: cy, ax: cx, ay: cy - r, prefer: "up" });
-      labels.push({ order: foot.order, color: footColor, dcx: cx, dcy: cy, ax: cx, ay: cy + r, prefer: "down" });
-    } else if (handVis) {
-      single(hand, handColor);
-    } else if (footVis) {
-      single(foot, footColor);
-    }
+    if (!revealed(hold)) continue;
+    const color = hold.kind === "hand" ? handColor : footColor;
+    const side: "left" | "right" = hold.x < meanX ? "left" : "right";
+    glyphs.push({ cx: hold.x, cy: hold.y, kind: hold.kind, side, color });
+    labels.push({ order: hold.order, color, dcx: hold.x, dcy: hold.y, prefer: side });
   }
-  if (discs.length === 0) return { discs, placed: [] };
+  if (glyphs.length === 0) return { glyphs, placed: [] };
 
   // Font must be set before measureText so label widths are correct.
   ctx.font = `bold ${fontPx}px sans-serif`;
 
-  // ── Label placement — greedy, in first-use order, so earlier labels keep a
-  //    stable spot and never overlap a later one or a disc. ──
+  // ── Label placement — greedy, in first-use order, pushed to the route's outer
+  //    side so digits sit away from the holds; earlier labels keep a stable spot
+  //    and never overlap a later one or a glyph. ──
   const padX = fontPx * 0.55;
   const padY = fontPx * 0.34;
   const placed: Placed[] = [];
@@ -273,21 +283,22 @@ function buildHoldsPlan(
     const tw = ctx.measureText(text).width;
     const lw = Math.max(tw + 2 * padX, fontPx + 2 * padY);
     const lh = fontPx + 2 * padY;
-    const angles = unit.prefer === "up" ? UP_ANGLES : unit.prefer === "down" ? DOWN_ANGLES : LABEL_ANGLES;
+    const angles = unit.prefer === "left" ? LEFT_ANGLES : RIGHT_ANGLES;
 
     let best: Rect | null = null;
     let bestC = { x: 0, y: 0 };
-    // Expanding rings of candidate offsets around the tether point.
+    // Expanding rings of candidate offsets, started well clear of the glyph so the
+    // number reads at a distance from the hold.
     outer: for (let ring = 0; ring < 6; ring++) {
-      const off = (0.5 + ring * 0.75) * Math.max(lw, lh);
+      const off = r + (1.2 + ring * 0.9) * Math.max(lw, lh);
       for (const angle of angles) {
-        const cx = unit.ax + Math.cos(angle) * off;
-        const cy = unit.ay + Math.sin(angle) * off;
+        const cx = unit.dcx + Math.cos(angle) * off;
+        const cy = unit.dcy + Math.sin(angle) * off;
         const rect: Rect = { x: cx - lw / 2, y: cy - lh / 2, w: lw, h: lh };
         if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > w || rect.y + rect.h > h) continue;
         const hitsLabel = placed.some((p) => rectsOverlap(rect, p.rect));
-        const hitsDisc = discs.some((d) => rectCircleOverlap(rect, d.cx, d.cy, r));
-        if (!hitsLabel && !hitsDisc) {
+        const hitsGlyph = glyphs.some((g) => rectCircleOverlap(rect, g.cx, g.cy, r));
+        if (!hitsLabel && !hitsGlyph) {
           best = rect;
           bestC = { x: cx, y: cy };
           break outer;
@@ -300,14 +311,15 @@ function buildHoldsPlan(
       }
     }
     if (!best) {
-      const cx = unit.ax + r + lw;
-      best = { x: cx - lw / 2, y: unit.ay - lh / 2, w: lw, h: lh };
-      bestC = { x: cx, y: unit.ay };
+      const dir = unit.prefer === "left" ? -1 : 1;
+      const cx = unit.dcx + dir * (r + lw);
+      best = { x: cx - lw / 2, y: unit.dcy - lh / 2, w: lw, h: lh };
+      bestC = { x: cx, y: unit.dcy };
     }
     placed.push({ unit, rect: best, cx: bestC.x, cy: bestC.y });
   }
 
-  return { discs, placed };
+  return { glyphs, placed };
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +335,7 @@ function buildHoldsPlan(
  * @param t         - Current playback time (seconds). Holds first used after this
  *                    are not yet drawn (progressive, cumulative reveal).
  * @param style     - Optional colour / size overrides.
- * @param bodyScale - Photo-space body scale (px) the disc radius multiplies by.
+ * @param bodyScale - Photo-space body scale (px) the glyph extent multiplies by.
  */
 export function drawHolds(
   ctx: CanvasRenderingContext2D,
@@ -340,13 +352,10 @@ export function drawHolds(
   const labelColor = style?.labelColor ?? DEFAULT_LABEL_COLOR;
   const numberColor = style?.numberColor ?? DEFAULT_NUMBER_COLOR;
   const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
-  const ringWidth = Math.max(1, r * RING_WIDTH_FRAC);
   const leaderWidth = Math.max(1, r * LEADER_WIDTH_FRAC);
   const glowBlur = r * GLOW_BLUR_FRAC;
   const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
   const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
-
-  const combineR = Math.max(1, (style?.combineFactor ?? DEFAULT_COMBINE_FACTOR) * bodyScale);
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -358,86 +367,39 @@ export function drawHolds(
   // high-water reveal that revealed set only grows, so the plan is recomputed at
   // most once per reveal and reused on every frame in between (ADR 0009).
   const revealedSig = holds.filter(revealed).map((hold) => hold.id).join(",");
-  const sig = `${w}x${h}|${r}|${fontPx}|${combineR}|${handColor}|${footColor}|${revealedSig}`;
+  const sig = `${w}x${h}|${r}|${fontPx}|${handColor}|${footColor}|${revealedSig}`;
   const cached = planCache.get(ctx.canvas);
   let plan: RenderPlan;
   if (cached && cached.holds === holds && cached.sig === sig) {
     plan = cached.plan;
   } else {
-    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, combineR, handColor, footColor, w, h });
+    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, handColor, footColor, w, h });
     planCache.set(ctx.canvas, { holds, sig, plan });
   }
-  const { discs, placed } = plan;
-  if (discs.length === 0) return;
+  const { glyphs, placed } = plan;
+  if (glyphs.length === 0) return;
 
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `bold ${fontPx}px sans-serif`;
 
-  // ── Pass 1 — discs with a soft glow (drawn first so labels/leaders sit on top).
-  //    A split disc fills each half under a clip and draws a colour-coded ring per
-  //    half plus a divider so the hand/foot split reads at a glance. ──
-  for (const d of discs) {
-    for (const seg of d.segments) {
-      ctx.save();
-      if (seg.half !== "full") {
-        ctx.beginPath();
-        if (seg.half === "top") ctx.rect(d.cx - r, d.cy - r, 2 * r, r);
-        else ctx.rect(d.cx - r, d.cy, 2 * r, r);
-        ctx.clip();
-      }
-      ctx.shadowColor = seg.color;
-      ctx.shadowBlur = glowBlur;
-      ctx.globalAlpha = fillOpacity;
-      ctx.fillStyle = seg.color;
-      ctx.beginPath();
-      ctx.arc(d.cx, d.cy, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // Colour-coded ring (full circle, or two semicircle arcs + divider for a split).
-    ctx.save();
-    ctx.lineWidth = ringWidth;
-    if (d.segments.length === 1) {
-      ctx.strokeStyle = d.segments[0].color;
-      ctx.beginPath();
-      ctx.arc(d.cx, d.cy, r, 0, Math.PI * 2);
-      ctx.stroke();
-    } else {
-      const top = d.segments.find((s) => s.half === "top")!;
-      const bottom = d.segments.find((s) => s.half === "bottom")!;
-      ctx.strokeStyle = top.color;
-      ctx.beginPath();
-      ctx.arc(d.cx, d.cy, r, Math.PI, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = bottom.color;
-      ctx.beginPath();
-      ctx.arc(d.cx, d.cy, r, 0, Math.PI);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(d.cx - r, d.cy);
-      ctx.lineTo(d.cx + r, d.cy);
-      ctx.stroke();
-    }
-    ctx.restore();
+  // ── Pass 1 — hand / foot glyphs (drawn first so labels/leaders sit on top). ──
+  for (const g of glyphs) {
+    drawGlyph(ctx, g.kind, g.side, g.cx, g.cy, 2 * r, g.color, fillOpacity, glowBlur);
   }
+  ctx.shadowBlur = 0;
 
   // ── Pass 2 — leader lines + black-on-white number labels. ──
   for (const p of placed) {
     const { unit } = p;
-    // Leader toward the label centre. A full disc's tether is its centre, so the
-    // leader starts at the edge; a split half tethers at the half edge already.
-    let sx = unit.ax;
-    let sy = unit.ay;
-    if (unit.prefer === "any") {
-      const dx = p.cx - unit.dcx;
-      const dy = p.cy - unit.dcy;
-      const len = Math.hypot(dx, dy) || 1;
-      sx = unit.dcx + (dx / len) * r;
-      sy = unit.dcy + (dy / len) * r;
-    }
+    // Leader from the glyph edge (centre offset by r toward the label) to the
+    // label centre.
+    const dx = p.cx - unit.dcx;
+    const dy = p.cy - unit.dcy;
+    const len = Math.hypot(dx, dy) || 1;
+    const sx = unit.dcx + (dx / len) * r;
+    const sy = unit.dcy + (dy / len) * r;
     ctx.lineWidth = leaderWidth;
     ctx.strokeStyle = unit.color;
     ctx.beginPath();
