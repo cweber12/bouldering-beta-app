@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import ToolbarButton from "@/components/scan/controls/ToolbarButton";
 import type { HoldEntry } from "@/hooks/useScanHolds";
 
 /** Hand / Foot Hold marker colours — mirror the tokens in holdsOverlay.ts. */
@@ -39,19 +40,19 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
 
   return (
     <div ref={panelRef} className="relative">
-      <button
+      <ToolbarButton
         onClick={() => setOpen((o) => !o)}
-        className="ui-icon-btn flex h-8 w-8 items-center justify-center"
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label="Edit holds"
         title="Edit holds"
-      >
-        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="7.5" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6M9 12h6" />
-        </svg>
-      </button>
+        label="Holds"
+        icon={
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="7.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6M9 12h6" />
+          </svg>
+        }
+      />
 
       {open && (
         <div

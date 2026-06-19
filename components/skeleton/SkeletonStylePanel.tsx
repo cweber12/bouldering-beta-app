@@ -5,6 +5,7 @@ import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import ToolbarButton from "@/components/scan/controls/ToolbarButton";
 
 // ---------------------------------------------------------------------------
 // Defaults — mirror the built-in defaults in pipeline/skeletonOverlay.ts.
@@ -145,18 +146,18 @@ export default function SkeletonStylePanel({
     <div ref={panelRef} className={cn("relative", className)}>
       {/* Trigger button. "icon" = plateless toolbar icon; "default" = bordered chip. */}
       {variant === "icon" ? (
-        <button
+        <ToolbarButton
           onClick={() => setOpen(o => !o)}
-          className="ui-icon-btn flex h-8 w-8 items-center justify-center"
           aria-expanded={open}
           aria-haspopup="dialog"
-          aria-label="Overlay"
-          title="Overlay"
-        >
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-          </svg>
-        </button>
+          title={label || "Overlay"}
+          label={label || "Overlay"}
+          icon={
+            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
+            </svg>
+          }
+        />
       ) : (
         <button
           onClick={() => setOpen(o => !o)}

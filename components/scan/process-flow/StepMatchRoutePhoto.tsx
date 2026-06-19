@@ -7,6 +7,7 @@ import FramePlayer from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
+import ToolbarButton from "@/components/scan/controls/ToolbarButton";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
@@ -156,32 +157,30 @@ export default function StepMatchRoutePhoto({
 
   // ── Plateless toolbar controls ────────────────────────────────────────────
   const changePhotoBtn = (
-    <button
-      type="button"
+    <ToolbarButton
       onClick={() => setShowPhotoChooser(true)}
-      className="ui-icon-btn flex h-8 w-8 items-center justify-center"
       title="Change photo"
-      aria-label="Change route photo"
-    >
-      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-      </svg>
-    </button>
+      label="Change"
+      icon={
+        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+        </svg>
+      }
+    />
   );
 
   const expandBtn = (
-    <button
-      type="button"
+    <ToolbarButton
       onClick={() => setRoutePhotoFullscreen(true)}
-      className="ui-icon-btn flex h-8 w-8 items-center justify-center"
-      aria-label="Expand route photo to fullscreen"
       title="Expand preview"
-    >
-      <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
-      </svg>
-    </button>
+      label="Expand"
+      icon={
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+        </svg>
+      }
+    />
   );
 
   const exportBtn = exportStatus !== "rendering" ? (
@@ -201,18 +200,17 @@ export default function StepMatchRoutePhoto({
   // ── Match stats popover (floating, after match) — Developer view only ──
   const matchStatsControl = advanced && matchStatus === "done" && matchResult ? (
     <div ref={matchStatsRef} className="relative">
-      <button
-        type="button"
+      <ToolbarButton
         onClick={() => setShowMatchStats(p => !p)}
-        className="ui-icon-btn flex h-8 w-8 items-center justify-center"
-        aria-label="Match statistics"
         aria-expanded={showMatchStats}
         title="Match statistics"
-      >
-        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-        </svg>
-      </button>
+        label="Stats"
+        icon={
+          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          </svg>
+        }
+      />
       {showMatchStats && (
         <div className="ui-popover absolute right-0 top-full z-30 mt-1.5 w-56 px-4 py-3">
           <div className="grid grid-cols-3 gap-3 text-center">
@@ -250,7 +248,7 @@ export default function StepMatchRoutePhoto({
       </div>
     ) : isFrameReady && skeletonData ? (
       <div className="ml-auto flex items-center gap-1">
-        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="" variant="icon" footer={<DeveloperViewToggle />} />
+        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="Overlay" variant="icon" footer={<DeveloperViewToggle />} />
         {matchStatsControl}
         {exportBtn}
       </div>
@@ -343,16 +341,16 @@ export default function StepMatchRoutePhoto({
         header={
           <header className="flex shrink-0 items-center justify-between border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
             <p className="text-sm font-medium text-fg">Route photo &mdash; frame the route</p>
-            <button
+            <ToolbarButton
               onClick={() => setRoutePhotoFullscreen(false)}
-              className="ui-icon-btn flex h-8 w-8 items-center justify-center"
-              aria-label="Close fullscreen (Escape)"
               title="Close fullscreen (Esc)"
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
-              </svg>
-            </button>
+              label="Close"
+              icon={
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+                </svg>
+              }
+            />
           </header>
         }
         footer={

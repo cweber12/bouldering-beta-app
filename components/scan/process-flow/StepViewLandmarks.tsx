@@ -11,7 +11,6 @@ import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle"
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { useAdvancedView } from "@/hooks/useAdvancedView";
-import { fitMediaMaxWidth } from "@/utils/mediaContainerStyle";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
@@ -102,15 +101,6 @@ export default function StepViewLandmarks({
   // Detection Preview has nothing to show, and Save/Test would be meaningless.
   const hasSkeleton = !!firstFrameSkeletonData;
 
-  // Fill the available vertical space with the overlay preview so it sits flush
-  // between the nav and footer without scrolling — both orientations reach the
-  // full height, width following the aspect ratio. Defaults to portrait (9:16).
-  const vm = activeAttempt?.videoMeta;
-  const previewW = vm && vm.height ? vm.width : 9;
-  const previewH = vm && vm.height ? vm.height : 16;
-  // Larger offset accounts for the purpose band shown above the preview.
-  const previewMaxWidth = fitMediaMaxWidth(previewW, previewH, "12.5rem");
-
   // ── Footer actions — only once results exist (with a skeleton) and before upload ──
   const showFooterActions = showResults && !s3Saved && hasSkeleton;
 
@@ -167,7 +157,7 @@ export default function StepViewLandmarks({
       <SkeletonStylePanel
         onChange={onSkeletonStyleChange}
         size="sm"
-        label=""
+        label="Overlay"
         variant="icon"
         footer={<DeveloperViewToggle />}
       />
@@ -251,10 +241,12 @@ export default function StepViewLandmarks({
           </div>
         )}
 
-        {/* ── Results — preview only, fit to viewport, no scroll ── */}
+        {/* ── Results — preview fills the stage, banners pinned above ── */}
         {(showResults || (!isProcessing && orbStatus === "failed") || processingError) && (
-          <div className="mx-auto flex h-full w-full max-w-2xl flex-col items-center justify-center gap-3 px-4 py-4 sm:px-6">
+          <div className="flex h-full w-full flex-col gap-3 px-4 py-4 sm:px-6">
 
+            {/* Banners — constrained + centered, never stretched to the stage width */}
+            <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 empty:hidden">
             {!isProcessing && orbStatus === "failed" && (
               <p className="text-center text-sm text-caution">
                 We couldn&rsquo;t read the wall texture, so placing your climb on a route photo isn&rsquo;t available. You can still save the scan.
@@ -289,9 +281,16 @@ export default function StepViewLandmarks({
 
             {saveError && <p className="w-full text-center text-xs text-danger">{saveError}</p>}
 
+            {processingError && (
+              <p className="w-full rounded-(--radius-panel) border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+                {processingError}
+              </p>
+            )}
+            </div>
+
             {/* No climber detected → explicit empty state instead of a dead spinner */}
             {showResults && !hasSkeleton && (
-              <div className="flex flex-col items-center gap-4 text-center">
+              <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 text-center">
                 <svg className="h-10 w-10 text-fg-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
                 </svg>
@@ -320,32 +319,24 @@ export default function StepViewLandmarks({
               </div>
             )}
 
-            {/* Animated preview */}
+            {/* Animated preview — fills the stage, fitting the full width and height */}
             {showResults && hasSkeleton && (
               firstFrameFile && firstFrameSkeletonData ? (
-                <div className="mx-auto w-full" style={{ maxWidth: previewMaxWidth }}>
-                  <FramePlayer
-                    ref={previewPlayerRef}
-                    imageFile={firstFrameFile}
-                    layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
-                    duration={firstFrameSkeletonData.duration}
-                    autoPlay
-                    holds={scanHolds.previewHolds}
-                    orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
-                    bare
-                    className="w-full rounded-none"
-                  />
-                </div>
+                <FramePlayer
+                  ref={previewPlayerRef}
+                  imageFile={firstFrameFile}
+                  layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
+                  duration={firstFrameSkeletonData.duration}
+                  autoPlay
+                  holds={scanHolds.previewHolds}
+                  orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
+                  fit="contain"
+                  bare
+                  className="min-h-0 flex-1 rounded-none"
+                />
               ) : (
-                <p className="text-xs text-fg-muted text-center">Loading preview&#8230;</p>
+                <p className="flex-1 text-xs text-fg-muted text-center">Loading preview&#8230;</p>
               )
-            )}
-
-            {/* Processing error */}
-            {processingError && (
-              <p className="w-full rounded-(--radius-panel) border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
-                {processingError}
-              </p>
             )}
           </div>
         )}
