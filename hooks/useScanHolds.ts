@@ -104,7 +104,8 @@ export function useScanHolds(attempt: RouteAttempt | null, editable: boolean): S
           a.firstUseTime - b.firstUseTime ||
           a.x - b.x ||
           a.y - b.y ||
-          a.kind.localeCompare(b.kind),
+          a.kind.localeCompare(b.kind) ||
+          (a.side ?? "right").localeCompare(b.side ?? "right"),
       )
       .map((hold, idx) => ({ hold, order: idx + 1 }));
   }, [holds]);
@@ -125,7 +126,7 @@ export function useScanHolds(attempt: RouteAttempt | null, editable: boolean): S
       const pt = limbContactAt(frame, kind, side);
       if (!pt) return false;
       // The add-frame timestamp is the Hold's first-use/reveal time.
-      persist([...holds, { x: pt.x, y: pt.y, kind, firstUseTime: frame.timestamp }]);
+      persist([...holds, { x: pt.x, y: pt.y, kind, side, firstUseTime: frame.timestamp }]);
       return true;
     },
     [ctx, editable, holds, persist],

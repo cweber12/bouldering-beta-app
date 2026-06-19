@@ -232,9 +232,10 @@ describe("detectHolds", () => {
     expect(holds).toHaveLength(0);
   });
 
-  it("merges a two-hand match at one spot into a single numbered Hold", () => {
-    // Left and right hands grip the same location — same kind + location, so the
-    // two Dwells collapse into one Hold rather than two stacked numbers.
+  it("keeps both hands on a shared hold as two distinct-side Holds", () => {
+    // Left and right hands grip the same location. Left and right are never merged
+    // (different sides), so the spot shows two Hand Holds — one per side — each
+    // numbered and, downstream, drawn its own colour/glyph.
     const frames: PoseFrame[] = DEFAULT_TS.map((t) => ({
       timestamp: t,
       keypoints: [
@@ -243,8 +244,9 @@ describe("detectHolds", () => {
       ],
     }));
     const holds = detectHolds(frames, project, BODY_SCALE);
-    expect(holds).toHaveLength(1);
-    expect(holds[0].kind).toBe("hand");
+    expect(holds).toHaveLength(2);
+    expect(holds.every((h) => h.kind === "hand")).toBe(true);
+    expect(new Set(holds.map((h) => h.side))).toEqual(new Set(["left", "right"]));
   });
 
   it("numbers Holds in one combined hand+foot first-use sequence", () => {

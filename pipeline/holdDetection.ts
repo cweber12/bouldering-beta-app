@@ -92,8 +92,14 @@ export type HoldProjector = (pt: Point, t: number) => Point;
 export interface Hold {
   /** Stable id derived from the assigned order (`hold-<order>`). */
   id: string;
-  /** Which limb kind used it — drives the marker colour. */
+  /** Which limb kind used it — pairs with `side` to drive the marker colour/glyph. */
   kind: "hand" | "foot";
+  /**
+   * Which side's limb used it. Left and right are kept distinct (never merged),
+   * so a hold used by both the right then left hand shows two marks, each its
+   * own colour. Legacy Holds without a stored side default to `"right"`.
+   */
+  side: "left" | "right";
   /** Location in Route Photo pixel space. */
   x: number;
   y: number;
@@ -444,9 +450,11 @@ function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions
 // ---------------------------------------------------------------------------
 
 /**
- * Collapse same-kind Dwells within the merge radius into one Hold located at —
- * and timed by — the earliest contributing Dwell, so a re-grip or a two-hand
- * match is one numbered Hold. Hand and foot Dwells never merge (different kinds).
+ * Collapse same-kind, **same-side** Dwells within the merge radius into one Hold
+ * located at — and timed by — the earliest contributing Dwell, so a re-grip with
+ * the same hand is one numbered Hold. A different limb (other side, or other
+ * kind) on the same spot stays a separate Hold, so a hold used by both hands
+ * shows both marks.
  */
 function mergeDwells(dwells: Dwell[], mergeRadius: number): Omit<Hold, "order" | "id">[] {
   // Earliest-first so the surviving cluster anchor is the first use.
@@ -454,10 +462,11 @@ function mergeDwells(dwells: Dwell[], mergeRadius: number): Omit<Hold, "order" |
   const holds: Omit<Hold, "order" | "id">[] = [];
   for (const d of sorted) {
     const existing = holds.find(
-      (h) => h.kind === d.kind && Math.hypot(h.x - d.x, h.y - d.y) <= mergeRadius,
+      (h) =>
+        h.kind === d.kind && h.side === d.side && Math.hypot(h.x - d.x, h.y - d.y) <= mergeRadius,
     );
-    if (existing) continue; // absorbed; the earlier anchor wins.
-    holds.push({ kind: d.kind, x: d.x, y: d.y, firstUseTime: d.firstUseTime });
+    if (existing) continue; // absorbed; the earlier same-side anchor wins.
+    holds.push({ kind: d.kind, side: d.side, x: d.x, y: d.y, firstUseTime: d.firstUseTime });
   }
   return holds;
 }
@@ -529,13 +538,15 @@ export function detectHolds(
   const merged = mergeDwells(dwells, resolved.mergeRadius);
 
   // One combined chronological sequence — colour already distinguishes the kind.
-  // Deterministic tie-break (time → x → y → kind) keeps numbering stable.
+  // Deterministic tie-break (time → x → y → kind → side) keeps numbering stable,
+  // including two same-spot holds that differ only by side (both hands on a hold).
   merged.sort(
     (a, b) =>
       a.firstUseTime - b.firstUseTime ||
       a.x - b.x ||
       a.y - b.y ||
-      a.kind.localeCompare(b.kind),
+      a.kind.localeCompare(b.kind) ||
+      a.side.localeCompare(b.side),
   );
 
   return merged.map((h, idx) => ({ ...h, order: idx + 1, id: `hold-${idx + 1}` }));
@@ -568,6 +579,7 @@ export function detectHoldsVideoSpace(
     x: h.x / width,
     y: h.y / height,
     kind: h.kind,
+    side: h.side,
     firstUseTime: h.firstUseTime,
   }));
 }
@@ -582,14 +594,16 @@ export function detectHoldsVideoSpace(
 export function projectStoredHolds(stored: StoredHold[], project: HoldProjector): Hold[] {
   const projected = stored.map((h) => {
     const p = project({ x: h.x, y: h.y }, h.firstUseTime);
-    return { kind: h.kind, x: p.x, y: p.y, firstUseTime: h.firstUseTime };
+    // Legacy authored Holds predate the stored side — default to "right".
+    return { kind: h.kind, side: h.side ?? "right", x: p.x, y: p.y, firstUseTime: h.firstUseTime };
   });
   projected.sort(
     (a, b) =>
       a.firstUseTime - b.firstUseTime ||
       a.x - b.x ||
       a.y - b.y ||
-      a.kind.localeCompare(b.kind),
+      a.kind.localeCompare(b.kind) ||
+      a.side.localeCompare(b.side),
   );
   return projected.map((h, idx) => ({ ...h, order: idx + 1, id: `hold-${idx + 1}` }));
 }

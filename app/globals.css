@@ -50,8 +50,11 @@
   --color-attempt-surface: #3d2200;  /* muted badge background */
 
   /* ─── Holds overlay markers (Route Overlay only) ────── */
-  --color-hand-hold:       #22d3ee;  /* cyan — Hand Hold disc */
-  --color-foot-hold:       #fb923c;  /* orange — Foot Hold disc */
+  /* Per-side glyph colours — hands cool, feet warm (see HOLD_COLORS). */
+  --color-hand-hold-left:  #22d3ee;  /* cyan-400 — left Hand */
+  --color-hand-hold-right: #818cf8;  /* indigo-400 — right Hand */
+  --color-foot-hold-left:  #fb923c;  /* orange-400 — left Foot */
+  --color-foot-hold-right: #f472b6;  /* pink-400 — right Foot */
 
   /* ─── Scanner glow ──────────────────────────────────── */
   --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
@@ -140,8 +143,10 @@
   --color-attempt-surface: #fef3c7;   /* amber-100 */
 
   /* ── Holds overlay markers — deeper for contrast on light ── */
-  --color-hand-hold:       #0891b2;   /* cyan-600 */
-  --color-foot-hold:       #ea580c;   /* orange-600 */
+  --color-hand-hold-left:  #0891b2;   /* cyan-600 — left Hand */
+  --color-hand-hold-right: #4f46e5;   /* indigo-600 — right Hand */
+  --color-foot-hold-left:  #ea580c;   /* orange-600 — left Foot */
+  --color-foot-hold-right: #db2777;   /* pink-600 — right Foot */
 
   /* ── Glow ────────────────────────────────────────────── */
   --color-glow: rgba(20, 83, 45, 0.14);

@@ -63,8 +63,13 @@ export interface StoredHold {
   x: number;
   /** Normalized [0,1] y in video-frame space. */
   y: number;
-  /** Which limb kind used it — drives the marker colour. */
+  /** Which limb kind used it — pairs with `side` to drive the marker colour/glyph. */
   kind: "hand" | "foot";
+  /**
+   * Which side's limb used it. Optional for backward compatibility: legacy
+   * authored Holds predate this field and default to `"right"` on load.
+   */
+  side?: "left" | "right";
   /** Absolute video time (seconds) the Climber first used this Hold. */
   firstUseTime: number;
 }

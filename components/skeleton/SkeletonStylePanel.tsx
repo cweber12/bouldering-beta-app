@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import type { HoldStyle } from "@/pipeline/holdsOverlay";
+import { holdColor, type HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
@@ -25,9 +25,13 @@ const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Holds pass defaults — mirror the tokens in globals.css / pipeline/holdsOverlay.ts. */
-const DEFAULT_HAND_HOLD_COLOR = "#22d3ee"; // cyan
-const DEFAULT_FOOT_HOLD_COLOR = "#fb923c"; // orange
+/** Per-side Holds legend — left / right hands and feet, four distinct colours. */
+const HOLD_LEGEND: { kind: "hand" | "foot"; side: "left" | "right"; label: string }[] = [
+  { kind: "hand", side: "left", label: "L hand" },
+  { kind: "hand", side: "right", label: "R hand" },
+  { kind: "foot", side: "left", label: "L foot" },
+  { kind: "foot", side: "right", label: "R foot" },
+];
 
 /** Best-effort hex extraction from a CSS color string (rgba / hex). */
 function cssToHex(css: string): string {
@@ -112,8 +116,6 @@ export default function SkeletonStylePanel({
 
   // ── Holds pass (independent of the pose overlay) ──
   const [holdsVisible, setHoldsVisible] = useState(true);
-  const [handColor,    setHandColor]    = useState(DEFAULT_HAND_HOLD_COLOR);
-  const [footColor,    setFootColor]    = useState(DEFAULT_FOOT_HOLD_COLOR);
 
   // Stable refs for the callbacks to avoid re-emitting on every parent render.
   const onChangeRef = useRef(onChange);
@@ -134,10 +136,11 @@ export default function SkeletonStylePanel({
     jointsVisible, jointColor, jointRadius,
   ]);
 
-  // Emit the Holds style whenever any Holds setting changes.
+  // Emit the Holds style whenever any Holds setting changes. Marker colours are
+  // fixed per side (see HOLD_COLORS), so only visibility is user-controlled here.
   useEffect(() => {
-    onHoldsChangeRef.current?.({ holdsVisible, handColor, footColor });
-  }, [holdsVisible, handColor, footColor]);
+    onHoldsChangeRef.current?.({ holdsVisible });
+  }, [holdsVisible]);
 
   // Close when clicking outside.
   useClickOutside(panelRef, () => setOpen(false), open);
@@ -261,27 +264,20 @@ export default function SkeletonStylePanel({
           {/* ── Holds (independent overlay pass) ── */}
           {onHoldsChange && (
             <div className="flex flex-col gap-2 border-t border-edge/60 pt-3">
-              <div className="flex items-center gap-2">
-                <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-                  <input type="checkbox" checked={holdsVisible}
-                    onChange={e => setHoldsVisible(e.target.checked)}
-                    className="accent-accent rounded" />
-                  Holds
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
-                  <input type="color" value={cssToHex(handColor)}
-                    onChange={e => setHandColor(e.target.value)}
-                    className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
-                    title="Hand Hold colour" />
-                  Hands
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
-                  <input type="color" value={cssToHex(footColor)}
-                    onChange={e => setFootColor(e.target.value)}
-                    className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
-                    title="Foot Hold colour" />
-                  Feet
-                </label>
+              <label className="flex items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+                <input type="checkbox" checked={holdsVisible}
+                  onChange={e => setHoldsVisible(e.target.checked)}
+                  className="accent-accent rounded" />
+                Holds
+              </label>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                {HOLD_LEGEND.map(({ kind, side, label }) => (
+                  <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted select-none">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: holdColor(kind, side) }} aria-hidden="true" />
+                    {label}
+                  </span>
+                ))}
               </div>
             </div>
           )}

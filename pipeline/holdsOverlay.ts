@@ -3,18 +3,22 @@
  *
  * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo. To
  * mark the spot the climber used *without covering it up*, the marker is a
- * translucent hand / foot **glyph** (the limb that used the hold) tinted soft
- * cyan (hand) / orange (foot) with a soft same-colour glow and **no border**. The
- * number is set off to the side as black-on-white, tethered to the glyph by a
- * leader line. Each Hold's number is pushed to the **outer** side of the route —
- * left of the holds' mean x goes further left, right of it goes further right —
- * so the digits sit away from the wall and the holds stay easy to see. Labels are
- * placed greedily in first-use order so they never overlap one another or a glyph.
+ * translucent hand / foot **glyph** of the actual limb that used the hold —
+ * oriented left / right to match the side and tinted a per-side colour (left and
+ * right hands and feet are four distinct colours) with a soft same-colour glow
+ * and **no border**. The number is set off to the side as black-on-white,
+ * tethered to the glyph by a leader line. Each Hold's number is pushed to the
+ * **outer** side of the route — left of the holds' mean x goes further left,
+ * right of it goes further right — so the digits sit away from the wall and the
+ * holds stay easy to see. Labels are placed greedily in first-use order so they
+ * never overlap one another or a glyph.
+ *
+ * Left and right limbs are never merged in detection, so a hold used by both
+ * hands (right then left) yields two Holds at the same spot; co-located glyphs
+ * are fanned apart horizontally here so both marks read.
  *
  * The hand / foot shape comes from a single SVG path each (viewBox-square); the
- * left variant is just the right one mirrored horizontally. Which side's glyph a
- * Hold gets follows the same mean-x split as its label, since the detected Hold
- * carries only its kind (hand / foot), not which hand or foot used it.
+ * left variant is just the right one mirrored horizontally.
  *
  * Markers reveal progressively: only Holds whose `firstUseTime ≤ t` are drawn, so
  * a marker pops in when the limb first lands and persists to the end.
@@ -29,13 +33,28 @@
 import type { Hold } from "@/pipeline/holdDetection";
 
 // ---------------------------------------------------------------------------
-// Defaults (× body scale unless noted)
+// Per-side marker colours
+//
+// Four distinct, site-cohesive hues: hands cool (cyan / indigo), feet warm
+// (orange / pink), with left and right clearly separated within each pair. Kept
+// in sync with the `--color-*-hold-*` tokens in app/globals.css and reused by the
+// scan Holds editor / style panel so the legend matches the overlay.
 // ---------------------------------------------------------------------------
 
-/** Hand Hold glyph colour — cyan (mirrors `--color-hand-hold`). */
-const DEFAULT_HAND_COLOR = "#22d3ee";
-/** Foot Hold glyph colour — orange (mirrors `--color-foot-hold`). */
-const DEFAULT_FOOT_COLOR = "#fb923c";
+export const HOLD_COLORS = {
+  hand: { left: "#22d3ee", right: "#818cf8" },
+  foot: { left: "#fb923c", right: "#f472b6" },
+} as const;
+
+/** Marker colour for a limb kind + side. */
+export function holdColor(kind: "hand" | "foot", side: "left" | "right"): string {
+  return HOLD_COLORS[kind][side];
+}
+
+// ---------------------------------------------------------------------------
+// Other defaults (× body scale unless noted)
+// ---------------------------------------------------------------------------
+
 /** Number label background — white. */
 const DEFAULT_LABEL_COLOR = "#ffffff";
 /** Number text — near-black for contrast on the white label. */
@@ -54,6 +73,8 @@ const GLOW_BLUR_FRAC = 0.45;
 const LEADER_WIDTH_FRAC = 0.06;
 /** Number label font size × body scale. */
 const LABEL_FONT_FRAC = 0.26;
+/** Co-located glyph fan-out spacing × glyph half-extent (shared-hold spread). */
+const CLUSTER_SPACING_FRAC = 1.25;
 
 // ---------------------------------------------------------------------------
 // Glyph geometry — hand / foot SVG path data
@@ -147,7 +168,7 @@ function rectCircleOverlap(r: Rect, cx: number, cy: number, cr: number): boolean
 const LEFT_ANGLES = [Math.PI, (-3 * Math.PI) / 4, (3 * Math.PI) / 4, -Math.PI / 2, Math.PI / 2];
 const RIGHT_ANGLES = [0, -Math.PI / 4, Math.PI / 4, -Math.PI / 2, Math.PI / 2];
 
-/** A glyph to draw at a Hold. */
+/** A glyph to draw at a Hold (centre already adjusted for shared-hold fan-out). */
 interface GlyphUnit {
   cx: number;
   cy: number;
@@ -192,10 +213,6 @@ function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): 
 export interface HoldStyle {
   /** Draw the Holds pass. Default true (callers usually gate via the panel). */
   holdsVisible?: boolean;
-  /** Hand Hold glyph colour. Default {@link DEFAULT_HAND_COLOR}. */
-  handColor?: string;
-  /** Foot Hold glyph colour. Default {@link DEFAULT_FOOT_COLOR}. */
-  footColor?: string;
   /** Number label background colour. Default {@link DEFAULT_LABEL_COLOR}. */
   labelColor?: string;
   /** Number text colour. Default {@link DEFAULT_NUMBER_COLOR}. */
@@ -235,10 +252,47 @@ const planCache = new WeakMap<HTMLCanvasElement, PlanCacheEntry>();
 interface PlanSizes {
   r: number;
   fontPx: number;
-  handColor: string;
-  footColor: string;
   w: number;
   h: number;
+}
+
+/**
+ * Fan co-located Holds apart horizontally so left and right marks on a shared
+ * hold both read. Holds whose centres fall within one glyph half-extent are one
+ * cluster; a cluster of n is spread evenly about its centroid, left side first.
+ */
+function spreadClusters(
+  holds: Hold[],
+  r: number,
+): { hold: Hold; cx: number; cy: number }[] {
+  const clusters: Hold[][] = [];
+  for (const hold of holds) {
+    const cluster = clusters.find((c) =>
+      c.some((o) => Math.hypot(o.x - hold.x, o.y - hold.y) <= r),
+    );
+    if (cluster) cluster.push(hold);
+    else clusters.push([hold]);
+  }
+
+  const out: { hold: Hold; cx: number; cy: number }[] = [];
+  const spacing = CLUSTER_SPACING_FRAC * r;
+  for (const cluster of clusters) {
+    if (cluster.length === 1) {
+      out.push({ hold: cluster[0], cx: cluster[0].x, cy: cluster[0].y });
+      continue;
+    }
+    const cx0 = cluster.reduce((s, h) => s + h.x, 0) / cluster.length;
+    const cy0 = cluster.reduce((s, h) => s + h.y, 0) / cluster.length;
+    // Left limbs to the left, right to the right; stable by first-use order.
+    const ordered = [...cluster].sort((a, b) =>
+      a.side === b.side ? a.order - b.order : a.side === "left" ? -1 : 1,
+    );
+    ordered.forEach((hold, i) => {
+      const dx = (i - (ordered.length - 1) / 2) * spacing;
+      out.push({ hold, cx: cx0 + dx, cy: cy0 });
+    });
+  }
+  return out;
 }
 
 /**
@@ -251,23 +305,29 @@ function buildHoldsPlan(
   revealed: (hold: Hold) => boolean,
   sizes: PlanSizes,
 ): RenderPlan {
-  const { r, fontPx, handColor, footColor, w, h } = sizes;
+  const { r, fontPx, w, h } = sizes;
 
-  // Mean x over *all* Holds (not just the revealed ones) so a Hold's side — and
-  // therefore its glyph orientation and label direction — stays fixed as the
-  // sequence reveals rather than jumping when a new Hold appears.
+  // Mean x over *all* Holds (not just the revealed ones) so a Hold's label
+  // direction stays fixed as the sequence reveals rather than jumping when a new
+  // Hold appears.
   const meanX = holds.reduce((sum, hold) => sum + hold.x, 0) / holds.length;
+
+  const revealedHolds = [...holds].sort((a, b) => a.order - b.order).filter(revealed);
+  if (revealedHolds.length === 0) return { glyphs: [], placed: [] };
 
   const glyphs: GlyphUnit[] = [];
   const labels: LabelUnit[] = [];
-  for (const hold of [...holds].sort((a, b) => a.order - b.order)) {
-    if (!revealed(hold)) continue;
-    const color = hold.kind === "hand" ? handColor : footColor;
-    const side: "left" | "right" = hold.x < meanX ? "left" : "right";
-    glyphs.push({ cx: hold.x, cy: hold.y, kind: hold.kind, side, color });
-    labels.push({ order: hold.order, color, dcx: hold.x, dcy: hold.y, prefer: side });
+  for (const { hold, cx, cy } of spreadClusters(revealedHolds, r)) {
+    const color = holdColor(hold.kind, hold.side);
+    glyphs.push({ cx, cy, kind: hold.kind, side: hold.side, color });
+    labels.push({
+      order: hold.order,
+      color,
+      dcx: cx,
+      dcy: cy,
+      prefer: hold.x < meanX ? "left" : "right",
+    });
   }
-  if (glyphs.length === 0) return { glyphs, placed: [] };
 
   // Font must be set before measureText so label widths are correct.
   ctx.font = `bold ${fontPx}px sans-serif`;
@@ -334,7 +394,7 @@ function buildHoldsPlan(
  *                    and `firstUseTime` in the same clock as `t`.
  * @param t         - Current playback time (seconds). Holds first used after this
  *                    are not yet drawn (progressive, cumulative reveal).
- * @param style     - Optional colour / size overrides.
+ * @param style     - Optional label colour / size overrides.
  * @param bodyScale - Photo-space body scale (px) the glyph extent multiplies by.
  */
 export function drawHolds(
@@ -347,8 +407,6 @@ export function drawHolds(
   if (style?.holdsVisible === false) return;
   if (holds.length === 0) return;
 
-  const handColor = style?.handColor ?? DEFAULT_HAND_COLOR;
-  const footColor = style?.footColor ?? DEFAULT_FOOT_COLOR;
   const labelColor = style?.labelColor ?? DEFAULT_LABEL_COLOR;
   const numberColor = style?.numberColor ?? DEFAULT_NUMBER_COLOR;
   const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
@@ -367,13 +425,13 @@ export function drawHolds(
   // high-water reveal that revealed set only grows, so the plan is recomputed at
   // most once per reveal and reused on every frame in between (ADR 0009).
   const revealedSig = holds.filter(revealed).map((hold) => hold.id).join(",");
-  const sig = `${w}x${h}|${r}|${fontPx}|${handColor}|${footColor}|${revealedSig}`;
+  const sig = `${w}x${h}|${r}|${fontPx}|${revealedSig}`;
   const cached = planCache.get(ctx.canvas);
   let plan: RenderPlan;
   if (cached && cached.holds === holds && cached.sig === sig) {
     plan = cached.plan;
   } else {
-    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, handColor, footColor, w, h });
+    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, w, h });
     planCache.set(ctx.canvas, { holds, sig, plan });
   }
   const { glyphs, placed } = plan;

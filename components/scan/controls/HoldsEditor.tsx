@@ -4,11 +4,8 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
+import { holdColor } from "@/pipeline/holdsOverlay";
 import type { HoldEntry } from "@/hooks/useScanHolds";
-
-/** Hand / Foot Hold marker colours — mirror the tokens in holdsOverlay.ts. */
-const HAND_COLOR = "#22d3ee";
-const FOOT_COLOR = "#fb923c";
 
 export interface HoldsEditorProps {
   /** Current Holds with their re-derived numbers, sorted by first use. */
@@ -75,7 +72,7 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                 >
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: kind === "hand" ? HAND_COLOR : FOOT_COLOR }}
+                    style={{ backgroundColor: holdColor(kind, side) }}
                     aria-hidden="true"
                   />
                   {label}
@@ -99,11 +96,14 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                   >
                     <span
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-fg-inverse"
-                      style={{ backgroundColor: entry.hold.kind === "hand" ? HAND_COLOR : FOOT_COLOR }}
+                      style={{ backgroundColor: holdColor(entry.hold.kind, entry.hold.side ?? "right") }}
                     >
                       {entry.order}
                     </span>
-                    <span className="flex-1 capitalize">{entry.hold.kind}</span>
+                    <span className="flex-1 capitalize">
+                      {entry.hold.side ? `${entry.hold.side} ` : ""}
+                      {entry.hold.kind}
+                    </span>
                     <button
                       type="button"
                       onClick={() => onRemove(entry)}

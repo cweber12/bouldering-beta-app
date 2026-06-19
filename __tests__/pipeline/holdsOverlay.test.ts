@@ -40,8 +40,8 @@ function makeCtx(width = 1000, height = 1000) {
 }
 
 const HOLDS: Hold[] = [
-  { id: "hold-1", kind: "hand", x: 250, y: 400, firstUseTime: 1, order: 1 },
-  { id: "hold-2", kind: "foot", x: 700, y: 800, firstUseTime: 2, order: 2 },
+  { id: "hold-1", kind: "hand", side: "left", x: 250, y: 400, firstUseTime: 1, order: 1 },
+  { id: "hold-2", kind: "foot", side: "right", x: 700, y: 800, firstUseTime: 2, order: 2 },
 ];
 
 const BODY_SCALE = 100;
