@@ -42,8 +42,8 @@ import type { Hold } from "@/pipeline/holdDetection";
 // ---------------------------------------------------------------------------
 
 export const HOLD_COLORS = {
-  hand: { left: "#22d3ee", right: "#818cf8" },
-  foot: { left: "#fb923c", right: "#f472b6" },
+  hand: { left: "#FFFFFF", right: "#DDDDDD" },
+  foot: { left: "#000000", right: "#333333" },
 } as const;
 
 /** Marker colour for a limb kind + side. */
