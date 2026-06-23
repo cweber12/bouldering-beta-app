@@ -30,6 +30,7 @@ import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
+import ScanLoadingOverlay from "@/components/scan/process-flow/ScanLoadingOverlay";
 import MetadataBottomSheet, {
   type MetadataSheetLocation,
   type MetadataSheetRunDetails,
@@ -133,7 +134,7 @@ function ScanPageInner() {
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics } =
+  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, currentFrameImage, currentClimberCrop } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
   const { matchImage, estimateCrop, autoFrameStatus, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
@@ -290,6 +291,12 @@ function ScanPageInner() {
   const isDone       = status === "done";
   const orbReady     = orbStatus === "ready";
 
+  // Full-bleed loading view: shown from the moment Scan is pressed until results
+  // are ready — through the seek loop (isProcessing) and the post-loop tail
+  // where ORB extraction still runs (status done, orbStatus extracting).
+  const scanFinishing  = isDone && orbStatus === "extracting";
+  const showScanLoading = step === "landmarks" && (isProcessing || scanFinishing);
+
   // Active attempt — only from the current scan session
   const activeAttemptId = isDone ? attemptId : null;
   const activeAttempt   = activeAttemptId ? (getAttempt(activeAttemptId) ?? null) : null;
@@ -436,6 +443,13 @@ function ScanPageInner() {
       refineStride: cfg.refineStride,
     });
     setStep("landmarks");
+  }
+
+  // Abort an in-flight scan from the loading view and return to detection so the
+  // user can re-frame and try again.
+  function handleCancelScan() {
+    resetProcessor();
+    setStep("detection");
   }
 
   function handleViewOnRoutePhoto(file: File) {
@@ -717,6 +731,18 @@ function ScanPageInner() {
           onDeleteFromDevice={handleDeleteFromDevice}
           saveError={saveError}
           matchDiagnostics={matchDiagnostics}
+        />
+      )}
+
+      {/* Full-bleed scan loading view — covers the chrome while the scan runs */}
+      {showScanLoading && (
+        <ScanLoadingOverlay
+          frameImage={currentFrameImage}
+          manualCropTop={climberCrop.y}
+          adaptiveCrop={currentClimberCrop}
+          progressPct={progressPct}
+          finishing={!isProcessing || progressPct >= 100}
+          onCancel={handleCancelScan}
         />
       )}
 

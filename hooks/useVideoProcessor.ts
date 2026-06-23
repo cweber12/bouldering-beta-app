@@ -181,6 +181,18 @@ export interface VideoProcessorResult {
    * extraction. Null until ready; consumed by the dev-only DiagnosticsPanel.
    */
   scanDiagnostics: ScanDiagnostics | null;
+  /**
+   * A live, downscaled snapshot of the frame currently being scanned, refreshed
+   * on each detection frame. Drives the full-bleed loading view so the user sees
+   * the scan read up the wall. Null before the first detection frame.
+   */
+  currentFrameImage: ImageData | null;
+  /**
+   * The current Adaptive Crop as a frame fraction, refreshed alongside
+   * {@link currentFrameImage}. The loading view's green band grows from the
+   * frame bottom up to this crop's top. Null until the Climber is first found.
+   */
+  currentClimberCrop: CropFraction | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -216,6 +228,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanDiagnostics, setScanDiagnostics] = useState<ScanDiagnostics | null>(null);
+  const [currentFrameImage, setCurrentFrameImage] = useState<ImageData | null>(null);
+  const [currentClimberCrop, setCurrentClimberCrop] = useState<CropFraction | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -250,6 +264,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setFirstFrameFile(null);
       setErrorMessage(null);
       setScanDiagnostics(null);
+      setCurrentFrameImage(null);
+      setCurrentClimberCrop(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -279,6 +295,18 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const { duration, videoWidth, videoHeight } = video;
         canvas.width = videoWidth;
         canvas.height = videoHeight;
+
+        // Downscaled preview canvas for the live loading view: a low-res copy of
+        // the frame currently being scanned. Full-res snapshots in React state
+        // would be needless megabytes; a loading frame only needs to read.
+        const PREVIEW_MAX = 540;
+        const previewScale = Math.min(1, PREVIEW_MAX / Math.max(videoWidth, videoHeight));
+        const previewW = Math.max(1, Math.round(videoWidth * previewScale));
+        const previewH = Math.max(1, Math.round(videoHeight * previewScale));
+        const framePreviewCanvas = document.createElement("canvas");
+        framePreviewCanvas.width = previewW;
+        framePreviewCanvas.height = previewH;
+        const framePreviewCtx = framePreviewCanvas.getContext("2d", { willReadFrequently: true });
 
         const totalFrameCount = Math.ceil((duration * 1000) / frameIntervalMs);
         const startFrame = startTime > 0 ? Math.floor((startTime * 1000) / frameIntervalMs) : 0;
@@ -570,6 +598,23 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             if (detectionFrameCount % POSE_REANALYSIS_INTERVAL === 0) {
               const reData = ctx.getImageData(0, 0, videoWidth, videoHeight);
               currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
+            }
+
+            // Surface a live, downscaled snapshot of the frame being scanned plus
+            // the current Adaptive Crop, so the loading view shows the scan reading
+            // up the wall with the green band tracking the Climber. Updated on
+            // detection frames — the same cadence at which lastClimberBox changes.
+            if (framePreviewCtx && mountedRef.current) {
+              framePreviewCtx.drawImage(canvas, 0, 0, videoWidth, videoHeight, 0, 0, previewW, previewH);
+              setCurrentFrameImage(framePreviewCtx.getImageData(0, 0, previewW, previewH));
+              if (lastClimberBox) {
+                setCurrentClimberCrop({
+                  x: lastClimberBox.x / videoWidth,
+                  y: lastClimberBox.y / videoHeight,
+                  w: lastClimberBox.width / videoWidth,
+                  h: lastClimberBox.height / videoHeight,
+                });
+              }
             }
           }
 
@@ -976,6 +1021,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setFirstFrameFile(null);
       setErrorMessage(null);
       setScanDiagnostics(null);
+      setCurrentFrameImage(null);
+      setCurrentClimberCrop(null);
     }
   }, []);
 
@@ -988,5 +1035,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, currentFrameImage, currentClimberCrop };
 }
