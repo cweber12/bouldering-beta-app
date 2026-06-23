@@ -6,6 +6,12 @@
 > consequence are reversed there. Holds are now detected in video-frame space at
 > scan time, editable, and saved with the Run. Panning Capture and legacy Runs
 > still follow this ADR.
+>
+> **Marker labeling superseded by [ADR 0010](0010-on-glyph-hold-numbering.md).** The
+> white-number-disc marker described in the consequences below is replaced by an
+> on-glyph number (the digit drawn on the hand / foot glyph itself); the leader lines
+> and outer-side label placement that grew on top of it are removed. The Hold
+> inference and reveal behaviour here are unchanged.
 
 A third overlay pass, **Holds**, marks where the **Climber**'s hands and feet were
 used on the wall, numbered in the order they were first used. A Hold is **inferred

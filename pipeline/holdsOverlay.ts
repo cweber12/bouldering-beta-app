@@ -1,17 +1,16 @@
 /**
  * Holds overlay drawing for CanvasRenderingContext2D.
  *
- * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo. To
- * mark the spot the climber used *without covering it up*, the marker is a
- * translucent hand / foot **glyph** of the actual limb that used the hold —
- * oriented left / right to match the side and tinted a per-side colour (left and
- * right hands and feet are four distinct colours) with a soft same-colour glow
- * and **no border**. The number is set off to the side as black-on-white,
- * tethered to the glyph by a leader line. Each Hold's number is pushed to the
- * **outer** side of the route — left of the holds' mean x goes further left,
- * right of it goes further right — so the digits sit away from the wall and the
- * holds stay easy to see. Labels are placed greedily in first-use order so they
- * never overlap one another or a glyph.
+ * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo /
+ * Detection Preview. The marker is a hand / foot **glyph** of the actual limb
+ * that used the hold — oriented left / right to match the side, given a crisp
+ * full-opacity stroke in its per-side colour and a lighter translucent fill so
+ * the wall hold reads through. The Hold's number is drawn **on the glyph
+ * itself**, centred at the limb's contact point, in a colour + halo derived from
+ * the glyph's luminance so the digit always contrasts against the glyph (dark
+ * digit + light halo on light glyphs, light digit + dark halo on dark ones) and
+ * against the rock showing through. No leader lines, no off-to-the-side label
+ * chips, no greedy placement — the number is the Hold (ADR 0010).
  *
  * Left and right limbs are never merged in detection, so a hold used by both
  * hands (right then left) yields two Holds at the same spot; co-located glyphs
@@ -24,7 +23,9 @@
  * a marker pops in when the limb first lands and persists to the end.
  *
  * Sizes are multipliers of the photo-space `bodyScale`, mirroring the Skeleton
- * overlay, so markers look identical at any photo resolution.
+ * overlay, so markers look identical at any photo resolution. The per-frame cost
+ * is trivial (a glyph + a centred number each), so geometry is computed inline
+ * without a cache.
  *
  * Framework-agnostic — no React imports. Keep it that way so a future baked-in
  * WebM path can reuse it.
@@ -35,8 +36,7 @@ import type { Hold } from "@/pipeline/holdDetection";
 // ---------------------------------------------------------------------------
 // Per-side marker colours
 //
-// Four distinct, site-cohesive hues: hands cool (cyan / indigo), feet warm
-// (orange / pink), with left and right clearly separated within each pair. Kept
+// Hands light, feet dark, with left and right separated within each pair. Kept
 // in sync with the `--color-*-hold-*` tokens in app/globals.css and reused by the
 // scan Holds editor / style panel so the legend matches the overlay.
 // ---------------------------------------------------------------------------
@@ -55,26 +55,53 @@ export function holdColor(kind: "hand" | "foot", side: "left" | "right"): string
 // Other defaults (× body scale unless noted)
 // ---------------------------------------------------------------------------
 
-/** Number label background — white. */
-const DEFAULT_LABEL_COLOR = "#ffffff";
-/** Number text — near-black for contrast on the white label. */
-const DEFAULT_NUMBER_COLOR = "#0b0f14";
 /** Glyph half-extent × body scale (the marked spot's footprint radius). */
 const DEFAULT_HOLD_RADIUS = 0.35;
 /**
- * Glyph fill opacity. Translucent so the actual wall hold reads through, but
- * solid enough that the silhouette is the clearly-visible marker now that there
- * is no border ring carrying the colour.
+ * Glyph fill opacity. Lighter than the old borderless glyph so the actual wall
+ * hold reads through; the crisp full-opacity stroke carries the shape and colour.
  */
-const DEFAULT_FILL_OPACITY = 0.55;
-/** Glow blur as a fraction of the glyph half-extent. */
-const GLOW_BLUR_FRAC = 0.45;
-/** Leader-line width as a fraction of the glyph half-extent. */
-const LEADER_WIDTH_FRAC = 0.06;
-/** Number label font size × body scale. */
+const DEFAULT_FILL_OPACITY = 0.35;
+/** Glyph stroke width as a fraction of the glyph half-extent (device px). */
+const STROKE_WIDTH_FRAC = 0.12;
+/** Number font size × body scale. */
 const LABEL_FONT_FRAC = 0.26;
+/** Number halo (outline) width as a fraction of the font size. */
+const HALO_WIDTH_FRAC = 0.16;
 /** Co-located glyph fan-out spacing × glyph half-extent (shared-hold spread). */
 const CLUSTER_SPACING_FRAC = 1.25;
+
+// ---------------------------------------------------------------------------
+// Number contrast
+//
+// The number colour + halo are derived from the glyph colour's luminance so the
+// digit pops off the glyph whatever its colour (light glyphs → dark digit, dark
+// glyphs → light digit) and the opposite-colour halo separates it from busy rock
+// showing through the lightened fill (ADR 0010).
+// ---------------------------------------------------------------------------
+
+const DARK_DIGIT = "#0b0f14";
+const LIGHT_DIGIT = "#ffffff";
+const LIGHT_HALO = "rgba(255,255,255,0.9)";
+const DARK_HALO = "rgba(0,0,0,0.85)";
+
+/** Relative luminance (0–1) of a `#rgb` / `#rrggbb` colour; 1 for unparseable. */
+function hexLuminance(hex: string): number {
+  let h = hex.trim().replace("#", "");
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  if (h.length < 6) return 1;
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Number fill + halo for a glyph of the given colour. */
+function numberContrast(glyphColor: string): { digit: string; halo: string } {
+  return hexLuminance(glyphColor) > 0.5
+    ? { digit: DARK_DIGIT, halo: LIGHT_HALO }
+    : { digit: LIGHT_DIGIT, halo: DARK_HALO };
+}
 
 // ---------------------------------------------------------------------------
 // Glyph geometry — hand / foot SVG path data
@@ -82,8 +109,8 @@ const CLUSTER_SPACING_FRAC = 1.25;
 // One path per kind, taken from the source SVGs (square viewBox). The left
 // variant is the right path mirrored about the vertical centre line, so only the
 // "right" path is stored. Path2D is constructed lazily and cached; it is absent
-// in jsdom (no `canvas` package), so `glyphPath` returns null there and the draw
-// falls back to labels-only — exactly what the layout-caching tests rely on.
+// in jsdom (no `canvas` package), so `glyphPath` returns null there and the glyph
+// fill/stroke is skipped while the centred number still draws.
 // ---------------------------------------------------------------------------
 
 const HAND_PATH =
@@ -111,7 +138,7 @@ function glyphPath(kind: "hand" | "foot"): Path2D | null {
 /**
  * Draw one hand / foot glyph centred at `(cx, cy)`, scaled so its viewBox spans
  * `size` px, mirrored horizontally for the left variant, tinted `color` at
- * `opacity` with a soft same-colour glow and no border.
+ * `fillOpacity` with a crisp full-opacity stroke of the same colour.
  */
 function drawGlyph(
   ctx: CanvasRenderingContext2D,
@@ -121,8 +148,8 @@ function drawGlyph(
   cy: number,
   size: number,
   color: string,
-  opacity: number,
-  glowBlur: number,
+  fillOpacity: number,
+  strokeWidth: number,
 ): void {
   const path = glyphPath(kind);
   if (!path) return;
@@ -132,128 +159,32 @@ function drawGlyph(
   ctx.translate(cx, cy);
   ctx.scale(side === "left" ? -s : s, s);
   ctx.translate(-vb / 2, -vb / 2);
-  ctx.globalAlpha = opacity;
+  // Translucent fill so the wall hold reads through.
+  ctx.globalAlpha = fillOpacity;
   ctx.fillStyle = color;
-  ctx.shadowColor = color;
-  // shadowBlur is applied in output (device) space, unaffected by the CTM, so
-  // pass the px blur directly rather than dividing by the glyph scale.
-  ctx.shadowBlur = glowBlur;
   ctx.fill(path);
+  // Crisp full-opacity stroke carries the shape + colour. lineWidth is in the
+  // scaled path space, so divide the desired device width by the glyph scale.
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = strokeWidth / s;
+  ctx.strokeStyle = color;
+  ctx.lineJoin = "round";
+  ctx.stroke(path);
   ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
-// Geometry helpers
+// Geometry helper — shared-hold fan-out
 // ---------------------------------------------------------------------------
-
-interface Rect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-function rectsOverlap(a: Rect, b: Rect): boolean {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-}
-
-/** Does an axis-aligned rect overlap a circle? */
-function rectCircleOverlap(r: Rect, cx: number, cy: number, cr: number): boolean {
-  const nx = Math.max(r.x, Math.min(cx, r.x + r.w));
-  const ny = Math.max(r.y, Math.min(cy, r.y + r.h));
-  return Math.hypot(cx - nx, cy - ny) < cr;
-}
-
-/** Candidate label directions biased outward to the left / right of the route. */
-const LEFT_ANGLES = [Math.PI, (-3 * Math.PI) / 4, (3 * Math.PI) / 4, -Math.PI / 2, Math.PI / 2];
-const RIGHT_ANGLES = [0, -Math.PI / 4, Math.PI / 4, -Math.PI / 2, Math.PI / 2];
 
 /** A glyph to draw at a Hold (centre already adjusted for shared-hold fan-out). */
 interface GlyphUnit {
   cx: number;
   cy: number;
+  order: number;
   kind: "hand" | "foot";
   side: "left" | "right";
   color: string;
-}
-
-/** A number label to place, tethered to its glyph by a leader. */
-interface LabelUnit {
-  order: number;
-  color: string;
-  /** Glyph centre — the leader starts at the glyph edge toward the label. */
-  dcx: number;
-  dcy: number;
-  /** Side of the route's mean x this Hold sits on — labels push that way. */
-  prefer: "left" | "right";
-}
-
-interface Placed {
-  unit: LabelUnit;
-  /** Label rect. */
-  rect: Rect;
-  /** Label centre. */
-  cx: number;
-  cy: number;
-}
-
-/** Path a (optionally rounded) rect, falling back to a plain rect on engines
- *  without `roundRect` (jsdom / older canvas). */
-function pathRoundRect(ctx: CanvasRenderingContext2D, r: Rect, radius: number): void {
-  ctx.beginPath();
-  if (typeof ctx.roundRect === "function") ctx.roundRect(r.x, r.y, r.w, r.h, radius);
-  else ctx.rect(r.x, r.y, r.w, r.h);
-}
-
-// ---------------------------------------------------------------------------
-// Style options
-// ---------------------------------------------------------------------------
-
-/** Style options for the Holds pass. All optional; unset fields use defaults. */
-export interface HoldStyle {
-  /** Draw the Holds pass. Default true (callers usually gate via the panel). */
-  holdsVisible?: boolean;
-  /** Number label background colour. Default {@link DEFAULT_LABEL_COLOR}. */
-  labelColor?: string;
-  /** Number text colour. Default {@link DEFAULT_NUMBER_COLOR}. */
-  numberColor?: string;
-  /** Glyph half-extent × body scale. Default {@link DEFAULT_HOLD_RADIUS}. */
-  radius?: number;
-  /** Glyph fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
-  fillOpacity?: number;
-}
-
-// ---------------------------------------------------------------------------
-// Cached render plan
-//
-// The greedy label layout is the per-frame cost the static-Holds change removes
-// (ADR 0009). The plan — glyph geometry + placed label rects — depends only on
-// the Holds, the canvas size, the style sizes, and *which* Holds are revealed.
-// With high-water reveal the revealed set only grows, so the plan is recomputed
-// at most once per reveal and reused on every frame in between, keyed per canvas.
-// ---------------------------------------------------------------------------
-
-/** The time-independent geometry rendered each frame for a given revealed set. */
-interface RenderPlan {
-  glyphs: GlyphUnit[];
-  placed: Placed[];
-}
-
-interface PlanCacheEntry {
-  holds: Hold[];
-  sig: string;
-  plan: RenderPlan;
-}
-
-/** Per-canvas plan cache. WeakMap so a discarded canvas frees its entry. */
-const planCache = new WeakMap<HTMLCanvasElement, PlanCacheEntry>();
-
-/** Sizes the plan geometry depends on (derived from style + body scale). */
-interface PlanSizes {
-  r: number;
-  fontPx: number;
-  w: number;
-  h: number;
 }
 
 /**
@@ -295,91 +226,18 @@ function spreadClusters(
   return out;
 }
 
-/**
- * Build the glyph + label geometry for the currently-revealed Holds. Pure
- * geometry — no drawing — so the result can be cached and replayed each frame.
- */
-function buildHoldsPlan(
-  ctx: CanvasRenderingContext2D,
-  holds: Hold[],
-  revealed: (hold: Hold) => boolean,
-  sizes: PlanSizes,
-): RenderPlan {
-  const { r, fontPx, w, h } = sizes;
+// ---------------------------------------------------------------------------
+// Style options
+// ---------------------------------------------------------------------------
 
-  // Mean x over *all* Holds (not just the revealed ones) so a Hold's label
-  // direction stays fixed as the sequence reveals rather than jumping when a new
-  // Hold appears.
-  const meanX = holds.reduce((sum, hold) => sum + hold.x, 0) / holds.length;
-
-  const revealedHolds = [...holds].sort((a, b) => a.order - b.order).filter(revealed);
-  if (revealedHolds.length === 0) return { glyphs: [], placed: [] };
-
-  const glyphs: GlyphUnit[] = [];
-  const labels: LabelUnit[] = [];
-  for (const { hold, cx, cy } of spreadClusters(revealedHolds, r)) {
-    const color = holdColor(hold.kind, hold.side);
-    glyphs.push({ cx, cy, kind: hold.kind, side: hold.side, color });
-    labels.push({
-      order: hold.order,
-      color,
-      dcx: cx,
-      dcy: cy,
-      prefer: hold.x < meanX ? "left" : "right",
-    });
-  }
-
-  // Font must be set before measureText so label widths are correct.
-  ctx.font = `bold ${fontPx}px sans-serif`;
-
-  // ── Label placement — greedy, in first-use order, pushed to the route's outer
-  //    side so digits sit away from the holds; earlier labels keep a stable spot
-  //    and never overlap a later one or a glyph. ──
-  const padX = fontPx * 0.55;
-  const padY = fontPx * 0.34;
-  const placed: Placed[] = [];
-  for (const unit of [...labels].sort((a, b) => a.order - b.order)) {
-    const text = String(unit.order);
-    const tw = ctx.measureText(text).width;
-    const lw = Math.max(tw + 2 * padX, fontPx + 2 * padY);
-    const lh = fontPx + 2 * padY;
-    const angles = unit.prefer === "left" ? LEFT_ANGLES : RIGHT_ANGLES;
-
-    let best: Rect | null = null;
-    let bestC = { x: 0, y: 0 };
-    // Expanding rings of candidate offsets, started well clear of the glyph so the
-    // number reads at a distance from the hold.
-    outer: for (let ring = 0; ring < 6; ring++) {
-      const off = r + (1.2 + ring * 0.9) * Math.max(lw, lh);
-      for (const angle of angles) {
-        const cx = unit.dcx + Math.cos(angle) * off;
-        const cy = unit.dcy + Math.sin(angle) * off;
-        const rect: Rect = { x: cx - lw / 2, y: cy - lh / 2, w: lw, h: lh };
-        if (rect.x < 0 || rect.y < 0 || rect.x + rect.w > w || rect.y + rect.h > h) continue;
-        const hitsLabel = placed.some((p) => rectsOverlap(rect, p.rect));
-        const hitsGlyph = glyphs.some((g) => rectCircleOverlap(rect, g.cx, g.cy, r));
-        if (!hitsLabel && !hitsGlyph) {
-          best = rect;
-          bestC = { x: cx, y: cy };
-          break outer;
-        }
-        // Remember the first candidate as a fallback if nothing fits cleanly.
-        if (!best) {
-          best = rect;
-          bestC = { x: cx, y: cy };
-        }
-      }
-    }
-    if (!best) {
-      const dir = unit.prefer === "left" ? -1 : 1;
-      const cx = unit.dcx + dir * (r + lw);
-      best = { x: cx - lw / 2, y: unit.dcy - lh / 2, w: lw, h: lh };
-      bestC = { x: cx, y: unit.dcy };
-    }
-    placed.push({ unit, rect: best, cx: bestC.x, cy: bestC.y });
-  }
-
-  return { glyphs, placed };
+/** Style options for the Holds pass. All optional; unset fields use defaults. */
+export interface HoldStyle {
+  /** Draw the Holds pass. Default true (callers usually gate via the panel). */
+  holdsVisible?: boolean;
+  /** Glyph half-extent × body scale. Default {@link DEFAULT_HOLD_RADIUS}. */
+  radius?: number;
+  /** Glyph fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
+  fillOpacity?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,7 +252,7 @@ function buildHoldsPlan(
  *                    and `firstUseTime` in the same clock as `t`.
  * @param t         - Current playback time (seconds). Holds first used after this
  *                    are not yet drawn (progressive, cumulative reveal).
- * @param style     - Optional label colour / size overrides.
+ * @param style     - Optional visibility / size overrides.
  * @param bodyScale - Photo-space body scale (px) the glyph extent multiplies by.
  */
 export function drawHolds(
@@ -407,72 +265,50 @@ export function drawHolds(
   if (style?.holdsVisible === false) return;
   if (holds.length === 0) return;
 
-  const labelColor = style?.labelColor ?? DEFAULT_LABEL_COLOR;
-  const numberColor = style?.numberColor ?? DEFAULT_NUMBER_COLOR;
   const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
-  const leaderWidth = Math.max(1, r * LEADER_WIDTH_FRAC);
-  const glowBlur = r * GLOW_BLUR_FRAC;
   const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
+  const strokeWidth = Math.max(1.5, r * STROKE_WIDTH_FRAC);
   const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
+  const haloWidth = Math.max(2, fontPx * HALO_WIDTH_FRAC);
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
   const revealed = (hold: Hold) => hold.firstUseTime <= t && inBounds(hold);
 
-  // Build (or reuse) the render plan. The greedy label layout depends only on the
-  // Holds, the canvas, the style sizes, and which Holds are revealed; with
-  // high-water reveal that revealed set only grows, so the plan is recomputed at
-  // most once per reveal and reused on every frame in between (ADR 0009).
-  const revealedSig = holds.filter(revealed).map((hold) => hold.id).join(",");
-  const sig = `${w}x${h}|${r}|${fontPx}|${revealedSig}`;
-  const cached = planCache.get(ctx.canvas);
-  let plan: RenderPlan;
-  if (cached && cached.holds === holds && cached.sig === sig) {
-    plan = cached.plan;
-  } else {
-    plan = buildHoldsPlan(ctx, holds, revealed, { r, fontPx, w, h });
-    planCache.set(ctx.canvas, { holds, sig, plan });
-  }
-  const { glyphs, placed } = plan;
-  if (glyphs.length === 0) return;
+  const revealedHolds = [...holds].sort((a, b) => a.order - b.order).filter(revealed);
+  if (revealedHolds.length === 0) return;
+
+  const glyphs: GlyphUnit[] = spreadClusters(revealedHolds, r).map(({ hold, cx, cy }) => ({
+    cx,
+    cy,
+    order: hold.order,
+    kind: hold.kind,
+    side: hold.side,
+    color: holdColor(hold.kind, hold.side),
+  }));
 
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = `bold ${fontPx}px sans-serif`;
 
-  // ── Pass 1 — hand / foot glyphs (drawn first so labels/leaders sit on top). ──
+  // ── Pass 1 — hand / foot glyphs (drawn first so numbers sit on top). ──
   for (const g of glyphs) {
-    drawGlyph(ctx, g.kind, g.side, g.cx, g.cy, 2 * r, g.color, fillOpacity, glowBlur);
+    drawGlyph(ctx, g.kind, g.side, g.cx, g.cy, 2 * r, g.color, fillOpacity, strokeWidth);
   }
-  ctx.shadowBlur = 0;
 
-  // ── Pass 2 — leader lines + black-on-white number labels. ──
-  for (const p of placed) {
-    const { unit } = p;
-    // Leader from the glyph edge (centre offset by r toward the label) to the
-    // label centre.
-    const dx = p.cx - unit.dcx;
-    const dy = p.cy - unit.dcy;
-    const len = Math.hypot(dx, dy) || 1;
-    const sx = unit.dcx + (dx / len) * r;
-    const sy = unit.dcy + (dy / len) * r;
-    ctx.lineWidth = leaderWidth;
-    ctx.strokeStyle = unit.color;
-    ctx.beginPath();
-    ctx.moveTo(sx, sy);
-    ctx.lineTo(p.cx, p.cy);
-    ctx.stroke();
-
-    // Label background — white rounded rect.
-    pathRoundRect(ctx, p.rect, Math.min(p.rect.h / 2, fontPx * 0.4));
-    ctx.fillStyle = labelColor;
-    ctx.fill();
-
-    // Number — near-black, centred in the label.
-    ctx.fillStyle = numberColor;
-    ctx.fillText(String(unit.order), p.cx, p.cy);
+  // ── Pass 2 — the number, centred on each glyph, auto-contrasted with a halo. ──
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = haloWidth;
+  for (const g of glyphs) {
+    const { digit, halo } = numberContrast(g.color);
+    const text = String(g.order);
+    ctx.strokeStyle = halo;
+    ctx.strokeText(text, g.cx, g.cy);
+    ctx.fillStyle = digit;
+    ctx.fillText(text, g.cx, g.cy);
   }
 
   ctx.restore();

@@ -81,16 +81,15 @@ unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
 
 A third overlay pass, **Holds**, marks where the climber's hands and feet were
 used on the wall — numbered in the order they were first used. Each marker is a
-translucent **hand / foot glyph** of the actual limb that used it (borderless,
-with a soft colour glow), oriented left / right to match the side and tinted one
-of **four per-side colours**: left hand cyan, right hand indigo, left foot
-orange, right foot pink. Left and right are never merged, so a hold used by both
-hands (right then left) shows two marks, fanned apart so both read. The number is
-set off to the side as black-on-white, tethered by a leader line, and pushed to
-the route's **outer** side — Holds left of the holds' mean x get labels further
-left, those to the right get labels further right — so the digits sit clear of
-the holds; labels are placed in first-use order so they never overlap each other
-or a glyph.
+**hand / foot glyph** of the actual limb that used it, oriented left / right to
+match the side, with a crisp full-opacity stroke in its **per-side colour**
+(hands light, feet dark, left and right distinguished within each pair) and a
+lighter translucent fill so the wall hold reads through. Left and right are never
+merged, so a hold used by both hands (right then left) shows two marks, fanned
+apart so both read. The number is drawn **on the glyph itself**, centred at the
+contact point, in a colour and halo derived from the glyph's luminance so the
+digit always contrasts against the glyph and the rock behind it — no leader
+lines, no off-to-the-side labels (ADR 0010).
 Markers reveal in first-use order on the first playback pass and then stay shown
 across loops; a **Replay** control on the player re-arms that reveal. Holds are
 **inferred from Dwells** (a limb held still long enough to be load-bearing — a
@@ -114,8 +113,9 @@ on the fly via `pipeline/holdDetection.ts` (`detectHolds`) over the same pose
 frames the Skeleton uses. The Holds source path lives in the `useHolds` hook;
 scan-stage editing lives in `useScanHolds`. `drawHolds`
 (`pipeline/holdsOverlay.ts`) renders them beneath the Skeleton (which stays
-legible on top), caching the greedy label layout per reveal so playback stays
-cheap; they are toggled independently from the Overlay panel's Holds row. The
+legible on top); the per-frame cost is a glyph plus a centred number each, so
+geometry is computed inline without a cache. They are toggled independently from
+the Overlay panel's Holds row. The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off).
 
