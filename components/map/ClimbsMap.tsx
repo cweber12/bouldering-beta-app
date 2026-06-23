@@ -177,9 +177,15 @@ export default function ClimbsMap({
     (async () => {
       if (!containerRef.current) return;
       // CartoDB tiles + icon fix live in the shared util; clustering stays here.
+      // A default center/zoom must be set at creation: Leaflet throws
+      // "Set map center and zoom first" when layers are added (and dragging is
+      // attempted) before the map has a view. The marker-sync effect below
+      // overrides this with fitBounds once pins are known.
       const { L, map } = await initLeafletMap(containerRef.current, {
         scrollWheelZoom: true,
         zoomControl: true,
+        center: [39, -98], // North America fallback
+        zoom: 4,
       });
       // markercluster augments L (side-effect import); keep it out of SSR.
       await import("leaflet.markercluster");
