@@ -7,10 +7,10 @@
 > scan time, editable, and saved with the Run. Panning Capture and legacy Runs
 > still follow this ADR.
 >
-> **Marker labeling superseded by [ADR 0010](0010-on-glyph-hold-numbering.md).** The
-> white-number-disc marker described in the consequences below is replaced by an
-> on-glyph number (the digit drawn on the hand / foot glyph itself); the leader lines
-> and outer-side label placement that grew on top of it are removed. The Hold
+> **Label placement superseded by [ADR 0010](0010-aligned-leader-hold-numbering.md).** The
+> greedy, outward-pushed placement with angled leader lines described below is replaced
+> by deterministic per-side placement: a straight horizontal leader from the glyph
+> centre to a black-on-white label offset by a constant per-side distance. The Hold
 > inference and reveal behaviour here are unchanged.
 
 A third overlay pass, **Holds**, marks where the **Climber**'s hands and feet were

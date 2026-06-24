@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
-import { holdColor } from "@/pipeline/holdsOverlay";
+import { HOLD_STYLE, HOLD_BADGE } from "@/pipeline/holdsOverlay";
 import type { HoldEntry } from "@/hooks/useScanHolds";
 
 export interface HoldsEditorProps {
@@ -72,7 +72,7 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                 >
                   <span
                     className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: holdColor(kind, side) }}
+                    style={{ backgroundColor: HOLD_STYLE[kind].fill, border: `2px solid ${HOLD_STYLE[kind].border}` }}
                     aria-hidden="true"
                   />
                   {label}
@@ -95,8 +95,12 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                     className="flex items-center gap-2 text-xs text-fg-secondary"
                   >
                     <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-fg-inverse"
-                      style={{ backgroundColor: holdColor(entry.hold.kind, entry.hold.side ?? "right") }}
+                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
+                      style={{
+                        backgroundColor: HOLD_BADGE.bg,
+                        color: HOLD_BADGE.text,
+                        boxShadow: `0 0 0 1.5px ${HOLD_STYLE[entry.hold.kind].border}`,
+                      }}
                     >
                       {entry.order}
                     </span>

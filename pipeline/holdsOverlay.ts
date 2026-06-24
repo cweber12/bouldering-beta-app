@@ -2,15 +2,16 @@
  * Holds overlay drawing for CanvasRenderingContext2D.
  *
  * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo /
- * Detection Preview. The marker is a hand / foot **glyph** of the actual limb
- * that used the hold — oriented left / right to match the side, given a crisp
- * full-opacity stroke in its per-side colour and a lighter translucent fill so
- * the wall hold reads through. The Hold's number is drawn **on the glyph
- * itself**, centred at the limb's contact point, in a colour + halo derived from
- * the glyph's luminance so the digit always contrasts against the glyph (dark
- * digit + light halo on light glyphs, light digit + dark halo on dark ones) and
- * against the rock showing through. No leader lines, no off-to-the-side label
- * chips, no greedy placement — the number is the Hold (ADR 0010).
+ * Detection Preview. The marker is an **opaque** hand / foot **glyph** of the limb
+ * that used the hold — oriented left / right to match the side — with a vivid
+ * per-kind border over a flat fill, plus a thin neutral hairline so the glyph
+ * separates from same-toned rock. The Hold's number rides in a small **corner
+ * badge** pinned to the glyph (a dark disc with a white digit and a white ring),
+ * so the number stays tightly coupled to its mark with no leader line.
+ *
+ * Kind (hand vs foot) is carried by colour — white fill + yellow border for hands,
+ * black fill + purple border for feet — and side (left vs right) by the **mirrored
+ * silhouette** alone; the left variant is the right path flipped horizontally.
  *
  * Left and right limbs are never merged in detection, so a hold used by both
  * hands (right then left) yields two Holds at the same spot; co-located glyphs
@@ -24,8 +25,7 @@
  *
  * Sizes are multipliers of the photo-space `bodyScale`, mirroring the Skeleton
  * overlay, so markers look identical at any photo resolution. The per-frame cost
- * is trivial (a glyph + a centred number each), so geometry is computed inline
- * without a cache.
+ * is trivial, so geometry is computed inline without a cache.
  *
  * Framework-agnostic — no React imports. Keep it that way so a future baked-in
  * WebM path can reuse it.
@@ -34,22 +34,41 @@
 import type { Hold } from "@/pipeline/holdDetection";
 
 // ---------------------------------------------------------------------------
-// Per-side marker colours
+// Per-kind glyph colours — the single source of truth for the Holds palette.
 //
-// Hands light, feet dark, with left and right separated within each pair. Kept
-// in sync with the `--color-*-hold-*` tokens in app/globals.css and reused by the
-// scan Holds editor / style panel so the legend matches the overlay.
+// Kind is colour-coded (hands cool/light, feet warm/dark); side is shown by the
+// mirrored silhouette, not colour. Each kind has an opaque `fill`, a vivid
+// identifying `border`, and a neutral `hairline` that separates the glyph from
+// same-toned rock (dark behind the white hand, light behind the black foot).
+// Mirror these values in `app/globals.css` (--color-*-hold-*) and `utils/theme.ts`.
 // ---------------------------------------------------------------------------
 
-export const HOLD_COLORS = {
-  hand: { left: "#FFFFFF", right: "#DDDDDD" },
-  foot: { left: "#000000", right: "#333333" },
+export interface HoldKindStyle {
+  /** Opaque interior fill. */
+  fill: string;
+  /** Vivid identifying outline (also used as the legend/editor swatch hue). */
+  border: string;
+  /** Neutral separating hairline drawn outside the border. */
+  hairline: string;
+}
+
+export const HOLD_STYLE: Record<"hand" | "foot", HoldKindStyle> = {
+  hand: { fill: "#FFFFFF", border: "#FFD400", hairline: "#0B0F14" },
+  foot: { fill: "#000000", border: "#A855F7", hairline: "#FFFFFF" },
 } as const;
 
-/** Marker colour for a limb kind + side. */
-export function holdColor(kind: "hand" | "foot", side: "left" | "right"): string {
-  return HOLD_COLORS[kind][side];
+/** Vivid identifying hue for a kind (the glyph border) — for legends / swatches. */
+export function holdColor(kind: "hand" | "foot"): string {
+  return HOLD_STYLE[kind].border;
 }
+
+/** Number-badge palette — a neutral dark disc with a white digit and white ring,
+ *  uniform across kinds so the number is always the most legible element. */
+export const HOLD_BADGE = {
+  bg: "#0B0F14",
+  text: "#FFFFFF",
+  ring: "#FFFFFF",
+} as const;
 
 // ---------------------------------------------------------------------------
 // Other defaults (× body scale unless noted)
@@ -57,51 +76,18 @@ export function holdColor(kind: "hand" | "foot", side: "left" | "right"): string
 
 /** Glyph half-extent × body scale (the marked spot's footprint radius). */
 const DEFAULT_HOLD_RADIUS = 0.35;
-/**
- * Glyph fill opacity. Lighter than the old borderless glyph so the actual wall
- * hold reads through; the crisp full-opacity stroke carries the shape and colour.
- */
-const DEFAULT_FILL_OPACITY = 0.35;
-/** Glyph stroke width as a fraction of the glyph half-extent (device px). */
-const STROKE_WIDTH_FRAC = 0.12;
-/** Number font size × body scale. */
+/** Vivid border stroke width as a fraction of the glyph half-extent. */
+const GLYPH_BORDER_FRAC = 0.14;
+/** Neutral hairline width as a fraction of the glyph half-extent. */
+const GLYPH_HAIRLINE_FRAC = 0.05;
+/** Number badge font size × body scale. */
 const LABEL_FONT_FRAC = 0.26;
-/** Number halo (outline) width as a fraction of the font size. */
-const HALO_WIDTH_FRAC = 0.16;
+/** Badge centre offset toward the glyph's top-right corner × glyph half-extent. */
+const BADGE_CORNER_FRAC = 0.72;
 /** Co-located glyph fan-out spacing × glyph half-extent (shared-hold spread). */
 const CLUSTER_SPACING_FRAC = 1.25;
 
-// ---------------------------------------------------------------------------
-// Number contrast
-//
-// The number colour + halo are derived from the glyph colour's luminance so the
-// digit pops off the glyph whatever its colour (light glyphs → dark digit, dark
-// glyphs → light digit) and the opposite-colour halo separates it from busy rock
-// showing through the lightened fill (ADR 0010).
-// ---------------------------------------------------------------------------
-
-const DARK_DIGIT = "#0b0f14";
-const LIGHT_DIGIT = "#ffffff";
-const LIGHT_HALO = "rgba(255,255,255,0.9)";
-const DARK_HALO = "rgba(0,0,0,0.85)";
-
-/** Relative luminance (0–1) of a `#rgb` / `#rrggbb` colour; 1 for unparseable. */
-function hexLuminance(hex: string): number {
-  let h = hex.trim().replace("#", "");
-  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
-  if (h.length < 6) return 1;
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** Number fill + halo for a glyph of the given colour. */
-function numberContrast(glyphColor: string): { digit: string; halo: string } {
-  return hexLuminance(glyphColor) > 0.5
-    ? { digit: DARK_DIGIT, halo: LIGHT_HALO }
-    : { digit: LIGHT_DIGIT, halo: DARK_HALO };
-}
+const TAU = Math.PI * 2;
 
 // ---------------------------------------------------------------------------
 // Glyph geometry — hand / foot SVG path data
@@ -110,7 +96,7 @@ function numberContrast(glyphColor: string): { digit: string; halo: string } {
 // variant is the right path mirrored about the vertical centre line, so only the
 // "right" path is stored. Path2D is constructed lazily and cached; it is absent
 // in jsdom (no `canvas` package), so `glyphPath` returns null there and the glyph
-// fill/stroke is skipped while the centred number still draws.
+// is skipped while the number badges still draw.
 // ---------------------------------------------------------------------------
 
 const HAND_PATH =
@@ -136,9 +122,9 @@ function glyphPath(kind: "hand" | "foot"): Path2D | null {
 }
 
 /**
- * Draw one hand / foot glyph centred at `(cx, cy)`, scaled so its viewBox spans
- * `size` px, mirrored horizontally for the left variant, tinted `color` at
- * `fillOpacity` with a crisp full-opacity stroke of the same colour.
+ * Draw one opaque hand / foot glyph centred at `(cx, cy)`, scaled so its viewBox
+ * spans `size` px, mirrored horizontally for the left variant. Layered outside-in:
+ * a neutral hairline, the vivid kind border, then the flat fill.
  */
 function drawGlyph(
   ctx: CanvasRenderingContext2D,
@@ -147,9 +133,9 @@ function drawGlyph(
   cx: number,
   cy: number,
   size: number,
-  color: string,
-  fillOpacity: number,
-  strokeWidth: number,
+  style: HoldKindStyle,
+  borderPx: number,
+  hairlinePx: number,
 ): void {
   const path = glyphPath(kind);
   if (!path) return;
@@ -159,33 +145,25 @@ function drawGlyph(
   ctx.translate(cx, cy);
   ctx.scale(side === "left" ? -s : s, s);
   ctx.translate(-vb / 2, -vb / 2);
-  // Translucent fill so the wall hold reads through.
-  ctx.globalAlpha = fillOpacity;
-  ctx.fillStyle = color;
-  ctx.fill(path);
-  // Crisp full-opacity stroke carries the shape + colour. lineWidth is in the
-  // scaled path space, so divide the desired device width by the glyph scale.
-  ctx.globalAlpha = 1;
-  ctx.lineWidth = strokeWidth / s;
-  ctx.strokeStyle = color;
   ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  // Stroke widths are given in device px, so divide by the glyph scale `s` to set
+  // them in the glyph's local space. Widest (hairline) first, then the border,
+  // then the fill on top — so each layer shows as a ring outside the last.
+  ctx.strokeStyle = style.hairline;
+  ctx.lineWidth = (borderPx * 2 + hairlinePx * 2) / s;
   ctx.stroke(path);
+  ctx.strokeStyle = style.border;
+  ctx.lineWidth = (borderPx * 2) / s;
+  ctx.stroke(path);
+  ctx.fillStyle = style.fill;
+  ctx.fill(path);
   ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
-// Geometry helper — shared-hold fan-out
+// Geometry helpers
 // ---------------------------------------------------------------------------
-
-/** A glyph to draw at a Hold (centre already adjusted for shared-hold fan-out). */
-interface GlyphUnit {
-  cx: number;
-  cy: number;
-  order: number;
-  kind: "hand" | "foot";
-  side: "left" | "right";
-  color: string;
-}
 
 /**
  * Fan co-located Holds apart horizontally so left and right marks on a shared
@@ -230,14 +208,11 @@ function spreadClusters(
 // Style options
 // ---------------------------------------------------------------------------
 
-/** Style options for the Holds pass. All optional; unset fields use defaults. */
+/** Style options for the Holds pass. The glyph look is fixed (opaque, per-kind
+ *  colour); only visibility is caller-controlled. */
 export interface HoldStyle {
   /** Draw the Holds pass. Default true (callers usually gate via the panel). */
   holdsVisible?: boolean;
-  /** Glyph half-extent × body scale. Default {@link DEFAULT_HOLD_RADIUS}. */
-  radius?: number;
-  /** Glyph fill opacity in [0, 1]. Default {@link DEFAULT_FILL_OPACITY}. */
-  fillOpacity?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +227,7 @@ export interface HoldStyle {
  *                    and `firstUseTime` in the same clock as `t`.
  * @param t         - Current playback time (seconds). Holds first used after this
  *                    are not yet drawn (progressive, cumulative reveal).
- * @param style     - Optional visibility / size overrides.
+ * @param style     - Optional visibility toggle.
  * @param bodyScale - Photo-space body scale (px) the glyph extent multiplies by.
  */
 export function drawHolds(
@@ -265,27 +240,27 @@ export function drawHolds(
   if (style?.holdsVisible === false) return;
   if (holds.length === 0) return;
 
-  const r = Math.max(3, (style?.radius ?? DEFAULT_HOLD_RADIUS) * bodyScale);
-  const fillOpacity = style?.fillOpacity ?? DEFAULT_FILL_OPACITY;
-  const strokeWidth = Math.max(1.5, r * STROKE_WIDTH_FRAC);
+  const r = Math.max(3, DEFAULT_HOLD_RADIUS * bodyScale);
+  const glyphWidth = 2 * r;
+  const borderPx = Math.max(1.5, r * GLYPH_BORDER_FRAC);
+  const hairlinePx = Math.max(1, r * GLYPH_HAIRLINE_FRAC);
   const fontPx = Math.max(9, Math.round(bodyScale * LABEL_FONT_FRAC));
-  const haloWidth = Math.max(2, fontPx * HALO_WIDTH_FRAC);
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
-  const revealed = (hold: Hold) => hold.firstUseTime <= t && inBounds(hold);
 
-  const revealedHolds = [...holds].sort((a, b) => a.order - b.order).filter(revealed);
-  if (revealedHolds.length === 0) return;
+  const candidates = holds.filter(inBounds);
+  if (candidates.length === 0) return;
+  const revealed = candidates.filter((hold) => hold.firstUseTime <= t);
+  if (revealed.length === 0) return;
 
-  const glyphs: GlyphUnit[] = spreadClusters(revealedHolds, r).map(({ hold, cx, cy }) => ({
+  const glyphs = spreadClusters(revealed, r).map(({ hold, cx, cy }) => ({
     cx,
     cy,
     order: hold.order,
     kind: hold.kind,
     side: hold.side,
-    color: holdColor(hold.kind, hold.side),
   }));
 
   ctx.save();
@@ -293,22 +268,33 @@ export function drawHolds(
   ctx.textBaseline = "middle";
   ctx.font = `bold ${fontPx}px sans-serif`;
 
-  // ── Pass 1 — hand / foot glyphs (drawn first so numbers sit on top). ──
+  // ── Pass 1 — opaque hand / foot glyphs. ──
   for (const g of glyphs) {
-    drawGlyph(ctx, g.kind, g.side, g.cx, g.cy, 2 * r, g.color, fillOpacity, strokeWidth);
+    drawGlyph(ctx, g.kind, g.side, g.cx, g.cy, glyphWidth, HOLD_STYLE[g.kind], borderPx, hairlinePx);
   }
 
-  // ── Pass 2 — the number, centred on each glyph, auto-contrasted with a halo. ──
-  ctx.lineJoin = "round";
-  ctx.miterLimit = 2;
-  ctx.lineWidth = haloWidth;
+  // ── Pass 2 — corner number badges (on top of every glyph so a neighbouring
+  //    glyph never covers a number). ──
   for (const g of glyphs) {
-    const { digit, halo } = numberContrast(g.color);
     const text = String(g.order);
-    ctx.strokeStyle = halo;
-    ctx.strokeText(text, g.cx, g.cy);
-    ctx.fillStyle = digit;
-    ctx.fillText(text, g.cx, g.cy);
+    const tw = ctx.measureText(text).width;
+    const br = Math.max(fontPx * 0.62, tw / 2 + fontPx * 0.3);
+    const bx = g.cx + r * BADGE_CORNER_FRAC;
+    const by = g.cy - r * BADGE_CORNER_FRAC;
+    const ringPx = Math.max(1, br * 0.14);
+
+    ctx.beginPath();
+    ctx.arc(bx, by, br + ringPx, 0, TAU);
+    ctx.fillStyle = HOLD_BADGE.ring;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(bx, by, br, 0, TAU);
+    ctx.fillStyle = HOLD_BADGE.bg;
+    ctx.fill();
+
+    ctx.fillStyle = HOLD_BADGE.text;
+    ctx.fillText(text, bx, by);
   }
 
   ctx.restore();

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import { holdColor, type HoldStyle } from "@/pipeline/holdsOverlay";
+import { HOLD_STYLE, type HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
@@ -25,12 +25,11 @@ const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Per-side Holds legend — left / right hands and feet, four distinct colours. */
-const HOLD_LEGEND: { kind: "hand" | "foot"; side: "left" | "right"; label: string }[] = [
-  { kind: "hand", side: "left", label: "L hand" },
-  { kind: "hand", side: "right", label: "R hand" },
-  { kind: "foot", side: "left", label: "L foot" },
-  { kind: "foot", side: "right", label: "R foot" },
+/** Per-kind Holds legend — colour codes kind (hands vs feet); side is shown by
+ *  the mirrored glyph on the overlay, not colour. */
+const HOLD_LEGEND: { kind: "hand" | "foot"; label: string }[] = [
+  { kind: "hand", label: "Hands" },
+  { kind: "foot", label: "Feet" },
 ];
 
 /** Best-effort hex extraction from a CSS color string (rgba / hex). */
@@ -137,7 +136,7 @@ export default function SkeletonStylePanel({
   ]);
 
   // Emit the Holds style whenever any Holds setting changes. Marker colours are
-  // fixed per side (see HOLD_COLORS), so only visibility is user-controlled here.
+  // fixed per kind (see HOLD_STYLE), so only visibility is user-controlled here.
   useEffect(() => {
     onHoldsChangeRef.current?.({ holdsVisible });
   }, [holdsVisible]);
@@ -271,10 +270,11 @@ export default function SkeletonStylePanel({
                 Holds
               </label>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {HOLD_LEGEND.map(({ kind, side, label }) => (
+                {HOLD_LEGEND.map(({ kind, label }) => (
                   <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted select-none">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: holdColor(kind, side) }} aria-hidden="true" />
+                      style={{ backgroundColor: HOLD_STYLE[kind].fill, border: `2px solid ${HOLD_STYLE[kind].border}` }}
+                      aria-hidden="true" />
                     {label}
                   </span>
                 ))}

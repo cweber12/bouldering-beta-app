@@ -72,8 +72,8 @@ export const dark = {
   sendSurface:    "#0c3d22",
   attempt:        "#fbbf24",
   attemptSurface: "#3d2200",
-  handHold:       "#22d3ee",   // cyan — Hand Hold disc
-  footHold:       "#fb923c",   // orange — Foot Hold disc
+  handHold:       "#ffd400",   // hand glyph border (white fill) — see HOLD_STYLE
+  footHold:       "#a855f7",   // foot glyph border (black fill) — see HOLD_STYLE
 } as const;
 
 // ─── Light theme canvas values ───────────────────────────────
@@ -98,8 +98,8 @@ export const light = {
   sendSurface:    "#d1fae5",   // emerald-100
   attempt:        "#92400e",   // amber-800
   attemptSurface: "#fef3c7",   // amber-100
-  handHold:       "#0891b2",   // cyan-600
-  footHold:       "#ea580c",   // orange-600
+  handHold:       "#ffd400",   // same palette (overlay drawn on a photo)
+  footHold:       "#a855f7",
 } as const;
 
 export type Theme = typeof dark;

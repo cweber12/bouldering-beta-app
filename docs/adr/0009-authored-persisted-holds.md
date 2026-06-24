@@ -84,7 +84,7 @@ persisting static Holds lets that layout be computed once and cached.
 - **The label layout can be cached.** Because saved Holds are static, the greedy
   per-frame label placement in `drawHolds` can be computed once per (holds, canvas)
   and reused — the actual fix for the rendering slowdown that prompted this work.
-  *(Moot since [ADR 0010](0010-on-glyph-hold-numbering.md): the greedy label layout
+  *(Moot since [ADR 0010](0010-aligned-leader-hold-numbering.md): the greedy label layout
   was removed in favour of on-glyph numbers, so there is nothing left to cache. The
   persistence decision in this ADR is unaffected.)*
 - **Panning Capture is unchanged.** It keeps wall-space on-the-fly detection and

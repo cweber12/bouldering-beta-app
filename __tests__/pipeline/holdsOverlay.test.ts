@@ -4,22 +4,23 @@ import type { Hold } from "@/pipeline/holdDetection";
 
 // ---------------------------------------------------------------------------
 // drawHolds is a canvas routine; we feed it a minimal fake 2D context and spy on
-// the text calls. The number is drawn ON each glyph (ADR 0010), so one revealed
-// Hold means one strokeText (halo) + one fillText (digit). Path2D is absent in
-// jsdom, so the glyph fill/stroke is skipped while the centred number still draws
-// — which is exactly what these assertions rely on.
+// the text + arc calls. Each revealed Hold draws one corner number badge: a white
+// ring + a dark disc (two `arc` fills) and the number (one `fillText`), pinned up
+// and to the right of the glyph. Path2D is absent in jsdom, so the opaque glyph
+// itself is skipped while the badges still draw — which is what these assertions
+// rely on.
 // ---------------------------------------------------------------------------
 
 function makeCtx(width = 1000, height = 1000) {
-  const strokeText = vi.fn();
   const fillText = vi.fn();
+  const arc = vi.fn();
   const ctx = {
     canvas: { width, height } as HTMLCanvasElement,
     measureText: vi.fn(() => ({ width: 12 }) as TextMetrics),
     save: vi.fn(),
     restore: vi.fn(),
     beginPath: vi.fn(),
-    arc: vi.fn(),
+    arc,
     rect: vi.fn(),
     roundRect: vi.fn(),
     translate: vi.fn(),
@@ -30,7 +31,6 @@ function makeCtx(width = 1000, height = 1000) {
     fill: vi.fn(),
     stroke: vi.fn(),
     fillText,
-    strokeText,
     textAlign: "",
     textBaseline: "",
     font: "",
@@ -38,12 +38,12 @@ function makeCtx(width = 1000, height = 1000) {
     strokeStyle: "",
     lineWidth: 0,
     lineJoin: "",
-    miterLimit: 0,
+    lineCap: "",
     shadowColor: "",
     shadowBlur: 0,
     globalAlpha: 1,
   };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, strokeText, fillText };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, fillText, arc };
 }
 
 const HOLDS: Hold[] = [
@@ -53,16 +53,27 @@ const HOLDS: Hold[] = [
 
 const BODY_SCALE = 100;
 
-describe("drawHolds on-glyph numbering", () => {
+describe("drawHolds corner number badges", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("draws one digit (fill + halo) per revealed hold", () => {
-    const { ctx, strokeText, fillText } = makeCtx();
+  it("draws one number badge per revealed hold", () => {
+    const { ctx, fillText, arc } = makeCtx();
     // Both holds revealed at t=5.
     drawHolds(ctx, HOLDS, 5, undefined, BODY_SCALE);
     expect(fillText).toHaveBeenCalledTimes(2);
-    expect(strokeText).toHaveBeenCalledTimes(2);
     expect(fillText.mock.calls.map((c) => c[0])).toEqual(["1", "2"]);
+    // Two arc fills per badge (white ring + dark disc).
+    expect(arc).toHaveBeenCalledTimes(4);
+  });
+
+  it("pins each badge up and to the right of its glyph", () => {
+    const { ctx, fillText } = makeCtx();
+    drawHolds(ctx, HOLDS, 5, undefined, BODY_SCALE);
+    const [c1, c2] = fillText.mock.calls;
+    expect(c1[1]).toBeGreaterThan(250); // badge for "1" right of its glyph
+    expect(c1[2]).toBeLessThan(400); //    ...and above it
+    expect(c2[1]).toBeGreaterThan(700);
+    expect(c2[2]).toBeLessThan(800);
   });
 
   it("reveals holds progressively by firstUseTime", () => {
@@ -72,7 +83,6 @@ describe("drawHolds on-glyph numbering", () => {
     expect(fillText).toHaveBeenCalledTimes(1);
     expect(fillText.mock.calls[0][0]).toBe("1");
 
-    // Now both revealed.
     fillText.mockClear();
     drawHolds(ctx, HOLDS, 2.5, undefined, BODY_SCALE);
     expect(fillText).toHaveBeenCalledTimes(2);
