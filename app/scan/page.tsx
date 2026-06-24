@@ -30,7 +30,7 @@ import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
-import ScanLoadingOverlay from "@/components/scan/process-flow/ScanLoadingOverlay";
+import ScanProgress from "@/components/scan/process-flow/ScanProgress";
 import MetadataBottomSheet, {
   type MetadataSheetLocation,
   type MetadataSheetRunDetails,
@@ -291,11 +291,13 @@ function ScanPageInner() {
   const isDone       = status === "done";
   const orbReady     = orbStatus === "ready";
 
-  // Full-bleed loading view: shown from the moment Scan is pressed until results
-  // are ready — through the seek loop (isProcessing) and the post-loop tail
-  // where ORB extraction still runs (status done, orbStatus extracting).
-  const scanFinishing  = isDone && orbStatus === "extracting";
-  const showScanLoading = step === "landmarks" && (isProcessing || scanFinishing);
+  // Loading view: shown from the moment Scan is pressed until results are ready —
+  // through the seek loop (isProcessing) and the post-loop tail where refinement
+  // and ORB extraction still run (status done, ORB not yet resolved). Covering
+  // the whole tail avoids a one-tick flash of the empty review step.
+  const showScanLoading =
+    step === "landmarks" &&
+    (isProcessing || (isDone && orbStatus !== "ready" && orbStatus !== "failed"));
 
   // Active attempt — only from the current scan session
   const activeAttemptId = isDone ? attemptId : null;
@@ -668,7 +670,18 @@ function ScanPageInner() {
         />
       )}
 
-      {step === "landmarks" && (
+      {step === "landmarks" && showScanLoading && (
+        <ScanProgress
+          frameImage={currentFrameImage}
+          manualCropTop={climberCrop.y}
+          adaptiveCrop={currentClimberCrop}
+          progressPct={progressPct}
+          finishing={!isProcessing || progressPct >= 100}
+          onCancel={handleCancelScan}
+        />
+      )}
+
+      {step === "landmarks" && !showScanLoading && (
         <StepViewLandmarks
           isProcessing={isProcessing}
           currentFrame={currentFrame}
@@ -731,18 +744,6 @@ function ScanPageInner() {
           onDeleteFromDevice={handleDeleteFromDevice}
           saveError={saveError}
           matchDiagnostics={matchDiagnostics}
-        />
-      )}
-
-      {/* Full-bleed scan loading view — covers the chrome while the scan runs */}
-      {showScanLoading && (
-        <ScanLoadingOverlay
-          frameImage={currentFrameImage}
-          manualCropTop={climberCrop.y}
-          adaptiveCrop={currentClimberCrop}
-          progressPct={progressPct}
-          finishing={!isProcessing || progressPct >= 100}
-          onCancel={handleCancelScan}
         />
       )}
 

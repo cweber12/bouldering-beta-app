@@ -296,10 +296,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         canvas.width = videoWidth;
         canvas.height = videoHeight;
 
-        // Downscaled preview canvas for the live loading view: a low-res copy of
-        // the frame currently being scanned. Full-res snapshots in React state
-        // would be needless megabytes; a loading frame only needs to read.
-        const PREVIEW_MAX = 540;
+        // Preview canvas for the live loading view: a copy of the frame currently
+        // being scanned. Kept near source resolution so it reads as crisply as the
+        // Step 2 video preview; only oversized (4K+) footage is capped.
+        const PREVIEW_MAX = 1920;
         const previewScale = Math.min(1, PREVIEW_MAX / Math.max(videoWidth, videoHeight));
         const previewW = Math.max(1, Math.round(videoWidth * previewScale));
         const previewH = Math.max(1, Math.round(videoHeight * previewScale));
