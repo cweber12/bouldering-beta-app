@@ -10,6 +10,14 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
+function safelyRemoveMap(map: LeafletMap): void {
+  try {
+    map.remove();
+  } catch {
+    // Ignore teardown races from stale async initializers in strict mode.
+  }
+}
+
 export interface ClimbPin {
   lat: number;
   lng: number;
@@ -150,6 +158,9 @@ export default function ClimbsMap({
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bounds key of the last successful Overpass query (skip repeat fetches).
   const lastBoundsKeyRef = useRef<string | null>(null);
+  // Guards async init so stale effects can't steal/reuse the same container.
+  const initTokenRef = useRef(0);
+  const initInFlightRef = useRef(false);
 
   const [ready, setReady] = useState(false);
   const [showCrags, setShowCrags] = useState(false);
@@ -168,14 +179,20 @@ export default function ClimbsMap({
 
   // Initialise the map (runs once after mount).
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || mapRef.current || initInFlightRef.current) return;
 
     let aborted = false;
+    let mapInstance: LeafletMap | null = null;
+    const initToken = ++initTokenRef.current;
+    initInFlightRef.current = true;
     // Declared outside the IIFE so the cleanup closure can disconnect it.
     let resizeObs: ResizeObserver | null = null;
 
     (async () => {
-      if (!containerRef.current) return;
+      if (!containerRef.current) {
+        initInFlightRef.current = false;
+        return;
+      }
       // CartoDB tiles + icon fix live in the shared util; clustering stays here.
       // A default center/zoom must be set at creation: Leaflet throws
       // "Set map center and zoom first" when layers are added (and dragging is
@@ -187,10 +204,19 @@ export default function ClimbsMap({
         center: [39, -98], // North America fallback
         zoom: 4,
       });
+      mapInstance = map;
+
+      if (aborted || initToken !== initTokenRef.current) {
+        safelyRemoveMap(map);
+        initInFlightRef.current = false;
+        return;
+      }
+
       // markercluster augments L (side-effect import); keep it out of SSR.
       await import("leaflet.markercluster");
-      if (aborted) {
-        map.remove();
+      if (aborted || initToken !== initTokenRef.current) {
+        safelyRemoveMap(map);
+        initInFlightRef.current = false;
         return;
       }
 
@@ -217,20 +243,29 @@ export default function ClimbsMap({
       // when the parent transitions from display:none to visible — ensuring
       // tiles are re-requested at the correct container size.
       resizeObs = new ResizeObserver(() => {
-        if (mapRef.current) mapRef.current.invalidateSize();
+        map.invalidateSize();
       });
       resizeObs.observe(containerRef.current);
 
       setReady(true);
+      initInFlightRef.current = false;
     })();
 
     return () => {
       aborted = true;
       resizeObs?.disconnect();
-      mapRef.current?.remove();
-      mapRef.current = null;
-      clusterRef.current = null;
-      osmLayerRef.current = null;
+      if (mapInstance) {
+        safelyRemoveMap(mapInstance);
+        if (mapRef.current === mapInstance) {
+          mapRef.current = null;
+          clusterRef.current = null;
+          osmLayerRef.current = null;
+          setReady(false);
+        }
+      }
+      if (initToken === initTokenRef.current) {
+        initInFlightRef.current = false;
+      }
     };
   }, []);
 
