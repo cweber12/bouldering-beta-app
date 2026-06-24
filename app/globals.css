@@ -50,12 +50,9 @@
   --color-attempt-surface: #3d2200;  /* muted badge background */
 
   /* ─── Holds overlay markers (Route Overlay only) ────── */
-  /* Per-kind glyph colours — opaque fill + vivid border; kind only (side is the
-     mirrored silhouette). Mirror of HOLD_STYLE in pipeline/holdsOverlay.ts. */
-  --color-hand-hold-fill:   #ffffff;  /* white hand fill */
-  --color-hand-hold-border: #ffd400;  /* bright yellow hand border */
-  --color-foot-hold-fill:   #000000;  /* black foot fill */
-  --color-foot-hold-border: #a855f7;  /* bright purple foot border */
+  /* Single outline colour for every Hold glyph; kind is the hand/foot shape and
+     side the mirror. Mirror of HOLD_GLYPH_COLOR in pipeline/holdsOverlay.ts. */
+  --color-hold-glyph: #ffffff;
 
   /* ─── Scanner glow ──────────────────────────────────── */
   --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
@@ -143,11 +140,8 @@
   --color-attempt:         #92400e;   /* amber-800 */
   --color-attempt-surface: #fef3c7;   /* amber-100 */
 
-  /* ── Holds overlay markers — same palette (drawn on a photo, theme-independent) ── */
-  --color-hand-hold-fill:   #ffffff;
-  --color-hand-hold-border: #ffd400;
-  --color-foot-hold-fill:   #000000;
-  --color-foot-hold-border: #a855f7;
+  /* ── Holds overlay marker — same colour (drawn on a photo, theme-independent) ── */
+  --color-hold-glyph: #ffffff;
 
   /* ── Glow ────────────────────────────────────────────── */
   --color-glow: rgba(20, 83, 45, 0.14);

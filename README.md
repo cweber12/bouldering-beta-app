@@ -81,15 +81,14 @@ unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
 
 A third overlay pass, **Holds**, marks where the climber's hands and feet were
 used on the wall — numbered in the order they were first used. Each marker is an
-**opaque hand / foot glyph** of the actual limb that used it, oriented left /
-right to match the side. Colour codes the **kind** — white fill + bright yellow
-border for hands, black fill + bright purple border for feet — each with a thin
-neutral hairline outside the border so the glyph separates from same-toned rock.
-Side is shown by the **mirrored silhouette** alone, not by colour. Left and right
-are never merged, so a hold used by both hands (right then left) shows two marks,
-fanned apart so both read. The number rides in a small **corner badge** pinned to
-the glyph (a dark disc with a white digit and a white ring), keeping the number
-tightly coupled to its mark with no leader line.
+**outline-only hand / foot glyph** of the actual limb that used it — a single
+colour stroke with a **transparent fill**, so the wall hold reads straight
+through. Every glyph uses the **same colour**; only the **shape** (hand vs foot)
+and the **orientation** (mirrored for the left side) tell them apart. Left and
+right are never merged, so a hold used by both hands (right then left) shows two
+marks, fanned apart so both read. The number rides in a small **corner badge**
+pinned to the glyph (a dark disc with a white digit and a white ring), keeping the
+number tightly coupled to its mark with no leader line.
 Markers reveal in first-use order on the first playback pass and then stay shown
 across loops; a **Replay** control on the player re-arms that reveal. Holds are
 **inferred from Dwells** (a limb held still long enough to be load-bearing — a

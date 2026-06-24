@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import { HOLD_STYLE, type HoldStyle } from "@/pipeline/holdsOverlay";
+import { type HoldStyle } from "@/pipeline/holdsOverlay";
+import HoldGlyphIcon from "@/components/skeleton/HoldGlyphIcon";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
@@ -25,8 +26,8 @@ const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Per-kind Holds legend — colour codes kind (hands vs feet); side is shown by
- *  the mirrored glyph on the overlay, not colour. */
+/** Holds legend — glyphs are a single colour, differentiated by shape (hand vs
+ *  foot) and orientation (mirror = side), so the legend shows the shapes. */
 const HOLD_LEGEND: { kind: "hand" | "foot"; label: string }[] = [
   { kind: "hand", label: "Hands" },
   { kind: "foot", label: "Feet" },
@@ -135,8 +136,9 @@ export default function SkeletonStylePanel({
     jointsVisible, jointColor, jointRadius,
   ]);
 
-  // Emit the Holds style whenever any Holds setting changes. Marker colours are
-  // fixed per kind (see HOLD_STYLE), so only visibility is user-controlled here.
+  // Emit the Holds style whenever any Holds setting changes. The glyph look is
+  // fixed (single-colour outline, see HOLD_GLYPH_COLOR), so only visibility is
+  // user-controlled here.
   useEffect(() => {
     onHoldsChangeRef.current?.({ holdsVisible });
   }, [holdsVisible]);
@@ -272,9 +274,7 @@ export default function SkeletonStylePanel({
               <div className="flex flex-wrap gap-x-3 gap-y-1">
                 {HOLD_LEGEND.map(({ kind, label }) => (
                   <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted select-none">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: HOLD_STYLE[kind].fill, border: `2px solid ${HOLD_STYLE[kind].border}` }}
-                      aria-hidden="true" />
+                    <HoldGlyphIcon kind={kind} className="h-3.5 w-3.5 shrink-0 text-fg-secondary" />
                     {label}
                   </span>
                 ))}

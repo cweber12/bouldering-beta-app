@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
-import { HOLD_STYLE, HOLD_BADGE } from "@/pipeline/holdsOverlay";
+import { HOLD_BADGE } from "@/pipeline/holdsOverlay";
+import HoldGlyphIcon from "@/components/skeleton/HoldGlyphIcon";
 import type { HoldEntry } from "@/hooks/useScanHolds";
 
 export interface HoldsEditorProps {
@@ -70,11 +71,7 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                   onClick={() => onAdd(kind, side)}
                   className="flex items-center justify-center gap-1.5 rounded-(--radius-control) border border-edge/60 bg-inset px-2 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
                 >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: HOLD_STYLE[kind].fill, border: `2px solid ${HOLD_STYLE[kind].border}` }}
-                    aria-hidden="true"
-                  />
+                  <HoldGlyphIcon kind={kind} side={side} className="h-4 w-4 shrink-0" />
                   {label}
                 </button>
               ))}
@@ -96,14 +93,15 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                   >
                     <span
                       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                      style={{
-                        backgroundColor: HOLD_BADGE.bg,
-                        color: HOLD_BADGE.text,
-                        boxShadow: `0 0 0 1.5px ${HOLD_STYLE[entry.hold.kind].border}`,
-                      }}
+                      style={{ backgroundColor: HOLD_BADGE.bg, color: HOLD_BADGE.text }}
                     >
                       {entry.order}
                     </span>
+                    <HoldGlyphIcon
+                      kind={entry.hold.kind}
+                      side={entry.hold.side ?? "right"}
+                      className="h-4 w-4 shrink-0 text-fg-muted"
+                    />
                     <span className="flex-1 capitalize">
                       {entry.hold.side ? `${entry.hold.side} ` : ""}
                       {entry.hold.kind}

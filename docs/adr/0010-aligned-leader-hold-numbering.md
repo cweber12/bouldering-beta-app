@@ -3,11 +3,12 @@
 > **Superseded by the corner-badge hold redesign.** The off-to-the-side
 > black-on-white label and the horizontal leader line described here are gone:
 > the Hold number now rides in a small dark **corner badge** pinned to the glyph
-> (no leader, no aligned label group), and the glyph itself is opaque (white fill +
-> yellow border for hands, black fill + purple border for feet, with a neutral
-> separating hairline) rather than translucent. Kind is colour-coded; side is the
-> mirrored silhouette only. The Hold inference, selectivity gates, shared-hold
-> fan-out, and progressive reveal are all unchanged. See `pipeline/holdsOverlay.ts`.
+> (no leader, no aligned label group). The glyph itself is an **outline-only**
+> hand / foot shape — a single colour stroke with a transparent fill, so the wall
+> reads through — where only the shape (hand vs foot) and orientation (mirrored for
+> the left side) differentiate holds; there is no per-kind or per-side colour. The
+> Hold inference, selectivity gates, shared-hold fan-out, and progressive reveal are
+> all unchanged. See `pipeline/holdsOverlay.ts`.
 
 Supersedes the *label placement* of [ADR 0007](0007-hold-detection-overlay.md) — the
 greedy, outward-pushed, ring-search placement with angled leader lines — and moots the
