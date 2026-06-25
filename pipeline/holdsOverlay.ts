@@ -75,6 +75,11 @@ export const HOLD_BADGE = {
 /** Dark digit colour for the on-glyph number — high contrast on the white glyph. */
 const HOLD_NUMBER_COLOR = HOLD_BADGE.bg;
 
+/** White halo stroked around the dark digit. Invisible on the white glyph; where the
+ *  digit spills onto rock the halo gives it a readable backing, so the number reads
+ *  everywhere without a disc. */
+const HOLD_NUMBER_HALO = "#FFFFFF";
+
 // ---------------------------------------------------------------------------
 // Sizing & layout defaults (× body scale unless noted)
 // ---------------------------------------------------------------------------
@@ -91,6 +96,9 @@ const CLUSTER_RADIUS_FRAC = DEFAULT_HOLD_RADIUS;
 /** Glyph viewBox span as a multiple of the ring radius — tied to the ring so the
  *  two always look balanced; ~ring-radius keeps the glyph about half its old size. */
 const GLYPH_SPAN_TO_RING = 1.1;
+/** Per-kind size multiplier on the base span — the foot silhouette reads smaller at a
+ *  given span than the hand, so it is drawn a touch larger. */
+const GLYPH_SCALE: Record<"hand" | "foot", number> = { hand: 1.1, foot: 1.15 };
 /** Glyph centre sits this × its span beyond the ring edge, so its solid mass rests
  *  flush just outside the stroke while the ring interior stays clear. */
 const BADGE_DIST_FRAC = 0.42;
@@ -100,25 +108,36 @@ const BADGE_COLLISION_FRAC = 0.5;
 /** Glyph outline width as a fraction of the glyph span. */
 const GLYPH_OUTLINE_FRAC = 0.05;
 /** Base on-glyph digit font as a fraction of the glyph span (before auto-fit). */
-const NUMBER_BASE_FRAC = 0.42;
+const NUMBER_BASE_FRAC = 0.52;
 /** On-glyph digit font floor as a fraction of body scale, so it never goes sub-legible. */
-const NUMBER_FLOOR_FRAC = 0.12;
+const NUMBER_FLOOR_FRAC = 0.16;
+/** White halo stroke around the digit as a fraction of the digit font size. */
+const NUMBER_HALO_FRAC = 0.18;
 /** Width of the solid region under the digit, per kind, as a fraction of the glyph
  *  span. The foot's "ball" is a smaller solid patch than the hand's palm, so a
- *  two-digit number is auto-shrunk harder there to stay contained. */
-const SOLID_WIDTH_FRAC: Record<"hand" | "foot", number> = { hand: 0.5, foot: 0.42 };
+ *  two-digit number is auto-shrunk harder there to stay contained; the halo forgives
+ *  a small spill onto rock. */
+const SOLID_WIDTH_FRAC: Record<"hand" | "foot", number> = { hand: 0.58, foot: 0.5 };
 /** Hard cap on how far (radians) a badge may be nudged along its arc to clear a
  *  neighbouring ring's badge — keeps it on the hold's own side, never flung away. */
 const MAX_NUDGE = Math.PI / 2;
 
 /**
- * Visual centroid of each glyph as a fraction of its square viewBox — where the
- * silhouette is solid enough to back the number. Eyeballed from the paths; the x is
- * mirrored with the glyph for the left side.
+ * Where the number sits on each glyph, as a fraction of its square viewBox in the
+ * glyph's *drawn* orientation (the left glyph is the mirror of the right, so the
+ * left/right entries are mirror-symmetric about x = 0.5). Biased off-centre so the
+ * digit reads down-and-out toward its limb's side — left limbs left, right limbs
+ * right — over the solid palm / ball. Eyeballed; safe to tune per side.
  */
-const GLYPH_CENTROID: Record<"hand" | "foot", { x: number; y: number }> = {
-  hand: { x: 0.5, y: 0.6 },
-  foot: { x: 0.46, y: 0.56 },
+const GLYPH_CENTROID: Record<"hand" | "foot", Record<"left" | "right", { x: number; y: number }>> = {
+  hand: {
+    left: { x: 0.44, y: 0.66 },
+    right: { x: 0.56, y: 0.66 },
+  },
+  foot: {
+    left: { x: 0.45, y: 0.56 },
+    right: { x: 0.55, y: 0.56 },
+  },
 };
 
 const TAU = Math.PI * 2;
@@ -270,8 +289,16 @@ interface ClusterLayout {
   badges: BadgePlacement[];
 }
 
-function layoutClusters(clusters: Hold[][], badgeDist: number, br: number): ClusterLayout[] {
-  const step = Math.min(MAX_NUDGE, (2 * br) / badgeDist);
+/** Per-kind badge geometry: glyph span, flush distance from the ring centre, and
+ *  the collision radius the glyph is treated as for spacing. */
+type BadgeGeom = Record<"hand" | "foot", { span: number; dist: number; br: number }>;
+
+function layoutClusters(clusters: Hold[][], geom: BadgeGeom): ClusterLayout[] {
+  // Fan spacing uses the larger glyph (so neither kind overlaps) and the larger
+  // radius (the conservative angle→arc-length conversion).
+  const brRep = Math.max(geom.hand.br, geom.foot.br);
+  const distRep = Math.max(geom.hand.dist, geom.foot.dist);
+  const step = Math.min(MAX_NUDGE, (2 * brRep) / distRep);
 
   const meta = clusters.map((members) => {
     const cx = members.reduce((s, m) => s + m.x, 0) / members.length;
@@ -302,32 +329,35 @@ function layoutClusters(clusters: Hold[][], badgeDist: number, br: number): Clus
 
   // Resolve inter-ring collisions in Hold order, so lower numbers keep their slot.
   bases.sort((a, b) => a.hold.order - b.hold.order);
-  const placed: { x: number; y: number }[] = [];
+  const placed: { x: number; y: number; br: number }[] = [];
   const finalPos = new Map<string, { x: number; y: number }>();
-  const minGap = 2 * br * 0.9; // a hair of overlap tolerance avoids jitter
   const capSteps = Math.max(1, Math.floor(MAX_NUDGE / step));
   const offsets = [0];
   for (let k = 1; k <= capSteps; k++) offsets.push(k * step, -k * step);
 
   for (const b of bases) {
-    let chosen: { x: number; y: number } | null = null;
+    const g = geom[b.hold.kind];
+    const clears = (x: number, y: number) =>
+      placed.every((p) => Math.hypot(p.x - x, p.y - y) >= (g.br + p.br) * 0.9);
+    let chosen: { x: number; y: number; br: number } | null = null;
     for (const d of offsets) {
       const th = b.theta + d;
-      const x = b.cx + badgeDist * Math.cos(th);
-      const y = b.cy + badgeDist * Math.sin(th);
-      if (placed.every((p) => Math.hypot(p.x - x, p.y - y) >= minGap)) {
-        chosen = { x, y };
+      const x = b.cx + g.dist * Math.cos(th);
+      const y = b.cy + g.dist * Math.sin(th);
+      if (clears(x, y)) {
+        chosen = { x, y, br: g.br };
         break;
       }
     }
     if (!chosen) {
       chosen = {
-        x: b.cx + badgeDist * Math.cos(b.theta),
-        y: b.cy + badgeDist * Math.sin(b.theta),
+        x: b.cx + g.dist * Math.cos(b.theta),
+        y: b.cy + g.dist * Math.sin(b.theta),
+        br: g.br,
       };
     }
     placed.push(chosen);
-    finalPos.set(b.hold.id, chosen);
+    finalPos.set(b.hold.id, { x: chosen.x, y: chosen.y });
   }
 
   return meta.map(({ members, cx, cy, earliestReveal }) => ({
@@ -381,13 +411,15 @@ export function drawHolds(
   const circleR = Math.max(3, DEFAULT_HOLD_RADIUS * bodyScale);
   const circleStroke = Math.max(1.5, circleR * CIRCLE_STROKE_FRAC);
   const haloPx = Math.max(1, circleStroke * RING_HALO_FRAC);
-  const glyphSpan = circleR * GLYPH_SPAN_TO_RING;
-  const badgeDist = circleR + glyphSpan * BADGE_DIST_FRAC;
-  const br = glyphSpan * BADGE_COLLISION_FRAC;
+  const baseSpan = circleR * GLYPH_SPAN_TO_RING;
+  const spanFor = (kind: "hand" | "foot") => baseSpan * GLYPH_SCALE[kind];
+  const geomFor = (kind: "hand" | "foot") => {
+    const span = spanFor(kind);
+    return { span, dist: circleR + span * BADGE_DIST_FRAC, br: span * BADGE_COLLISION_FRAC };
+  };
+  const geom: BadgeGeom = { hand: geomFor("hand"), foot: geomFor("foot") };
   const clusterDist = CLUSTER_RADIUS_FRAC * bodyScale;
-  const glyphOutlinePx = Math.max(1, glyphSpan * GLYPH_OUTLINE_FRAC);
-  const numberBase = glyphSpan * NUMBER_BASE_FRAC;
-  const numberFloor = Math.max(8, bodyScale * NUMBER_FLOOR_FRAC);
+  const numberFloor = Math.max(9, bodyScale * NUMBER_FLOOR_FRAC);
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
@@ -398,7 +430,7 @@ export function drawHolds(
   const candidates = holds.filter(inBounds);
   if (candidates.length === 0) return;
   const clusters = clusterHolds(candidates, clusterDist);
-  const layouts = layoutClusters(clusters, badgeDist, br);
+  const layouts = layoutClusters(clusters, geom);
 
   ctx.save();
   ctx.textAlign = "center";
@@ -424,23 +456,31 @@ export function drawHolds(
   for (const cl of layouts) {
     for (const { hold, bx, by } of cl.badges) {
       if (hold.firstUseTime > t) continue;
-      drawGlyph(ctx, hold.kind, hold.side, bx, by, glyphSpan, HOLD_GLYPH_COLOR, HOLD_GLYPH_OUTLINE, glyphOutlinePx);
+      const span = geom[hold.kind].span;
+      const glyphOutlinePx = Math.max(1, span * GLYPH_OUTLINE_FRAC);
+      drawGlyph(ctx, hold.kind, hold.side, bx, by, span, HOLD_GLYPH_COLOR, HOLD_GLYPH_OUTLINE, glyphOutlinePx);
 
-      // Number digit centred on the glyph's solid palm / ball (x mirrored with the
-      // glyph), auto-fit so it stays contained — harder on the smaller foot ball.
-      const c = GLYPH_CENTROID[hold.kind];
-      const ox = (c.x - 0.5) * glyphSpan * (hold.side === "left" ? -1 : 1);
-      const oy = (c.y - 0.5) * glyphSpan;
-      const dcx = bx + ox;
-      const dcy = by + oy;
+      // Number digit over the glyph's solid palm / ball, biased toward the limb's
+      // side (left limbs left, right limbs right) via the per-side centroid, auto-fit
+      // so it stays contained — harder on the smaller foot ball.
+      const c = GLYPH_CENTROID[hold.kind][hold.side];
+      const dcx = bx + (c.x - 0.5) * span;
+      const dcy = by + (c.y - 0.5) * span;
 
       const text = String(hold.order);
-      const maxW = glyphSpan * SOLID_WIDTH_FRAC[hold.kind];
-      let fontPx = numberBase;
+      const maxW = span * SOLID_WIDTH_FRAC[hold.kind];
+      let fontPx = span * NUMBER_BASE_FRAC;
       ctx.font = `bold ${fontPx}px sans-serif`;
       const tw = ctx.measureText(text).width;
       if (tw > maxW) fontPx = Math.max(numberFloor, fontPx * (maxW / tw));
       ctx.font = `bold ${fontPx}px sans-serif`;
+
+      // White halo (stroke) under the dark digit so it reads even where it spills off
+      // the white glyph onto rock; the halo blends into the glyph elsewhere.
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(1.5, fontPx * NUMBER_HALO_FRAC);
+      ctx.strokeStyle = HOLD_NUMBER_HALO;
+      ctx.strokeText(text, dcx, dcy);
       ctx.fillStyle = HOLD_NUMBER_COLOR;
       ctx.fillText(text, dcx, dcy);
     }

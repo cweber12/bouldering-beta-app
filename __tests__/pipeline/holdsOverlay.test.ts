@@ -33,6 +33,7 @@ function makeCtx(width = 1000, height = 1000) {
     fill: vi.fn(),
     stroke,
     fillText,
+    strokeText: vi.fn(),
     textAlign: "",
     textBaseline: "",
     font: "",

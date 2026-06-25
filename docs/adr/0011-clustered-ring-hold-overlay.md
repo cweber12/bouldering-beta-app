@@ -34,14 +34,19 @@ draw-time concern.
    symmetrically along that arc. A glyph rests **flush just outside the stroke**,
    pointing inward — the contact implies the link, no leader line.
 
-3. **The number rides on the glyph.** A bold **dark digit is centred on the palm /
-   ball** of the solid white silhouette — no separate disc. The digit **auto-fits**
-   the glyph's solid region (a tighter cap on the foot's smaller "ball") so a two-digit
-   number stays contained and legible. Dark-on-white gives the digit its contrast.
+3. **The number rides on the glyph.** A bold **dark digit sits over the palm / ball**
+   of the solid white silhouette — no separate disc. Its position comes from a
+   **per-side centroid** (left/right entries mirror-symmetric about the glyph centre),
+   so the digit reads **down-and-out toward its limb's side** — left limbs left, right
+   limbs right. The digit **auto-fits** the glyph's solid region (a tighter cap on the
+   foot's smaller "ball") so a two-digit number stays contained, and carries a **thin
+   white halo**: invisible on the white glyph, but giving the digit a readable backing
+   wherever it spills onto rock — legibility without re-adding a disc.
 
 4. **Smaller glyphs, tied to the ring.** Glyph span scales as a fixed fraction of the
    ring radius (`≈ ring radius`), roughly half the old size, so ring and glyph always
-   look balanced at any photo resolution.
+   look balanced at any photo resolution. A small **per-kind multiplier** draws the
+   foot a touch larger than the hand, which reads smaller at a given span.
 
 5. **Contrast halo.** The white ring and white glyph each carry a thin **dark outline**
    so the marks read on light granite or chalky holds as well as on dark rock.
