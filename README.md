@@ -112,9 +112,11 @@ on the fly via `pipeline/holdDetection.ts` (`detectHolds`) over the same pose
 frames the Skeleton uses. The Holds source path lives in the `useHolds` hook;
 scan-stage editing lives in `useScanHolds`. `drawHolds`
 (`pipeline/holdsOverlay.ts`) renders them beneath the Skeleton (which stays
-legible on top); the per-frame cost is a glyph plus a corner number badge each, so
-geometry is computed inline without a cache. They are toggled independently from
-the Overlay panel's Holds row. The
+legible on top): coincident Holds share **one ring** carrying several numbered
+glyph badges, each a solid white hand/foot silhouette flush outside the ring with
+the number as a dark digit on the palm/ball (see ADR 0011). The per-frame cost is
+trivial, so geometry is computed inline without a cache. They are toggled
+independently from the Overlay panel's Holds row. The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off).
 

@@ -1,14 +1,15 @@
 # Aligned-leader hold numbering
 
-> **Superseded by the corner-badge hold redesign.** The off-to-the-side
-> black-on-white label and the horizontal leader line described here are gone:
-> the Hold number now rides in a small dark **corner badge** pinned to the glyph
-> (no leader, no aligned label group). The glyph itself is an **outline-only**
-> hand / foot shape — a single colour stroke with a transparent fill, so the wall
-> reads through — where only the shape (hand vs foot) and orientation (mirrored for
-> the left side) differentiate holds; there is no per-kind or per-side colour. The
-> Hold inference, selectivity gates, shared-hold fan-out, and progressive reveal are
-> all unchanged. See `pipeline/holdsOverlay.ts`.
+> **Superseded by [ADR 0011](0011-clustered-ring-hold-overlay.md) — the
+> clustered-ring hold overlay.** The off-to-the-side black-on-white label and the
+> horizontal leader line described here are gone. Coincident Holds now share **one
+> ring** carrying several numbered glyph badges; each badge is a **solid white**
+> hand / foot silhouette (mirrored for the left side) flush just outside the ring,
+> with the Hold number as a **dark digit centred on the palm / ball** of the glyph
+> (no leader, no disc). Only shape (hand vs foot) and orientation differentiate
+> holds; there is no per-kind or per-side colour. The Hold inference, selectivity
+> gates, and progressive reveal are all unchanged. See
+> `pipeline/holdsOverlay.ts`.
 
 Supersedes the *label placement* of [ADR 0007](0007-hold-detection-overlay.md) — the
 greedy, outward-pushed, ring-search placement with angled leader lines — and moots the
