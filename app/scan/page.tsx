@@ -76,21 +76,6 @@ function defaultClimberBox(point: { x: number; y: number }): CropFraction {
   };
 }
 
-/**
- * Default Wall Crop ("Route") around the Climber box — the climber-expanded
- * region, in fraction space (mirrors deriveWallRegion's 35% expansion). Auto-set
- * when the Climber is tapped; the User may then adjust it.
- */
-function deriveWallFraction(climber: CropFraction, pad = 0.35): CropFraction {
-  const cx = climber.x + climber.w / 2;
-  const cy = climber.y + climber.h / 2;
-  const halfW = (climber.w / 2) * (1 + pad);
-  const halfH = (climber.h / 2) * (1 + pad);
-  const x = clamp01(cx - halfW);
-  const y = clamp01(cy - halfH);
-  return { x, y, w: Math.min(1 - x, halfW * 2), h: Math.min(1 - y, halfH * 2) };
-}
-
 // ---------------------------------------------------------------------------
 // File-system helpers
 // ---------------------------------------------------------------------------
@@ -472,16 +457,19 @@ function ScanPageInner() {
     setMaxPoses(cfg.maxPoses);
   }
 
-  // Click-time Climber crop: landmark-derive the box from the tapped frame and
-  // auto-render the Wall Crop around it. Returns false when no pose was found at
-  // the tap, so the caller can hint the user to pick a clearer frame; the soft
-  // fallback box is set either way so the scan never blocks. Mirrors ADR 0013.
+  // Click-time Climber crop: landmark-derive the box from the tapped frame.
+  // Returns false when no pose was found at the tap, so the caller can hint the
+  // user to pick a clearer frame; the soft fallback box is set either way so the
+  // scan never blocks. The Wall Crop ("Route") is left at the full-frame default
+  // (Climber masked out during ORB) so route-photo matching has the most wall
+  // texture — a climber-hugging wall crop starves ORB. The User may still shrink
+  // it. Mirrors ADR 0013.
   const handleClimberTapDetect = useCallback(
     (frame: ImageData, point: { x: number; y: number }, timestampSec: number): boolean => {
       const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
       const climber = derived ?? defaultClimberBox(point);
       setClimberCrop(climber);
-      if (!wallTouchedRef.current) setWallCrop(deriveWallFraction(climber));
+      if (!wallTouchedRef.current) setWallCrop(DEFAULT_CROP);
       return derived != null;
     },
     [model],

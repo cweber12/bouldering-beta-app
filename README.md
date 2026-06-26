@@ -144,7 +144,7 @@ handles to resize it.
 | Target | Purpose |
 |---|---|
 | Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is derived from the climber's landmarks at the tap (sized to the body plus room for the next move) and follows them each frame. There is no climber box to resize — re-tap to pick a different climber. |
-| Route | Feature-matching region on the first video frame. Auto-rendered around the climber once they are tapped; drag it to frame only the route and the connected face to line the climb up with the route photo. |
+| Route | Feature-matching region on the first video frame. Defaults to the whole frame (climber masked out during matching); drag it to exclude sky, ground, or bystanders and line the climb up with the route photo. |
 
 Click **Scan video** after marking the climber and the route.
 

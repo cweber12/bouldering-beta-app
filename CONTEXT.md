@@ -45,8 +45,9 @@ _Avoid_: selection, region.
 
 **Wall Crop**:
 A region of stable wall texture (excluding the Climber) used to extract ORB
-features for route-photo matching. Auto-rendered around the Climber once the
-Climber is tapped, and adjustable by the User.
+features for route-photo matching. Defaults to the whole frame (the Climber is
+masked out during extraction) so matching has the most wall texture; the User
+may shrink it to exclude sky, ground, or bystanders.
 _Avoid_: background crop.
 
 **Quality Tier**:
@@ -258,7 +259,7 @@ _Avoid_: frame stats (too generic).
   frame; the **Adaptive Crop** is derived from that selected pose.
 - The tap seeds **Climber Identity** and the first **Adaptive Crop**; the
   Adaptive Crop then frames the Climber every detection frame. The **Wall Crop**
-  auto-renders around the Climber, stays User-adjustable, and feeds route-photo
+  defaults to the whole frame, stays User-adjustable, and feeds route-photo
   matching, not pose tracking.
 - A **Hold** is inferred from one or more **Dwells** of the same limb kind at one
   spot, and may then be edited by the **User**. For a **Fixed Capture** Run the

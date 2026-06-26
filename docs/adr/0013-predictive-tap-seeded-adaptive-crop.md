@@ -56,10 +56,12 @@ box:
 3. **The displayed box is the detection region.** What the User sees is the box
    the next frame is detected in, removing the old gap between the drawn 1.25×
    box and the 1.625× region actually searched.
-4. **The Wall Crop auto-renders and stays editable.** Once the Climber is tapped,
-   the Wall Crop ("Route") auto-renders from the climber-expanded region
-   (`deriveWallRegion`) and remains User-adjustable. It is now the only **Manual
-   Crop**.
+4. **The Wall Crop defaults to the whole frame and stays editable.** The Wall
+   Crop ("Route") defaults to the full frame (the Climber is masked out during
+   ORB) so route-photo matching keeps the most wall texture, and remains
+   User-adjustable. It is now the only **Manual Crop**. (A climber-hugging wall
+   crop was tried first and rejected: it starved ORB of wall features and broke
+   matching that previously worked.)
 
 ## Considered options
 
