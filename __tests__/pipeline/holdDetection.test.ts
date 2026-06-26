@@ -119,6 +119,32 @@ describe("detectHolds", () => {
     expect(holds[0].kind).toBe("foot");
   });
 
+  it("centres a Foot Hold on the toe, not the toe-heel midpoint", () => {
+    // Toe planted on the hold; the heel sits offset behind/beside it (pivoted off
+    // the hold). The stand-up gate fires, and the Hold must land on the toe.
+    const hip: [number, number] = [0.5, 0.5];
+    const ankle: [number, number] = [0.5, 0.85];
+    const toe: [number, number] = [0.5, 0.92];
+    const heel: [number, number] = [0.4, 0.95]; // distinct from the toe
+    const kneeXs = [0.65, 0.62, 0.58, 0.54, 0.51];
+    const frames: PoseFrame[] = kneeXs.map((kx, i) => ({
+      timestamp: FOOT_TS[i],
+      keypoints: [
+        kp("left_foot_index", toe[0], toe[1]),
+        kp("left_heel", heel[0], heel[1]),
+        kp("left_ankle", ankle[0], ankle[1]),
+        kp("left_knee", kx, 0.675),
+        kp("left_hip", hip[0], hip[1]),
+      ],
+    }));
+    const holds = detectHolds(frames, project, BODY_SCALE);
+    expect(holds).toHaveLength(1);
+    expect(holds[0].kind).toBe("foot");
+    // On the toe (0.5 → 500px), not the toe-heel midpoint (~0.45 → 450px).
+    expect(holds[0].x).toBeCloseTo(toe[0] * SCALE);
+    expect(holds[0].y).toBeCloseTo(toe[1] * SCALE);
+  });
+
   it("rejects a free-hanging plumb leg (straight knee, ankle under the hip)", () => {
     const hip: [number, number] = [0.5, 0.5];
     const knee: [number, number] = [0.5, 0.7]; // straight (~180°)

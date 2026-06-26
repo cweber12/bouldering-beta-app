@@ -132,8 +132,14 @@ export interface HoldDetectionOptions {
 interface LimbSpec {
   kind: "hand" | "foot";
   side: "left" | "right";
-  /** Primary contact landmarks, averaged when present (fingers / toes). */
-  contact: [string, string];
+  /**
+   * Primary contact landmarks, averaged when more than one is present. The hand
+   * uses both fingers (mean = palm centre); the foot uses the **toe only**
+   * (`foot_index`) — when you stand on a foothold the toe is what is planted on the
+   * hold while the heel pivots off it, so the toe both marks the hold and is the
+   * steadier point for the Dwell. The heel is deliberately excluded.
+   */
+  contact: string[];
   /** Proximal fallback when the primaries are missing (wrist / ankle). */
   fallback: string;
 }
@@ -141,8 +147,8 @@ interface LimbSpec {
 const LIMBS: LimbSpec[] = [
   { kind: "hand", side: "left",  contact: ["left_index", "left_pinky"],   fallback: "left_wrist" },
   { kind: "hand", side: "right", contact: ["right_index", "right_pinky"], fallback: "right_wrist" },
-  { kind: "foot", side: "left",  contact: ["left_foot_index", "left_heel"],   fallback: "left_ankle" },
-  { kind: "foot", side: "right", contact: ["right_foot_index", "right_heel"], fallback: "right_ankle" },
+  { kind: "foot", side: "left",  contact: ["left_foot_index"],  fallback: "left_ankle" },
+  { kind: "foot", side: "right", contact: ["right_foot_index"], fallback: "right_ankle" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -170,13 +176,20 @@ function nameMap(frame: PoseFrame): Map<string, Keypoint> {
   return m;
 }
 
-/** Normalized contact point + representative score for a limb at one frame. */
+/** Normalized contact point + representative score for a limb at one frame: the
+ *  mean of whichever primary landmarks are present, else the proximal fallback. */
 function contactOf(map: Map<string, Keypoint>, spec: LimbSpec): { pt: Point; score: number } | null {
-  const a = map.get(spec.contact[0]);
-  const b = map.get(spec.contact[1]);
-  if (a && b) return { pt: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, score: (a.score + b.score) / 2 };
-  if (a) return { pt: { x: a.x, y: a.y }, score: a.score };
-  if (b) return { pt: { x: b.x, y: b.y }, score: b.score };
+  const present = spec.contact.map((n) => map.get(n)).filter((kp): kp is Keypoint => kp !== undefined);
+  if (present.length > 0) {
+    const n = present.length;
+    return {
+      pt: {
+        x: present.reduce((s, kp) => s + kp.x, 0) / n,
+        y: present.reduce((s, kp) => s + kp.y, 0) / n,
+      },
+      score: present.reduce((s, kp) => s + kp.score, 0) / n,
+    };
+  }
   const f = map.get(spec.fallback);
   if (f) return { pt: { x: f.x, y: f.y }, score: f.score };
   return null;
@@ -184,10 +197,10 @@ function contactOf(map: Map<string, Keypoint>, spec: LimbSpec): { pt: Point; sco
 
 /**
  * Normalized [0,1] contact point of one extremity in a single pose frame, using
- * the same fingers/toes→proximal fallback detection uses (hand = mean(index,
- * pinky) → wrist; foot = mean(foot_index, heel) → ankle). Returns null when the
- * limb is absent. Used by scan-stage Hold authoring to snap a new Hold to the
- * limb the User picks (ADR 0009).
+ * the same primary→proximal fallback detection uses (hand = mean(index, pinky) →
+ * wrist; foot = foot_index toe → ankle). Returns null when the limb is absent.
+ * Used by scan-stage Hold authoring to snap a new Hold to the limb the User picks
+ * (ADR 0009).
  */
 export function limbContactAt(
   frame: PoseFrame,

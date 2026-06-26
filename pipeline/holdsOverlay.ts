@@ -49,13 +49,13 @@ import type { Hold } from "@/pipeline/holdDetection";
 
 /** Ring colour per limb kind — the whole payload of a Hold marker (ADR 0012). */
 export const HOLD_RING_COLOR: Record<"hand" | "foot", string> = {
-  hand: "#3b82f6", // mirror of --color-hand-hold
-  foot: "#f97316", // mirror of --color-foot-hold
+  hand: "#4BE3AC", // mirror of --color-hand-hold
+  foot: "#FFCC29", // mirror of --color-foot-hold
 };
 
 /** Thin dark halo stroked just outside the coloured ring so the mark reads on light
  *  or dark rock alike. Overlay-only (drawn over the photo, not theme chrome). */
-const HOLD_RING_HALO = "rgba(11, 15, 20, 0.85)";
+const HOLD_RING_HALO = "rgba(11, 15, 20, 0.25)";
 
 // ---------------------------------------------------------------------------
 // Sizing & layout defaults (× body scale unless noted)
@@ -175,7 +175,7 @@ function drawRing(
 ): void {
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, TAU);
-
+  ctx.strokeStyle = HOLD_RING_HALO;
   ctx.lineWidth = stroke + haloPx * 2;
   ctx.stroke();
   ctx.strokeStyle = color;
