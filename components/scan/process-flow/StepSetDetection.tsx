@@ -31,6 +31,18 @@ function formatVideoTime(secs: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+/** Grab the video's current frame as ImageData (full resolution) for detection. */
+function captureFrame(video: HTMLVideoElement | null): ImageData | null {
+  if (!video || !video.videoWidth || !video.videoHeight) return null;
+  const c = document.createElement("canvas");
+  c.width = video.videoWidth;
+  c.height = video.videoHeight;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(video, 0, 0);
+  return ctx.getImageData(0, 0, c.width, c.height);
+}
+
 // ---------------------------------------------------------------------------
 // DetectionSettings — plateless gear icon + popover (quality tier · pose model
 // · sampling frequency). Module-level so it never remounts on parent re-render.
@@ -224,11 +236,17 @@ export interface StepSetDetectionProps {
   videoPreviewUrl: string;
   climberCrop: CropFraction;
   wallCrop?: CropFraction;
-  onClimberCropChange: (c: CropFraction) => void;
   onWallCropChange?: (c: CropFraction) => void;
   /** Normalised point [0,1] the user tapped to identify the climber, if any. */
   climberPoint?: { x: number; y: number } | null;
   onClimberPointChange?: (p: { x: number; y: number } | null) => void;
+  /**
+   * Landmark-derive the Climber crop from the tapped frame. Given the displayed
+   * frame, the tap point, and the frame's video time, it sets the Climber crop
+   * (and auto-renders the Wall Crop). Returns false when no pose was found at the
+   * tap, so the step can hint the user to pick a clearer frame (ADR 0013).
+   */
+  onClimberTapDetect?: (frame: ImageData, point: { x: number; y: number }, timestampSec: number) => boolean;
   tier: QualityTier;
   onTierChange: (t: QualityTier) => void;
   modelVariant: MediaPipeVariant;
@@ -253,10 +271,10 @@ export default function StepSetDetection({
   videoPreviewUrl,
   climberCrop,
   wallCrop,
-  onClimberCropChange,
   onWallCropChange,
   climberPoint,
   onClimberPointChange,
+  onClimberTapDetect,
   tier,
   onTierChange,
   modelVariant,
@@ -293,9 +311,9 @@ export default function StepSetDetection({
   const [cropMode, setCropMode] = useState<CropMode>("climber");
   // Detection settings popover.
   const [showSettings, setShowSettings] = useState(false);
-  // True once the user has adjusted the wall box — drives the "now frame the
-  // wall" discoverability hint so it disappears after the second beat is done.
-  const [wallTouched, setWallTouched] = useState(false);
+  // Set when the most recent tap found no pose — surfaces a "pick a clearer
+  // frame" hint while the soft-fallback box keeps the scan unblocked.
+  const [tapMissed, setTapMissed] = useState(false);
   // Set when the user presses Scan with no climber marked: shows a soft nudge
   // and relabels the button to "Scan anyway" rather than blocking the scan.
   const [scanNudged, setScanNudged] = useState(false);
@@ -304,33 +322,27 @@ export default function StepSetDetection({
   const [hintMinimized, setHintMinimized] = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────
-  function handleClimberCropChange(c: CropFraction) {
-    onClimberCropChange(c);
-  }
-
   function handleWallCropChange(c: CropFraction) {
-    setWallTouched(true);
     onWallCropChange?.(c);
   }
 
-  // Tap the climber to lock detection. Seeds a default portrait box around the
-  // tap; processing refines it adaptively from the climber's landmarks.
+  // Tap the climber to lock detection. The box is landmark-derived from the
+  // tapped frame (climber-proportional, sized for the next move) — never
+  // hand-resized — and the Wall Crop auto-renders around it (ADR 0013).
   function handleClimberTap(p: { x: number; y: number }) {
     setScanNudged(false);
     onClimberPointChange?.(p);
-    const w = 0.34;
-    const h = 0.6;
-    onClimberCropChange({
-      x: Math.max(0, Math.min(1 - w, p.x - w / 2)),
-      y: Math.max(0, Math.min(1 - h, p.y - h / 2)),
-      w,
-      h,
-    });
+    const video = videoFullscreen ? fullscreenVideoRef.current : cropVideoRef.current;
+    const frame = captureFrame(video);
+    if (frame && onClimberTapDetect) {
+      const found = onClimberTapDetect(frame, p, video?.currentTime ?? 0);
+      setTapMissed(!found);
+    }
   }
 
   function handleSelectClimber() { setHintMinimized(false); setCropMode("climber"); }
   function handleSelectWall()    { setHintMinimized(false); setCropMode("wall"); }
-  function handleReTap()         { setScanNudged(false); onClimberPointChange?.(null); }
+  function handleReTap()         { setScanNudged(false); setTapMissed(false); onClimberPointChange?.(null); }
 
   function handleCropVideoLoaded() {
     const video  = cropVideoRef.current;
@@ -414,8 +426,9 @@ export default function StepSetDetection({
   ) : null;
 
   // Crop overlay. In climber mode, before a tap the overlay is a bare tap surface
-  // so the box never blocks tapping the climber; after a tap the derived box is
-  // shown for fine-tuning. Wall mode shows the wall crop box.
+  // so the box never blocks tapping the climber; after a tap the landmark-derived
+  // box is shown locked (no handles) and a tap re-detects a different climber.
+  // Wall mode shows the editable wall crop box.
   const cropOverlayNode = !hasCropFrame ? null : cropMode === "wall" ? (
     <CropBoxOverlay
       box={wallCrop ?? climberCrop}
@@ -433,8 +446,9 @@ export default function StepSetDetection({
     />
   ) : (
     <CropBoxOverlay
+      locked
       box={climberCrop}
-      onChange={handleClimberCropChange}
+      onChange={() => {}}
       onTap={handleClimberTap}
       borderRadius="0"
       color={CLIMBER_COLOR}
@@ -455,10 +469,15 @@ export default function StepSetDetection({
         ? { text: "Tap the climber, or Scan anyway.", tone: "caution", minimizable: false }
         : { text: "Tap the climber.", tone: "info", minimizable: false };
     }
+    if (tapMissed) {
+      return {
+        text: "No climber found there — tap again or pick a clearer frame.",
+        tone: "caution",
+        minimizable: false,
+      };
+    }
     return {
-      text: wallTouched
-        ? "Size the box to the climber with room for the next move."
-        : "Size the box to the climber with room for the next move, then tap Route.",
+      text: "Climber set. Tap Route to adjust the wall, or Scan.",
       tone: "info",
       minimizable: true,
     };
@@ -614,7 +633,7 @@ export default function StepSetDetection({
       ? "frame the route"
       : climberPoint == null
         ? "tap the climber"
-        : "size the box, then frame the route";
+        : "scan, or frame the route";
 
   const detectionPurpose =
     cropMode === "wall"

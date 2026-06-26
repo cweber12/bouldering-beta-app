@@ -50,8 +50,11 @@ seeds identity from a tap on the climber in the first frame (or the strongest
 pose), then on each frame selects the detected pose whose torso centroid is
 nearest the velocity-predicted position — rejecting anyone outside a distance
 gate, so a passerby never steals the track. The per-frame detection crop is
-derived **automatically** from the climber's landmarks; if the climber is lost
-inside the crop, detection widens to the full frame and re-acquires by identity.
+derived **automatically** from the climber's landmarks — sized to the body plus
+room for the next move and led toward the velocity-predicted position, so a
+reaching limb stays inside the crop instead of being clipped. If the climber is
+lost inside the crop, detection widens to the full frame and re-acquires by
+identity.
 
 After estimation, four post-processing passes are applied:
 
@@ -140,8 +143,8 @@ handles to resize it.
 
 | Target | Purpose |
 |---|---|
-| Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is then derived automatically and follows their full body each frame. Dragging the box is still available as a manual override. |
-| Route | Feature-matching region on the first video frame. Frame only the route and the connected face to line the climb up with the route photo. |
+| Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is derived from the climber's landmarks at the tap (sized to the body plus room for the next move) and follows them each frame. There is no climber box to resize — re-tap to pick a different climber. |
+| Route | Feature-matching region on the first video frame. Auto-rendered around the climber once they are tapped; drag it to frame only the route and the connected face to line the climb up with the route photo. |
 
 Click **Scan video** after marking the climber and the route.
 

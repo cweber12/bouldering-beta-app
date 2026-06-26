@@ -24,6 +24,7 @@ import { type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
+import { deriveTapCrop } from "@/pipeline/tapCropDetection";
 import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
@@ -52,6 +53,43 @@ const SESSION_KEY = "bouldering_last_attempt_id";
 let cachedRootHandle: FileSystemDirectoryHandle | null = null;
 let cachedPendingFile: File | null = null;
 let cachedVideoUrl: string | null = null;
+
+// ---------------------------------------------------------------------------
+// Climber / Wall crop helpers (fraction space)
+// ---------------------------------------------------------------------------
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/**
+ * Soft-fallback Climber box when click-time detection finds no pose: a modest
+ * portrait box around the tap, clamped to the frame. Smaller than the old fixed
+ * seed so it does not over-cover; the scan re-acquires the real extent anyway.
+ */
+function defaultClimberBox(point: { x: number; y: number }): CropFraction {
+  const w = 0.25;
+  const h = 0.55;
+  return {
+    x: clamp01(point.x - w / 2),
+    y: clamp01(point.y - h / 2),
+    w: Math.min(w, 1 - clamp01(point.x - w / 2)),
+    h: Math.min(h, 1 - clamp01(point.y - h / 2)),
+  };
+}
+
+/**
+ * Default Wall Crop ("Route") around the Climber box — the climber-expanded
+ * region, in fraction space (mirrors deriveWallRegion's 35% expansion). Auto-set
+ * when the Climber is tapped; the User may then adjust it.
+ */
+function deriveWallFraction(climber: CropFraction, pad = 0.35): CropFraction {
+  const cx = climber.x + climber.w / 2;
+  const cy = climber.y + climber.h / 2;
+  const halfW = (climber.w / 2) * (1 + pad);
+  const halfH = (climber.h / 2) * (1 + pad);
+  const x = clamp01(cx - halfW);
+  const y = clamp01(cy - halfH);
+  return { x, y, w: Math.min(1 - x, halfW * 2), h: Math.min(1 - y, halfH * 2) };
+}
 
 // ---------------------------------------------------------------------------
 // File-system helpers
@@ -185,6 +223,9 @@ function ScanPageInner() {
 
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
+  // True once the user has hand-adjusted the Wall Crop, so a re-tap does not
+  // clobber their framing with the auto climber-expanded region.
+  const wallTouchedRef = useRef(false);
   // Normalised point the user tapped to identify the climber (seeds tracking).
   const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
   // Panning Capture (long route): align per keyframe instead of a single frame-0
@@ -352,6 +393,7 @@ function ScanPageInner() {
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
     setWallCrop(DEFAULT_CROP);
+    wallTouchedRef.current = false;
     setS3Saved(false);
     setSaveError(null);
     setSavedRouteDirHandle(null);
@@ -429,6 +471,33 @@ function ScanPageInner() {
     setFrameStep(cfg.frameStep);
     setMaxPoses(cfg.maxPoses);
   }
+
+  // Click-time Climber crop: landmark-derive the box from the tapped frame and
+  // auto-render the Wall Crop around it. Returns false when no pose was found at
+  // the tap, so the caller can hint the user to pick a clearer frame; the soft
+  // fallback box is set either way so the scan never blocks. Mirrors ADR 0013.
+  const handleClimberTapDetect = useCallback(
+    (frame: ImageData, point: { x: number; y: number }, timestampSec: number): boolean => {
+      const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
+      const climber = derived ?? defaultClimberBox(point);
+      setClimberCrop(climber);
+      if (!wallTouchedRef.current) setWallCrop(deriveWallFraction(climber));
+      return derived != null;
+    },
+    [model],
+  );
+
+  // The user dragged the Wall Crop — remember it so a re-tap keeps their framing.
+  const handleWallCropChange = useCallback((c: CropFraction) => {
+    wallTouchedRef.current = true;
+    setWallCrop(c);
+  }, []);
+
+  // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
+  const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
+    if (p === null) wallTouchedRef.current = false;
+    setClimberPoint(p);
+  }, []);
 
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;
@@ -652,10 +721,10 @@ function ScanPageInner() {
           videoPreviewUrl={videoPreviewUrl}
           climberCrop={climberCrop}
           wallCrop={wallCrop}
-          onClimberCropChange={setClimberCrop}
-          onWallCropChange={setWallCrop}
+          onWallCropChange={handleWallCropChange}
           climberPoint={climberPoint}
-          onClimberPointChange={setClimberPoint}
+          onClimberPointChange={handleClimberPointChange}
+          onClimberTapDetect={handleClimberTapDetect}
           tier={tier}
           onTierChange={handleTierChange}
           modelVariant={modelVariant}
@@ -673,7 +742,7 @@ function ScanPageInner() {
       {step === "landmarks" && showScanLoading && (
         <ScanProgress
           frameImage={currentFrameImage}
-          manualCrop={climberCrop}
+          seedCrop={climberCrop}
           adaptiveCrop={currentClimberCrop}
           progressPct={progressPct}
           finishing={!isProcessing || progressPct >= 100}

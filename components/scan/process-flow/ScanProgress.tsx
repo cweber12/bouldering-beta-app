@@ -16,9 +16,9 @@ import { fitMediaStyle } from "@/utils/mediaContainerStyle";
 // scanned is painted live (crossfaded between stills so the moving climber does
 // not snap), and the Adaptive Crop is drawn over it as a green-tinted box — the
 // same accent colours as the Step 2 detection band — while the rest of the
-// frame is dimmed by a 25% black layer. The box starts on the user-drawn Manual
-// Crop and glides down onto the Climber once the first Adaptive Crop is found,
-// then tracks it. Both the frame and its box come from the same source
+// frame is dimmed by a 25% black layer. The box starts on the tap-derived seed
+// crop and glides onto the Climber once the first Adaptive Crop is found, then
+// tracks it. Both the frame and its box come from the same source
 // (useVideoProcessor) and are refreshed together, so the box always sits over
 // the frame it was derived from.
 // ---------------------------------------------------------------------------
@@ -26,8 +26,8 @@ import { fitMediaStyle } from "@/utils/mediaContainerStyle";
 export interface ScanProgressProps {
   /** Live snapshot of the frame currently being scanned; null until ready. */
   frameImage: ImageData | null;
-  /** The user-drawn Manual Crop (Climber) — the spotlight's starting box. */
-  manualCrop: CropFraction;
+  /** The tap-derived Climber seed crop — the spotlight's starting box. */
+  seedCrop: CropFraction;
   /** Per-frame Adaptive Crop (fraction); null until the Climber is first found. */
   adaptiveCrop: CropFraction | null;
   /** Seek-loop progress, 0–100. */
@@ -45,7 +45,7 @@ const FRAME_FADE_MS = 300;
 
 export default function ScanProgress({
   frameImage,
-  manualCrop,
+  seedCrop,
   adaptiveCrop,
   progressPct,
   finishing,
@@ -99,9 +99,9 @@ export default function ScanProgress({
   }, [frameImage]);
 
   // The spotlight box: the live Adaptive Crop once the Climber is found, else
-  // the user's Manual Crop. The geometry change is CSS-transitioned, so the box
-  // glides from the Manual Crop down onto the Climber and then tracks them.
-  const box = adaptiveCrop ?? manualCrop;
+  // the tap-derived seed crop. The geometry change is CSS-transitioned, so the
+  // box glides from the seed crop onto the Climber and then tracks them.
+  const box = adaptiveCrop ?? seedCrop;
 
   const aspectW = frameImage?.width ?? 9;
   const aspectH = frameImage?.height ?? 16;

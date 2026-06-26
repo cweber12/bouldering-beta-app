@@ -43,6 +43,13 @@ interface CropBoxOverlayProps {
    * selection before any box exists, so the box never blocks the tap.
    */
   tapOnly?: boolean;
+  /**
+   * Render the crop window read-only: it shows the box + mask but has **no
+   * resize handles and no drag**, while still reporting taps via {@link onTap}.
+   * Used for the landmark-derived Climber box, which the user re-positions by
+   * tapping a different climber rather than resizing (ADR 0013).
+   */
+  locked?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +142,7 @@ export default function CropBoxOverlay({
   showGrid = false,
   onTap,
   tapOnly = false,
+  locked = false,
 }: CropBoxOverlayProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -351,14 +359,15 @@ export default function CropBoxOverlay({
           border: `1px solid ${color}`,
           borderRadius,
           boxShadow: "0 0 0 1px rgba(0,0,0,0.35)",
-          cursor: disabled ? "default" : CURSOR_MAP["move"],
+          cursor: disabled || locked ? "default" : CURSOR_MAP["move"],
         }}
-        onPointerDown={disabled ? undefined : (e) => startDrag(e, "move")}
+        onPointerDown={disabled || locked ? undefined : (e) => startDrag(e, "move")}
       />
 
       {/* Resize handles — large invisible hit area with visible L-bracket / bar knob.
-          No individual shadows: the border's boxShadow provides the necessary contrast. */}
-      {!disabled &&
+          No individual shadows: the border's boxShadow provides the necessary contrast.
+          Hidden when locked: the Climber box is landmark-derived, not resized. */}
+      {!disabled && !locked &&
         handles.map(([id, lx, ly]) => (
           <div
             key={id}
