@@ -536,9 +536,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           if (i % frameStep === 0) {
             const predicted = predictCentroid(history);
+            const last = history.length > 0 ? history[history.length - 1] : null;
 
             // Region selection (pixels):
-            //  • established track → adaptive crop around the climber (slack-expanded)
+            //  • established track → a forward-looking region: the last climber
+            //    box translated toward where the Climber is heading, with a
+            //    velocity-sized margin, so a limb reaching between detection
+            //    frames stays inside the detection input rather than being
+            //    clipped out (ADR 0013).
             //  • no track yet but a climber crop is known → seed acquisition with
             //    it, even when the climber was tapped (the tap drives identity,
             //    not the search area). This keeps a small / distant climber large
@@ -546,12 +551,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             //    frame leaves a climber at the base of a tall boulder undetectable
             //    until they climb large enough.
             //  • otherwise full frame.
-            // A missed seed crop still falls back to the full-frame re-acquire below.
+            // A missed region still falls back to the full-frame re-acquire below.
             const region = pickAcquisitionRegion(
               lastClimberBox,
               climberCropPx ?? null,
               videoWidth,
               videoHeight,
+              last && predicted ? { predicted, last } : undefined,
             );
 
             let chosen = detectClimber(region, predicted);
@@ -601,18 +607,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             }
 
             // Surface a live, downscaled snapshot of the frame being scanned plus
-            // the current Adaptive Crop, so the loading view shows the scan reading
-            // up the wall with the green band tracking the Climber. Updated on
-            // detection frames — the same cadence at which lastClimberBox changes.
+            // the Adaptive Crop, so the loading view shows the scan reading up the
+            // wall with the green box tracking the Climber. The box shown is the
+            // actual detection region this frame was searched in (`region`), so it
+            // is honest about where the Climber was looked for — including the
+            // forward-looking margin — rather than the tighter contained-pose box.
             if (framePreviewCtx && mountedRef.current) {
               framePreviewCtx.drawImage(canvas, 0, 0, videoWidth, videoHeight, 0, 0, previewW, previewH);
               setCurrentFrameImage(framePreviewCtx.getImageData(0, 0, previewW, previewH));
-              if (lastClimberBox) {
+              const displayBox = region ?? lastClimberBox;
+              if (displayBox) {
                 setCurrentClimberCrop({
-                  x: lastClimberBox.x / videoWidth,
-                  y: lastClimberBox.y / videoHeight,
-                  w: lastClimberBox.width / videoWidth,
-                  h: lastClimberBox.height / videoHeight,
+                  x: displayBox.x / videoWidth,
+                  y: displayBox.y / videoHeight,
+                  w: displayBox.width / videoWidth,
+                  h: displayBox.height / videoHeight,
                 });
               }
             }
