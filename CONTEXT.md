@@ -27,18 +27,26 @@ _Avoid_: tracking ID, person ID.
 
 **Adaptive Crop**:
 The detection region for a frame, derived automatically from the **Climber**'s
-landmarks in the previous frame so it stays tight as they move and change scale.
-Replaces a fixed, manually-sized box.
+landmarks. Seeded at scan setup from the frame where the **User** taps the
+Climber, then re-derived each detection frame from the previous pose so it
+follows the Climber as they move and change scale. Sized and positioned to hold
+the whole body **and** the next move inside the region — so a reaching limb is
+not clipped out of detection. The Climber is the **only** thing the Adaptive
+Crop frames, and a tap is the only Climber input: there is no hand-drawn Climber
+box.
 _Avoid_: bounding box, ROI, the (manual) "crop box".
 
 **Manual Crop**:
-A user-drawn box used as an override/seed when tap-to-track is not used. The
-Climber crop and the **Wall Crop** are the two Manual Crops.
+A user-adjustable box. The **Wall Crop** is now the only Manual Crop: it
+auto-renders around the Climber and the **User** may resize it. The Climber is
+no longer framed by a Manual Crop — it is selected by a tap and framed by the
+**Adaptive Crop**.
 _Avoid_: selection, region.
 
 **Wall Crop**:
 A region of stable wall texture (excluding the Climber) used to extract ORB
-features for route-photo matching.
+features for route-photo matching. Auto-rendered around the Climber once the
+Climber is tapped, and adjustable by the User.
 _Avoid_: background crop.
 
 **Quality Tier**:
@@ -248,8 +256,10 @@ _Avoid_: frame stats (too generic).
 - A scan has exactly one **Climber** and zero or more **Bystanders**.
 - **Climber Identity** is seeded once, then selects the Climber's pose in every
   frame; the **Adaptive Crop** is derived from that selected pose.
-- A **Manual Crop** (Climber) seeds or overrides the Adaptive Crop; the **Wall
-  Crop** feeds route-photo matching, not pose tracking.
+- The tap seeds **Climber Identity** and the first **Adaptive Crop**; the
+  Adaptive Crop then frames the Climber every detection frame. The **Wall Crop**
+  auto-renders around the Climber, stays User-adjustable, and feeds route-photo
+  matching, not pose tracking.
 - A **Hold** is inferred from one or more **Dwells** of the same limb kind at one
   spot, and may then be edited by the **User**. For a **Fixed Capture** Run the
   Holds are detected and edited on the **Detection Preview** and saved with the
@@ -268,7 +278,9 @@ _Avoid_: frame stats (too generic).
 ## Flagged ambiguities
 
 - "crop" meant both the user's drawn box and the per-frame detection region —
-  resolved: **Manual Crop** (user-drawn) vs **Adaptive Crop** (auto-derived).
+  resolved: the **Adaptive Crop** (auto-derived, tap-seeded) is the only Climber
+  crop and frames the Climber; the **Manual Crop** is now just the
+  User-adjustable **Wall Crop**.
 - "user" meant both the account holder and the person climbing — resolved: the
   account holder is the **User**; the person climbing is the **Climber**.
 - "climb" is used in the UI/code for both the **Route** (a problem) and a single
