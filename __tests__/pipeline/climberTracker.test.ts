@@ -8,7 +8,10 @@ import {
   deriveClimberCrop,
   expandCropBox,
   pickAcquisitionRegion,
+  predictDetectionRegion,
   DEFAULT_GATE,
+  ABS_MIN_CROP_FRAC,
+  REGION_BASE_SLACK,
 } from "@/pipeline/climberTracker";
 import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
 
@@ -197,8 +200,21 @@ describe("deriveClimberCrop", () => {
     expect(ccx).toBeCloseTo(500, -1);
   });
 
-  it("enforces a minimum crop size for a collapsed pose", () => {
-    // A near-degenerate pose (all points stacked) must still yield ≥ MIN_CROP_FRAC.
+  it("pads generously and proportional to the climber, taller than wide", () => {
+    const pose = makePose(0.5, 0.5); // bbox w=0.1, h=0.36
+    const crop = deriveClimberCrop(pose.keypoints, 1000, 1000)!; // default pad 0.6, v-bias 1.25
+    // Width ≈ 1.6 × bbox (0.1 → 0.16), height ≈ 1.75 × bbox (0.36 → 0.63).
+    expect(crop.width).toBeCloseTo(160, -1);
+    expect(crop.height).toBeCloseTo(630, -1);
+    // The vertical pad fraction exceeds the horizontal one (upward-reach bias).
+    const widthRatio = crop.width / (0.1 * 1000);
+    const heightRatio = crop.height / (0.36 * 1000);
+    expect(heightRatio).toBeGreaterThan(widthRatio);
+  });
+
+  it("falls back to only an absolute floor for a collapsed pose (climber-proportional, not frame-proportional)", () => {
+    // A near-degenerate pose (all points stacked) hits the small absolute guard,
+    // not the old 0.18-of-frame floor.
     const tiny: Keypoint[] = [
       kp("left_hip", 0.5, 0.5),
       kp("right_hip", 0.5, 0.5),
@@ -206,8 +222,9 @@ describe("deriveClimberCrop", () => {
       kp("right_shoulder", 0.5, 0.5),
     ];
     const crop = deriveClimberCrop(tiny, 1000, 1000)!;
-    expect(crop.width).toBeGreaterThanOrEqual(180); // 0.18 * 1000
-    expect(crop.height).toBeGreaterThanOrEqual(180);
+    expect(crop.width).toBeCloseTo(ABS_MIN_CROP_FRAC * 1000, -1); // ≈ 60
+    expect(crop.height).toBeCloseTo(ABS_MIN_CROP_FRAC * 1000, -1);
+    expect(crop.width).toBeLessThan(180); // smaller than the old frame-proportional floor
   });
 
   it("clamps a pose near the frame edge", () => {
@@ -219,6 +236,41 @@ describe("deriveClimberCrop", () => {
 
   it("returns null for an empty pose", () => {
     expect(deriveClimberCrop([], 100, 100)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// predictDetectionRegion
+// ---------------------------------------------------------------------------
+
+describe("predictDetectionRegion", () => {
+  const box = { x: 400, y: 400, width: 200, height: 200 };
+
+  it("translates the region toward the predicted centroid (upward move shifts up)", () => {
+    // Climber rising: predicted is above last by 0.1 of the frame.
+    const region = predictDetectionRegion(box, { x: 0.5, y: 0.4 }, { x: 0.5, y: 0.5 }, 1000, 1000);
+    // Region top is higher than the box top, and its centre moved up.
+    expect(region.y).toBeLessThan(box.y);
+    const regionCenterY = region.y + region.height / 2;
+    expect(regionCenterY).toBeLessThan(box.y + box.height / 2);
+    // It also grew (motion margin), so it is larger than the original box.
+    expect(region.width).toBeGreaterThan(box.width);
+    expect(region.height).toBeGreaterThan(box.height);
+  });
+
+  it("grows the margin with move speed", () => {
+    const slow = predictDetectionRegion(box, { x: 0.5, y: 0.48 }, { x: 0.5, y: 0.5 }, 1000, 1000);
+    const fast = predictDetectionRegion(box, { x: 0.5, y: 0.30 }, { x: 0.5, y: 0.5 }, 1000, 1000);
+    expect(fast.height).toBeGreaterThan(slow.height);
+  });
+
+  it("pins the region to the frame edge on overflow without inverting", () => {
+    // A large upward prediction would push the top past 0 — it clamps to 0.
+    const region = predictDetectionRegion(box, { x: 0.5, y: 0.02 }, { x: 0.5, y: 0.5 }, 1000, 1000);
+    expect(region.y).toBe(0);
+    expect(region.width).toBeGreaterThan(0);
+    expect(region.height).toBeGreaterThan(0);
+    expect(region.y + region.height).toBeLessThanOrEqual(1000);
   });
 });
 
@@ -254,11 +306,20 @@ describe("pickAcquisitionRegion", () => {
     expect(pickAcquisitionRegion(null, crop, 1280, 720)).toEqual(crop);
   });
 
-  it("prefers the slack-expanded last climber box once a track exists", () => {
+  it("slack-expands the last climber box when no motion is supplied", () => {
     const last = { x: 200, y: 200, width: 100, height: 100 };
-    const region = pickAcquisitionRegion(last, crop, 1000, 1000, 0.1);
-    // Established track wins over the seed crop, expanded by 10% slack.
-    expect(region).toEqual(expandCropBox(last, 1000, 1000, 0.1));
+    const region = pickAcquisitionRegion(last, crop, 1000, 1000);
+    // Established track wins over the seed crop, expanded by the base slack.
+    expect(region).toEqual(expandCropBox(last, 1000, 1000, REGION_BASE_SLACK));
+  });
+
+  it("builds a predictive region from the last box when motion is supplied", () => {
+    const last = { x: 200, y: 200, width: 100, height: 100 };
+    const motion = { predicted: { x: 0.3, y: 0.2 }, last: { x: 0.25, y: 0.25 } };
+    const region = pickAcquisitionRegion(last, crop, 1000, 1000, motion);
+    expect(region).toEqual(
+      predictDetectionRegion(last, motion.predicted, motion.last, 1000, 1000),
+    );
   });
 
   it("returns null (full-frame search) when neither a track nor a crop exists", () => {
