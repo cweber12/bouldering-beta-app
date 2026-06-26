@@ -12,18 +12,22 @@ import { fitMediaStyle } from "@/utils/mediaContainerStyle";
 // size and placement. The bars carry no controls — the top bar just labels the
 // step and the bottom bar shows the percentage.
 //
-// The frame and the green band come from the same source — the scanner's own
-// decoded frame and its per-frame Adaptive Crop (useVideoProcessor) — so they
-// stay in sync as the scan reads up the wall. The band first grows from the
-// frame bottom to the user-drawn Manual Crop top (the intro), then hands off to
-// live Adaptive Crop tracking.
+// The stage is a spotlight on the scanner's own work. The frame currently being
+// scanned is painted live (crossfaded between stills so the moving climber does
+// not snap), and the Adaptive Crop is drawn over it as a green-tinted box — the
+// same accent colours as the Step 2 detection band — while the rest of the
+// frame is dimmed by a 25% black layer. The box starts on the user-drawn Manual
+// Crop and glides down onto the Climber once the first Adaptive Crop is found,
+// then tracks it. Both the frame and its box come from the same source
+// (useVideoProcessor) and are refreshed together, so the box always sits over
+// the frame it was derived from.
 // ---------------------------------------------------------------------------
 
 export interface ScanProgressProps {
   /** Live snapshot of the frame currently being scanned; null until ready. */
   frameImage: ImageData | null;
-  /** Top edge (fraction [0,1]) of the user-drawn Manual Crop — the intro target. */
-  manualCropTop: number;
+  /** The user-drawn Manual Crop (Climber) — the spotlight's starting box. */
+  manualCrop: CropFraction;
   /** Per-frame Adaptive Crop (fraction); null until the Climber is first found. */
   adaptiveCrop: CropFraction | null;
   /** Seek-loop progress, 0–100. */
@@ -34,52 +38,70 @@ export interface ScanProgressProps {
   onCancel: () => void;
 }
 
-/** Length of the one-time intro beat before the band tracks the Adaptive Crop. */
-const INTRO_MS = 750;
+/** How long the spotlight box takes to glide to a new Adaptive Crop. */
+const BOX_GLIDE_MS = 500;
+/** Crossfade duration between consecutive frame stills (and the box fade-in). */
+const FRAME_FADE_MS = 300;
 
 export default function ScanProgress({
   frameImage,
-  manualCropTop,
+  manualCrop,
   adaptiveCrop,
   progressPct,
   finishing,
   onCancel,
 }: ScanProgressProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Two stacked canvases ping-ponged for the still crossfade.
+  const aRef = useRef<HTMLCanvasElement>(null);
+  const bRef = useRef<HTMLCanvasElement>(null);
+  const topRef = useRef<"a" | "b">("a");
   // Measures the media stage so the frame is square-bounded to the exact
   // available height — identical to StepSetDetection's stage.
   const [stageRef, stageHeight] = useMeasuredHeight();
-
-  // Two-beat intro: the band grows from the frame bottom (top = 1) to the
-  // Manual Crop top, then hands off to live Adaptive Crop tracking.
-  const [animatedIn, setAnimatedIn] = useState(false);
-  const [introDone, setIntroDone] = useState(false);
+  // Fades the spotlight (box + dim) in once on mount.
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setAnimatedIn(true));
-    const timer = setTimeout(() => setIntroDone(true), INTRO_MS);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timer);
-    };
+    const raf = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Paint the latest frame snapshot onto the canvas (1:1; CSS stretches it).
+  // Crossfade each new frame still over the previous one. The incoming frame is
+  // painted onto whichever layer is currently underneath, then faded up above
+  // the outgoing layer, so the moving climber dissolves between stills (which
+  // arrive only on detection frames, ~2 fps) instead of snapping.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !frameImage) return;
-    if (canvas.width !== frameImage.width) canvas.width = frameImage.width;
-    if (canvas.height !== frameImage.height) canvas.height = frameImage.height;
-    canvas.getContext("2d")?.putImageData(frameImage, 0, 0);
+    if (!frameImage) return;
+    const a = aRef.current;
+    const b = bRef.current;
+    if (!a || !b) return;
+
+    const incoming = topRef.current === "a" ? b : a;
+    const outgoing = topRef.current === "a" ? a : b;
+
+    if (incoming.width !== frameImage.width) incoming.width = frameImage.width;
+    if (incoming.height !== frameImage.height) incoming.height = frameImage.height;
+    incoming.getContext("2d")?.putImageData(frameImage, 0, 0);
+
+    incoming.style.zIndex = "1";
+    outgoing.style.zIndex = "0";
+    outgoing.style.opacity = "1";
+
+    // Restart the fade: commit opacity 0 (no transition), force a reflow, then
+    // transition to 1 so the incoming still actually animates each time.
+    incoming.style.transition = "none";
+    incoming.style.opacity = "0";
+    void incoming.offsetWidth;
+    incoming.style.transition = `opacity ${FRAME_FADE_MS}ms ease`;
+    incoming.style.opacity = "1";
+
+    topRef.current = topRef.current === "a" ? "b" : "a";
   }, [frameImage]);
 
-  // Band top edge (fraction): the frame bottom (1) before the intro, then the
-  // Manual Crop top, then the live Adaptive Crop top once the intro has elapsed.
-  const bandTop = !animatedIn
-    ? 1
-    : introDone && adaptiveCrop
-      ? adaptiveCrop.y
-      : manualCropTop;
+  // The spotlight box: the live Adaptive Crop once the Climber is found, else
+  // the user's Manual Crop. The geometry change is CSS-transitioned, so the box
+  // glides from the Manual Crop down onto the Climber and then tracks them.
+  const box = adaptiveCrop ?? manualCrop;
 
   const aspectW = frameImage?.width ?? 9;
   const aspectH = frameImage?.height ?? 16;
@@ -103,18 +125,45 @@ export default function ScanProgress({
             className="relative overflow-hidden"
             style={fitMediaStyle(aspectW, aspectH, stageHeight)}
           >
-            {frameImage ? (
-              <canvas ref={canvasRef} className="absolute inset-0 h-full w-full object-fill" />
-            ) : (
-              <div className="absolute inset-0 bg-inset" />
-            )}
+            {/* Base layer behind the frame canvases. */}
+            <div className="absolute inset-0 bg-inset" />
 
-            {/* Green scan band: frame bottom up to the crop top. */}
-            <div
-              className="absolute inset-x-0 bottom-0 border-t-2 border-accent/80 bg-accent/20"
-              style={{ top: `${bandTop * 100}%`, transition: "top 700ms ease-out" }}
-              aria-hidden="true"
+            {/* Two stacked canvases crossfaded on each new still (1:1; CSS
+                stretches them to the stage). */}
+            <canvas
+              ref={aRef}
+              className="absolute inset-0 h-full w-full object-fill"
+              style={{ opacity: 0 }}
             />
+            <canvas
+              ref={bRef}
+              className="absolute inset-0 h-full w-full object-fill"
+              style={{ opacity: 0 }}
+            />
+
+            {/* Spotlight: green-tinted Adaptive Crop with the rest of the frame
+                dimmed by the box's own 0.25 black outset shadow (clipped to the
+                frame by the container's overflow-hidden). One element carries
+                the border, tint, dim and glide so they stay in sync. */}
+            {frameImage && (
+              <div
+                className="absolute border-2 border-accent/80 bg-accent/20"
+                style={{
+                  left: `${box.x * 100}%`,
+                  top: `${box.y * 100}%`,
+                  width: `${box.w * 100}%`,
+                  height: `${box.h * 100}%`,
+                  borderRadius: "2px",
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.25)",
+                  opacity: mounted ? 1 : 0,
+                  transition:
+                    `left ${BOX_GLIDE_MS}ms ease-out, top ${BOX_GLIDE_MS}ms ease-out, ` +
+                    `width ${BOX_GLIDE_MS}ms ease-out, height ${BOX_GLIDE_MS}ms ease-out, ` +
+                    `opacity ${FRAME_FADE_MS}ms ease`,
+                }}
+                aria-hidden="true"
+              />
+            )}
           </div>
         </div>
       </div>

@@ -673,7 +673,7 @@ function ScanPageInner() {
       {step === "landmarks" && showScanLoading && (
         <ScanProgress
           frameImage={currentFrameImage}
-          manualCropTop={climberCrop.y}
+          manualCrop={climberCrop}
           adaptiveCrop={currentClimberCrop}
           progressPct={progressPct}
           finishing={!isProcessing || progressPct >= 100}
