@@ -49,8 +49,8 @@ import type { Hold } from "@/pipeline/holdDetection";
 
 /** Ring colour per limb kind — the whole payload of a Hold marker (ADR 0012). */
 export const HOLD_RING_COLOR: Record<"hand" | "foot", string> = {
-  hand: "#CCCCCC", // mirror of --color-hand-hold
-  foot: "#111111", // mirror of --color-foot-hold
+  hand: "#3b82f6", // mirror of --color-hand-hold
+  foot: "#f97316", // mirror of --color-foot-hold
 };
 
 /** Thin dark halo stroked just outside the coloured ring so the mark reads on light

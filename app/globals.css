@@ -52,8 +52,8 @@
   /* ─── Holds overlay markers (Route Overlay only) ────── */
   /* Kind is shown by colour: blue ring = Hand Hold, orange ring = Foot Hold.
      Mirror of HOLD_RING_COLOR in pipeline/holdsOverlay.ts. */
-  --color-hand-hold: #4BE3AC;
-  --color-foot-hold: #FFCC29;
+  --color-hand-hold: #3b82f6;
+  --color-foot-hold: #f97316;
 
   /* ─── Scanner glow ──────────────────────────────────── */
   --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
@@ -142,8 +142,8 @@
   --color-attempt-surface: #fef3c7;   /* amber-100 */
 
   /* ── Holds overlay markers — same colours (drawn on a photo, theme-independent) ── */
-  --color-hand-hold: #4BE3AC;
-  --color-foot-hold: #FFCC29;
+  --color-hand-hold: #3b82f6;
+  --color-foot-hold: #f97316;
 
   /* ── Glow ────────────────────────────────────────────── */
   --color-glow: rgba(20, 83, 45, 0.14);
