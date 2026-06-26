@@ -2,46 +2,37 @@
  * Holds overlay drawing for CanvasRenderingContext2D.
  *
  * Draws the **Holds** pass: a marker at each inferred Hold on the Route Photo /
- * Detection Preview. The unit on the wall is a **single transparent bordered
- * ring** placed at the hold's *exact* photo-space location — rings never move to
- * make room, so the circle always frames the wall hold it names, and its interior
- * stays clear so the rock reads through.
+ * Detection Preview. The unit on the wall is a **single thin colour-coded ring**
+ * placed at the hold's *exact* photo-space location — rings never move to make
+ * room, so the circle always frames the wall hold it names, and its interior stays
+ * clear so the rock reads through. **Blue marks a Hand Hold, orange a Foot Hold**
+ * (ADR 0012): colour carries the kind, the only thing the marker says. There is no
+ * number, no hand/foot glyph, and no left/right side on the wall — `order` and
+ * `side` live in the data but are not painted. The Skeleton already narrates
+ * progression, and the reveal timing (below) carries the sequence, so a digit the
+ * climber could not read at overlay scale earns nothing.
  *
- * **Coincident Holds share one ring (clustering).** Left and right limbs are never
- * merged in detection, so a hold used by both hands — or by a hand and a foot —
- * yields several Holds at the same spot. At draw time those Holds are clustered by
- * proximity (centres within ~one ring radius) and drawn as a **single ring**
- * carrying **several numbered glyph badges**, rather than a pile of overlapping
- * circles.
+ * **Coincident Holds of one kind share a ring (clustering).** Left and right limbs
+ * are never merged in detection, so a hold used by both hands yields several Holds
+ * at one spot; at draw time the Holds within ~one ring radius collapse into a
+ * **single ring** rather than a pile of overlapping circles. A spot used by **both
+ * a hand and a foot** draws **two concentric rings** (blue outer, orange inner)
+ * centred on the spot — both kinds shown, no nudge.
  *
- * Each badge is a **solid white hand / foot silhouette** (mirrored for the left
- * side) sitting **flush just outside the ring**, pointing inward, with the Hold's
- * number rendered as a **dark digit centred on the palm / ball of the glyph** — no
- * separate disc. The digit auto-fits the glyph's solid region so a two-digit
- * number stays contained even on the smaller foot. Left-limb badges live on the
- * ring's left arc, right-limb on the right arc; several on one side fan along that
- * arc. The white ring and white glyph each carry a thin dark outline so they read
- * on light or dark rock alike.
+ * Each ring carries a thin dark halo so it reads on light granite or chalky holds
+ * as well as on dark rock. Rings reveal progressively: a kind's ring appears when
+ * its earliest member of that kind has `firstUseTime ≤ t`, so a ring popping in as
+ * the limb lands narrates the sequence as playback advances.
  *
- * The layout is solved against **all in-bounds Holds** up front — cluster centres
- * and every badge slot are fixed from the start — so nothing jumps when a later
- * Hold reveals. Where two *separate* rings sit close, a colliding badge is nudged a
- * little along its own arc (capped, never flung radially outward); a small overlap
- * is tolerated over a far-flung badge.
- *
- * Markers reveal progressively: a ring appears when its earliest member's
- * `firstUseTime ≤ t`, and each badge pops in when its own limb first lands, so the
- * numbers tell the sequence as playback advances.
- *
- * The hand / foot shape comes from a single SVG path each (square viewBox); the
- * left variant is just the right one mirrored horizontally.
+ * The layout is solved against **all in-bounds Holds** up front — ring centres are
+ * fixed from the start — so nothing jumps when a later Hold reveals.
  *
  * Sizes are multipliers of the photo-space `bodyScale`, mirroring the Skeleton
- * overlay, so markers look identical at any photo resolution. The per-frame cost
- * is trivial, so geometry is computed inline without a cache.
+ * overlay, so markers look identical at any photo resolution. The per-frame cost is
+ * trivial, so geometry is computed inline without a cache.
  *
- * Framework-agnostic — no React imports. Keep it that way so a future baked-in
- * WebM path can reuse it.
+ * Framework-agnostic — no React imports. Keep it that way so a future baked-in WebM
+ * path can reuse it.
  */
 
 import type { Hold } from "@/pipeline/holdDetection";
@@ -49,36 +40,22 @@ import type { Hold } from "@/pipeline/holdDetection";
 // ---------------------------------------------------------------------------
 // Marker colours — the single source of truth for the Holds look.
 //
-// The ring border and the solid glyph badge are both white; kind is shown by the
-// hand / foot shape and side by the mirrored silhouette, never by colour. Mirror
-// `HOLD_GLYPH_COLOR` in `app/globals.css` (--color-hold-glyph) and `utils/theme.ts`.
-// The dark outline + dark digit are overlay-only (drawn over the photo, not theme
-// chrome), so they live here alone.
+// Kind is shown by colour: blue = Hand Hold, orange = Foot Hold. A blue/orange
+// pair is colour-blind-safe and sits clear of the green pose overlay, so a hold
+// ring never blends into the Skeleton when they overlap. Mirror these in
+// `app/globals.css` (--color-hand-hold / --color-foot-hold) and `utils/theme.ts`
+// (handHold / footHold) for the legend and editor swatches.
 // ---------------------------------------------------------------------------
 
-/** Single colour shared by the ring border and every Hold glyph badge. */
-export const HOLD_GLYPH_COLOR = "#FFFFFF";
+/** Ring colour per limb kind — the whole payload of a Hold marker (ADR 0012). */
+export const HOLD_RING_COLOR: Record<"hand" | "foot", string> = {
+  hand: "#3b82f6", // mirror of --color-hand-hold
+  foot: "#f97316", // mirror of --color-foot-hold
+};
 
-/** Thin dark halo stroked around the white ring and white glyph so the marks read
- *  on light or dark rock; also the colour of the on-glyph number digit. */
-export const HOLD_GLYPH_OUTLINE = "rgba(11, 15, 20, 0.85)";
-
-/** Number-badge palette — kept for the scan-stage Holds editor list chip, which
- *  shows the order on a dark pill. The overlay itself draws the digit directly on
- *  the white glyph (see {@link HOLD_GLYPH_OUTLINE}), with no disc. */
-export const HOLD_BADGE = {
-  bg: "#0B0F14",
-  text: "#FFFFFF",
-  ring: "#FFFFFF",
-} as const;
-
-/** Dark digit colour for the on-glyph number — high contrast on the white glyph. */
-const HOLD_NUMBER_COLOR = HOLD_BADGE.bg;
-
-/** White halo stroked around the dark digit. Invisible on the white glyph; where the
- *  digit spills onto rock the halo gives it a readable backing, so the number reads
- *  everywhere without a disc. */
-const HOLD_NUMBER_HALO = "#FFFFFF";
+/** Thin dark halo stroked just outside the coloured ring so the mark reads on light
+ *  or dark rock alike. Overlay-only (drawn over the photo, not theme chrome). */
+const HOLD_RING_HALO = "rgba(11, 15, 20, 0.85)";
 
 // ---------------------------------------------------------------------------
 // Sizing & layout defaults (× body scale unless noted)
@@ -86,150 +63,27 @@ const HOLD_NUMBER_HALO = "#FFFFFF";
 
 /** Ring radius × body scale (the marked hold's footprint). */
 const DEFAULT_HOLD_RADIUS = 0.45;
-/** Ring border stroke width as a fraction of the ring radius. */
-const CIRCLE_STROKE_FRAC = 0.09;
-/** Dark halo width around the white ring as a fraction of its stroke. */
+/** Ring colour-stroke width as a fraction of the ring radius. */
+const CIRCLE_STROKE_FRAC = 0.07;
+/** Dark halo width, each side of the colour stroke, as a fraction of that stroke. */
 const RING_HALO_FRAC = 0.6;
-/** Cluster Holds whose centres fall within this × body scale into one ring — set
- *  to the ring radius, i.e. group only Holds whose rings visibly overlap. */
+/** Cluster Holds whose centres fall within this × body scale into one spot — set to
+ *  the ring radius, i.e. group only Holds whose rings would visibly overlap. */
 const CLUSTER_RADIUS_FRAC = DEFAULT_HOLD_RADIUS;
-/** Glyph viewBox span as a multiple of the ring radius — tied to the ring so the
- *  two always look balanced; ~ring-radius keeps the glyph about half its old size. */
-const GLYPH_SPAN_TO_RING = 1.1;
-/** Per-kind size multiplier on the base span — the foot silhouette reads smaller at a
- *  given span than the hand, so it is drawn a touch larger. */
-const GLYPH_SCALE: Record<"hand" | "foot", number> = { hand: 1.1, foot: 1.15 };
-/** Glyph centre sits this × its span beyond the ring edge, so its solid mass rests
- *  flush just outside the stroke while the ring interior stays clear. */
-const BADGE_DIST_FRAC = 0.42;
-/** Badge collision radius as a fraction of the glyph span (a glyph is treated as a
- *  disc of this radius for fan spacing and inter-ring deconfliction). */
-const BADGE_COLLISION_FRAC = 0.5;
-/** Glyph outline width as a fraction of the glyph span. */
-const GLYPH_OUTLINE_FRAC = 0.05;
-/** Base on-glyph digit font as a fraction of the glyph span (before auto-fit). */
-const NUMBER_BASE_FRAC = 0.52;
-/** On-glyph digit font floor as a fraction of body scale, so it never goes sub-legible. */
-const NUMBER_FLOOR_FRAC = 0.16;
-/** White halo stroke around the digit as a fraction of the digit font size. */
-const NUMBER_HALO_FRAC = 0.18;
-/** Width of the solid region under the digit, per kind, as a fraction of the glyph
- *  span. The foot's "ball" is a smaller solid patch than the hand's palm, so a
- *  two-digit number is auto-shrunk harder there to stay contained; the halo forgives
- *  a small spill onto rock. */
-const SOLID_WIDTH_FRAC: Record<"hand" | "foot", number> = { hand: 0.58, foot: 0.5 };
-/** Hard cap on how far (radians) a badge may be nudged along its arc to clear a
- *  neighbouring ring's badge — keeps it on the hold's own side, never flung away. */
-const MAX_NUDGE = Math.PI / 2;
-
-/**
- * Where the number sits on each glyph, as a fraction of its square viewBox in the
- * glyph's *drawn* orientation (the left glyph is the mirror of the right, so the
- * left/right entries are mirror-symmetric about x = 0.5). Biased off-centre so the
- * digit reads down-and-out toward its limb's side — left limbs left, right limbs
- * right — over the solid palm / ball. Eyeballed; safe to tune per side.
- */
-const GLYPH_CENTROID: Record<"hand" | "foot", Record<"left" | "right", { x: number; y: number }>> = {
-  hand: {
-    left: { x: 0.44, y: 0.66 },
-    right: { x: 0.56, y: 0.66 },
-  },
-  foot: {
-    left: { x: 0.45, y: 0.56 },
-    right: { x: 0.55, y: 0.56 },
-  },
-};
+/** Inner concentric ring radius (the foot ring at a spot used by both kinds) as a
+ *  fraction of the outer ring radius — kept well inside so the two rings read apart
+ *  while the innermost interior still shows rock. */
+const INNER_RING_FRAC = 0.62;
 
 const TAU = Math.PI * 2;
 
 // ---------------------------------------------------------------------------
-// Glyph geometry — hand / foot SVG path data
+// Clustering — coincident Holds share one spot
 //
-// One path per kind, taken from the source SVGs (square viewBox). The left
-// variant is the right path mirrored about the vertical centre line, so only the
-// "right" path is stored. Path2D is constructed lazily and cached; it is absent
-// in jsdom (no `canvas` package), so `glyphPath` returns null there and the glyph
-// is skipped while the rings and number digits still draw.
-// ---------------------------------------------------------------------------
-
-const HAND_PATH =
-  "M496 136s-40.486 85.32-51.442 128.988c-14.33 57.118 2.078 100.297-18.747 155.68-35.998 64.97-38.435 75.466-169.81 75.33-48.132-.044-186.02-36.76-186.02-36.76C50.97 454.35 16 457.23 16 435.997c0-21.232 24.88-36.736 46.97-36.787l87.03 7.642c21.14-1.326 43.286-13.71 43.96-41.36-.353-40.927-4.4-72.357-25.175-105.6l-80.67-125.864c-4.818-10.02-5.964-27.105 7.983-34.732 13.947-7.628 29.793 3.71 35.205 13.582l90.11 122.57c9.618 8.955 26.738 10.68 25.278-8.38L206.903 44.652c-2.478-12.96 4.1-28.654 19.1-28.654 19.687 0 31.795 7.515 31.413 19.413l43.75 179.984c3.42 8.76 15.545 7.59 18.807-.49l12.462-175.022c.64-5.583 7.922-15.314 21.9-13.286 13.976 2.027 22.035 17 20.555 22.793l-4.044 172.936c2.838 15.327 14.888 17.565 24.266 9.008l61.22-109.487c3.72-9.183 18.288-11.096 26.715-7.455 7.84 5.107 12.954 11.96 12.954 21.603z";
-// Provided foot silhouette (SVG Repo). Both supplied files share this path; the
-// left file is only this path mirrored, so we store the right foot and mirror it.
-const FOOT_PATH =
-  "M23.625,18.764c-0.177,0.277-0.384,0.531-0.604,0.762c-2.053,3.024-8.75,8.344-9.885,10.131c-1.479,2.332-4.521,3.074-6.76,1.653c-2.239-1.419-2.911-4.461-1.432-6.792c1.937-3.06,7.063-3.254,8.063-5.459c0-0.002,0-0.004,0-0.005c0-0.203,0.126-0.42,0.007-0.592c-1.814-2.641-1.721-6.973-0.319-9.183c1.72-2.713,4.932-1.208,8.178,0.851C24.115,12.186,25.346,16.051,23.625,18.764z M16.045,6.201c1.422,0.902,3.396,0.343,4.404-1.251c1.011-1.594,0.677-3.617-0.746-4.521c-1.424-0.899-3.394-0.339-4.405,1.255C14.288,3.277,14.621,5.301,16.045,6.201z M20.637,5.579c-0.519,0.818-0.377,1.836,0.312,2.274c0.689,0.438,1.671,0.13,2.189-0.688c0.519-0.817,0.377-1.835-0.312-2.273C22.137,4.454,21.156,4.761,20.637,5.579z M23.149,8.06c-0.444,0.701-0.312,1.581,0.294,1.966c0.606,0.384,1.458,0.127,1.901-0.574c0.444-0.701,0.313-1.581-0.293-1.965C24.446,7.102,23.592,7.359,23.149,8.06z M26.838,12.158c0.465-0.735,0.393-1.616-0.164-1.968c-0.558-0.353-1.386-0.042-1.851,0.692s-0.394,1.616,0.164,1.969C25.545,13.203,26.374,12.893,26.838,12.158z M27.528,13.204c-0.412-0.261-1.025-0.032-1.371,0.513s-0.293,1.198,0.119,1.459c0.412,0.261,1.025,0.031,1.371-0.514C27.992,14.118,27.94,13.465,27.528,13.204z";
-
-/** Source viewBox side length for each glyph (square). */
-const HAND_VB = 512;
-const FOOT_VB = 32.031;
-
-/** Glyph path data — exported so the legend / editor can echo the badge as a
- *  filled icon (rendered with `currentColor`, mirrored for the left side). */
-export const HOLD_GLYPH_PATH: Record<"hand" | "foot", string> = {
-  hand: HAND_PATH,
-  foot: FOOT_PATH,
-};
-/** Square viewBox side length per kind, paired with {@link HOLD_GLYPH_PATH}. */
-export const HOLD_GLYPH_VIEWBOX: Record<"hand" | "foot", number> = {
-  hand: HAND_VB,
-  foot: FOOT_VB,
-};
-
-const path2dCache = new Map<"hand" | "foot", Path2D>();
-
-/** Lazily-built Path2D for a kind, or null where Path2D is unavailable (jsdom). */
-function glyphPath(kind: "hand" | "foot"): Path2D | null {
-  if (typeof Path2D === "undefined") return null;
-  let p = path2dCache.get(kind);
-  if (!p) {
-    p = new Path2D(kind === "hand" ? HAND_PATH : FOOT_PATH);
-    path2dCache.set(kind, p);
-  }
-  return p;
-}
-
-/**
- * Draw one solid-fill hand / foot glyph centred at `(cx, cy)`, scaled so its
- * viewBox spans `size` px, mirrored horizontally for the left variant, with a thin
- * dark outline for contrast on any rock.
- */
-function drawGlyph(
-  ctx: CanvasRenderingContext2D,
-  kind: "hand" | "foot",
-  side: "left" | "right",
-  cx: number,
-  cy: number,
-  size: number,
-  fill: string,
-  outline: string,
-  outlinePx: number,
-): void {
-  const path = glyphPath(kind);
-  if (!path) return;
-  const vb = kind === "hand" ? HAND_VB : FOOT_VB;
-  const s = size / vb;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(side === "left" ? -s : s, s);
-  ctx.translate(-vb / 2, -vb / 2);
-  ctx.lineJoin = "round";
-  ctx.lineCap = "round";
-  // Stroke first so the outline sits half outside the silhouette, then fill white
-  // over its inner half — a clean dark rim around a solid white shape.
-  ctx.lineWidth = outlinePx / s;
-  ctx.strokeStyle = outline;
-  ctx.stroke(path);
-  ctx.fillStyle = fill;
-  ctx.fill(path);
-  ctx.restore();
-}
-
-// ---------------------------------------------------------------------------
-// Clustering — coincident Holds share one ring
-//
-// Single-link union by centre distance: any two Holds within `clusterDist` join
-// the same cluster, so a chalky hold used by both hands (two coincident Holds)
-// reads as one ring with two badges rather than two stacked circles.
+// Single-link union by centre distance: any two Holds within `clusterDist` join the
+// same cluster, so a hold used by both hands (two coincident Holds) reads as one
+// ring rather than two stacked circles. A cluster carrying both kinds becomes two
+// concentric rings on the shared centroid.
 // ---------------------------------------------------------------------------
 
 function clusterHolds(holds: Hold[], clusterDist: number): Hold[][] {
@@ -263,120 +117,78 @@ function clusterHolds(holds: Hold[], clusterDist: number): Hold[][] {
 }
 
 // ---------------------------------------------------------------------------
-// Badge layout — side-anchored arcs + capped inter-ring nudge
+// Ring layout — one ring per kind present in a cluster
 //
-// Each cluster's badges hang off one ring: left-limb badges on the left arc (rest
-// at 9 o'clock), right-limb on the right arc (3 o'clock); several on a side fan
-// symmetrically along that arc. Badge slots are fixed from all in-bounds Holds up
-// front. A badge that would overlap an already-placed badge from another ring is
-// nudged a little further along its own arc (capped at ±MAX_NUDGE), never stepped
-// radially outward — a small overlap is tolerated over a far-flung badge.
+// Each cluster contributes one ring per limb kind it contains, both centred on the
+// cluster centroid. When a cluster holds both kinds, the hand ring takes the full
+// radius and the foot ring nests inside it, so the spot reads as "hand and foot"
+// without a position nudge. A ring reveals at the earliest `firstUseTime` among its
+// own kind's members.
 // ---------------------------------------------------------------------------
 
-interface BadgePlacement {
-  hold: Hold;
-  /** Badge centre (the glyph centre) in photo px. */
-  bx: number;
-  by: number;
-}
-
-interface ClusterLayout {
+interface Ring {
   /** Shared ring centre in photo px. */
   cx: number;
   cy: number;
-  /** Earliest member `firstUseTime` — when the ring first reveals. */
+  kind: "hand" | "foot";
+  radius: number;
+  /** Earliest `firstUseTime` among this ring's members — when it reveals. */
   earliestReveal: number;
-  badges: BadgePlacement[];
 }
 
-/** Per-kind badge geometry: glyph span, flush distance from the ring centre, and
- *  the collision radius the glyph is treated as for spacing. */
-type BadgeGeom = Record<"hand" | "foot", { span: number; dist: number; br: number }>;
-
-function layoutClusters(clusters: Hold[][], geom: BadgeGeom): ClusterLayout[] {
-  // Fan spacing uses the larger glyph (so neither kind overlaps) and the larger
-  // radius (the conservative angle→arc-length conversion).
-  const brRep = Math.max(geom.hand.br, geom.foot.br);
-  const distRep = Math.max(geom.hand.dist, geom.foot.dist);
-  const step = Math.min(MAX_NUDGE, (2 * brRep) / distRep);
-
-  const meta = clusters.map((members) => {
+function buildRings(clusters: Hold[][], circleR: number): Ring[] {
+  const rings: Ring[] = [];
+  for (const members of clusters) {
     const cx = members.reduce((s, m) => s + m.x, 0) / members.length;
     const cy = members.reduce((s, m) => s + m.y, 0) / members.length;
-    const earliestReveal = Math.min(...members.map((m) => m.firstUseTime));
-    return { members, cx, cy, earliestReveal };
-  });
-
-  // Base slot per badge: side anchor + symmetric fan along its arc.
-  interface Base {
-    hold: Hold;
-    cx: number;
-    cy: number;
-    theta: number;
-  }
-  const bases: Base[] = [];
-  for (const { members, cx, cy } of meta) {
-    for (const side of ["left", "right"] as const) {
-      const group = members.filter((m) => m.side === side).sort((a, b) => a.order - b.order);
-      if (group.length === 0) continue;
-      const anchor = side === "left" ? Math.PI : 0;
-      group.forEach((hold, i) => {
-        const off = (i - (group.length - 1) / 2) * step;
-        bases.push({ hold, cx, cy, theta: anchor + off });
+    const hasHand = members.some((m) => m.kind === "hand");
+    const hasFoot = members.some((m) => m.kind === "foot");
+    const both = hasHand && hasFoot;
+    const earliest = (kind: "hand" | "foot") =>
+      Math.min(...members.filter((m) => m.kind === kind).map((m) => m.firstUseTime));
+    if (hasHand) {
+      rings.push({ cx, cy, kind: "hand", radius: circleR, earliestReveal: earliest("hand") });
+    }
+    if (hasFoot) {
+      rings.push({
+        cx,
+        cy,
+        kind: "foot",
+        radius: both ? circleR * INNER_RING_FRAC : circleR,
+        earliestReveal: earliest("foot"),
       });
     }
   }
+  return rings;
+}
 
-  // Resolve inter-ring collisions in Hold order, so lower numbers keep their slot.
-  bases.sort((a, b) => a.hold.order - b.hold.order);
-  const placed: { x: number; y: number; br: number }[] = [];
-  const finalPos = new Map<string, { x: number; y: number }>();
-  const capSteps = Math.max(1, Math.floor(MAX_NUDGE / step));
-  const offsets = [0];
-  for (let k = 1; k <= capSteps; k++) offsets.push(k * step, -k * step);
+/** Stroke one colour-coded ring: a wider dark halo first, then the colour over it,
+ *  leaving a thin dark rim on both edges so the ring reads on any rock. */
+function drawRing(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  color: string,
+  stroke: number,
+  haloPx: number,
+): void {
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, TAU);
 
-  for (const b of bases) {
-    const g = geom[b.hold.kind];
-    const clears = (x: number, y: number) =>
-      placed.every((p) => Math.hypot(p.x - x, p.y - y) >= (g.br + p.br) * 0.9);
-    let chosen: { x: number; y: number; br: number } | null = null;
-    for (const d of offsets) {
-      const th = b.theta + d;
-      const x = b.cx + g.dist * Math.cos(th);
-      const y = b.cy + g.dist * Math.sin(th);
-      if (clears(x, y)) {
-        chosen = { x, y, br: g.br };
-        break;
-      }
-    }
-    if (!chosen) {
-      chosen = {
-        x: b.cx + g.dist * Math.cos(b.theta),
-        y: b.cy + g.dist * Math.sin(b.theta),
-        br: g.br,
-      };
-    }
-    placed.push(chosen);
-    finalPos.set(b.hold.id, { x: chosen.x, y: chosen.y });
-  }
-
-  return meta.map(({ members, cx, cy, earliestReveal }) => ({
-    cx,
-    cy,
-    earliestReveal,
-    badges: members.map((hold) => {
-      const p = finalPos.get(hold.id)!;
-      return { hold, bx: p.x, by: p.y };
-    }),
-  }));
+  ctx.lineWidth = stroke + haloPx * 2;
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = stroke;
+  ctx.stroke();
 }
 
 // ---------------------------------------------------------------------------
 // Style options
 // ---------------------------------------------------------------------------
 
-/** Style options for the Holds pass. The marker look is fixed (single-colour
- *  ring + glyph badge); only visibility is caller-controlled. */
+/** Style options for the Holds pass. The marker look is fixed (colour-coded ring);
+ *  only visibility is caller-controlled. */
 export interface HoldStyle {
   /** Draw the Holds pass. Default true (callers usually gate via the panel). */
   holdsVisible?: boolean;
@@ -390,11 +202,10 @@ export interface HoldStyle {
  * Draw the Holds markers gated by playback time.
  *
  * @param ctx       - Canvas 2D context (drawn in photo pixel space).
- * @param holds     - Detected Holds, each with a photo-space `{x, y}`, `order`,
- *                    and `firstUseTime` in the same clock as `t`.
+ * @param holds     - Detected Holds, each with a photo-space `{x, y}`, `kind`, and
+ *                    `firstUseTime` in the same clock as `t`.
  * @param t         - Current playback time (seconds). A ring reveals when its
- *                    earliest member's `firstUseTime ≤ t`; each badge reveals at
- *                    its own `firstUseTime` (progressive, cumulative).
+ *                    earliest same-kind member's `firstUseTime ≤ t` (progressive).
  * @param style     - Optional visibility toggle.
  * @param bodyScale - Photo-space body scale (px) the marker sizes multiply by.
  */
@@ -409,82 +220,26 @@ export function drawHolds(
   if (holds.length === 0) return;
 
   const circleR = Math.max(3, DEFAULT_HOLD_RADIUS * bodyScale);
-  const circleStroke = Math.max(1.5, circleR * CIRCLE_STROKE_FRAC);
+  const circleStroke = Math.max(2, circleR * CIRCLE_STROKE_FRAC);
   const haloPx = Math.max(1, circleStroke * RING_HALO_FRAC);
-  const baseSpan = circleR * GLYPH_SPAN_TO_RING;
-  const spanFor = (kind: "hand" | "foot") => baseSpan * GLYPH_SCALE[kind];
-  const geomFor = (kind: "hand" | "foot") => {
-    const span = spanFor(kind);
-    return { span, dist: circleR + span * BADGE_DIST_FRAC, br: span * BADGE_COLLISION_FRAC };
-  };
-  const geom: BadgeGeom = { hand: geomFor("hand"), foot: geomFor("foot") };
   const clusterDist = CLUSTER_RADIUS_FRAC * bodyScale;
-  const numberFloor = Math.max(9, bodyScale * NUMBER_FLOOR_FRAC);
 
   const w = ctx.canvas.width;
   const h = ctx.canvas.height;
   const inBounds = (hold: Hold) => hold.x >= 0 && hold.x <= w && hold.y >= 0 && hold.y <= h;
 
-  // Layout is solved against ALL in-bounds Holds so ring centres and badge slots
-  // are fixed from the start; only members revealed by `t` are then drawn.
+  // Layout is solved against ALL in-bounds Holds so ring centres are fixed from the
+  // start; only rings revealed by `t` are then drawn.
   const candidates = holds.filter(inBounds);
   if (candidates.length === 0) return;
-  const clusters = clusterHolds(candidates, clusterDist);
-  const layouts = layoutClusters(clusters, geom);
+  const rings = buildRings(clusterHolds(candidates, clusterDist), circleR);
 
   ctx.save();
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-
-  // ── Pass 1 — one transparent bordered ring per cluster (dark halo, then white). ──
-  for (const cl of layouts) {
-    if (cl.earliestReveal > t) continue;
-    ctx.beginPath();
-    ctx.arc(cl.cx, cl.cy, circleR, 0, TAU);
-    ctx.strokeStyle = HOLD_GLYPH_OUTLINE;
-    ctx.lineWidth = circleStroke + 2 * haloPx;
-    ctx.stroke();
-    ctx.strokeStyle = HOLD_GLYPH_COLOR;
-    ctx.lineWidth = circleStroke;
-    ctx.stroke();
+  for (const ring of rings) {
+    if (ring.earliestReveal > t) continue;
+    drawRing(ctx, ring.cx, ring.cy, ring.radius, HOLD_RING_COLOR[ring.kind], circleStroke, haloPx);
   }
-
-  // ── Pass 2 — solid glyph badges with the on-glyph number (after every ring so a
-  //    neighbour's badge never sits under a later ring). ──
-  for (const cl of layouts) {
-    for (const { hold, bx, by } of cl.badges) {
-      if (hold.firstUseTime > t) continue;
-      const span = geom[hold.kind].span;
-      const glyphOutlinePx = Math.max(1, span * GLYPH_OUTLINE_FRAC);
-      drawGlyph(ctx, hold.kind, hold.side, bx, by, span, HOLD_GLYPH_COLOR, HOLD_GLYPH_OUTLINE, glyphOutlinePx);
-
-      // Number digit over the glyph's solid palm / ball, biased toward the limb's
-      // side (left limbs left, right limbs right) via the per-side centroid, auto-fit
-      // so it stays contained — harder on the smaller foot ball.
-      const c = GLYPH_CENTROID[hold.kind][hold.side];
-      const dcx = bx + (c.x - 0.5) * span;
-      const dcy = by + (c.y - 0.5) * span;
-
-      const text = String(hold.order);
-      const maxW = span * SOLID_WIDTH_FRAC[hold.kind];
-      let fontPx = span * NUMBER_BASE_FRAC;
-      ctx.font = `bold ${fontPx}px sans-serif`;
-      const tw = ctx.measureText(text).width;
-      if (tw > maxW) fontPx = Math.max(numberFloor, fontPx * (maxW / tw));
-      ctx.font = `bold ${fontPx}px sans-serif`;
-
-      // White halo (stroke) under the dark digit so it reads even where it spills off
-      // the white glyph onto rock; the halo blends into the glyph elsewhere.
-      ctx.lineJoin = "round";
-      ctx.lineWidth = Math.max(1.5, fontPx * NUMBER_HALO_FRAC);
-      ctx.strokeStyle = HOLD_NUMBER_HALO;
-      ctx.strokeText(text, dcx, dcy);
-      ctx.fillStyle = HOLD_NUMBER_COLOR;
-      ctx.fillText(text, dcx, dcy);
-    }
-  }
-
   ctx.restore();
 }

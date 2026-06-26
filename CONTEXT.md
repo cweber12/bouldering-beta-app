@@ -168,8 +168,10 @@ _Avoid_: thin line, wireframe (the Skeleton is the lines+joints, distinct from
 the **Silhouette** fill beneath it).
 
 **Holds** (overlay pass):
-A third overlay pass, independent of the **Silhouette**/**Skeleton**: numbered
-markers placed where the **Climber**'s hands and feet used a hold. Toggled
+A third overlay pass, independent of the **Silhouette**/**Skeleton**: ring
+markers placed where the **Climber**'s hands and feet used a hold, colour-coded by
+limb kind (one colour for a **Hand Hold**, another for a **Foot Hold**) with the
+ring interior left clear so the wall hold shows through. Toggled
 separately from the pose overlay, so a viewer can show the pose, the Holds, both,
 or neither. Drawn both on the **Detection Preview** — where the Holds are
 reviewed and edited at scan time — and on the **Route Overlay**. Markers reveal in
@@ -184,10 +186,11 @@ stayed still long enough to be load-bearing (a **Dwell**), but the **User** may
 also **add or remove** Holds while reviewing a Run (a Hold is added by scrubbing
 to the frame where the limb is on the hold and snapping to that limb). Each Hold
 is exactly one **Hand Hold** or **Foot Hold**, anchored to where the limb was in
-the Run (and shown on the **Route Photo** through the overlay), and is labelled
-with its rank in the order it was **first** used (one combined hand+foot
-sequence). That rank is always re-derived from first-use order, so adding or
-removing a Hold renumbers the rest automatically. Repeated use of the same spot by
+the Run (and shown on the **Route Photo** through the overlay). Each Hold has a
+rank in the order it was **first** used (one combined hand+foot sequence), always
+re-derived from first-use order so adding or removing a Hold renumbers the rest;
+that rank orders the progressive reveal and the editor list rather than appearing
+as a number on the marker. Repeated use of the same spot by
 the same limb kind — a re-grip, a two-hand match — is the same Hold, not a new
 one; a hand and a foot on the same spot are two different Holds.
 _Avoid_: grip, placement, contact (those name the raw evidence — see **Dwell** —

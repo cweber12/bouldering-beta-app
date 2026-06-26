@@ -80,15 +80,13 @@ unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
 ### Holds overlay
 
 A third overlay pass, **Holds**, marks where the climber's hands and feet were
-used on the wall — numbered in the order they were first used. Each marker is an
-**outline-only hand / foot glyph** of the actual limb that used it — a single
-colour stroke with a **transparent fill**, so the wall hold reads straight
-through. Every glyph uses the **same colour**; only the **shape** (hand vs foot)
-and the **orientation** (mirrored for the left side) tell them apart. Left and
-right are never merged, so a hold used by both hands (right then left) shows two
-marks, fanned apart so both read. The number rides in a small **corner badge**
-pinned to the glyph (a dark disc with a white digit and a white ring), keeping the
-number tightly coupled to its mark with no leader line.
+used on the wall. Each marker is a **thin colour-coded ring** with a **transparent
+interior**, so the wall hold reads straight through. Colour carries the only thing
+the marker says: **blue = a hand hold, orange = a foot hold** (ADR 0012). There is
+no number, no glyph and no left/right side on the wall — the Skeleton already shows
+the move sequence, and a ring popping in as the limb lands narrates the order. A
+spot used by both hands collapses to one blue ring; a spot used by both a hand and
+a foot draws **two concentric rings** (blue outer, orange inner).
 Markers reveal in first-use order on the first playback pass and then stay shown
 across loops; a **Replay** control on the player re-arms that reveal. Holds are
 **inferred from Dwells** (a limb held still long enough to be load-bearing — a
@@ -112,9 +110,9 @@ on the fly via `pipeline/holdDetection.ts` (`detectHolds`) over the same pose
 frames the Skeleton uses. The Holds source path lives in the `useHolds` hook;
 scan-stage editing lives in `useScanHolds`. `drawHolds`
 (`pipeline/holdsOverlay.ts`) renders them beneath the Skeleton (which stays
-legible on top): coincident Holds share **one ring** carrying several numbered
-glyph badges, each a solid white hand/foot silhouette flush outside the ring with
-the number as a dark digit on the palm/ball (see ADR 0011). The per-frame cost is
+legible on top): coincident Holds collapse into **one ring per kind** at the spot,
+blue for hand and orange for foot, each a thin colour stroke with a dark contrast
+halo and a clear interior (see ADR 0012). The per-frame cost is
 trivial, so geometry is computed inline without a cache. They are toggled
 independently from the Overlay panel's Holds row. The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not

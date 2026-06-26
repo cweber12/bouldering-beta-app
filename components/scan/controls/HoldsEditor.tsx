@@ -4,9 +4,13 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
-import { HOLD_BADGE } from "@/pipeline/holdsOverlay";
-import HoldGlyphIcon from "@/components/skeleton/HoldGlyphIcon";
 import type { HoldEntry } from "@/hooks/useScanHolds";
+
+/** Ring-swatch class echoing the wall marker colour for a limb kind (ADR 0012). */
+const KIND_RING: Record<"hand" | "foot", string> = {
+  hand: "border-hand-hold",
+  foot: "border-foot-hold",
+};
 
 export interface HoldsEditorProps {
   /** Current Holds with their re-derived numbers, sorted by first use. */
@@ -71,7 +75,7 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                   onClick={() => onAdd(kind, side)}
                   className="flex items-center justify-center gap-1.5 rounded-(--radius-control) border border-edge/60 bg-inset px-2 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
                 >
-                  <HoldGlyphIcon kind={kind} side={side} className="h-4 w-4 shrink-0" />
+                  <span className={cn("h-4 w-4 shrink-0 rounded-full border-2", KIND_RING[kind])} aria-hidden="true" />
                   {label}
                 </button>
               ))}
@@ -91,16 +95,12 @@ export default function HoldsEditor({ entries, onAdd, onRemove }: HoldsEditorPro
                     key={`${entry.hold.kind}-${entry.hold.firstUseTime}-${entry.hold.x}-${entry.hold.y}`}
                     className="flex items-center gap-2 text-xs text-fg-secondary"
                   >
-                    <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                      style={{ backgroundColor: HOLD_BADGE.bg, color: HOLD_BADGE.text }}
-                    >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-inset text-[10px] font-bold text-fg-secondary">
                       {entry.order}
                     </span>
-                    <HoldGlyphIcon
-                      kind={entry.hold.kind}
-                      side={entry.hold.side ?? "right"}
-                      className="h-4 w-4 shrink-0 text-fg-muted"
+                    <span
+                      className={cn("h-4 w-4 shrink-0 rounded-full border-2", KIND_RING[entry.hold.kind])}
+                      aria-hidden="true"
                     />
                     <span className="flex-1 capitalize">
                       {entry.hold.side ? `${entry.hold.side} ` : ""}

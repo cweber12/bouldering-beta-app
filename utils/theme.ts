@@ -72,7 +72,8 @@ export const dark = {
   sendSurface:    "#0c3d22",
   attempt:        "#fbbf24",
   attemptSurface: "#3d2200",
-  holdGlyph:      "#ffffff",   // single outline colour for every Hold glyph — see HOLD_GLYPH_COLOR
+  handHold:       "#3b82f6",   // Hand Hold ring — mirror of HOLD_RING_COLOR.hand
+  footHold:       "#f97316",   // Foot Hold ring — mirror of HOLD_RING_COLOR.foot
 } as const;
 
 // ─── Light theme canvas values ───────────────────────────────
@@ -97,7 +98,8 @@ export const light = {
   sendSurface:    "#d1fae5",   // emerald-100
   attempt:        "#92400e",   // amber-800
   attemptSurface: "#fef3c7",   // amber-100
-  holdGlyph:      "#ffffff",   // same colour (overlay drawn on a photo)
+  handHold:       "#3b82f6",   // same colours (overlay drawn on a photo, theme-independent)
+  footHold:       "#f97316",
 } as const;
 
 export type Theme = typeof dark;

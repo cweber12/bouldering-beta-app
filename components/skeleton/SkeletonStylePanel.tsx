@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { type HoldStyle } from "@/pipeline/holdsOverlay";
-import HoldGlyphIcon from "@/components/skeleton/HoldGlyphIcon";
 import { cn } from "@/utils/cn";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
@@ -26,11 +25,11 @@ const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Holds legend — glyphs are a single colour, differentiated by shape (hand vs
- *  foot) and orientation (mirror = side), so the legend shows the shapes. */
-const HOLD_LEGEND: { kind: "hand" | "foot"; label: string }[] = [
-  { kind: "hand", label: "Hands" },
-  { kind: "foot", label: "Feet" },
+/** Holds legend — kind is shown by ring colour (blue hand / orange foot), so the
+ *  legend echoes the wall marker with a small colour ring (ADR 0012). */
+const HOLD_LEGEND: { kind: "hand" | "foot"; label: string; ring: string }[] = [
+  { kind: "hand", label: "Hands", ring: "border-hand-hold" },
+  { kind: "foot", label: "Feet", ring: "border-foot-hold" },
 ];
 
 /** Best-effort hex extraction from a CSS color string (rgba / hex). */
@@ -136,8 +135,8 @@ export default function SkeletonStylePanel({
     jointsVisible, jointColor, jointRadius,
   ]);
 
-  // Emit the Holds style whenever any Holds setting changes. The glyph look is
-  // fixed (single-colour outline, see HOLD_GLYPH_COLOR), so only visibility is
+  // Emit the Holds style whenever any Holds setting changes. The marker look is
+  // fixed (colour-coded rings, see HOLD_RING_COLOR), so only visibility is
   // user-controlled here.
   useEffect(() => {
     onHoldsChangeRef.current?.({ holdsVisible });
@@ -272,9 +271,9 @@ export default function SkeletonStylePanel({
                 Holds
               </label>
               <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {HOLD_LEGEND.map(({ kind, label }) => (
+                {HOLD_LEGEND.map(({ label, ring }) => (
                   <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted select-none">
-                    <HoldGlyphIcon kind={kind} className="h-3.5 w-3.5 shrink-0 text-fg-secondary" />
+                    <span className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", ring)} aria-hidden="true" />
                     {label}
                   </span>
                 ))}

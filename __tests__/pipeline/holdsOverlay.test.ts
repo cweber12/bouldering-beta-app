@@ -1,21 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { drawHolds } from "@/pipeline/holdsOverlay";
+import { drawHolds, HOLD_RING_COLOR } from "@/pipeline/holdsOverlay";
 import type { Hold } from "@/pipeline/holdDetection";
 
 // ---------------------------------------------------------------------------
 // drawHolds is a canvas routine; we feed it a minimal fake 2D context and spy on
-// the text + arc + stroke calls. Coincident Holds share ONE ring; each ring draws
-// a single `arc` stroked twice (a dark halo + the white border). Each revealed
-// Hold then draws a numbered glyph badge — a solid glyph (skipped here, Path2D is
-// absent in jsdom) and the on-glyph number (one `fillText`). So a cluster of N
-// Holds contributes one `arc`, two `stroke`s, and N `fillText`s; the glyph fill is
-// what jsdom drops.
+// the arc + stroke calls. Each Hold marker is a thin colour-coded ring (blue =
+// hand, orange = foot) with a clear interior — no number, no glyph (ADR 0012).
+//
+// A ring is one `arc` stroked twice: a wider dark halo, then the kind colour over
+// it. So a single ring contributes one `arc` and two `stroke`s. Coincident same-
+// kind Holds collapse to one ring; a spot used by both a hand and a foot draws two
+// concentric rings. We capture arc centres/radii and the strokeStyle at each
+// stroke to assert position and colour.
 // ---------------------------------------------------------------------------
 
 function makeCtx(width = 1000, height = 1000) {
-  const fillText = vi.fn();
-  const arc = vi.fn();
-  const stroke = vi.fn();
+  const arcs: [number, number, number][] = [];
+  const strokeColors: string[] = [];
+  const arc = vi.fn((x: number, y: number, r: number) => arcs.push([x, y, r]));
   const ctx = {
     canvas: { width, height } as HTMLCanvasElement,
     measureText: vi.fn(() => ({ width: 12 }) as TextMetrics),
@@ -23,17 +25,14 @@ function makeCtx(width = 1000, height = 1000) {
     restore: vi.fn(),
     beginPath: vi.fn(),
     arc,
-    rect: vi.fn(),
-    roundRect: vi.fn(),
     translate: vi.fn(),
     scale: vi.fn(),
-    clip: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     fill: vi.fn(),
-    stroke,
-    fillText,
+    fillText: vi.fn(),
     strokeText: vi.fn(),
+    stroke: vi.fn(() => strokeColors.push(ctx.strokeStyle)),
     textAlign: "",
     textBaseline: "",
     font: "",
@@ -42,11 +41,8 @@ function makeCtx(width = 1000, height = 1000) {
     lineWidth: 0,
     lineJoin: "",
     lineCap: "",
-    shadowColor: "",
-    shadowBlur: 0,
-    globalAlpha: 1,
   };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, fillText, arc, stroke };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, arcs, strokeColors, arc, stroke: ctx.stroke, fillText: ctx.fillText };
 }
 
 const HOLDS: Hold[] = [
@@ -56,88 +52,92 @@ const HOLDS: Hold[] = [
 
 const BODY_SCALE = 100;
 
-describe("drawHolds clustered rings + side badges", () => {
+describe("drawHolds colour-coded rings", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("draws one ring per cluster and one number per revealed hold", () => {
-    const { ctx, fillText, arc, stroke } = makeCtx();
-    // Both holds revealed at t=5; they sit far apart, so two separate rings.
+  it("draws one ring per kind, coloured by kind, with no numbers or glyphs", () => {
+    const { ctx, arc, stroke, fillText, strokeColors } = makeCtx();
     drawHolds(ctx, HOLDS, 5, undefined, BODY_SCALE);
-    expect(fillText).toHaveBeenCalledTimes(2);
-    expect(fillText.mock.calls.map((c) => c[0])).toEqual(["1", "2"]);
-    // One ring per cluster: one arc each, stroked twice (halo + white border).
+    // Two separate spots → two rings, each stroked twice (halo + colour).
     expect(arc).toHaveBeenCalledTimes(2);
     expect(stroke).toHaveBeenCalledTimes(4);
+    // No number digit and no glyph fill.
+    expect(fillText).not.toHaveBeenCalled();
+    // Both kind colours appear.
+    expect(strokeColors).toContain(HOLD_RING_COLOR.hand);
+    expect(strokeColors).toContain(HOLD_RING_COLOR.foot);
   });
 
-  it("consolidates coincident holds into a single shared ring", () => {
-    const { ctx, fillText, arc, stroke } = makeCtx();
-    // Both hands on the same wall hold → two coincident Holds, one ring.
+  it("collapses coincident same-kind Holds into a single ring", () => {
+    const { ctx, arc, stroke, strokeColors } = makeCtx();
+    // Both hands on the same wall hold → two coincident Holds, one blue ring.
     const sameHold: Hold[] = [
       { id: "hold-1", kind: "hand", side: "right", x: 500, y: 500, firstUseTime: 1, order: 1 },
       { id: "hold-2", kind: "hand", side: "left", x: 505, y: 498, firstUseTime: 2, order: 2 },
     ];
     drawHolds(ctx, sameHold, 5, undefined, BODY_SCALE);
-    // One shared ring (one arc, two strokes) but both badges drawn.
     expect(arc).toHaveBeenCalledTimes(1);
     expect(stroke).toHaveBeenCalledTimes(2);
-    expect(fillText).toHaveBeenCalledTimes(2);
-    // Badges land on opposite sides of the shared ring centre (~502).
-    const [right, left] = fillText.mock.calls;
-    expect(right[1]).toBeGreaterThan(520); // right limb → right arc
-    expect(left[1]).toBeLessThan(490); // left limb → left arc
+    expect(strokeColors).toContain(HOLD_RING_COLOR.hand);
+    expect(strokeColors).not.toContain(HOLD_RING_COLOR.foot);
   });
 
-  it("places each badge on its limb's side of the ring", () => {
-    const { ctx, fillText } = makeCtx();
-    drawHolds(ctx, HOLDS, 5, undefined, BODY_SCALE);
-    const [c1, c2] = fillText.mock.calls;
-    expect(c1[1]).toBeLessThan(250); // left hand → badge left of its ring
-    expect(c2[1]).toBeGreaterThan(700); // right foot → badge right of its ring
+  it("draws concentric rings when one spot is used by both a hand and a foot", () => {
+    const { ctx, arc, arcs, strokeColors } = makeCtx();
+    const both: Hold[] = [
+      { id: "hold-1", kind: "hand", side: "right", x: 500, y: 500, firstUseTime: 1, order: 1 },
+      { id: "hold-2", kind: "foot", side: "left", x: 503, y: 502, firstUseTime: 2, order: 2 },
+    ];
+    drawHolds(ctx, both, 5, undefined, BODY_SCALE);
+    // Two concentric rings on the shared centroid: same centre, different radii.
+    expect(arc).toHaveBeenCalledTimes(2);
+    const [hand, foot] = arcs; // hand ring is pushed first
+    expect(hand[0]).toBeCloseTo(foot[0]); // same cx
+    expect(hand[1]).toBeCloseTo(foot[1]); // same cy
+    expect(foot[2]).toBeLessThan(hand[2]); // foot ring nests inside the hand ring
+    expect(strokeColors).toContain(HOLD_RING_COLOR.hand);
+    expect(strokeColors).toContain(HOLD_RING_COLOR.foot);
   });
 
-  it("reveals holds progressively by firstUseTime", () => {
-    const { ctx, fillText, arc } = makeCtx();
+  it("reveals rings progressively by firstUseTime", () => {
+    const { ctx, arc } = makeCtx();
     // Only the first hold revealed (t=1.5 < hold-2 firstUseTime 2).
     drawHolds(ctx, HOLDS, 1.5, undefined, BODY_SCALE);
-    expect(fillText).toHaveBeenCalledTimes(1);
-    expect(fillText.mock.calls[0][0]).toBe("1");
-    // Only the revealed cluster's ring is drawn.
     expect(arc).toHaveBeenCalledTimes(1);
 
-    fillText.mockClear();
+    arc.mockClear();
     drawHolds(ctx, HOLDS, 2.5, undefined, BODY_SCALE);
-    expect(fillText).toHaveBeenCalledTimes(2);
+    expect(arc).toHaveBeenCalledTimes(2);
   });
 
-  it("reveals a shared ring on its earliest member, then pops in later badges", () => {
-    const { ctx, fillText, arc } = makeCtx();
-    const sameHold: Hold[] = [
+  it("reveals each kind's ring at its own earliest use within a shared spot", () => {
+    const { ctx, arc, strokeColors } = makeCtx();
+    const both: Hold[] = [
       { id: "hold-1", kind: "hand", side: "right", x: 500, y: 500, firstUseTime: 1, order: 1 },
-      { id: "hold-2", kind: "hand", side: "left", x: 503, y: 502, firstUseTime: 3, order: 2 },
+      { id: "hold-2", kind: "foot", side: "left", x: 503, y: 502, firstUseTime: 3, order: 2 },
     ];
-    // t between the two: ring shows (earliest member used), only badge 1 drawn.
-    drawHolds(ctx, sameHold, 2, undefined, BODY_SCALE);
+    // t between the two: the hand ring shows, the foot ring is still hidden.
+    drawHolds(ctx, both, 2, undefined, BODY_SCALE);
     expect(arc).toHaveBeenCalledTimes(1);
-    expect(fillText).toHaveBeenCalledTimes(1);
-    expect(fillText.mock.calls[0][0]).toBe("1");
+    expect(strokeColors).toContain(HOLD_RING_COLOR.hand);
+    expect(strokeColors).not.toContain(HOLD_RING_COLOR.foot);
   });
 
   it("draws nothing when holds are empty or hidden", () => {
-    const { ctx, fillText } = makeCtx();
+    const { ctx, arc } = makeCtx();
     drawHolds(ctx, [], 5, undefined, BODY_SCALE);
     drawHolds(ctx, HOLDS, 5, { holdsVisible: false }, BODY_SCALE);
-    expect(fillText).not.toHaveBeenCalled();
+    expect(arc).not.toHaveBeenCalled();
   });
 
   it("drops holds whose point falls outside the canvas bounds", () => {
-    const { ctx, fillText } = makeCtx();
+    const { ctx, arc } = makeCtx();
     const offscreen: Hold[] = [
       { id: "a", kind: "hand", side: "left", x: -10, y: 400, firstUseTime: 1, order: 1 },
       { id: "b", kind: "hand", side: "right", x: 500, y: 500, firstUseTime: 1, order: 2 },
     ];
     drawHolds(ctx, offscreen, 5, undefined, BODY_SCALE);
-    expect(fillText).toHaveBeenCalledTimes(1);
-    expect(fillText.mock.calls[0][0]).toBe("2");
+    // Only the in-bounds hold draws a ring.
+    expect(arc).toHaveBeenCalledTimes(1);
   });
 });
