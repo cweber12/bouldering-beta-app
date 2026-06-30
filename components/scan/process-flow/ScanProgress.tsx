@@ -150,7 +150,10 @@ export default function ScanProgress({
             {/* Spotlight: green-tinted Adaptive Crop with the rest of the frame
                 dimmed by the box's own 0.75 black outset shadow (clipped to the
                 frame by the container's overflow-hidden). One element carries
-                the border, tint, dim and move so they stay in sync. */}
+                the border, tint, dim and move so they stay in sync. It sits at
+                zIndex 2 — above both crossfade canvases (which ping-pong between
+                zIndex 0 and 1) — so the rectangle and shadow stay painted over
+                every still and never flash out when a new frame fades in. */}
             {frameImage && (
               <div
                 className="absolute border-2 border-accent/80 bg-accent/20"
@@ -159,6 +162,7 @@ export default function ScanProgress({
                   top: `${box.y * 100}%`,
                   width: `${box.w * 100}%`,
                   height: `${box.h * 100}%`,
+                  zIndex: 2,
                   borderRadius: "2px",
                   boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)",
                   opacity: mounted ? 1 : 0,
