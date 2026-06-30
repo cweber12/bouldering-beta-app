@@ -17,10 +17,13 @@
  * at one spot; at draw time the Holds within ~one ring radius collapse into a
  * **single ring** rather than a pile of overlapping circles. A spot used by **both
  * a hand and a foot** draws **two concentric rings** (blue outer, orange inner)
- * centred on the spot — both kinds shown, no nudge.
+ * centred on the spot — the inner ring nested right inside the outer one (edges
+ * touching) so both kinds show without a nudge and the clear interior stays large.
  *
- * Each ring is a single flat colour stroke — no halo — so it reads as the exact
- * Hand/Foot token colour shown in the Holds dropdown swatches. Rings reveal
+ * Each ring is a flat colour stroke carrying an **outer-only drop shadow** — the
+ * blur is clipped to the region outside the ring, so it darkens the wall around the
+ * marker while the interior stays clear and reads as highlighted. The stroke itself
+ * is the exact Hand/Foot token colour shown in the Holds dropdown swatches. Rings reveal
  * progressively: a kind's ring appears when its earliest member of that kind has
  * `firstUseTime ≤ t`, so a ring popping in as the limb lands narrates the sequence
  * as playback advances.
@@ -65,10 +68,12 @@ const CIRCLE_STROKE_FRAC = 0.07;
 /** Cluster Holds whose centres fall within this × body scale into one spot — set to
  *  the ring radius, i.e. group only Holds whose rings would visibly overlap. */
 const CLUSTER_RADIUS_FRAC = DEFAULT_HOLD_RADIUS;
-/** Inner concentric ring radius (the foot ring at a spot used by both kinds) as a
- *  fraction of the outer ring radius — kept well inside so the two rings read apart
- *  while the innermost interior still shows rock. */
-const INNER_RING_FRAC = 0.62;
+/** Outer drop-shadow blur radius as a fraction of the ring radius. The shadow is
+ *  clipped to the region outside the ring, so the blur falls outward only and the
+ *  interior reads as highlighted. */
+const SHADOW_BLUR_FRAC = 0.55;
+/** Outer drop-shadow colour — a significant dark blur so the ring lifts off the wall. */
+const SHADOW_COLOR = "rgba(0, 0, 0, 0.7)";
 
 const TAU = Math.PI * 2;
 
@@ -116,9 +121,10 @@ function clusterHolds(holds: Hold[], clusterDist: number): Hold[][] {
 //
 // Each cluster contributes one ring per limb kind it contains, both centred on the
 // cluster centroid. When a cluster holds both kinds, the hand ring takes the full
-// radius and the foot ring nests inside it, so the spot reads as "hand and foot"
-// without a position nudge. A ring reveals at the earliest `firstUseTime` among its
-// own kind's members.
+// radius and the foot ring nests just inside it — its outer stroke edge touching the
+// hand ring's inner edge (`radius − stroke`) — so the two rings read as a pair while
+// the clear interior stays as large as possible. A ring reveals at the earliest
+// `firstUseTime` among its own kind's members.
 // ---------------------------------------------------------------------------
 
 interface Ring {
@@ -131,7 +137,10 @@ interface Ring {
   earliestReveal: number;
 }
 
-function buildRings(clusters: Hold[][], circleR: number): Ring[] {
+function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): Ring[] {
+  // Inner foot ring sits right inside the hand ring: its outer stroke edge touches the
+  // hand ring's inner stroke edge, which (centreline to centreline) is one stroke width.
+  const innerR = Math.max(circleStroke, circleR - circleStroke);
   const rings: Ring[] = [];
   for (const members of clusters) {
     const cx = members.reduce((s, m) => s + m.x, 0) / members.length;
@@ -149,7 +158,7 @@ function buildRings(clusters: Hold[][], circleR: number): Ring[] {
         cx,
         cy,
         kind: "foot",
-        radius: both ? circleR * INNER_RING_FRAC : circleR,
+        radius: both ? innerR : circleR,
         earliestReveal: earliest("foot"),
       });
     }
@@ -157,8 +166,13 @@ function buildRings(clusters: Hold[][], circleR: number): Ring[] {
   return rings;
 }
 
-/** Stroke one colour-coded ring as a single flat colour, matching the Holds
- *  dropdown swatch exactly (no halo). */
+/** Stroke one colour-coded ring with an outer-only drop shadow.
+ *
+ *  Two passes: first the shadow, clipped to the region *outside* the ring (full canvas
+ *  minus the ring's disc, even-odd) so the blur falls outward only and never darkens
+ *  the interior; then a clean flat colour stroke on top, matching the Holds dropdown
+ *  swatch exactly. The clear interior plus the surrounding shadow lifts the ring off
+ *  the wall so its centre reads as highlighted. */
 function drawRing(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -167,6 +181,25 @@ function drawRing(
   color: string,
   stroke: number,
 ): void {
+  // Shadow pass — clip to outside the ring, then stroke so only the outward blur shows.
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.arc(cx, cy, r, 0, TAU);
+  ctx.clip("evenodd");
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, TAU);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = stroke;
+  ctx.shadowColor = SHADOW_COLOR;
+  ctx.shadowBlur = r * SHADOW_BLUR_FRAC;
+  ctx.stroke();
+  ctx.restore();
+
+  // Clean flat-colour stroke on top (shadow explicitly cleared), so the ring colour
+  // reads true and never casts a second blur.
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, TAU);
   ctx.strokeStyle = color;
@@ -222,7 +255,7 @@ export function drawHolds(
   // start; only rings revealed by `t` are then drawn.
   const candidates = holds.filter(inBounds);
   if (candidates.length === 0) return;
-  const rings = buildRings(clusterHolds(candidates, clusterDist), circleR);
+  const rings = buildRings(clusterHolds(candidates, clusterDist), circleR, circleStroke);
 
   ctx.save();
   ctx.lineJoin = "round";
