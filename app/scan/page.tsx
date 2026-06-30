@@ -25,6 +25,7 @@ import type { HoldStyle } from "@/pipeline/holdsOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
 import { deriveTapCrop } from "@/pipeline/tapCropDetection";
+import { containRoute, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
@@ -469,17 +470,27 @@ function ScanPageInner() {
       const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
       const climber = derived ?? defaultClimberBox(point);
       setClimberCrop(climber);
-      if (!wallTouchedRef.current) setWallCrop(DEFAULT_CROP);
+      // Route appears around the Climber: near full-frame, bottom pulled up to the
+      // Climber's bottom (ADR 0014). Keep the User's framing if they touched it.
+      setWallCrop((prev) => (wallTouchedRef.current ? containRoute(prev, climber) : defaultRouteAroundClimber(climber)));
       return derived != null;
     },
     [model],
   );
 
-  // The user dragged the Wall Crop — remember it so a re-tap keeps their framing.
+  // The user dragged the Climber box — it overrides the detection seed region.
+  // The Climber is dominant, so it pushes the Route out to keep containing it.
+  const handleClimberCropChange = useCallback((c: CropFraction) => {
+    setClimberCrop(c);
+    setWallCrop((prev) => containRoute(prev, c));
+  }, []);
+
+  // The user dragged the Route box — remember it so a re-tap keeps their framing.
+  // The Route is subordinate: it can never cross inside the Climber.
   const handleWallCropChange = useCallback((c: CropFraction) => {
     wallTouchedRef.current = true;
-    setWallCrop(c);
-  }, []);
+    setWallCrop(containRoute(c, climberCrop));
+  }, [climberCrop]);
 
   // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
   const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
@@ -709,6 +720,7 @@ function ScanPageInner() {
           videoPreviewUrl={videoPreviewUrl}
           climberCrop={climberCrop}
           wallCrop={wallCrop}
+          onClimberCropChange={handleClimberCropChange}
           onWallCropChange={handleWallCropChange}
           climberPoint={climberPoint}
           onClimberPointChange={handleClimberPointChange}

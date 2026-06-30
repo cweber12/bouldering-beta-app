@@ -36,6 +36,14 @@ type PoseDetector = any;
 export const TAP_WINDOW: { w: number; h: number } = { w: 0.45, h: 0.75 };
 
 /**
+ * Padding for the **initial** tap-derived Climber box — slightly more generous
+ * than the per-frame in-scan default (`DEFAULT_CROP_PAD = 0.6`) so the seed box
+ * the User sees and adjusts comfortably surrounds the climber. Only the seed is
+ * widened; the in-scan adaptive crop keeps its tuned padding (ADR 0013/0014).
+ */
+export const SEED_CROP_PAD = 0.85;
+
+/**
  * Derive the Climber crop from a tap, in **frame fractions** (so it feeds the
  * crop overlay and the processor seed directly).
  *
@@ -46,6 +54,7 @@ export const TAP_WINDOW: { w: number; h: number } = { w: 0.45, h: 0.75 };
  * @param point        - Tap, in frame fractions [0, 1].
  * @param timestampSec - The tapped frame's video time, for the detector's clock.
  * @param windowFrac   - Override the zoom window (defaults to {@link TAP_WINDOW}).
+ * @param padFactor    - Padding for the derived box (defaults to {@link SEED_CROP_PAD}).
  */
 export function deriveTapCrop(
   detector: PoseDetector,
@@ -53,6 +62,7 @@ export function deriveTapCrop(
   point: Point,
   timestampSec: number,
   windowFrac: { w: number; h: number } = TAP_WINDOW,
+  padFactor: number = SEED_CROP_PAD,
 ): CropFraction | null {
   const frameW = frame.width;
   const frameH = frame.height;
@@ -96,7 +106,7 @@ export function deriveTapCrop(
   const chosen = selectClimberByPoint(posesFull, point);
   if (!chosen) return null;
 
-  const box = deriveClimberCrop(chosen.keypoints, frameW, frameH);
+  const box = deriveClimberCrop(chosen.keypoints, frameW, frameH, padFactor);
   if (!box) return null;
   return {
     x: box.x / frameW,

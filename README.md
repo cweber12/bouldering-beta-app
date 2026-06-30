@@ -142,14 +142,21 @@ Before processing, each upload and image-match workflow shows an interactive
 crop box overlay. Drag the interior to move the box and drag any of the 8
 handles to resize it.
 
-**Mark detection — two targets:**
+**Mark detection — two nested boxes:**
+
+**Tap the climber** to lock detection onto them. Two boxes then appear and are
+adjustable at the same time — the inner **Climber** box and the outer **Route**
+box around it (drag a box's interior to move it, a handle to resize). Re-tap to
+pick a different climber.
 
 | Target | Purpose |
 |---|---|
-| Climber | Pose detection window. **Tap the climber** to lock detection onto them; the box is derived from the climber's landmarks at the tap (sized to the body plus room for the next move) and follows them each frame. There is no climber box to resize — re-tap to pick a different climber. |
-| Route | Feature-matching region on the first video frame. Defaults to the whole frame (climber masked out during matching); drag it to exclude sky, ground, or bystanders and line the climb up with the route photo. |
+| Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically. |
+| Route (outer) | Feature-matching region on the first video frame. Starts near full-frame with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to exclude sky or bystanders and line the climb up with the route photo. |
 
-Click **Scan video** after marking the climber and the route.
+The Climber box is dominant: moving it pushes the Route out to keep containing
+it, and the Route can never be dragged inside the Climber. Click **Scan video**
+after framing the boxes.
 
 ## Guided scan flow
 

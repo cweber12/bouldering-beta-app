@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
+import DualCropOverlay from "@/components/capture/DualCropOverlay";
+import { defaultRouteAroundClimber } from "@/utils/cropContainment";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 import {
@@ -20,7 +22,6 @@ import ToolbarButton from "@/components/scan/controls/ToolbarButton";
 
 const CLIMBER_COLOR = "rgba(255,255,255,0.90)";
 const WALL_COLOR = "rgba(251,191,36,0.90)";
-type CropMode = "climber" | "wall";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -236,6 +237,8 @@ export interface StepSetDetectionProps {
   videoPreviewUrl: string;
   climberCrop: CropFraction;
   wallCrop?: CropFraction;
+  /** The user dragged the Climber box — overrides the detection seed region. */
+  onClimberCropChange?: (c: CropFraction) => void;
   onWallCropChange?: (c: CropFraction) => void;
   /** Normalised point [0,1] the user tapped to identify the climber, if any. */
   climberPoint?: { x: number; y: number } | null;
@@ -271,6 +274,7 @@ export default function StepSetDetection({
   videoPreviewUrl,
   climberCrop,
   wallCrop,
+  onClimberCropChange,
   onWallCropChange,
   climberPoint,
   onClimberPointChange,
@@ -307,8 +311,6 @@ export default function StepSetDetection({
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
   const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
 
-  // Guided crop stage: "climber" first, "wall" after switching the toggle.
-  const [cropMode, setCropMode] = useState<CropMode>("climber");
   // Detection settings popover.
   const [showSettings, setShowSettings] = useState(false);
   // Set when the most recent tap found no pose — surfaces a "pick a clearer
@@ -331,6 +333,7 @@ export default function StepSetDetection({
   // hand-resized — and the Wall Crop auto-renders around it (ADR 0013).
   function handleClimberTap(p: { x: number; y: number }) {
     setScanNudged(false);
+    setHintMinimized(false);
     onClimberPointChange?.(p);
     const video = videoFullscreen ? fullscreenVideoRef.current : cropVideoRef.current;
     const frame = captureFrame(video);
@@ -340,9 +343,7 @@ export default function StepSetDetection({
     }
   }
 
-  function handleSelectClimber() { setHintMinimized(false); setCropMode("climber"); }
-  function handleSelectWall()    { setHintMinimized(false); setCropMode("wall"); }
-  function handleReTap()         { setScanNudged(false); setTapMissed(false); onClimberPointChange?.(null); }
+  function handleReTap()         { setHintMinimized(false); setScanNudged(false); setTapMissed(false); onClimberPointChange?.(null); }
 
   function handleCropVideoLoaded() {
     const video  = cropVideoRef.current;
@@ -411,7 +412,7 @@ export default function StepSetDetection({
   };
 
   // Marker showing which climber the user tapped.
-  const climberMarker = cropMode === "climber" && climberPoint ? (
+  const climberMarker = climberPoint ? (
     <div
       className="pointer-events-none absolute z-20"
       style={{
@@ -425,18 +426,12 @@ export default function StepSetDetection({
     </div>
   ) : null;
 
-  // Crop overlay. In climber mode, before a tap the overlay is a bare tap surface
-  // so the box never blocks tapping the climber; after a tap the landmark-derived
-  // box is shown locked (no handles) and a tap re-detects a different climber.
-  // Wall mode shows the editable wall crop box.
-  const cropOverlayNode = !hasCropFrame ? null : cropMode === "wall" ? (
-    <CropBoxOverlay
-      box={wallCrop ?? climberCrop}
-      onChange={handleWallCropChange}
-      borderRadius="0"
-      color={WALL_COLOR}
-    />
-  ) : climberPoint == null ? (
+  // Crop overlay. Before a tap the overlay is a bare tap surface so the box never
+  // blocks tapping the climber. After a tap, both the Climber box (inner) and the
+  // Route box (outer, around the climber) are shown and independently adjustable;
+  // the Climber pushes the Route out and the Route can't cross inside it (ADR 0014).
+  // The climber is re-identified via the Re-tap button, not by tapping the boxes.
+  const cropOverlayNode = !hasCropFrame ? null : climberPoint == null ? (
     <CropBoxOverlay
       tapOnly
       box={climberCrop}
@@ -445,13 +440,13 @@ export default function StepSetDetection({
       color={CLIMBER_COLOR}
     />
   ) : (
-    <CropBoxOverlay
-      locked
-      box={climberCrop}
-      onChange={() => {}}
-      onTap={handleClimberTap}
-      borderRadius="0"
-      color={CLIMBER_COLOR}
+    <DualCropOverlay
+      climber={climberCrop}
+      route={wallCrop ?? defaultRouteAroundClimber(climberCrop)}
+      onClimberChange={(c) => onClimberCropChange?.(c)}
+      onRouteChange={handleWallCropChange}
+      climberColor={CLIMBER_COLOR}
+      routeColor={WALL_COLOR}
     />
   );
 
@@ -461,9 +456,6 @@ export default function StepSetDetection({
   // minimize control. Copy is terse and imperative, manual-style.
   const stageHint: { text: string; tone: "info" | "caution"; minimizable: boolean } | null = (() => {
     if (!hasCropFrame) return null;
-    if (cropMode === "wall") {
-      return { text: "Frame only the route and the connected face.", tone: "info", minimizable: true };
-    }
     if (climberPoint == null) {
       return scanNudged
         ? { text: "Tap the climber, or Scan anyway.", tone: "caution", minimizable: false }
@@ -477,7 +469,7 @@ export default function StepSetDetection({
       };
     }
     return {
-      text: "Climber set. Tap Route to adjust the wall, or Scan.",
+      text: "Drag the white box for the climber, the amber box for the route. Then Scan.",
       tone: "info",
       minimizable: true,
     };
@@ -534,29 +526,9 @@ export default function StepSetDetection({
   function toolbarNode(variant: "inline" | "fullscreen") {
     return (
       <>
-        <div className="ui-segmented text-xs" role="group" aria-label="What to mark">
-          <button
-            type="button"
-            onClick={handleSelectClimber}
-            className="ui-segmented-button px-3 py-1 font-medium"
-            aria-pressed={cropMode === "climber"}
-          >
-            Climber
-          </button>
-          <button
-            type="button"
-            onClick={handleSelectWall}
-            className="ui-segmented-button px-3 py-1 font-medium"
-            aria-pressed={cropMode === "wall"}
-            title="Frame the route — include only the route and the connected face"
-          >
-            Route
-          </button>
-        </div>
-
         <div className="ml-auto flex items-center gap-1">
           <DetectionSettings {...settingsProps} />
-          {cropMode === "climber" && climberPoint != null && (
+          {climberPoint != null && (
             <ToolbarButton
               onClick={handleReTap}
               title="Re-tap a different climber"
@@ -629,16 +601,12 @@ export default function StepSetDetection({
   }
 
   const detectionInstruction =
-    cropMode === "wall"
-      ? "frame the route"
-      : climberPoint == null
-        ? "tap the climber"
-        : "scan, or frame the route";
+    climberPoint == null ? "tap the climber" : "frame the boxes, or scan";
 
   const detectionPurpose =
-    cropMode === "wall"
-      ? "Frame the route to align it with your route photo."
-      : "Mark the climber so tracking follows the right person.";
+    climberPoint == null
+      ? "Mark the climber so tracking follows the right person."
+      : "White frames the climber for detection; amber frames the route for photo matching.";
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
