@@ -6,6 +6,8 @@ import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import HoldsEditor from "@/components/scan/controls/HoldsEditor";
+import ToolbarButton from "@/components/scan/controls/ToolbarButton";
+import { HandIcon, ClimberIcon } from "@/components/scan/controls/overlayIcons";
 import { useScanHolds } from "@/hooks/useScanHolds";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
@@ -82,6 +84,10 @@ export default function StepViewLandmarks({
 }: StepViewLandmarksProps) {
   const { advanced } = useAdvancedView();
   const [showPhotoChooser, setShowPhotoChooser] = useState(false);
+  // Which right-edge control drawer is open over the preview (one at a time).
+  const [openSidebar, setOpenSidebar] = useState<"holds" | "climber" | null>(null);
+  const toggleSidebar = (id: "holds" | "climber") =>
+    setOpenSidebar((cur) => (cur === id ? null : id));
   const previewPlayerRef = useRef<FramePlayerHandle>(null);
 
   // Scan-stage Holds editing — Fixed Capture only (a Panning Capture Run, which
@@ -104,11 +110,11 @@ export default function StepViewLandmarks({
   // ── Footer actions — only once results exist (with a skeleton) and before upload ──
   const showFooterActions = showResults && !s3Saved && hasSkeleton;
 
-  // Purpose line — only while reviewing the traced climb (not during processing
-  // or empty/error states, which carry their own messaging).
-  const purpose = showResults && hasSkeleton && !s3Saved
+  // Info line for the preview control bar — shown while reviewing the traced
+  // climb (cleared once saved, when the success banner takes over).
+  const previewInfo = !s3Saved
     ? "Here's your climb traced frame by frame. Looks right? Place it on the route."
-    : undefined;
+    : null;
 
   // "Save scan" stores the raw scan. It is the secondary action once a route
   // photo overlay is possible (orbReady); when it is not, it becomes the only —
@@ -143,26 +149,36 @@ export default function StepViewLandmarks({
     </button>
   );
 
-  // Skeleton style lives in the top toolbar (plateless icon) whenever a preview
-  // is shown.
-  const toolbarActions = showResults && hasSkeleton ? (
-    <div className="ml-auto flex items-center gap-1">
-      {holdsEditable && (
-        <HoldsEditor
-          entries={scanHolds.entries}
-          onAdd={handleAddHold}
-          onRemove={(entry) => scanHolds.removeHold(entry.hold)}
-        />
+  // The Holds + Climber controls live in a bar directly above the preview (the
+  // bar that carries the info line); each opens as a right-edge drawer over the
+  // preview frame.
+  const previewBar = (
+    <div className="flex shrink-0 items-center gap-3 border-b border-edge/60 bg-surface px-4 py-2 sm:px-6">
+      {previewInfo && (
+        <p className="min-w-0 flex-1 truncate text-sm text-fg-secondary">{previewInfo}</p>
       )}
-      <SkeletonStylePanel
-        onChange={onSkeletonStyleChange}
-        size="sm"
-        label="Overlay"
-        variant="icon"
-        footer={<DeveloperViewToggle />}
-      />
+      <div className="ml-auto flex items-center gap-1">
+        {holdsEditable && (
+          <ToolbarButton
+            onClick={() => toggleSidebar("holds")}
+            aria-expanded={openSidebar === "holds"}
+            aria-haspopup="dialog"
+            title="Edit holds"
+            label="Holds"
+            icon={<HandIcon />}
+          />
+        )}
+        <ToolbarButton
+          onClick={() => toggleSidebar("climber")}
+          aria-expanded={openSidebar === "climber"}
+          aria-haspopup="dialog"
+          title="Climber overlay"
+          label="Climber"
+          icon={<ClimberIcon />}
+        />
+      </div>
     </div>
-  ) : undefined;
+  );
 
   // Footer primary — the hero forward action: place the climb on a route photo.
   // Only available once reference features are ready (orbReady).
@@ -187,9 +203,7 @@ export default function StepViewLandmarks({
       totalSteps={4}
       stepName={isProcessing ? "Scanning video" : "Review climb"}
       instruction={isProcessing ? "detecting pose frame by frame" : undefined}
-      purpose={purpose}
       onBack={showFooterActions ? onEditClimb : undefined}
-      toolbar={toolbarActions}
       primaryAction={showFooterActions ? (placeOnRouteButton ?? saveScanButton) : undefined}
       secondaryAction={showFooterActions && placeOnRouteButton ? saveScanButton : undefined}
     >
@@ -243,10 +257,10 @@ export default function StepViewLandmarks({
 
         {/* ── Results — preview fills the stage, banners pinned above ── */}
         {(showResults || (!isProcessing && orbStatus === "failed") || processingError) && (
-          <div className="flex h-full w-full flex-col gap-3 px-4 py-4 sm:px-6">
+          <div className="flex h-full w-full flex-col">
 
             {/* Banners — constrained + centered, never stretched to the stage width */}
-            <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 empty:hidden">
+            <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 px-4 pt-4 empty:hidden sm:px-6">
             {!isProcessing && orbStatus === "failed" && (
               <p className="text-center text-sm text-caution">
                 We couldn&rsquo;t read the wall texture, so placing your climb on a route photo isn&rsquo;t available. You can still save the scan.
@@ -319,23 +333,43 @@ export default function StepViewLandmarks({
               </div>
             )}
 
-            {/* Animated preview — fills the stage, fitting the full width and height */}
+            {/* Animated preview — control bar above, drawers anchored to the frame */}
             {showResults && hasSkeleton && (
               firstFrameFile && firstFrameSkeletonData ? (
-                <FramePlayer
-                  ref={previewPlayerRef}
-                  imageFile={firstFrameFile}
-                  layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
-                  duration={firstFrameSkeletonData.duration}
-                  autoPlay
-                  holds={scanHolds.previewHolds}
-                  orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
-                  fit="contain"
-                  bare
-                  className="min-h-0 flex-1 rounded-none"
-                />
+                <>
+                  {previewBar}
+                  <div className="relative flex min-h-0 flex-1 flex-col">
+                    <FramePlayer
+                      ref={previewPlayerRef}
+                      imageFile={firstFrameFile}
+                      layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
+                      duration={firstFrameSkeletonData.duration}
+                      autoPlay
+                      holds={scanHolds.previewHolds}
+                      orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
+                      fit="contain"
+                      bare
+                      className="min-h-0 flex-1 rounded-none"
+                    />
+                    {holdsEditable && (
+                      <HoldsEditor
+                        open={openSidebar === "holds"}
+                        onClose={() => setOpenSidebar(null)}
+                        entries={scanHolds.entries}
+                        onAdd={handleAddHold}
+                        onRemove={(entry) => scanHolds.removeHold(entry.hold)}
+                      />
+                    )}
+                    <SkeletonStylePanel
+                      open={openSidebar === "climber"}
+                      onClose={() => setOpenSidebar(null)}
+                      onChange={onSkeletonStyleChange}
+                      footer={<DeveloperViewToggle />}
+                    />
+                  </div>
+                </>
               ) : (
-                <p className="flex-1 text-xs text-fg-muted text-center">Loading preview&#8230;</p>
+                <p className="flex-1 px-4 py-4 text-center text-xs text-fg-muted sm:px-6">Loading preview&#8230;</p>
               )
             )}
           </div>

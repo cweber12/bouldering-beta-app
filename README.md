@@ -76,9 +76,11 @@ It accepts a `SkeletonStyle` object with `silhouetteVisible/Color/Opacity`,
 `limbThickness`, `linesVisible/lineColor/lineThickness`, and
 `jointsVisible/jointColor/jointRadius` (plus optional `skeletonEdges` /
 `keypointNames`). All sizes are multipliers of a per-frame body scale (shoulder
-width) so the overlay looks the same at any photo resolution. The Overlay panel
-(rows: Silhouette / Lines / Joints, each with a visibility toggle, colour, and
-unitless sliders, plus a Holds row) feeds the live preview and the WebM render.
+width) so the overlay looks the same at any photo resolution. The **Climber**
+panel (rows: Silhouette / Lines / Joints, each with a visibility toggle, colour,
+and unitless sliders, plus a Holds row) feeds the live preview and the WebM
+render. On the scan preview it opens as a right-edge drawer over the preview
+frame, from a control bar directly above the preview.
 
 ### Holds overlay
 
@@ -117,7 +119,8 @@ legible on top): coincident Holds collapse into **one ring per kind** at the spo
 blue for hand and orange for foot, each a thin colour stroke with a dark contrast
 halo and a clear interior (see ADR 0012). The per-frame cost is
 trivial, so geometry is computed inline without a cache. They are toggled
-independently from the Overlay panel's Holds row. The
+independently from the Climber panel's Holds row, and edited from the **Holds**
+drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off).
 

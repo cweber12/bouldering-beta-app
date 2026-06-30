@@ -8,6 +8,7 @@ import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import ToolbarButton from "@/components/scan/controls/ToolbarButton";
+import { ClimberIcon } from "@/components/scan/controls/overlayIcons";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
@@ -116,6 +117,7 @@ export default function StepMatchRoutePhoto({
   const [routePhotoFullscreen,  setRoutePhotoFullscreen]  = useState(false);
   const [showMatchStats,        setShowMatchStats]        = useState(false);
   const [showPhotoChooser,      setShowPhotoChooser]      = useState(false);
+  const [climberOpen,           setClimberOpen]           = useState(false);
   const matchStatsRef = useRef<HTMLDivElement>(null);
   const { advanced } = useAdvancedView();
 
@@ -249,20 +251,37 @@ export default function StepMatchRoutePhoto({
 
   const errorText = saveError ?? (matchStatus === "error" || frameStatus === "error" ? (matchError ?? frameError) : null);
 
-  // ── Toolbar — plateless utility cluster, contextual to match state ──
+  // ── Top toolbar — only the pre-match crop controls. Once the overlay is built,
+  // the Climber/Stats/Export cluster moves to the bar directly above the preview.
   const toolbarNode =
     !routeMatchTriggered && !isMatching ? (
       <div className="ml-auto flex items-center gap-1">
         {changePhotoBtn}
         {expandBtn}
       </div>
-    ) : isFrameReady && skeletonData ? (
+    ) : undefined;
+
+  // ── Preview control bar — info line + Climber drawer toggle, directly above
+  // the placed-on-route player (shown once the overlay is built). ──
+  const previewBar = (
+    <div className="flex items-center gap-3 rounded-(--radius-panel) border border-edge/50 bg-surface px-3 py-1.5">
+      <p className="min-w-0 flex-1 truncate text-sm text-fg-secondary">
+        Your climb, placed on the route — tweak the overlay, then save.
+      </p>
       <div className="ml-auto flex items-center gap-1">
-        <SkeletonStylePanel onChange={onSkeletonStyleChange} onHoldsChange={onHoldsStyleChange} size="sm" label="Overlay" variant="icon" footer={<DeveloperViewToggle />} />
+        <ToolbarButton
+          onClick={() => setClimberOpen((o) => !o)}
+          aria-expanded={climberOpen}
+          aria-haspopup="dialog"
+          title="Climber overlay"
+          label="Climber"
+          icon={<ClimberIcon />}
+        />
         {matchStatsControl}
         {exportBtn}
       </div>
-    ) : undefined;
+    </div>
+  );
 
   return (
     <>
@@ -321,21 +340,32 @@ export default function StepMatchRoutePhoto({
             </div>
           )}
 
-          {/* After: pose overlay player */}
+          {/* After: pose overlay player with the control bar above and the
+              Climber drawer anchored to the player's right edge */}
           {isFrameReady && skeletonData && (
-            <div className="mx-auto w-full" style={{ maxWidth: playerMaxWidth }}>
-              <FramePlayer
-                imageFile={routePhotoFile}
-                layers={[{ frames: skeletonData.frames, style: topoStyle }]}
-                duration={skeletonData.duration}
-                holds={holds}
-                holdStyle={holdStyle}
-                autoPlay
-              />
+            <div className="mx-auto flex w-full flex-col gap-1.5" style={{ maxWidth: playerMaxWidth }}>
+              {previewBar}
+              <div className="relative">
+                <FramePlayer
+                  imageFile={routePhotoFile}
+                  layers={[{ frames: skeletonData.frames, style: topoStyle }]}
+                  duration={skeletonData.duration}
+                  holds={holds}
+                  holdStyle={holdStyle}
+                  autoPlay
+                />
+                <SkeletonStylePanel
+                  open={climberOpen}
+                  onClose={() => setClimberOpen(false)}
+                  onChange={onSkeletonStyleChange}
+                  onHoldsChange={onHoldsStyleChange}
+                  footer={<DeveloperViewToggle />}
+                />
+              </div>
 
               {/* Export progress — plateless strip below the player */}
               {exportStatus === "rendering" && (
-                <div className="mt-1.5 flex flex-col gap-1 px-1">
+                <div className="flex flex-col gap-1 px-1">
                   <div className="flex items-center justify-between text-[11px] text-fg-muted">
                     <span>Encoding video&#8230;</span>
                     <span>{exportProgress}%</span>

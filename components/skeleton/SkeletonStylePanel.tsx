@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { type HoldStyle } from "@/pipeline/holdsOverlay";
 import { cn } from "@/utils/cn";
-import { useClickOutside } from "@/hooks/useClickOutside";
-import ToolbarButton from "@/components/scan/controls/ToolbarButton";
+import PreviewSidebar from "@/components/scan/controls/PreviewSidebar";
 
 // ---------------------------------------------------------------------------
 // Defaults — mirror the built-in defaults in pipeline/skeletonOverlay.ts.
@@ -48,6 +47,10 @@ function cssToHex(css: string): string {
 // ---------------------------------------------------------------------------
 
 export interface SkeletonStylePanelProps {
+  /** Whether the drawer is open (controlled by the parent step). */
+  open: boolean;
+  /** Close the drawer. */
+  onClose: () => void;
   /** Called whenever any style setting changes. */
   onChange: (style: SkeletonStyle) => void;
   /**
@@ -56,17 +59,8 @@ export interface SkeletonStylePanelProps {
    * Holds row is hidden (e.g. surfaces with no Route Overlay).
    */
   onHoldsChange?: (style: HoldStyle) => void;
-  /** Label for the trigger button. Defaults to "Overlay". */
+  /** Drawer heading. Defaults to "Climber". */
   label?: string;
-  className?: string;
-  /** "sm" renders a compact toolbar-height button (px-3 py-1.5 text-xs). Default is "md". */
-  size?: "sm" | "md";
-  /** Opens the panel above the trigger — use in sticky footers where a downward
-   *  panel would be clipped off-screen. */
-  openUpward?: boolean;
-  /** "icon" renders a plateless icon-only trigger (`.ui-icon-btn`) for the top
-   *  toolbar; "default" keeps the bordered chip trigger. */
-  variant?: "default" | "icon";
   /** Optional content rendered at the bottom of the open panel, under a divider.
    *  Kept generic (the panel itself stays decoupled from app-level concerns) —
    *  the scan flow passes its Developer-view toggle here. */
@@ -74,7 +68,7 @@ export interface SkeletonStylePanelProps {
 }
 
 /**
- * Dropdown panel exposing the two-pass overlay controls in three rows:
+ * Right-edge drawer exposing the **Climber** overlay controls in three rows:
  *
  * 1. **Silhouette** — visibility, colour, thickness, opacity.
  * 2. **Lines** — visibility, colour, thickness (the thin Skeleton lines).
@@ -83,20 +77,18 @@ export interface SkeletonStylePanelProps {
  * The three colours default to a graded accent green — silhouette base, brighter
  * lines, lighter joints; sliders are unitless multipliers of body scale (the
  * overlay sizes itself to the climber, so pixels would be meaningless).
+ *
+ * The component stays mounted while its parent step is, so the slider state
+ * survives a close even though the drawer markup only renders while `open`.
  */
 export default function SkeletonStylePanel({
+  open,
+  onClose,
   onChange,
   onHoldsChange,
-  label = "Overlay",
-  className = "",
-  size = "md",
-  openUpward = false,
-  variant = "default",
+  label = "Climber",
   footer,
 }: SkeletonStylePanelProps) {
-  const [open, setOpen] = useState(false);
-  const panelRef = useRef<HTMLDivElement>(null);
-
   // ── Silhouette pass ──
   const [silhouetteVisible, setSilhouetteVisible] = useState(true);
   const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_SILHOUETTE_COLOR);
@@ -142,62 +134,8 @@ export default function SkeletonStylePanel({
     onHoldsChangeRef.current?.({ holdsVisible });
   }, [holdsVisible]);
 
-  // Close when clicking outside.
-  useClickOutside(panelRef, () => setOpen(false), open);
-
   return (
-    <div ref={panelRef} className={cn("relative", className)}>
-      {/* Trigger button. "icon" = plateless toolbar icon; "default" = bordered chip. */}
-      {variant === "icon" ? (
-        <ToolbarButton
-          onClick={() => setOpen(o => !o)}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-          title={label || "Overlay"}
-          label={label || "Overlay"}
-          icon={
-            <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-            </svg>
-          }
-        />
-      ) : (
-        <button
-          onClick={() => setOpen(o => !o)}
-          className={cn(
-            "flex items-center gap-1.5 rounded-(--radius-control) border border-edge/50 bg-card/60 font-medium text-fg-muted transition-all duration-200 hover:border-edge-hover hover:text-fg",
-            size === "sm"
-              ? "px-3 py-1.5 text-xs"
-              : "px-4 py-2 text-sm",
-          )}
-          aria-expanded={open}
-          aria-haspopup="dialog"
-        >
-          {/* Adjustments icon */}
-          <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
-          </svg>
-          {label}
-          <svg
-            className={cn("h-3 w-3 shrink-0 transition-transform", open && "rotate-180")}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-      )}
-
-      {open && (
-        <div
-          role="dialog"
-          aria-label="Overlay options"
-          className={cn(
-            "absolute z-30 w-72 overflow-y-auto max-h-[80vh] rounded-(--radius-panel) border border-edge bg-card p-3 shadow-xl flex flex-col gap-3",
-            openUpward ? "bottom-full mb-1" : "top-full mt-1",
-            variant === "icon" ? "right-0" : "left-0",
-          )}
-        >
+    <PreviewSidebar open={open} onClose={onClose} title={label}>
           {/* ── Silhouette ── */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
@@ -284,8 +222,6 @@ export default function SkeletonStylePanel({
           {footer && (
             <div className="border-t border-edge/60 pt-3">{footer}</div>
           )}
-        </div>
-      )}
-    </div>
+    </PreviewSidebar>
   );
 }
