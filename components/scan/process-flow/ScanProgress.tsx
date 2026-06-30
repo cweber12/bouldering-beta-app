@@ -16,11 +16,12 @@ import { fitMediaStyle } from "@/utils/mediaContainerStyle";
 // scanned is painted live (crossfaded between stills so the moving climber does
 // not snap), and the Adaptive Crop is drawn over it as a green-tinted box — the
 // same accent colours as the Step 2 detection band — while the rest of the
-// frame is dimmed by a 25% black layer. The box starts on the tap-derived seed
-// crop and glides onto the Climber once the first Adaptive Crop is found, then
+// frame is dimmed by a 75% black layer. The box starts on the tap-derived seed
+// crop and moves onto the Climber once the first Adaptive Crop is found, then
 // tracks it. Both the frame and its box come from the same source
-// (useVideoProcessor) and are refreshed together, so the box always sits over
-// the frame it was derived from.
+// (useVideoProcessor) and are refreshed together in one render, so each time a
+// new frame crossfades in the box moves — over the same duration — to the spot
+// it was derived from, appearing to step from one location to the next.
 // ---------------------------------------------------------------------------
 
 export interface ScanProgressProps {
@@ -38,10 +39,14 @@ export interface ScanProgressProps {
   onCancel: () => void;
 }
 
-/** How long the spotlight box takes to glide to a new Adaptive Crop. */
-const BOX_GLIDE_MS = 500;
 /** Crossfade duration between consecutive frame stills (and the box fade-in). */
 const FRAME_FADE_MS = 300;
+/**
+ * How long the spotlight box takes to move to a new Adaptive Crop. Matched to
+ * FRAME_FADE_MS so the box and the frame it belongs to transition together —
+ * the box moves quickly and lands exactly as the new frame finishes crossfading.
+ */
+const BOX_GLIDE_MS = FRAME_FADE_MS;
 
 export default function ScanProgress({
   frameImage,
@@ -99,8 +104,9 @@ export default function ScanProgress({
   }, [frameImage]);
 
   // The spotlight box: the live Adaptive Crop once the Climber is found, else
-  // the tap-derived seed crop. The geometry change is CSS-transitioned, so the
-  // box glides from the seed crop onto the Climber and then tracks them.
+  // the tap-derived seed crop. The geometry change is CSS-transitioned over the
+  // frame-fade duration, so the box moves from the seed crop onto the Climber —
+  // and then from frame to frame — in step with each new still.
   const box = adaptiveCrop ?? seedCrop;
 
   const aspectW = frameImage?.width ?? 9;
@@ -142,9 +148,9 @@ export default function ScanProgress({
             />
 
             {/* Spotlight: green-tinted Adaptive Crop with the rest of the frame
-                dimmed by the box's own 0.25 black outset shadow (clipped to the
+                dimmed by the box's own 0.75 black outset shadow (clipped to the
                 frame by the container's overflow-hidden). One element carries
-                the border, tint, dim and glide so they stay in sync. */}
+                the border, tint, dim and move so they stay in sync. */}
             {frameImage && (
               <div
                 className="absolute border-2 border-accent/80 bg-accent/20"
@@ -154,7 +160,7 @@ export default function ScanProgress({
                   width: `${box.w * 100}%`,
                   height: `${box.h * 100}%`,
                   borderRadius: "2px",
-                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.25)",
+                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)",
                   opacity: mounted ? 1 : 0,
                   transition:
                     `left ${BOX_GLIDE_MS}ms ease-out, top ${BOX_GLIDE_MS}ms ease-out, ` +
