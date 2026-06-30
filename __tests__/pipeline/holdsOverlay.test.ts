@@ -7,11 +7,11 @@ import type { Hold } from "@/pipeline/holdDetection";
 // the arc + stroke calls. Each Hold marker is a thin colour-coded ring (blue =
 // hand, orange = foot) with a clear interior — no number, no glyph (ADR 0012).
 //
-// A ring is one `arc` stroked twice: a wider dark halo, then the kind colour over
-// it. So a single ring contributes one `arc` and two `stroke`s. Coincident same-
-// kind Holds collapse to one ring; a spot used by both a hand and a foot draws two
-// concentric rings. We capture arc centres/radii and the strokeStyle at each
-// stroke to assert position and colour.
+// A ring is one `arc` stroked once in the flat kind colour (no halo), so a single
+// ring contributes one `arc` and one `stroke`. Coincident same-kind Holds collapse
+// to one ring; a spot used by both a hand and a foot draws two concentric rings. We
+// capture arc centres/radii and the strokeStyle at each stroke to assert position
+// and colour.
 // ---------------------------------------------------------------------------
 
 function makeCtx(width = 1000, height = 1000) {
@@ -58,9 +58,9 @@ describe("drawHolds colour-coded rings", () => {
   it("draws one ring per kind, coloured by kind, with no numbers or glyphs", () => {
     const { ctx, arc, stroke, fillText, strokeColors } = makeCtx();
     drawHolds(ctx, HOLDS, 5, undefined, BODY_SCALE);
-    // Two separate spots → two rings, each stroked twice (halo + colour).
+    // Two separate spots → two rings, each stroked once (flat colour, no halo).
     expect(arc).toHaveBeenCalledTimes(2);
-    expect(stroke).toHaveBeenCalledTimes(4);
+    expect(stroke).toHaveBeenCalledTimes(2);
     // No number digit and no glyph fill.
     expect(fillText).not.toHaveBeenCalled();
     // Both kind colours appear.
@@ -77,7 +77,7 @@ describe("drawHolds colour-coded rings", () => {
     ];
     drawHolds(ctx, sameHold, 5, undefined, BODY_SCALE);
     expect(arc).toHaveBeenCalledTimes(1);
-    expect(stroke).toHaveBeenCalledTimes(2);
+    expect(stroke).toHaveBeenCalledTimes(1);
     expect(strokeColors).toContain(HOLD_RING_COLOR.hand);
     expect(strokeColors).not.toContain(HOLD_RING_COLOR.foot);
   });

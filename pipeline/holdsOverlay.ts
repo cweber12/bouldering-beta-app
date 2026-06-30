@@ -19,10 +19,11 @@
  * a hand and a foot** draws **two concentric rings** (blue outer, orange inner)
  * centred on the spot — both kinds shown, no nudge.
  *
- * Each ring carries a thin dark halo so it reads on light granite or chalky holds
- * as well as on dark rock. Rings reveal progressively: a kind's ring appears when
- * its earliest member of that kind has `firstUseTime ≤ t`, so a ring popping in as
- * the limb lands narrates the sequence as playback advances.
+ * Each ring is a single flat colour stroke — no halo — so it reads as the exact
+ * Hand/Foot token colour shown in the Holds dropdown swatches. Rings reveal
+ * progressively: a kind's ring appears when its earliest member of that kind has
+ * `firstUseTime ≤ t`, so a ring popping in as the limb lands narrates the sequence
+ * as playback advances.
  *
  * The layout is solved against **all in-bounds Holds** up front — ring centres are
  * fixed from the start — so nothing jumps when a later Hold reveals.
@@ -53,10 +54,6 @@ export const HOLD_RING_COLOR: Record<"hand" | "foot", string> = {
   foot: "#f97316", // mirror of --color-foot-hold
 };
 
-/** Thin dark halo stroked just outside the coloured ring so the mark reads on light
- *  or dark rock alike. Overlay-only (drawn over the photo, not theme chrome). */
-const HOLD_RING_HALO = "rgba(11, 15, 20, 0.25)";
-
 // ---------------------------------------------------------------------------
 // Sizing & layout defaults (× body scale unless noted)
 // ---------------------------------------------------------------------------
@@ -65,8 +62,6 @@ const HOLD_RING_HALO = "rgba(11, 15, 20, 0.25)";
 const DEFAULT_HOLD_RADIUS = 0.45;
 /** Ring colour-stroke width as a fraction of the ring radius. */
 const CIRCLE_STROKE_FRAC = 0.07;
-/** Dark halo width, each side of the colour stroke, as a fraction of that stroke. */
-const RING_HALO_FRAC = 0.6;
 /** Cluster Holds whose centres fall within this × body scale into one spot — set to
  *  the ring radius, i.e. group only Holds whose rings would visibly overlap. */
 const CLUSTER_RADIUS_FRAC = DEFAULT_HOLD_RADIUS;
@@ -162,8 +157,8 @@ function buildRings(clusters: Hold[][], circleR: number): Ring[] {
   return rings;
 }
 
-/** Stroke one colour-coded ring: a wider dark halo first, then the colour over it,
- *  leaving a thin dark rim on both edges so the ring reads on any rock. */
+/** Stroke one colour-coded ring as a single flat colour, matching the Holds
+ *  dropdown swatch exactly (no halo). */
 function drawRing(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -171,13 +166,9 @@ function drawRing(
   r: number,
   color: string,
   stroke: number,
-  haloPx: number,
 ): void {
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, TAU);
-  ctx.strokeStyle = HOLD_RING_HALO;
-  ctx.lineWidth = stroke + haloPx * 2;
-  ctx.stroke();
   ctx.strokeStyle = color;
   ctx.lineWidth = stroke;
   ctx.stroke();
@@ -221,7 +212,6 @@ export function drawHolds(
 
   const circleR = Math.max(3, DEFAULT_HOLD_RADIUS * bodyScale);
   const circleStroke = Math.max(2, circleR * CIRCLE_STROKE_FRAC);
-  const haloPx = Math.max(1, circleStroke * RING_HALO_FRAC);
   const clusterDist = CLUSTER_RADIUS_FRAC * bodyScale;
 
   const w = ctx.canvas.width;
@@ -239,7 +229,7 @@ export function drawHolds(
   ctx.lineCap = "round";
   for (const ring of rings) {
     if (ring.earliestReveal > t) continue;
-    drawRing(ctx, ring.cx, ring.cy, ring.radius, HOLD_RING_COLOR[ring.kind], circleStroke, haloPx);
+    drawRing(ctx, ring.cx, ring.cy, ring.radius, HOLD_RING_COLOR[ring.kind], circleStroke);
   }
   ctx.restore();
 }
