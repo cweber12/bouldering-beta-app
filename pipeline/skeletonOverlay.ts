@@ -36,7 +36,7 @@ import { applyHomographyMatrix } from "@/pipeline/homography";
 // Defaults (all thickness/size values are × body scale unless noted)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_COLOR = "#b3e609"; // accent green — silhouette base colour
+const DEFAULT_COLOR = "#333333"; // accent green — silhouette base colour
 /** Skeleton lines: a brighter variation of the accent so the thin pose reads
  *  crisply on top of the translucent silhouette. */
 const DEFAULT_SKELETON_COLOR = shiftLightness(DEFAULT_COLOR, 0.5);
