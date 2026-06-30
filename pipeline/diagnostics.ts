@@ -210,6 +210,8 @@ export interface ScanDiagnostics {
       goodFrames: number;
       confidence: MinAvgMax;
       avgKeypointCount: number;
+      /** Detection frames where a missing limb grew the crop via a reach disk (ADR 0014). */
+      limbExpandedFrames: number;
       refinement: { gapsRefined: number; recoveryFramesUsed: number };
     };
     orb: {

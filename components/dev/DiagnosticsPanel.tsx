@@ -198,6 +198,7 @@ function ScanBody({ record }: { record: ScanDiagnostics }) {
         <Stat label="flipped" value={String(result.pose.flippedFrames)} />
         <Stat label="confidence" value={`${fmt(conf.min)}–${fmt(conf.max)} (avg ${fmt(conf.avg)})`} />
         <Stat label="refinement" value={`${result.pose.refinement.gapsRefined} gaps · ${result.pose.refinement.recoveryFramesUsed} frames`} />
+        <Stat label="limb-expanded" value={String(result.pose.limbExpandedFrames)} />
       </Section>
       <Section title="ORB">
         <Stat label="ref keypoints" value={String(result.orb.refKeypointCount)} />

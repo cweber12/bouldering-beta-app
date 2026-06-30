@@ -173,7 +173,7 @@ No change to flip detection, refinement, ORB, or persistence.
 ## Out of scope / follow-ups
 
 - Tuning the constants above against real Runs (use the dev diagnostics).
-- Asymmetric/limb-aware sizing beyond the vertical bias (only if coverage data
-  shows clipping persists).
+- ~~Asymmetric/limb-aware sizing beyond the vertical bias (only if coverage data
+  shows clipping persists).~~ Done — see ADR 0014 (missing-limb reach disks).
 - Panning Capture is unaffected (same crop machinery; per-keyframe wall sampling
   unchanged).

@@ -200,6 +200,7 @@ function scanInput(overrides: Partial<ScanDiagnosticsInput> = {}): ScanDiagnosti
       goodFrames: 6,
       confidence: { min: 0.6, avg: 0.8, max: 0.95 },
       avgKeypointCount: 33,
+      limbExpandedFrames: 0,
       refinement: { gapsRefined: 1, recoveryFramesUsed: 3 },
     },
     orb: { refKeypointCount: 400, keyframeCount: 0, keyframeKeypoints: { min: 0, avg: 0, max: 0 } },

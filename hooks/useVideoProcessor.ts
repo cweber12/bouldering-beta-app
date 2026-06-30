@@ -15,6 +15,7 @@ import {
 } from "@/pipeline/cropDetector";
 import {
   deriveClimberCrop,
+  findMissingLimbs,
   pickAcquisitionRegion,
   poseCentroid,
   predictCentroid,
@@ -373,6 +374,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const coverageSamples: number[] = [];                    // climber bbox area ÷ frame area
         let recoveryFramesUsed = 0;                              // frames accepted in Adaptive Refinement
         let gapsRefined = 0;                                     // gaps the refinement pass re-probed
+        let limbExpandedFrames = 0;                              // detection frames where a missing-limb reach disk was applied (ADR 0014)
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -584,6 +586,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 lastClimberBox = box;
                 coverageSamples.push((box.width * box.height) / (videoWidth * videoHeight));
               }
+              // ADR 0014: count frames where a missing limb pushed the crop out via
+              // a reach disk, so the constants can be tuned against real Runs.
+              if (findMissingLimbs(chosen.keypoints).length > 0) limbExpandedFrames++;
             }
 
             // Diagnostics: one row per pose-detection frame (wasFlip filled in
@@ -978,6 +983,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                     avgKeypointCount: detectedRows.length > 0
                       ? detectedRows.reduce((s, r) => s + r.keypointCount, 0) / detectedRows.length
                       : 0,
+                    limbExpandedFrames,
                     refinement: { gapsRefined, recoveryFramesUsed },
                   },
                   orb: {

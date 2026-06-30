@@ -6,11 +6,13 @@ import {
   selectClimberPose,
   selectClimberByPoint,
   deriveClimberCrop,
+  findMissingLimbs,
   expandCropBox,
   pickAcquisitionRegion,
   predictDetectionRegion,
   DEFAULT_GATE,
   ABS_MIN_CROP_FRAC,
+  REACH_MAX_EXPANSION,
   REGION_BASE_SLACK,
 } from "@/pipeline/climberTracker";
 import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
@@ -24,8 +26,11 @@ function kp(name: string, x: number, y: number, score = 0.9): Keypoint {
 }
 
 /**
- * A simple "person": four torso keypoints centred on (cx, cy) plus a head and
- * two ankles so the bbox has realistic vertical extent. `spread` controls torso
+ * A complete "person": torso, head, and both full limb chains (elbows/wrists,
+ * knees/ankles). All limb keypoints sit inside the torso↔ankle bbox so the box
+ * extent is set by shoulders/hips/nose/ankles — i.e. adding the limbs does not
+ * change the bbox, but the pose has **no missing limbs**, so the reach-disk
+ * expansion (ADR 0014) does not fire on it. `spread` controls torso
  * half-width/height. Centroid of the symmetric torso lands exactly on (cx, cy).
  */
 function makePose(cx: number, cy: number, score = 0.9, spread = 0.05): PoseFrame {
@@ -35,12 +40,24 @@ function makePose(cx: number, cy: number, score = 0.9, spread = 0.05): PoseFrame
       kp("nose", cx, cy - 0.18, score),
       kp("left_shoulder", cx - spread, cy - spread, score),
       kp("right_shoulder", cx + spread, cy - spread, score),
+      kp("left_elbow", cx - spread, cy, score),
+      kp("right_elbow", cx + spread, cy, score),
+      kp("left_wrist", cx - spread, cy + spread, score),
+      kp("right_wrist", cx + spread, cy + spread, score),
       kp("left_hip", cx - spread, cy + spread, score),
       kp("right_hip", cx + spread, cy + spread, score),
+      kp("left_knee", cx - spread, cy + 0.1, score),
+      kp("right_knee", cx + spread, cy + 0.1, score),
       kp("left_ankle", cx - spread, cy + 0.18, score),
       kp("right_ankle", cx + spread, cy + 0.18, score),
     ],
   };
+}
+
+/** Drop keypoints by name from a pose (to simulate a limb MediaPipe missed). */
+function without(pose: PoseFrame, ...names: string[]): Keypoint[] {
+  const drop = new Set(names);
+  return pose.keypoints.filter((k) => !drop.has(k.name));
 }
 
 // ---------------------------------------------------------------------------
@@ -236,6 +253,88 @@ describe("deriveClimberCrop", () => {
 
   it("returns null for an empty pose", () => {
     expect(deriveClimberCrop([], 100, 100)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findMissingLimbs (ADR 0014)
+// ---------------------------------------------------------------------------
+
+describe("findMissingLimbs", () => {
+  it("reports nothing for a complete pose", () => {
+    expect(findMissingLimbs(makePose(0.5, 0.5).keypoints)).toEqual([]);
+  });
+
+  it("flags a limb whose endpoint is absent but whose anchor is present", () => {
+    const pose = without(makePose(0.5, 0.5), "left_wrist");
+    expect(findMissingLimbs(pose)).toEqual(["left_arm"]);
+  });
+
+  it("is anchor-gated: a missing endpoint with no anchor is not actionable", () => {
+    const pose = without(makePose(0.5, 0.5), "left_wrist", "left_shoulder");
+    expect(findMissingLimbs(pose)).toEqual([]);
+  });
+
+  it("flags both legs when both ankles are gone", () => {
+    const pose = without(makePose(0.5, 0.5), "left_ankle", "right_ankle");
+    expect(findMissingLimbs(pose)).toEqual(["left_leg", "right_leg"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deriveClimberCrop — missing-limb reach expansion (ADR 0014)
+// ---------------------------------------------------------------------------
+
+describe("deriveClimberCrop reach expansion", () => {
+  // makePose(0.5, 0.5): bbox x∈[0.45,0.55], y∈[0.32,0.68]. Normal box (pad 0.6,
+  // v-bias 1.25): x∈[0.42,0.58] (420..580), y∈[0.185,0.815].
+  const full = deriveClimberCrop(makePose(0.5, 0.5).keypoints, 1000, 1000)!;
+
+  it("does not expand a complete pose", () => {
+    expect(full.x).toBe(420);
+    expect(full.width).toBe(160);
+  });
+
+  it("grows the box outward on the side of a missing limb", () => {
+    // Left arm missing (wrist gone, shoulder present). The disk sits on the left
+    // shoulder, pushing the left edge out; the bbox is unchanged by dropping the
+    // wrist, so the only difference is the reach disk.
+    const crop = deriveClimberCrop(without(makePose(0.5, 0.5), "left_wrist"), 1000, 1000)!;
+    expect(crop.x).toBeLessThan(full.x); // left edge moved outward
+    expect(crop.width).toBeGreaterThan(full.width);
+  });
+
+  it("sizes the disk from the contralateral (mirror) limb when present", () => {
+    // Mirror right arm has segment sum 0.1 → radius 0.108. Left edge → ~0.342,
+    // i.e. expanded but inside the cap floor (0.34).
+    const crop = deriveClimberCrop(without(makePose(0.5, 0.5), "left_wrist"), 1000, 1000)!;
+    expect(crop.x).toBeGreaterThan(340);
+    expect(crop.x).toBeLessThan(420);
+  });
+
+  it("caps total expansion at REACH_MAX_EXPANSION × the normal half-extent", () => {
+    // Both arms missing with no mirror on either side → torso-ratio fallback,
+    // whose radius exceeds the cap, so both x edges pin to the cap floor/ceiling.
+    const crop = deriveClimberCrop(
+      without(makePose(0.5, 0.5), "left_wrist", "right_wrist", "left_elbow", "right_elbow"),
+      1000,
+      1000,
+    )!;
+    const normalHalfW = full.width / 2; // 80 px
+    const cx = 500;
+    expect(crop.x).toBe(cx - normalHalfW * REACH_MAX_EXPANSION); // 340
+    expect(crop.x + crop.width).toBe(cx + normalHalfW * REACH_MAX_EXPANSION); // 660
+  });
+
+  it("does not expand when the missing limb's anchor is also absent", () => {
+    // Anchor-gated: no shoulder → no disk → identical to the un-expanded box.
+    const crop = deriveClimberCrop(
+      without(makePose(0.5, 0.5), "left_wrist", "left_shoulder"),
+      1000,
+      1000,
+    )!;
+    expect(crop.x).toBe(full.x);
+    expect(crop.width).toBe(full.width);
   });
 });
 

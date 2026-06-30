@@ -89,6 +89,35 @@ export const MOTION_MARGIN_K = 1.0;
 /** Residual symmetric slack folded into the detection region (× box extent). */
 export const REGION_BASE_SLACK = 0.10;
 
+/**
+ * Reach-disk sizing for a **missing limb** (its endpoint keypoint absent from the
+ * pose). A missing limb is not in the bbox, so the crop is tight on that side —
+ * and since the crop is also the next frame's detection region, the limb stays
+ * outside it and is never recovered (the clipping feedback loop, ADR 0014). For
+ * each missing limb we grow the crop to contain a disk of plausible endpoint
+ * positions, centred on the limb's anchor joint (shoulder / hip) with a radius of
+ * the limb's full reach. The radius is taken from the contralateral (mirror) limb
+ * when it is detected (segment sum, so a *bent* mirror limb still gives full
+ * reach); otherwise it falls back to the torso (shoulder↔hip) length × the ratio
+ * below.
+ */
+export const ARM_REACH_TORSO_RATIO = 1.4;
+export const LEG_REACH_TORSO_RATIO = 1.6;
+
+/**
+ * Small margin added around a missing limb's reach disk (× radius) so a
+ * re-entering endpoint lands *inside* the region rather than exactly on its edge.
+ */
+export const REACH_DISK_MARGIN = 0.08;
+
+/**
+ * Cap on how far the reach disks may grow the crop, as a multiple of the normal
+ * padded half-extent on each dimension (measured from the box centre). Backstop
+ * against a balloon when several limbs are missing at once; the frame clamp is
+ * the final outer bound.
+ */
+export const REACH_MAX_EXPANSION = 2.0;
+
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
@@ -233,16 +262,146 @@ export function selectClimberByPoint(poses: PoseFrame[], point: Point): PoseFram
 // Adaptive crop
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Missing-limb reach disks (ADR 0014)
+// ---------------------------------------------------------------------------
+
+/** The four limbs whose reach can fall outside a bbox built from detected joints. */
+export type LimbId = "left_arm" | "right_arm" | "left_leg" | "right_leg";
+
+interface LimbSpec {
+  /** Endpoint keypoint whose absence means the limb is "missing" (reaches furthest). */
+  endpoint: string;
+  /** Anchor joint the reach disk is centred on (shoulder / hip). */
+  anchor: string;
+  /** Contralateral limb chain, measured (segment sum) for the reach radius. */
+  mirror: { anchor: string; mid: string; endpoint: string };
+  /** Torso-length multiplier used when the mirror limb is unavailable. */
+  ratio: number;
+}
+
+const LIMBS: Record<LimbId, LimbSpec> = {
+  left_arm: {
+    endpoint: "left_wrist",
+    anchor: "left_shoulder",
+    mirror: { anchor: "right_shoulder", mid: "right_elbow", endpoint: "right_wrist" },
+    ratio: ARM_REACH_TORSO_RATIO,
+  },
+  right_arm: {
+    endpoint: "right_wrist",
+    anchor: "right_shoulder",
+    mirror: { anchor: "left_shoulder", mid: "left_elbow", endpoint: "left_wrist" },
+    ratio: ARM_REACH_TORSO_RATIO,
+  },
+  left_leg: {
+    endpoint: "left_ankle",
+    anchor: "left_hip",
+    mirror: { anchor: "right_hip", mid: "right_knee", endpoint: "right_ankle" },
+    ratio: LEG_REACH_TORSO_RATIO,
+  },
+  right_leg: {
+    endpoint: "right_ankle",
+    anchor: "right_hip",
+    mirror: { anchor: "left_hip", mid: "left_knee", endpoint: "left_ankle" },
+    ratio: LEG_REACH_TORSO_RATIO,
+  },
+};
+
+const LIMB_IDS: LimbId[] = ["left_arm", "right_arm", "left_leg", "right_leg"];
+
+/** Index a pose by keypoint name for O(1) lookups. */
+function byName(keypoints: Keypoint[]): Map<string, Keypoint> {
+  const m = new Map<string, Keypoint>();
+  for (const kp of keypoints) m.set(kp.name, kp);
+  return m;
+}
+
+/**
+ * The limbs that are **missing yet actionable**: the limb's endpoint keypoint is
+ * absent (so it is not in the bbox) but its anchor joint *is* detected (so we can
+ * place a reach disk and trust the pose enough to act). Anchor-gating skips the
+ * most degenerate poses, where the disk centre would be unknown anyway.
+ *
+ * Exported so the per-frame loop can count expansion frames for Scan Diagnostics
+ * without recomputing the disk geometry.
+ */
+export function findMissingLimbs(keypoints: Keypoint[]): LimbId[] {
+  const names = new Set(keypoints.map((kp) => kp.name));
+  const out: LimbId[] = [];
+  for (const id of LIMB_IDS) {
+    const spec = LIMBS[id];
+    if (!names.has(spec.endpoint) && names.has(spec.anchor)) out.push(id);
+  }
+  return out;
+}
+
+/** Mean shoulder↔hip length, the stable torso scale for the reach fallback. */
+function torsoLength(map: Map<string, Keypoint>): number {
+  const lens: number[] = [];
+  for (const [s, h] of [
+    ["left_shoulder", "left_hip"],
+    ["right_shoulder", "right_hip"],
+  ] as const) {
+    const sp = map.get(s);
+    const hp = map.get(h);
+    if (sp && hp) lens.push(Math.hypot(sp.x - hp.x, sp.y - hp.y));
+  }
+  if (lens.length === 0) return 0;
+  return lens.reduce((a, b) => a + b, 0) / lens.length;
+}
+
+/** Full reach of a limb: mirror-limb segment sum, else torso × ratio. */
+function limbReachRadius(map: Map<string, Keypoint>, spec: LimbSpec, torsoLen: number): number {
+  const a = map.get(spec.mirror.anchor);
+  const m = map.get(spec.mirror.mid);
+  const e = map.get(spec.mirror.endpoint);
+  if (a && m && e) {
+    return Math.hypot(a.x - m.x, a.y - m.y) + Math.hypot(m.x - e.x, m.y - e.y);
+  }
+  return torsoLen * spec.ratio;
+}
+
+interface ReachDisk {
+  cx: number;
+  cy: number;
+  r: number;
+}
+
+/** Reach disks (normalised) for every missing-yet-actionable limb in the pose. */
+function computeReachDisks(keypoints: Keypoint[]): ReachDisk[] {
+  const missing = findMissingLimbs(keypoints);
+  if (missing.length === 0) return [];
+  const map = byName(keypoints);
+  const torso = torsoLength(map);
+  const disks: ReachDisk[] = [];
+  for (const id of missing) {
+    const spec = LIMBS[id];
+    const anchor = map.get(spec.anchor);
+    if (!anchor) continue; // anchor-gated (findMissingLimbs already ensures this)
+    const reach = limbReachRadius(map, spec, torso);
+    if (reach <= 0) continue; // no mirror + no torso → nothing to size against
+    disks.push({ cx: anchor.x, cy: anchor.y, r: reach * (1 + REACH_DISK_MARGIN) });
+  }
+  return disks;
+}
+
 /**
  * Derive a generous, climber-proportional crop box around a pose, in **pixel**
  * coordinates, clamped to the frame. The box tracks the Climber's actual extent
  * (so it stays right as they move and change scale) plus padding sized to hold
  * the **next move** — the pad is a fraction of the pose bbox, biased taller for
  * upward reaches ({@link CROP_PAD_V_BIAS}). The {@link ABS_MIN_CROP_FRAC} floor
- * is only a degenerate-pose guard, not the normal size. Overflow past a frame
- * edge pins that side to 0 / max rather than shrinking the opposite side.
+ * is only a degenerate-pose guard, not the normal size.
  *
- * Returns null when the pose has no keypoints.
+ * On top of the symmetric pad, a **missing limb** (endpoint absent, anchor
+ * present) grows the box on its side via a reach disk so the limb can re-enter
+ * the detection region and be recovered (ADR 0014). The disk extent is composed
+ * by per-edge max with the normal padded box — the box only grows where a limb
+ * could reach, never tightens — and is capped at {@link REACH_MAX_EXPANSION}×
+ * the normal half-extent so several missing limbs can't balloon the crop.
+ *
+ * Overflow past a frame edge pins that side to 0 / max rather than shrinking the
+ * opposite side. Returns null when the pose has no keypoints.
  */
 export function deriveClimberCrop(
   keypoints: Keypoint[],
@@ -259,10 +418,29 @@ export function deriveClimberCrop(
   const halfW = Math.max((bb.w / 2) * (1 + padFactor), minFrac / 2);
   const halfH = Math.max((bb.h / 2) * (1 + padFactor * CROP_PAD_V_BIAS), minFrac / 2);
 
-  const x0 = Math.max(0, cx - halfW);
-  const y0 = Math.max(0, cy - halfH);
-  const x1 = Math.min(1, cx + halfW);
-  const y1 = Math.min(1, cy + halfH);
+  let x0 = cx - halfW;
+  let y0 = cy - halfH;
+  let x1 = cx + halfW;
+  let y1 = cy + halfH;
+
+  // Grow each edge to contain a missing limb's reach disk, capped relative to the
+  // normal box so a multi-limb-missing pose can't balloon toward the full frame.
+  const disks = computeReachDisks(keypoints);
+  if (disks.length > 0) {
+    const maxHalfW = halfW * REACH_MAX_EXPANSION;
+    const maxHalfH = halfH * REACH_MAX_EXPANSION;
+    for (const d of disks) {
+      x0 = Math.min(x0, Math.max(cx - maxHalfW, d.cx - d.r));
+      x1 = Math.max(x1, Math.min(cx + maxHalfW, d.cx + d.r));
+      y0 = Math.min(y0, Math.max(cy - maxHalfH, d.cy - d.r));
+      y1 = Math.max(y1, Math.min(cy + maxHalfH, d.cy + d.r));
+    }
+  }
+
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  x1 = Math.min(1, x1);
+  y1 = Math.min(1, y1);
 
   const x = Math.round(x0 * frameW);
   const y = Math.round(y0 * frameH);
