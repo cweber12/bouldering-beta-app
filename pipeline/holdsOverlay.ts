@@ -20,6 +20,13 @@
  * centred on the spot — the inner ring nested right inside the outer one (edges
  * touching) so both kinds show without a nudge and the clear interior stays large.
  *
+ * When two rings from **different** spots sit close enough that their outlines would
+ * cross, the overlapping arc is **clipped away** rather than drawn over — each ring's
+ * stroke is confined to the region outside its neighbours' discs, so the pair reads as
+ * a single clean union outline with no crossing lines and every hold stays framed.
+ * Concentric same-spot rings (the hand/foot pair) share a centre and are exempt, so the
+ * nested inner ring is never carved out by its own outer ring.
+ *
  * Each ring is a flat colour stroke carrying an **outer-only drop shadow** — the
  * blur is clipped to the region outside the ring, so it darkens the wall around the
  * marker while the interior stays clear and reads as highlighted. The stroke itself
@@ -135,6 +142,10 @@ interface Ring {
   radius: number;
   /** Earliest `firstUseTime` among this ring's members — when it reveals. */
   earliestReveal: number;
+  /** Index of the source cluster. Rings sharing a cluster are concentric (a
+   *  hand/foot pair on one spot) and must not clip each other; only rings from
+   *  *other* clusters occlude this one. */
+  clusterId: number;
 }
 
 function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): Ring[] {
@@ -142,7 +153,7 @@ function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): 
   // hand ring's inner stroke edge, which (centreline to centreline) is one stroke width.
   const innerR = Math.max(circleStroke, circleR - circleStroke);
   const rings: Ring[] = [];
-  for (const members of clusters) {
+  clusters.forEach((members, clusterId) => {
     const cx = members.reduce((s, m) => s + m.x, 0) / members.length;
     const cy = members.reduce((s, m) => s + m.y, 0) / members.length;
     const hasHand = members.some((m) => m.kind === "hand");
@@ -151,7 +162,7 @@ function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): 
     const earliest = (kind: "hand" | "foot") =>
       Math.min(...members.filter((m) => m.kind === kind).map((m) => m.firstUseTime));
     if (hasHand) {
-      rings.push({ cx, cy, kind: "hand", radius: circleR, earliestReveal: earliest("hand") });
+      rings.push({ cx, cy, kind: "hand", radius: circleR, earliestReveal: earliest("hand"), clusterId });
     }
     if (hasFoot) {
       rings.push({
@@ -160,31 +171,56 @@ function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): 
         kind: "foot",
         radius: both ? innerR : circleR,
         earliestReveal: earliest("foot"),
+        clusterId,
       });
     }
-  }
+  });
   return rings;
 }
 
-/** Stroke one colour-coded ring with an outer-only drop shadow.
+/** Stroke one colour-coded ring with an outer-only drop shadow, suppressing any
+ *  arc (and its shadow) that falls inside a neighbouring cluster's disc.
  *
- *  Two passes: first the shadow, clipped to the region *outside* the ring (full canvas
- *  minus the ring's disc, even-odd) so the blur falls outward only and never darkens
- *  the interior; then a clean flat colour stroke on top, matching the Holds dropdown
- *  swatch exactly. The clear interior plus the surrounding shadow lifts the ring off
- *  the wall so its centre reads as highlighted. */
+ *  When two rings from different clusters overlap, their outlines would cross and
+ *  clutter the holds. To keep every hold framed by a clean, un-crossed outline, the
+ *  arc of this ring that dips inside another cluster's disc is clipped away — the two
+ *  rings then read as a single union outline with no overlapping lines. `occluders`
+ *  are the *other* clusters' discs (the concentric same-cluster partner is excluded,
+ *  so the nested foot ring is never carved out by its own hand ring).
+ *
+ *  Three layers of clip compose (each `clip` intersects): outside every occluder disc,
+ *  then — for the shadow pass only — outside this ring's own disc so the blur falls
+ *  outward. After the shadow, a clean flat colour stroke on top matches the Holds
+ *  dropdown swatch exactly. The clear interior plus the surrounding shadow lifts the
+ *  ring off the wall so its centre reads as highlighted. */
 function drawRing(
   ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  r: number,
+  ring: Ring,
+  occluders: Ring[],
   color: string,
   stroke: number,
 ): void {
-  // Shadow pass — clip to outside the ring, then stroke so only the outward blur shows.
+  const { cx, cy, radius: r } = ring;
+  const w = ctx.canvas.width;
+  const h = ctx.canvas.height;
+
+  ctx.save();
+
+  // Clip away each neighbouring cluster's disc so this ring's arc (and shadow) never
+  // crosses into it. A separate clip per disc means the kept region is the area
+  // *outside their union*; padding by half a stroke swallows the neighbour's line
+  // width too, leaving no sliver behind.
+  for (const o of occluders) {
+    ctx.beginPath();
+    ctx.rect(0, 0, w, h);
+    ctx.arc(o.cx, o.cy, o.radius + stroke / 2, 0, TAU);
+    ctx.clip("evenodd");
+  }
+
+  // Shadow pass — clip to outside this ring, then stroke so only the outward blur shows.
   ctx.save();
   ctx.beginPath();
-  ctx.rect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.rect(0, 0, w, h);
   ctx.arc(cx, cy, r, 0, TAU);
   ctx.clip("evenodd");
   ctx.beginPath();
@@ -197,7 +233,7 @@ function drawRing(
   ctx.restore();
 
   // Clean flat-colour stroke on top (shadow explicitly cleared), so the ring colour
-  // reads true and never casts a second blur.
+  // reads true and never casts a second blur. Still inside the occluder clip.
   ctx.shadowColor = "transparent";
   ctx.shadowBlur = 0;
   ctx.beginPath();
@@ -205,6 +241,8 @@ function drawRing(
   ctx.strokeStyle = color;
   ctx.lineWidth = stroke;
   ctx.stroke();
+
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -257,12 +295,16 @@ export function drawHolds(
   if (candidates.length === 0) return;
   const rings = buildRings(clusterHolds(candidates, clusterDist), circleR, circleStroke);
 
+  // Only rings revealed by `t` are drawn — and only those occlude each other, so a
+  // not-yet-revealed neighbour never carves an unexplained gap into a visible ring.
+  const visible = rings.filter((ring) => ring.earliestReveal <= t);
+
   ctx.save();
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  for (const ring of rings) {
-    if (ring.earliestReveal > t) continue;
-    drawRing(ctx, ring.cx, ring.cy, ring.radius, HOLD_RING_COLOR[ring.kind], circleStroke);
+  for (const ring of visible) {
+    const occluders = visible.filter((o) => o.clusterId !== ring.clusterId);
+    drawRing(ctx, ring, occluders, HOLD_RING_COLOR[ring.kind], circleStroke);
   }
   ctx.restore();
 }

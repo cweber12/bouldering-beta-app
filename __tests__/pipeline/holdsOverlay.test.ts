@@ -150,6 +150,36 @@ describe("drawHolds colour-coded rings", () => {
     expect(colors).not.toContain(HOLD_RING_COLOR.foot);
   });
 
+  it("clips overlapping rings from different spots so their outlines never cross", () => {
+    const { ctx, arcs, ringColors } = makeCtx();
+    // Two separate spots (60px apart > cluster radius 45) whose rings still overlap
+    // (centres < 2×45). Each must be clipped against the other's disc.
+    const close: Hold[] = [
+      { id: "a", kind: "hand", side: "left", x: 500, y: 500, firstUseTime: 1, order: 1 },
+      { id: "b", kind: "foot", side: "left", x: 560, y: 500, firstUseTime: 1, order: 2 },
+    ];
+    drawHolds(ctx, close, 5, undefined, BODY_SCALE);
+    // Still two distinct rings (not clustered into one spot).
+    expect(ringColors()).toHaveLength(2);
+    // Each ring is clipped against the other cluster's disc, so arcs are centred at
+    // BOTH spots (an occluder arc at the neighbour's centre), proving the cross-clip.
+    const cxs = new Set(arcs.map((a) => a[0]));
+    expect(cxs).toContain(500);
+    expect(cxs).toContain(560);
+  });
+
+  it("does not cross-clip concentric same-spot rings (no neighbour discs)", () => {
+    const { ctx, arcs } = makeCtx();
+    const both: Hold[] = [
+      { id: "a", kind: "hand", side: "right", x: 500, y: 500, firstUseTime: 1, order: 1 },
+      { id: "b", kind: "foot", side: "left", x: 503, y: 502, firstUseTime: 1, order: 2 },
+    ];
+    drawHolds(ctx, both, 5, undefined, BODY_SCALE);
+    // Every arc shares the single centroid — no occluder arcs from a different spot.
+    const cxs = new Set(arcs.map((a) => a[0].toFixed(3)));
+    expect(cxs.size).toBe(1);
+  });
+
   it("draws nothing when holds are empty or hidden", () => {
     const { ctx, arc } = makeCtx();
     drawHolds(ctx, [], 5, undefined, BODY_SCALE);
