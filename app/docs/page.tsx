@@ -1,9 +1,25 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export const metadata = {
   title: "Docs — Route Scanner",
   description: "How Route Scanner works: pose detection, ORB matching, and homography.",
 };
+
+/**
+ * Documentation figure — a captioned screenshot in a letterboxed frame so
+ * portrait and landscape captures both sit inside the same 16:9 container.
+ */
+function Figure({ src, alt, caption }: { src: string; alt: string; caption: string }) {
+  return (
+    <figure className="mt-4">
+      <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-edge/50 bg-(--color-inset)">
+        <Image src={src} alt={alt} fill unoptimized className="object-contain" />
+      </div>
+      <figcaption className="mt-2 text-sm text-fg-muted leading-relaxed">{caption}</figcaption>
+    </figure>
+  );
+}
 
 export default function DocsPage() {
   return (
@@ -16,40 +32,84 @@ export default function DocsPage() {
           Documentation
         </h1>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-          Route Scanner analyses a climbing video by extracting skeleton poses frame-by-frame,
-          then overlays the movement onto a route photo using computer vision. Processed runs
-          can be saved to Amazon S3 for access across devices, or exported as local JSON files.
+          Route Scanner turns a single climbing video into an annotated route map. It estimates
+          the climber&apos;s skeleton frame-by-frame, infers which holds the hands and feet used,
+          and reprojects both onto a photo of the route using computer-vision feature matching.
+          Every stage runs locally in your browser; processed runs can be saved to Amazon S3 for
+          access across devices, or exported as local JSON files.
         </p>
 
         {/* ---------------------------------------------------------------- */}
         {/* Overview                                                         */}
         {/* ---------------------------------------------------------------- */}
         <section className="mt-10">
-          <h2 className="text-lg font-semibold text-fg">How it works (overview)</h2>
-          <ol className="mt-4 flex flex-col gap-3 pl-5 list-decimal text-fg-secondary leading-relaxed">
+          <h2 className="text-lg font-semibold text-fg">How it works</h2>
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
+            The pipeline runs entirely client-side and transforms raw footage into a
+            route-aligned overlay in five stages.
+          </p>
+
+          <ol className="mt-6 flex flex-col gap-8 pl-5 list-decimal leading-relaxed text-fg-secondary marker:font-semibold marker:text-fg">
             <li>
-              <strong className="text-fg">Video analysis (Scan page)</strong> — You
-              upload a short climbing video. The app samples a frame every 100 ms, runs
-              the chosen pose model ({" "}
-              <span className="font-mono text-fg">MediaPipe Pose Landmarker</span> &mdash; 33 BlazePose keypoints)
-              on each frame and stores the pose timeline.
+              <strong className="text-fg">Pose estimation.</strong> The app samples a frame
+              roughly every 100&nbsp;ms and runs{" "}
+              <span className="font-mono text-fg">MediaPipe Pose Landmarker</span> to locate 33
+              BlazePose keypoints per frame. In Outdoor mode a crop window tracks the climber&apos;s
+              hip so a small-in-frame subject still resolves cleanly, and the sparse detections are
+              interpolated and smoothed into a continuous pose timeline.
+              <Figure
+                src="/docs/skeleton-holds.png"
+                alt="Climbing video frame with the estimated skeleton drawn in green and inferred holds ringed in blue and orange"
+                caption="The estimated skeleton (green) tracked across the video, with inferred hand and foot holds ringed on the wall."
+              />
             </li>
             <li>
-              <strong className="text-fg">ORB feature extraction</strong> — After polling
-              all frames, ORB (Oriented FAST and Rotated BRIEF) descriptors are extracted from
-              the first video frame. These encode the wall&apos;s texture so it can be recognised
-              in an external photo later.
+              <strong className="text-fg">Detection framing.</strong> On the Scan page you set two
+              nested boxes over the first frame: an inner <em>Climber</em> box that seeds subject
+              identity and lighting analysis, and an outer <em>Route</em> box that bounds the wall
+              texture used for matching. The Route always contains the Climber, and its lower edge
+              trims the ground and crash pad that would otherwise pollute feature matching.
+              <Figure
+                src="/docs/detection-crops.png"
+                alt="Scan page detection step showing a large outer Route crop box and a smaller nested Climber crop box over the boulder"
+                caption="The nested Climber (inner) and Route (outer) crop boxes on the detection step."
+              />
             </li>
             <li>
-              <strong className="text-fg">Image matching (climb console)</strong> — You
-              upload a photo of the same section of wall. ORB features are extracted from it,
-              then matched against the video-frame features to find correspondences.
+              <strong className="text-fg">Feature extraction.</strong> ORB (Oriented FAST and
+              Rotated BRIEF) descriptors are sampled from the wall inside the Route box. These encode
+              the rock&apos;s texture as a fingerprint that can be recognised in a separate photo. When
+              the camera pans during the climb, features are gathered across several keyframes so the
+              whole wall stays represented.
+              <Figure
+                src="/docs/orb-features.png"
+                alt="Video frame overlaid with red ORB feature points densely covering the boulder's textured face"
+                caption="ORB feature points (red) sampled from the wall texture inside the Route box."
+              />
             </li>
             <li>
-              <strong className="text-fg">Homography &amp; overlay</strong> — The matched
-              keypoints are used to compute a perspective transform (homography). Each skeleton
-              frame is reprojected through this transform onto the route photo and rendered as a
-              WebM video that you can download.
+              <strong className="text-fg">Route-photo matching.</strong> You upload a photo of the
+              same wall. ORB features from the photo are matched against the video features, and a
+              homography — a perspective transform — is fitted with RANSAC to map any point from
+              video space into the photo.
+              <Figure
+                src="/docs/route-photo.png"
+                alt="A clean photo of the boulder route shot from a similar angle, ready to receive the overlay"
+                caption="The uploaded route photo. Shots taken from a similar angle to the video match most reliably."
+              />
+            </li>
+            <li>
+              <strong className="text-fg">Reprojection &amp; overlay.</strong> Every skeleton frame
+              is reprojected through the homography onto the route photo. The app also infers which
+              holds the hands and feet used — from how long each limb dwells at a fixed point on the
+              wall — and marks them with thin rings (blue for hands, orange for feet) that reveal in
+              the order they were first used. The finished sequence renders to a WebM video you can
+              download.
+              <Figure
+                src="/docs/pose-overlay.png"
+                alt="Route photo with the reprojected skeleton and blue and orange hold rings tracing the climb"
+                caption="The reprojected skeleton and hold rings composited onto the route photo — the exported result."
+              />
             </li>
           </ol>
         </section>
