@@ -18,7 +18,7 @@
  * documents otherwise.
  */
 
-import { scorePoseFrame, type Keypoint, type PoseFrame } from "@/pipeline/poseDetection";
+import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
 import type { CropBox } from "@/pipeline/cropDetector";
 
 // ---------------------------------------------------------------------------
@@ -170,6 +170,20 @@ export function predictCentroid(history: Point[]): Point | null {
   if (history.length === 1) return last;
   const prev = history[history.length - 2];
   return { x: last.x + (last.x - prev.x), y: last.y + (last.y - prev.y) };
+}
+
+/**
+ * Score a PoseFrame for ranking competing detection results when identity is
+ * not yet seeded. Higher is better: keypoint count × average confidence, so a
+ * fuller, more-confident pose wins. Returns 0 for a null or empty frame.
+ *
+ * Lives here because seeding Climber Identity is its only consumer
+ * ({@link selectClimberPose}).
+ */
+export function scorePoseFrame(frame: PoseFrame | null): number {
+  if (!frame || frame.keypoints.length === 0) return 0;
+  const avgScore = frame.keypoints.reduce((s, kp) => s + kp.score, 0) / frame.keypoints.length;
+  return frame.keypoints.length * avgScore;
 }
 
 // ---------------------------------------------------------------------------

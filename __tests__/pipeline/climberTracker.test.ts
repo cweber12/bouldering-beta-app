@@ -3,6 +3,7 @@ import {
   poseCentroid,
   poseBBox,
   predictCentroid,
+  scorePoseFrame,
   selectClimberPose,
   selectClimberByPoint,
   deriveClimberCrop,
@@ -423,5 +424,31 @@ describe("pickAcquisitionRegion", () => {
 
   it("returns null (full-frame search) when neither a track nor a crop exists", () => {
     expect(pickAcquisitionRegion(null, null, 1280, 720)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// scorePoseFrame — pose ranking used to seed Climber Identity
+// ---------------------------------------------------------------------------
+
+describe("scorePoseFrame", () => {
+  it("returns 0 for null frame", () => {
+    expect(scorePoseFrame(null)).toBe(0);
+  });
+
+  it("returns 0 for empty keypoints", () => {
+    expect(scorePoseFrame({ timestamp: 0, keypoints: [] })).toBe(0);
+  });
+
+  it("scores based on count × average confidence", () => {
+    const frame: PoseFrame = {
+      timestamp: 0,
+      keypoints: [
+        { name: "a", x: 0, y: 0, score: 0.8 },
+        { name: "b", x: 0, y: 0, score: 0.6 },
+      ],
+    };
+    // 2 × 0.7 = 1.4
+    expect(scorePoseFrame(frame)).toBeCloseTo(1.4, 5);
   });
 });

@@ -24,7 +24,8 @@ pipeline/            Framework-agnostic modules — zero React imports
   orbDetector.ts       extractFeatures(cv, imageData), matchOrbFeatures(cv, ref, query)
   homography.ts        computeHomography(cv, ...), applyHomographyMatrix(h, x, y)
   skeletonOverlay.ts   buildTransformedKeypoints(), drawSkeleton()
-  poseDetection.ts     estimateFrameUnified()
+  mediapipePoseDetection.ts  estimateFramesMediaPipe(), estimateFrameMediaPipe()
+  poseDetection.ts     Keypoint / PoseFrame types (detection in mediapipePoseDetection.ts)
   poseVideoRenderer.ts renderPoseVideo() — MediaRecorder + canvas.captureStream
 
 hooks/               React hooks — own state transitions, no direct OpenCV allocation

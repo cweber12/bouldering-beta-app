@@ -1,23 +1,19 @@
 /**
- * Pose estimation wrapper for MediaPipe Pose Landmarker.
+ * Pose-frame vocabulary: the Keypoint / PoseFrame types shared by every
+ * downstream pipeline module.
  *
- * Accepts a canvas element (drawn from a video frame) and returns an array
- * of normalized keypoints with confidence scores, filtered by minScore.
+ * Pose *detection* lives in `pipeline/mediapipePoseDetection.ts`
+ * (`estimateFramesMediaPipe` / `estimateFrameMediaPipe`). This module holds only
+ * the data types those functions produce, so the many modules that pass poses
+ * around depend on the shape, not on any specific backend.
  *
- * Low-confidence handling lives in the climber-identity tracker
- * (`pipeline/climberTracker.ts`), which widens the detection region and
- * re-selects by identity. This module therefore does not retry detection.
+ * A second pose backend is possible but not implemented: the `PoseBackend` seam
+ * marker and the backend-parameterised topology helpers live in
+ * `utils/poseConstants.ts`. When a real second backend lands, add a dispatcher
+ * there with actual branching — not an ignored parameter.
  *
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
-
-import type { PoseBackend } from "@/utils/poseConstants";
-import { estimateFrameMediaPipe } from "@/pipeline/mediapipePoseDetection";
-
-export type { PoseBackend };
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type PoseDetector = any;
 
 export interface Keypoint {
   /** Keypoint name (e.g. "left_wrist"). */
@@ -35,46 +31,4 @@ export interface PoseFrame {
   timestamp: number;
   /** Filtered keypoints for this frame. Empty if no pose was detected. */
   keypoints: Keypoint[];
-}
-
-const DEFAULT_MIN_SCORE = 0.3;
-
-// ---------------------------------------------------------------------------
-// Scoring
-// ---------------------------------------------------------------------------
-
-/**
- * Score a PoseFrame for ranking competing detection results.
- * Higher is better. Combines keypoint count with average confidence.
- */
-export function scorePoseFrame(frame: PoseFrame | null): number {
-  if (!frame || frame.keypoints.length === 0) return 0;
-  const avgScore = frame.keypoints.reduce((s, kp) => s + kp.score, 0) / frame.keypoints.length;
-  return frame.keypoints.length * avgScore;
-}
-
-// ---------------------------------------------------------------------------
-// Core estimation
-// ---------------------------------------------------------------------------
-
-/**
- * Run pose estimation on a single video frame using MediaPipe Pose Landmarker.
- *
- * @param detector  - The loaded MediaPipe PoseLandmarker instance.
- * @param canvas    - A canvas element containing the current video frame pixels.
- * @param timestamp - The video timestamp (seconds) this frame corresponds to.
- * @param _backend  - Ignored (only MediaPipe is supported). Kept for API compatibility.
- * @param minScore  - Keypoints below this confidence threshold are dropped.
- * @returns A PoseFrame, or null if no pose was detected.
- */
-export async function estimateFrameUnified(
-  detector: PoseDetector,
-  canvas: HTMLCanvasElement,
-  timestamp: number,
-  _backend?: PoseBackend,
-  minScore: number = DEFAULT_MIN_SCORE,
-): Promise<PoseFrame | null> {
-  return Promise.resolve(
-    estimateFrameMediaPipe(detector, canvas, timestamp, minScore),
-  );
 }

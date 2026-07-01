@@ -45,7 +45,7 @@ node scripts/fetch-opencv.mjs
 The scan page is a multi-step wizard. Each step is a component under `components/scan/process-flow/`:
 
 1. **StepPickVideo** — user selects or records a video (camera modal). The video is stored only in React state; nothing hits S3 yet.
-2. **StepSetDetection** — user draws a crop box over the climber. `CropBoxOverlay` writes fractional coordinates; `useVideoProcessor` drives the seek loop that feeds frames to `poseDetection.ts → estimateFrameUnified()`.
+2. **StepSetDetection** — user draws a crop box over the climber. `CropBoxOverlay` writes fractional coordinates; `useVideoProcessor` drives the seek loop that feeds frames to `mediapipePoseDetection.ts → estimateFramesMediaPipe()`.
 3. **StepViewLandmarks** — shows the sparse pose frames, lets the user trim/review. `useSkeletonFrames` pre-computes `SkeletonFrameData` from those frames.
 4. **StepMatchRoutePhoto** — user uploads a route photo. `useImageMatcher` calls `extractFeatures` (ORB on the first video frame) then `matchFeatures`, then `computeHomography` to find the perspective transform from video-space to photo-space.
 5. **Save flow** — `usePoseVideo` auto-renders an annotated WebM using `poseVideoRenderer.ts` (MediaRecorder + canvas.captureStream). `MetadataBottomSheet` collects route name / location / run type. `useS3Storage.uploadAttempt` serialises via `fsHelpers.ts` and POSTs to `/api/s3/put`.
@@ -56,7 +56,7 @@ Two `CompareSlot` components each independently run the scan pipeline. `CompareO
 ### Pipeline execution chain
 ```
 Video frame (ImageData)
-  └─ poseDetection.ts  estimateFrameUnified()      → PoseFrame[]  (sparse)
+  └─ mediapipePoseDetection.ts  estimateFramesMediaPipe()  → PoseFrame[]  (sparse)
        └─ poseInterpolator.ts  interpolatePoseFrames()  → dense PoseFrame[]
             └─ poseInterpolator.ts  smoothPoseFrames()      → smoothed PoseFrame[]
                  └─ skeletonRenderer.ts  buildSkeletonFrameData()

@@ -48,11 +48,9 @@ Perspective transform computation and application.
 
 ### `poseDetection.ts`
 
-MediaPipe Pose Landmarker inference wrapper.
-
-| Export | Signature | Description |
-|---|---|---|
-| `estimateFrameUnified` | `(detector, canvas, timestamp, backend?, minScore?) → Promise<PoseFrame>` | Run MediaPipe Pose Landmarker on a canvas; returns up to 33 keypoints. |
+Pose-frame vocabulary. Holds only the `PoseFrame` / `Keypoint` types shared by
+every downstream module. Detection itself lives in `mediapipePoseDetection.ts`
+(`estimateFramesMediaPipe` / `estimateFrameMediaPipe`).
 
 Types exported: `PoseFrame`, `Keypoint`.
 
