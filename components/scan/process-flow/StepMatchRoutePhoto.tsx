@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import CropBoxOverlay, { type CropFraction } from "@/components/capture/CropBoxOverlay";
-import FramePlayer from "@/components/skeleton/FramePlayer";
+import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import SkeletonStylePanel from "@/components/skeleton/SkeletonStylePanel";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
@@ -119,10 +119,20 @@ export default function StepMatchRoutePhoto({
   const [showPhotoChooser,      setShowPhotoChooser]      = useState(false);
   const [climberOpen,           setClimberOpen]           = useState(false);
   const matchStatsRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<FramePlayerHandle>(null);
   const { advanced } = useAdvancedView();
 
   // Close match stats when clicking outside.
   useClickOutside(matchStatsRef, () => setShowMatchStats(false), showMatchStats);
+
+  // Pause the live preview while the export encodes. renderPoseVideo runs on the
+  // main thread and MediaRecorder captures the canvas in real time, so leaving
+  // the FramePlayer's rAF loop running both starves the encode and makes the
+  // preview visibly stutter. Resume playback once encoding finishes.
+  useEffect(() => {
+    if (exportStatus === "rendering") playerRef.current?.pause();
+    else playerRef.current?.play();
+  }, [exportStatus]);
 
   const playerRatio = (routePhotoNaturalSize.w / routePhotoNaturalSize.h).toFixed(4);
   const playerMaxWidth = `min(100%, calc((100dvh - var(--nav-h) - 11rem) * ${playerRatio}))`;
@@ -347,6 +357,7 @@ export default function StepMatchRoutePhoto({
               {previewBar}
               <div className="relative">
                 <FramePlayer
+                  ref={playerRef}
                   imageFile={routePhotoFile}
                   layers={[{ frames: skeletonData.frames, style: topoStyle }]}
                   duration={skeletonData.duration}

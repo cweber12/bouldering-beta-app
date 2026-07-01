@@ -567,7 +567,7 @@ function ScanPageInner() {
         queryOrb: matchResult.queryOrb,
         matches: matchResult.matches,
         skeletonStyle: styleRef.current,
-        targetFps: 60,
+        targetFps: 30,
         onProgress: (r: number, t: number) => setExportProgress(Math.round((r / t) * 100)),
       });
 

@@ -224,6 +224,12 @@ export async function renderPoseVideo({
       let cachedCeilAt = -1;
 
       for (let i = 0; i < totalOutputFrames; i++) {
+        // MediaRecorder samples canvas.captureStream in wall-clock real time, so
+        // the loop must pace at ~frameDelay per frame. Measure the per-frame draw
+        // work and subtract it from the wait so the period tracks real time
+        // rather than drifting to (work + frameDelay) and dragging export past
+        // the clip's own duration.
+        const frameStart = performance.now();
         const t = firstTs + (i / fps);
 
         while (floorIdx < sortedFrames.length - 1 && sortedFrames[floorIdx + 1].timestamp <= t) {
@@ -232,46 +238,44 @@ export async function renderPoseVideo({
 
         ctx.drawImage(imageBitmap, 0, 0, canvasW, canvasH);
 
-        // Panning Capture: draw the pre-computed time-varying overlay and skip
-        // the single-homography caching path entirely.
         if (panningFrames) {
+          // Panning Capture: draw the pre-computed time-varying overlay and skip
+          // the single-homography caching path entirely.
           const kp = panningFrames[i]?.keypoints;
           if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, styleWithScale);
-          onProgress?.(i + 1, totalOutputFrames);
-          await new Promise<void>((r) => setTimeout(r, frameDelay));
-          continue;
-        }
-
-        // Compute / reuse transformed keypoints for floor frame.
-        if (cachedFloorAt !== floorIdx) {
-          cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
-            ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
-            : null;
-          cachedFloorAt = floorIdx;
-        }
-
-        if (cachedFloorKp) {
-          const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
-
-          if (cachedCeilAt !== ceilIdx) {
-            cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
-              ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
+        } else {
+          // Compute / reuse transformed keypoints for floor frame.
+          if (cachedFloorAt !== floorIdx) {
+            cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
+              ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
               : null;
-            cachedCeilAt = ceilIdx;
+            cachedFloorAt = floorIdx;
           }
 
-          if (cachedCeilKp && ceilIdx !== floorIdx) {
-            const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
-            const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
-            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), styleWithScale);
-          } else {
-            drawSkeleton(ctx, cachedFloorKp, styleWithScale);
+          if (cachedFloorKp) {
+            const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
+
+            if (cachedCeilAt !== ceilIdx) {
+              cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
+                ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
+                : null;
+              cachedCeilAt = ceilIdx;
+            }
+
+            if (cachedCeilKp && ceilIdx !== floorIdx) {
+              const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
+              const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
+              drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), styleWithScale);
+            } else {
+              drawSkeleton(ctx, cachedFloorKp, styleWithScale);
+            }
           }
         }
 
         onProgress?.(i + 1, totalOutputFrames);
 
-        await new Promise<void>((r) => setTimeout(r, frameDelay));
+        const elapsed = performance.now() - frameStart;
+        await new Promise<void>((r) => setTimeout(r, Math.max(0, frameDelay - elapsed)));
       }
 
       recorder.stop();
