@@ -1,22 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
-import type { MultiPoseLayer } from "@/pipeline/multiPoseVideoRenderer";
+import { renderMultiPoseVideo } from "@/pipeline/render/multiPoseVideoRenderer";
+import type { MultiPoseLayer } from "@/pipeline/render/multiPoseVideoRenderer";
 
 // ---------------------------------------------------------------------------
 // Module mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("@/pipeline/homography", () => ({
+vi.mock("@/pipeline/matching/homography", () => ({
   computeHomography: vi.fn(),
 }));
 
-vi.mock("@/pipeline/skeletonOverlay", () => ({
+vi.mock("@/pipeline/overlay/skeletonOverlay", () => ({
   buildTransformedKeypoints: vi.fn().mockReturnValue(new Map()),
   drawSkeleton: vi.fn(),
   computeStableBodyScale: vi.fn().mockReturnValue(100),
 }));
 
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography } from "@/pipeline/matching/homography";
 
 // ---------------------------------------------------------------------------
 // Helpers

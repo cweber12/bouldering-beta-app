@@ -46,7 +46,7 @@
  * path can reuse it.
  */
 
-import type { Hold } from "@/pipeline/holdDetection";
+import type { Hold } from "@/pipeline/holds/holdDetection";
 
 // ---------------------------------------------------------------------------
 // Marker colours — the single source of truth for the Holds look.

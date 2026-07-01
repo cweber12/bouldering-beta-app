@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from "react";
 import FramePlayer, { type FramePlayerLayer } from "@/components/skeleton/FramePlayer";
-import { buildMultiSkeletonFrames } from "@/pipeline/skeletonRenderer";
-import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
+import { buildMultiSkeletonFrames } from "@/pipeline/overlay/skeletonRenderer";
+import { renderMultiPoseVideo } from "@/pipeline/render/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;

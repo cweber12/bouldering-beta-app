@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
 
 // Mock only computeHomography at the module boundary; keep the real
 // applyHomographyMatrix so the corner projection is exercised end-to-end.
-vi.mock("@/pipeline/homography", async (importActual) => {
-  const actual = await importActual<typeof import("@/pipeline/homography")>();
+vi.mock("@/pipeline/matching/homography", async (importActual) => {
+  const actual = await importActual<typeof import("@/pipeline/matching/homography")>();
   return { ...actual, computeHomography: vi.fn() };
 });
 
-import { computeHomography } from "@/pipeline/homography";
-import { estimateRouteCrop, AUTO_FRAME_CONFIDENCE_MATCHES } from "@/pipeline/routeCropEstimator";
+import { computeHomography } from "@/pipeline/matching/homography";
+import { estimateRouteCrop, AUTO_FRAME_CONFIDENCE_MATCHES } from "@/pipeline/tracking/routeCropEstimator";
 
 const cv = {} as unknown;
 

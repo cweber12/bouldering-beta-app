@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   detectFlips,
   isLandmarkFlip,
-} from "@/pipeline/flipDetection";
-import type { PoseFrame } from "@/pipeline/poseDetection";
+} from "@/pipeline/pose/flipDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers

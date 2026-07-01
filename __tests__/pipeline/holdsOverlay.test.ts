@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { drawHolds, HOLD_RING_COLOR } from "@/pipeline/holdsOverlay";
-import type { Hold } from "@/pipeline/holdDetection";
+import { drawHolds, HOLD_RING_COLOR } from "@/pipeline/holds/holdsOverlay";
+import type { Hold } from "@/pipeline/holds/holdDetection";
 
 // ---------------------------------------------------------------------------
 // drawHolds is a canvas routine; we feed it a minimal fake 2D context and spy on

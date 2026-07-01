@@ -28,9 +28,9 @@
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
 
-import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
-import { applyHomographyMatrix } from "@/pipeline/homography";
+import { applyHomographyMatrix } from "@/pipeline/matching/homography";
 
 // ---------------------------------------------------------------------------
 // Defaults (all thickness/size values are × body scale unless noted)

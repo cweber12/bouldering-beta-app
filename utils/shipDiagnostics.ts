@@ -5,7 +5,7 @@
  * failed diagnostics append must never disrupt the scan/match flow.
  */
 
-import type { ScanDiagnostics, MatchDiagnostics } from "@/pipeline/diagnostics";
+import type { ScanDiagnostics, MatchDiagnostics } from "@/pipeline/analysis/diagnostics";
 
 export function shipDiagnostics(record: ScanDiagnostics | MatchDiagnostics): void {
   if (process.env.NODE_ENV !== "development") return;

@@ -28,7 +28,7 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-import type { FrameAnalysis } from "@/pipeline/frameAnalyzer";
+import type { FrameAnalysis } from "@/pipeline/analysis/frameAnalyzer";
 
 /**
  * Apply in-place preprocessing to a canvas based on user-selected lighting

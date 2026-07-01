@@ -7,11 +7,11 @@ import type { MultiPoseInput } from "@/hooks/useMultiPoseVideo";
 // Module mock — never exercise the real WASM/MediaRecorder pipeline in tests.
 // ---------------------------------------------------------------------------
 
-vi.mock("@/pipeline/multiPoseVideoRenderer", () => ({
+vi.mock("@/pipeline/render/multiPoseVideoRenderer", () => ({
   renderMultiPoseVideo: vi.fn(),
 }));
 
-import { renderMultiPoseVideo } from "@/pipeline/multiPoseVideoRenderer";
+import { renderMultiPoseVideo } from "@/pipeline/render/multiPoseVideoRenderer";
 
 // ---------------------------------------------------------------------------
 // Helpers

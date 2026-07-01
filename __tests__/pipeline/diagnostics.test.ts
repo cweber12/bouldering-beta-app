@@ -12,8 +12,8 @@ import {
   type SampledFrameStatus,
   type ScanDiagnosticsInput,
   type HomographyStats,
-} from "@/pipeline/diagnostics";
-import type { FrameAnalysis, RegionStats } from "@/pipeline/frameAnalyzer";
+} from "@/pipeline/analysis/diagnostics";
+import type { FrameAnalysis, RegionStats } from "@/pipeline/analysis/frameAnalyzer";
 
 // ---------------------------------------------------------------------------
 // Fixtures

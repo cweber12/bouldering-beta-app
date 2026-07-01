@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
-import type { OrbFeatures } from "@/pipeline/orbDetector";
+import { generateOrbThumbnail } from "@/pipeline/matching/orbThumbnail";
+import type { OrbFeatures } from "@/pipeline/matching/orbDetector";
 
 // ---------------------------------------------------------------------------
 // Minimal canvas / context stubs

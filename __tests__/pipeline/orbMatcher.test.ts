@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { matchFeatures, type OrbMatch } from "@/pipeline/orbMatcher";
-import { terminateOrbWorker } from "@/pipeline/orbFeatures";
-import type { OrbResult } from "@/pipeline/orbFeatures";
+import { matchFeatures, type OrbMatch } from "@/pipeline/legacy/orbMatcher";
+import { terminateOrbWorker } from "@/pipeline/legacy/orbFeatures";
+import type { OrbResult } from "@/pipeline/legacy/orbFeatures";
 
 // ---------------------------------------------------------------------------
 // Fake Worker — handles both 'detectAndCompute' and 'match' messages

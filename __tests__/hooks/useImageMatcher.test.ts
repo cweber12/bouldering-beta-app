@@ -6,7 +6,7 @@ import { useImageMatcher } from "@/hooks/useImageMatcher";
 // Module mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("@/pipeline/orbDetector", () => ({
+vi.mock("@/pipeline/matching/orbDetector", () => ({
   extractFeatures: vi.fn(),
   extractFeaturesFromCrop: vi.fn(),
   matchOrbFeatures: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("@/pipeline/orbDetector", () => ({
   rescaleFeaturesToNative: vi.fn(),
 }));
 
-vi.mock("@/pipeline/homography", () => ({
+vi.mock("@/pipeline/matching/homography", () => ({
   computeHomography: vi.fn(),
   applyHomographyMatrix: vi.fn(),
   ransacReprojThresholdFor: vi.fn().mockReturnValue(3),
@@ -28,11 +28,11 @@ vi.mock("@/utils/cvHelpers", () => ({
 
 // Symmetric query preprocessing (fix #1) — mocked to a no-op so the matcher's
 // extract/match behaviour is what the assertions exercise, not OpenCV calls.
-vi.mock("@/pipeline/framePreprocessor", () => ({
+vi.mock("@/pipeline/analysis/framePreprocessor", () => ({
   applyOrbPreprocessing: vi.fn(),
 }));
 
-vi.mock("@/pipeline/frameAnalyzer", () => ({
+vi.mock("@/pipeline/analysis/frameAnalyzer", () => ({
   analyzeFrame: vi.fn().mockReturnValue({ isBlurry: false }),
 }));
 
@@ -47,8 +47,8 @@ import {
   queryMaxEdgeFor,
   downscaleImageData,
   rescaleFeaturesToNative,
-} from "@/pipeline/orbDetector";
-import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
+} from "@/pipeline/matching/orbDetector";
+import { computeHomography, applyHomographyMatrix } from "@/pipeline/matching/homography";
 import { cropImageData } from "@/utils/cvHelpers";
 import { getAttempt } from "@/storage/sessionStore";
 

@@ -20,9 +20,9 @@
  * way.
  */
 
-import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
-import { mapKeypointsToFullFrame, type CropBox } from "@/pipeline/cropDetector";
-import { selectClimberByPoint, deriveClimberCrop, type Point } from "@/pipeline/climberTracker";
+import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
+import { mapKeypointsToFullFrame, type CropBox } from "@/pipeline/tracking/cropDetector";
+import { selectClimberByPoint, deriveClimberCrop, type Point } from "@/pipeline/tracking/climberTracker";
 import type { CropFraction } from "@/utils/cropFraction";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

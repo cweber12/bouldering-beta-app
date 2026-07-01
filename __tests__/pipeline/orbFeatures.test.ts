@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { detectAndCompute, terminateOrbWorker, type OrbKeypoint } from "@/pipeline/orbFeatures";
+import { detectAndCompute, terminateOrbWorker, type OrbKeypoint } from "@/pipeline/legacy/orbFeatures";
 
 // ---------------------------------------------------------------------------
 // Fake Worker that speaks the orbWorker protocol

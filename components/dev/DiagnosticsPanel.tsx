@@ -20,7 +20,7 @@ import type {
   MatchQuality,
   MinAvgMax,
   ConditionFlags,
-} from "@/pipeline/diagnostics";
+} from "@/pipeline/analysis/diagnostics";
 
 type DiagnosticsRecord = ScanDiagnostics | MatchDiagnostics;
 

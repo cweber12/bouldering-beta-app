@@ -1,18 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type PoseFrame } from "@/pipeline/poseDetection";
-import { estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
-import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/orbDetector";
+import { type PoseFrame } from "@/pipeline/pose/poseDetection";
+import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
+import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/matching/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
 import { neutralizeColorCast } from "@/utils/colorBalance";
-import { generateOrbThumbnail } from "@/pipeline/orbThumbnail";
-import { analyzeFrame, type FrameAnalysis } from "@/pipeline/frameAnalyzer";
-import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
+import { generateOrbThumbnail } from "@/pipeline/matching/orbThumbnail";
+import { analyzeFrame, type FrameAnalysis } from "@/pipeline/analysis/frameAnalyzer";
+import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
 import {
   mapKeypointsToFullFrame,
   type CropBox,
-} from "@/pipeline/cropDetector";
+} from "@/pipeline/tracking/cropDetector";
 import {
   deriveClimberCrop,
   findMissingLimbs,
@@ -23,21 +23,21 @@ import {
   selectClimberPose,
   REACQUIRE_GATE,
   type Point,
-} from "@/pipeline/climberTracker";
+} from "@/pipeline/tracking/climberTracker";
 import {
   filterLandmarks,
   interpolatePoseFrames,
   estimateMissingLandmarks,
   fillPersistentGaps,
   smoothPoseFrames,
-} from "@/pipeline/poseInterpolator";
+} from "@/pipeline/pose/poseInterpolator";
 import {
   detectFlips,
   isLandmarkFlip,
   DEFAULT_TELEPORT_THRESHOLD,
-} from "@/pipeline/flipDetection";
+} from "@/pipeline/pose/flipDetection";
 import { saveAttempt, type VideoMeta, type FrameCapture, type RunType, type StoredHold } from "@/storage/sessionStore";
-import { detectHoldsVideoSpace } from "@/pipeline/holdDetection";
+import { detectHoldsVideoSpace } from "@/pipeline/holds/holdDetection";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
 import type { PoseBackend } from "@/utils/poseConstants";
@@ -48,7 +48,7 @@ import {
   summarizeMinAvgMax,
   type ScanDiagnostics,
   type SampledFrameStatus,
-} from "@/pipeline/diagnostics";
+} from "@/pipeline/analysis/diagnostics";
 import { hashFile } from "@/utils/hashFile";
 import { shipDiagnostics } from "@/utils/shipDiagnostics";
 import { APP_VERSION } from "@/utils/appVersion";

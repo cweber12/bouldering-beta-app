@@ -9,10 +9,10 @@ import { useImageMatcher } from "@/hooks/useImageMatcher";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
-import { renderPoseVideo } from "@/pipeline/poseVideoRenderer";
+import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
 import RunStatusDot from "@/components/run/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 

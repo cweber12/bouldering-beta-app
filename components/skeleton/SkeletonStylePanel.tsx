@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import { type HoldStyle } from "@/pipeline/holdsOverlay";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import { type HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import { cn } from "@/utils/cn";
 import PreviewSidebar from "@/components/scan/controls/PreviewSidebar";
 

@@ -15,8 +15,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-import { computeHomography, applyHomographyMatrix } from "@/pipeline/homography";
-import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+import { computeHomography, applyHomographyMatrix } from "@/pipeline/matching/homography";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
 import type { CropFraction } from "@/utils/cropFraction";
 
 export interface RouteCropEstimate {

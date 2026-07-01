@@ -15,8 +15,8 @@ import {
   ABS_MIN_CROP_FRAC,
   REACH_MAX_EXPANSION,
   REGION_BASE_SLACK,
-} from "@/pipeline/climberTracker";
-import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
+} from "@/pipeline/tracking/climberTracker";
+import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers

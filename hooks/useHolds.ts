@@ -7,8 +7,8 @@ import {
   computeProjectedBodyScale,
   type Hold,
   type HoldProjector,
-} from "@/pipeline/holdDetection";
-import { applyHomographyMatrix, homographyAtTime } from "@/pipeline/homography";
+} from "@/pipeline/holds/holdDetection";
+import { applyHomographyMatrix, homographyAtTime } from "@/pipeline/matching/homography";
 import { getAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 

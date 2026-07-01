@@ -1,32 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------
 // Module mocks — isolate from real OpenCV / homography
 // ---------------------------------------------------------------------------
 
-vi.mock("@/pipeline/homography", () => ({
+vi.mock("@/pipeline/matching/homography", () => ({
   computeHomography: vi.fn(),
   homographyAtTime: vi.fn(() => new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1])),
 }));
 
-vi.mock("@/pipeline/skeletonOverlay", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/pipeline/skeletonOverlay")>();
+vi.mock("@/pipeline/overlay/skeletonOverlay", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/pipeline/overlay/skeletonOverlay")>();
   return {
     ...actual,
     buildTransformedKeypoints: vi.fn(),
   };
 });
 
-import { computeHomography, homographyAtTime } from "@/pipeline/homography";
-import { buildTransformedKeypoints } from "@/pipeline/skeletonOverlay";
+import { computeHomography, homographyAtTime } from "@/pipeline/matching/homography";
+import { buildTransformedKeypoints } from "@/pipeline/overlay/skeletonOverlay";
 
 import {
   buildSkeletonFrames,
   buildMultiSkeletonFrames,
   buildPanningSkeletonFrames,
-} from "@/pipeline/skeletonRenderer";
+} from "@/pipeline/overlay/skeletonRenderer";
 
 // ---------------------------------------------------------------------------
 // Helpers

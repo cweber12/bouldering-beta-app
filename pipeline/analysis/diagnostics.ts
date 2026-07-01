@@ -17,7 +17,7 @@
  * record. Keep it that way.
  */
 
-import type { RegionStats, FrameAnalysis } from "@/pipeline/frameAnalyzer";
+import type { RegionStats, FrameAnalysis } from "@/pipeline/analysis/frameAnalyzer";
 
 /** Schema version stamped onto every diagnostics record. */
 export const DIAGNOSTICS_SCHEMA_VERSION = 1;

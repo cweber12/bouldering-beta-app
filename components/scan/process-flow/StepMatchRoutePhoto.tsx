@@ -11,10 +11,10 @@ import ToolbarButton from "@/components/scan/controls/ToolbarButton";
 import { ClimberIcon } from "@/components/scan/controls/overlayIcons";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import SaveDropdown from "@/components/scan/controls/SaveDropdown";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import type { HoldStyle } from "@/pipeline/holdsOverlay";
-import type { Hold } from "@/pipeline/holdDetection";
-import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { HoldStyle } from "@/pipeline/holds/holdsOverlay";
+import type { Hold } from "@/pipeline/holds/holdDetection";
+import type { SkeletonFrameData } from "@/pipeline/overlay/skeletonRenderer";
 import type { ImageMatchResult, MatchStatus, AutoFrameStatus } from "@/hooks/useImageMatcher";
 import type { SkeletonFrameStatus } from "@/hooks/useSkeletonFrames";
 import { mediaContainerStyle, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
@@ -22,7 +22,7 @@ import { useClickOutside } from "@/hooks/useClickOutside";
 import { useAdvancedView } from "@/hooks/useAdvancedView";
 import FullscreenModal from "@/components/ui/FullscreenModal";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
-import type { MatchDiagnostics } from "@/pipeline/diagnostics";
+import type { MatchDiagnostics } from "@/pipeline/analysis/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Props

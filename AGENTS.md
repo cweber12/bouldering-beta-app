@@ -23,14 +23,18 @@
 ## Project Architecture
 
 ```
-pipeline/        Framework-agnostic processing modules (NO React imports)
-  orbDetector.ts   extractFeatures(cv, imageData), matchOrbFeatures(cv, ref, query)
-  homography.ts    computeHomography(), applyHomographyMatrix()
-  skeletonOverlay.ts  buildTransformedKeypoints(), drawSkeleton()
-  mediapipePoseDetection.ts  estimateFramesMediaPipe(), estimateFrameMediaPipe()
-  poseDetection.ts   Keypoint / PoseFrame types (detection lives in mediapipePoseDetection.ts)
-  poseVideoRenderer.ts  renderPoseVideo() — MediaRecorder + canvas.captureStream
-  [orbFeatures.ts / orbMatcher.ts / orbWorker.js]  legacy worker files, not used
+pipeline/        Framework-agnostic processing modules (NO React imports), grouped by concern
+  pose/      poseDetection (Keypoint / PoseFrame types), mediapipePoseDetection
+             (estimateFramesMediaPipe / estimateFrameMediaPipe), poseInterpolator, flipDetection
+  tracking/  cropDetector, climberTracker, tapCropDetection, routeCropEstimator
+  matching/  orbDetector (extractFeatures, matchOrbFeatures), homography
+             (computeHomography, applyHomographyMatrix), orbThumbnail
+  analysis/  frameAnalyzer, framePreprocessor, diagnostics
+  holds/     holdDetection, holdsOverlay
+  overlay/   skeletonOverlay (buildTransformedKeypoints, drawSkeleton), skeletonRenderer
+  render/    poseVideoRenderer (renderPoseVideo — MediaRecorder + canvas.captureStream),
+             multiPoseVideoRenderer, overlayVideoRecorder
+  legacy/    orbFeatures, orbMatcher — legacy worker files, not used
 
 hooks/           React hooks that wire pipeline modules to UI state
   useOpenCV.ts     loads /public/opencv.js; exposes { ready, cv }

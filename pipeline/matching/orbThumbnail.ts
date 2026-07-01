@@ -4,7 +4,7 @@
  * Framework-agnostic — no React imports. Uses the browser Canvas API only.
  */
 
-import type { OrbFeatures } from "@/pipeline/orbDetector";
+import type { OrbFeatures } from "@/pipeline/matching/orbDetector";
 
 /** Maximum thumbnail width in pixels. Height is scaled proportionally. */
 const THUMB_MAX_WIDTH = 320;

@@ -6,13 +6,13 @@
  * from this module only, so the storage backend stays swappable.
  */
 
-import type { PoseFrame } from "@/pipeline/poseDetection";
-import type { OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
-import type { CropBox } from "@/pipeline/cropDetector";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
+import type { OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/matching/orbDetector";
+import type { CropBox } from "@/pipeline/tracking/cropDetector";
 import type { PoseBackend } from "@/utils/poseConstants";
-import type { ReferenceFrameMeta } from "@/pipeline/diagnostics";
-export type { OrbKeypoint, OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/orbDetector";
-export type { CropBox } from "@/pipeline/cropDetector";
+import type { ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
+export type { OrbKeypoint, OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/matching/orbDetector";
+export type { CropBox } from "@/pipeline/tracking/cropDetector";
 export type { PoseBackend } from "@/utils/poseConstants";
 
 export interface VideoMeta {

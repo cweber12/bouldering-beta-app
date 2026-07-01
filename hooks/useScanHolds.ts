@@ -6,9 +6,9 @@ import {
   projectStoredHolds,
   type Hold,
   type HoldProjector,
-} from "@/pipeline/holdDetection";
+} from "@/pipeline/holds/holdDetection";
 import { saveAttempt, type RouteAttempt, type StoredHold } from "@/storage/sessionStore";
-import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 
 /** A stored Hold paired with its re-derived 1-based first-use rank, for the editor list. */
 export interface HoldEntry {

@@ -2,9 +2,25 @@
 
 Framework-agnostic processing modules. **Zero React imports.** All functions are synchronous and accept `cv` as their first argument.
 
+## Folder structure
+
+Modules are grouped by concern. Import paths follow the folder, e.g. `@/pipeline/pose/poseDetection`.
+
+```text
+pipeline/
+  pose/       poseDetection, mediapipePoseDetection, poseInterpolator, flipDetection
+  tracking/   cropDetector, climberTracker, tapCropDetection, routeCropEstimator
+  matching/   orbDetector, homography, orbThumbnail
+  analysis/   frameAnalyzer, framePreprocessor, diagnostics
+  holds/      holdDetection, holdsOverlay
+  overlay/    skeletonOverlay, skeletonRenderer
+  render/     poseVideoRenderer, multiPoseVideoRenderer, overlayVideoRecorder
+  legacy/     orbFeatures, orbMatcher   (unused worker files, kept for reference)
+```
+
 ## Modules
 
-### `framePreprocessor.ts`
+### `analysis/framePreprocessor.ts`
 
 Lighting-condition-specific preprocessing applied to the pose-detection canvas before each
 MediaPipe inference. The ORB background canvas is never touched.
@@ -26,7 +42,7 @@ Supported conditions and their effect:
 
 Multiple conditions combine: contrast enhancement and unsharp masking are applied in sequence when both are selected.
 
-### `orbDetector.ts`
+### `matching/orbDetector.ts`
 
 ORB feature detection and matching via OpenCV.js.
 
@@ -37,7 +53,7 @@ ORB feature detection and matching via OpenCV.js.
 
 Types exported: `OrbKeypoint`, `OrbFeatures`, `OrbMatch`.
 
-### `homography.ts`
+### `matching/homography.ts`
 
 Perspective transform computation and application.
 
@@ -46,7 +62,7 @@ Perspective transform computation and application.
 | `computeHomography` | `(cv, ref, query, matches) → Mat \| null` | RANSAC homography from ORB correspondences. Returns `null` when fewer than 4 matches. |
 | `applyHomographyMatrix` | `(h, x, y) → {x, y}` | Project a single 2-D point through a homography matrix. |
 
-### `poseDetection.ts`
+### `pose/poseDetection.ts`
 
 Pose-frame vocabulary. Holds only the `PoseFrame` / `Keypoint` types shared by
 every downstream module. Detection itself lives in `mediapipePoseDetection.ts`
@@ -54,7 +70,7 @@ every downstream module. Detection itself lives in `mediapipePoseDetection.ts`
 
 Types exported: `PoseFrame`, `Keypoint`.
 
-### `skeletonOverlay.ts`
+### `overlay/skeletonOverlay.ts`
 
 Draw the skeleton on a canvas for a single frame.
 
@@ -63,7 +79,7 @@ Draw the skeleton on a canvas for a single frame.
 | `buildTransformedKeypoints` | `(frame, homography, imgW, imgH) → Keypoint[]` | Re-project keypoints through the homography. |
 | `drawSkeleton` | `(ctx, keypoints) → void` | Draw bones and joints using SKELETON_EDGES topology. |
 
-### `cropDetector.ts`
+### `tracking/cropDetector.ts`
 
 Hip-centred crop geometry for outdoor mode.
 
@@ -75,7 +91,7 @@ Hip-centred crop geometry for outdoor mode.
 
 Types exported: `CropBox`.
 
-### `poseInterpolator.ts`
+### `pose/poseInterpolator.ts`
 
 Linear interpolation for outdoor mode gap-filling.
 
@@ -83,7 +99,7 @@ Linear interpolation for outdoor mode gap-filling.
 |---|---|---|
 | `interpolateFrames` | `(detected, totalCount) → PoseFrame[]` | Fill `totalCount` frames from sparsely detected frames. |
 
-### `poseVideoRenderer.ts`
+### `render/poseVideoRenderer.ts`
 
 Render an annotated WebM video from processed frames.
 
@@ -91,7 +107,7 @@ Render an annotated WebM video from processed frames.
 |---|---|---|
 | `renderPoseVideo` | `(options) → Promise<string>` | Draw skeleton overlay on route photo for every frame; encode via `MediaRecorder`; return object URL. |
 
-### `overlayVideoRecorder.ts`
+### `render/overlayVideoRecorder.ts`
 
 Shared WebM recorder behind both `renderPoseVideo` and `renderMultiPoseVideo`.
 Owns the `MediaRecorder` lifecycle, MIME selection, real-time-paced output loop,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { renderPoseVideo, type SkeletonStyle } from "@/pipeline/poseVideoRenderer";
+import { renderPoseVideo, type SkeletonStyle } from "@/pipeline/render/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 

@@ -29,14 +29,14 @@ import {
   rescaleFeaturesToNative,
   queryMaxEdgeFor,
   type OrbFeatures,
-} from "@/pipeline/orbDetector";
+} from "@/pipeline/matching/orbDetector";
 import {
   computeHomography,
   ransacReprojThresholdFor,
-} from "@/pipeline/homography";
-import { emptyHomographyStats, type HomographyStats } from "@/pipeline/diagnostics";
-import { analyzeFrame } from "@/pipeline/frameAnalyzer";
-import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
+} from "@/pipeline/matching/homography";
+import { emptyHomographyStats, type HomographyStats } from "@/pipeline/analysis/diagnostics";
+import { analyzeFrame } from "@/pipeline/analysis/frameAnalyzer";
+import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
 import { capToPixelBudget } from "@/utils/imageHelpers";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

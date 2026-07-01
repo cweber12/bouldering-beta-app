@@ -7,7 +7,7 @@
  * This module is framework-agnostic — no React imports.
  */
 
-import type { Keypoint } from "@/pipeline/poseDetection";
+import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -21,7 +21,7 @@
  * Keep it that way.
  */
 
-import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
 import type { StoredHold } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------

@@ -12,11 +12,11 @@ import {
   PANNING_QUERY_MAX_EDGE,
   type OrbMatch,
   type OrbFeatures,
-} from "@/pipeline/orbDetector";
-import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/homography";
-import { estimateRouteCrop, type RouteCropEstimate } from "@/pipeline/routeCropEstimator";
-import { analyzeFrame } from "@/pipeline/frameAnalyzer";
-import { applyOrbPreprocessing } from "@/pipeline/framePreprocessor";
+} from "@/pipeline/matching/orbDetector";
+import { computeHomography, applyHomographyMatrix, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/matching/homography";
+import { estimateRouteCrop, type RouteCropEstimate } from "@/pipeline/tracking/routeCropEstimator";
+import { analyzeFrame } from "@/pipeline/analysis/frameAnalyzer";
+import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
 import {
   buildMatchDiagnostics,
   emptyHomographyStats,
@@ -24,7 +24,7 @@ import {
   type HomographyStats,
   type MatchDiagnostics,
   type MatchResultInput,
-} from "@/pipeline/diagnostics";
+} from "@/pipeline/analysis/diagnostics";
 import { cropImageData } from "@/utils/cvHelpers";
 import { capToPixelBudget } from "@/utils/imageHelpers";
 import { hashFile } from "@/utils/hashFile";

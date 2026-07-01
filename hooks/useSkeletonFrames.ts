@@ -5,7 +5,7 @@ import {
   buildSkeletonFrames,
   buildPanningSkeletonFrames,
   type SkeletonFrameData,
-} from "@/pipeline/skeletonRenderer";
+} from "@/pipeline/overlay/skeletonRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 

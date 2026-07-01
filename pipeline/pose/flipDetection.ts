@@ -40,7 +40,7 @@
  * are normalised to [0, 1] of the full frame.
  */
 
-import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
+import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Tunables

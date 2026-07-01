@@ -11,7 +11,7 @@
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
 
-import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
+import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
 import { MP_KP_NAMES, type MediaPipeKeypointIndex } from "@/utils/poseConstants";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

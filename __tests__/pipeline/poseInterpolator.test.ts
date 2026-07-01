@@ -8,8 +8,8 @@ import {
   PERSISTENT_GAP_SCORE_FACTOR,
   applyLandmarkEstimator,
   type LandmarkEstimator,
-} from "@/pipeline/poseInterpolator";
-import type { PoseFrame } from "@/pipeline/poseDetection";
+} from "@/pipeline/pose/poseInterpolator";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import { MP_KP_NAMES } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------

@@ -1,10 +1,10 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import type { RenderedSkeletonFrame } from "@/pipeline/skeletonRenderer";
-import { drawHolds, type HoldStyle } from "@/pipeline/holdsOverlay";
-import type { Hold } from "@/pipeline/holdDetection";
+import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
+import { drawHolds, type HoldStyle } from "@/pipeline/holds/holdsOverlay";
+import type { Hold } from "@/pipeline/holds/holdDetection";
 import { cn } from "@/utils/cn";
 
 /** A single layer of pre-computed skeleton data with optional visual style. */

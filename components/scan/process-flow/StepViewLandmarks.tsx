@@ -13,10 +13,10 @@ import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle"
 import RoutePhotoChooser from "@/components/scan/controls/RoutePhotoChooser";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { useAdvancedView } from "@/hooks/useAdvancedView";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
-import type { SkeletonFrameData } from "@/pipeline/skeletonRenderer";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { SkeletonFrameData } from "@/pipeline/overlay/skeletonRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import type { ScanDiagnostics } from "@/pipeline/diagnostics";
+import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Props

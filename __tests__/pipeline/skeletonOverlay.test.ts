@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lerpKeypoints } from "@/pipeline/skeletonOverlay";
+import { lerpKeypoints } from "@/pipeline/overlay/skeletonOverlay";
 
 describe("lerpKeypoints", () => {
   const a = { nose: { x: 0, y: 0 }, left_eye: { x: 10, y: 20 } };

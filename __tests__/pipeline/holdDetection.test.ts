@@ -4,8 +4,8 @@ import {
   detectHoldsVideoSpace,
   projectStoredHolds,
   type HoldProjector,
-} from "@/pipeline/holdDetection";
-import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+} from "@/pipeline/holds/holdDetection";
+import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
 import type { StoredHold } from "@/storage/sessionStore";
 
 // ---------------------------------------------------------------------------

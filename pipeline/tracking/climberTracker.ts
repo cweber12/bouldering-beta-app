@@ -18,8 +18,8 @@
  * documents otherwise.
  */
 
-import type { Keypoint, PoseFrame } from "@/pipeline/poseDetection";
-import type { CropBox } from "@/pipeline/cropDetector";
+import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
+import type { CropBox } from "@/pipeline/tracking/cropDetector";
 
 // ---------------------------------------------------------------------------
 // Types & tunables

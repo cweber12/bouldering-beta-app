@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { applyFramePreprocessing } from "@/pipeline/framePreprocessor";
+import { applyFramePreprocessing } from "@/pipeline/analysis/framePreprocessor";
 
 // ---------------------------------------------------------------------------
 // Helpers

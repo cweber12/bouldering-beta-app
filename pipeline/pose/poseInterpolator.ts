@@ -10,7 +10,7 @@
  * This module is framework-agnostic — no React imports.
  */
 
-import type { PoseFrame, Keypoint } from "@/pipeline/poseDetection";
+import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
 import {
   MP_KP_NAMES,
   MP_SKELETON_EDGES,

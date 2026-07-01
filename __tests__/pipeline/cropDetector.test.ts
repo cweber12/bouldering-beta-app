@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   extractHipCenter,
   mapKeypointsToFullFrame,
-} from "@/pipeline/cropDetector";
-import type { Keypoint } from "@/pipeline/poseDetection";
+} from "@/pipeline/tracking/cropDetector";
+import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -12,8 +12,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
-import type { HomographyStats, HomographyFailureReason } from "@/pipeline/diagnostics";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
+import type { HomographyStats, HomographyFailureReason } from "@/pipeline/analysis/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Resolution-scaled RANSAC reprojection threshold

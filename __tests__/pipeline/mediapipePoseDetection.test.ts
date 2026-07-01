@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { estimateFrameMediaPipe, estimateFramesMediaPipe } from "@/pipeline/mediapipePoseDetection";
+import { estimateFrameMediaPipe, estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers

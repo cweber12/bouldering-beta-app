@@ -6,7 +6,7 @@ import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 // Module mocks
 // ---------------------------------------------------------------------------
 
-vi.mock("@/pipeline/skeletonRenderer", () => ({
+vi.mock("@/pipeline/overlay/skeletonRenderer", () => ({
   buildSkeletonFrames: vi.fn(),
 }));
 
@@ -14,7 +14,7 @@ vi.mock("@/storage/sessionStore", () => ({
   getAttempt: vi.fn(),
 }));
 
-import { buildSkeletonFrames } from "@/pipeline/skeletonRenderer";
+import { buildSkeletonFrames } from "@/pipeline/overlay/skeletonRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { OrbFeatures } from "@/storage/sessionStore";
 

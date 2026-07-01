@@ -9,11 +9,11 @@ import {
   RANSAC_BASE_THRESHOLD,
   RANSAC_RNG_SEED,
   type KeyframeHomography,
-} from "@/pipeline/homography";
-import { emptyHomographyStats } from "@/pipeline/diagnostics";
-import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/skeletonOverlay";
-import type { PoseFrame } from "@/pipeline/poseDetection";
-import type { OrbFeatures, OrbMatch } from "@/pipeline/orbDetector";
+} from "@/pipeline/matching/homography";
+import { emptyHomographyStats } from "@/pipeline/analysis/diagnostics";
+import { buildTransformedKeypoints, drawSkeleton } from "@/pipeline/overlay/skeletonOverlay";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
+import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
 
 // ---------------------------------------------------------------------------
 // applyHomographyMatrix

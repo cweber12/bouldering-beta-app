@@ -10,8 +10,8 @@
  * This module is framework-agnostic — no React imports. Keep it that way.
  */
 
-import { sendOrbRequest } from "@/pipeline/orbFeatures";
-import type { OrbResult } from "@/pipeline/orbFeatures";
+import { sendOrbRequest } from "@/pipeline/legacy/orbFeatures";
+import type { OrbResult } from "@/pipeline/legacy/orbFeatures";
 
 export interface OrbMatch {
   /** Index into the reference (query) keypoints array. */

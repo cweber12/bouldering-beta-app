@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { recordOverlayVideo } from "@/pipeline/overlayVideoRecorder";
+import { recordOverlayVideo } from "@/pipeline/render/overlayVideoRecorder";
 
 // ---------------------------------------------------------------------------
 // MediaRecorder mock — stop() fires onstop synchronously so fake timers can

@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, createQueryMatcher, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/orbDetector";
-import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/orbDetector";
+import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, createQueryMatcher, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/matching/orbDetector";
+import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/matching/orbDetector";
 
 // ---------------------------------------------------------------------------
 // Mock helpers

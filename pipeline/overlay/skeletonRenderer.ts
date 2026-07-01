@@ -13,10 +13,10 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography, homographyAtTime, type KeyframeHomography } from "@/pipeline/homography";
-import { buildTransformedKeypoints, lerpKeypoints } from "@/pipeline/skeletonOverlay";
+import { computeHomography, homographyAtTime, type KeyframeHomography } from "@/pipeline/matching/homography";
+import { buildTransformedKeypoints, lerpKeypoints } from "@/pipeline/overlay/skeletonOverlay";
 
 /** Single output frame with pre-transformed keypoints in image-pixel space. */
 export interface RenderedSkeletonFrame {

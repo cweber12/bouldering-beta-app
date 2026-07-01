@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   renderMultiPoseVideo,
   type MultiPoseLayer,
-} from "@/pipeline/multiPoseVideoRenderer";
+} from "@/pipeline/render/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
-import type { SkeletonStyle } from "@/pipeline/skeletonOverlay";
+import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;

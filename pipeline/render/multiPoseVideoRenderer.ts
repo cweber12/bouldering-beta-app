@@ -16,17 +16,17 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
 
-import type { PoseFrame } from "@/pipeline/poseDetection";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography } from "@/pipeline/homography";
+import { computeHomography } from "@/pipeline/matching/homography";
 import {
   buildTransformedKeypoints,
   drawSkeleton,
   lerpKeypoints,
   computeStableBodyScale,
   type SkeletonStyle,
-} from "@/pipeline/skeletonOverlay";
-import { recordOverlayVideo } from "@/pipeline/overlayVideoRecorder";
+} from "@/pipeline/overlay/skeletonOverlay";
+import { recordOverlayVideo } from "@/pipeline/render/overlayVideoRecorder";
 
 export type { SkeletonStyle };
 
