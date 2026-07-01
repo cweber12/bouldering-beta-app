@@ -54,9 +54,9 @@ export default function DocsPage() {
               <strong className="text-fg">Pose estimation.</strong> The app samples a frame
               roughly every 100&nbsp;ms and runs{" "}
               <span className="font-mono text-fg">MediaPipe Pose Landmarker</span> to locate 33
-              BlazePose keypoints per frame. In Outdoor mode a crop window tracks the climber&apos;s
-              hip so a small-in-frame subject still resolves cleanly, and the sparse detections are
-              interpolated and smoothed into a continuous pose timeline.
+              BlazePose keypoints per frame. A crop window locks onto the climber you tapped and
+              follows them frame-to-frame, so a small-in-frame subject still resolves cleanly, and
+              the sparse detections are interpolated and smoothed into a continuous pose timeline.
               <Figure
                 src="/docs/skeleton-holds.jpg"
                 alt="Climbing video frame with the estimated skeleton drawn in green and inferred holds ringed in blue and orange"
@@ -64,11 +64,12 @@ export default function DocsPage() {
               />
             </li>
             <li>
-              <strong className="text-fg">Detection framing.</strong> On the Scan page you set two
-              nested boxes over the first frame: an inner <em>Climber</em> box that seeds subject
-              identity and lighting analysis, and an outer <em>Route</em> box that bounds the wall
-              texture used for matching. The Route always contains the Climber, and its lower edge
-              trims the ground and crash pad that would otherwise pollute feature matching.
+              <strong className="text-fg">Detection framing.</strong> On the Scan page you tap the
+              climber on the first frame. Two nested boxes then appear and can be dragged: an inner{" "}
+              <em>Climber</em> box — derived from the climber&apos;s landmarks — that seeds tracking
+              and the automatic lighting analysis, and an outer <em>Route</em> box that bounds the
+              wall texture used for matching. The Route always contains the Climber, and its lower
+              edge trims the ground and crash pad that would otherwise pollute feature matching.
               <Figure
                 src="/docs/detection-crops.jpg"
                 alt="Scan page detection step showing a large outer Route crop box and a smaller nested Climber crop box over the boulder"
@@ -176,81 +177,77 @@ export default function DocsPage() {
               <p className="text-sm font-semibold text-fg">1. Prepare your footage</p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 Film your climbing run in portrait or landscape — either works. The camera
-                should be stationary and include the entire wall section. For outdoor climbs,
-                zoom in as much as possible to improve pose accuracy.
+                should be stationary and include the entire wall section. For distant or
+                small-in-frame climbers, zoom in as much as possible to improve pose accuracy.
               </p>
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
-              <p className="text-sm font-semibold text-fg">2. Choose Indoor or Outdoor</p>
-              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                On the{" "}
-                <Link href="/" className="text-fg hover:underline">
-                  home page
-                </Link>{" "}
-                select the mode (
-                <a href="#modes" className="text-fg hover:underline">
-                  see below
-                </a>
-                ). This controls how pose detection is applied — indoor uses full-frame detection
-                while outdoor crops around the estimated hip position before each inference.
-              </p>
-            </div>
-
-            <div className="border-l-2 border-edge/40 px-4 py-2">
-              <p className="text-sm font-semibold text-fg">3. Upload and process the video</p>
+              <p className="text-sm font-semibold text-fg">2. Upload or record your video</p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
                 On the{" "}
                 <Link href="/scan" className="text-fg hover:underline">
                   Scan page
                 </Link>
-                , click the upload area and select your video. Processing begins automatically.
-                A progress bar shows the current frame. When the status banner turns green, ORB
-                features are ready.
+                , choose a video file or record one on the spot with your camera. The video stays
+                on your device — nothing is uploaded yet.
+              </p>
+            </div>
+
+            <div className="border-l-2 border-edge/40 px-4 py-2">
+              <p className="text-sm font-semibold text-fg">3. Mark the climber and scan</p>
+              <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
+                Tap the climber on the first frame to lock tracking onto them, then drag the
+                white <strong className="text-fg">Climber</strong> and amber{" "}
+                <strong className="text-fg">Route</strong> boxes to frame the shot. Click{" "}
+                <strong className="text-fg">Scan video</strong> to begin — a progress view shows
+                the current frame, and processing finishes with the traced climb ready to review.
               </p>
               <p className="mt-2 text-base text-fg-secondary">
-                If lighting conditions are challenging, expand the{" "}
-                <strong className="text-fg">Frame adjustments</strong> panel and select
-                the conditions that apply — see{" "}
+                Open the <strong className="text-fg">Settings</strong> popover (gear icon) to
+                choose a <strong className="text-fg">detection quality</strong> tier — Fast,
+                Balanced, or Accurate (see{" "}
+                <a href="#quality" className="text-fg hover:underline">
+                  Detection quality
+                </a>{" "}
+                below). The same popover exposes the pose model, detection frequency, and the{" "}
+                <strong className="text-fg">Long route (panning)</strong> toggle for shots where
+                the camera pans up the wall.
+              </p>
+              <p className="mt-2 text-base text-fg-secondary">
+                Lighting is handled automatically — there are no manual exposure controls to set
+                (see{" "}
                 <a href="#lighting" className="text-fg hover:underline">
                   Lighting &amp; preprocessing
                 </a>{" "}
-                below.
-              </p>
-              <p className="mt-2 text-base text-fg-secondary">
-                You can optionally save the processed data to your device as a{" "}
-                <code className="text-fg">.json</code> file so you can reload it in a
-                later session without reprocessing the video.
+                below).
               </p>
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">
-                4. Adjust skeleton style (optional)
+                4. Review and adjust skeleton style (optional)
               </p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                In the climb console a <strong className="text-fg">Skeleton style</strong>{" "}
-                panel appears once matching completes. Use the colour pickers to change limb and
-                joint colours. Use the sliders to adjust line width and joint radius. Changes
-                take effect on the next render — click{" "}
-                <strong className="text-fg">Apply &amp; Match</strong> again to re-export
-                with updated styles.
+                Watch the traced climb on the review step. A{" "}
+                <strong className="text-fg">Skeleton style</strong> panel lets you change limb and
+                joint colours with the colour pickers and adjust line width and joint radius with
+                the sliders. Changes take effect on the next render. From here you can save the
+                raw scan or continue to the route photo.
               </p>
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">
-                5. Match a route photo and export
+                5. Place on the route photo and export
               </p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                In the{" "}
-                <Link href="/compare" className="text-fg hover:underline">
-                  climb console
-                </Link>
-                , upload a photo of the wall from a similar angle. The match statistics panel
-                shows how many ORB correspondences were found. Aim for at least 10 good matches
-                for a stable homography. The pose overlay video renders automatically — download
-                it as a <code className="text-fg">.webm</code> file.
+                Add a photo of the wall taken from a similar angle. A preliminary match runs
+                automatically and frames the climb over the photo; adjust the box if needed, then
+                click <strong className="text-fg">Place on route</strong>. The pose overlay renders
+                automatically — click <strong className="text-fg">Export video</strong> to download
+                it as a <code className="text-fg">.webm</code> file. Aim for at least 10 good ORB
+                matches for a stable homography (match statistics appear in Developer view).
               </p>
             </div>
           </div>
@@ -262,113 +259,108 @@ export default function DocsPage() {
         <section className="mt-10" id="lighting">
           <h2 className="text-lg font-semibold text-fg">Lighting &amp; preprocessing</h2>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            Pose detection is sensitive to contrast and sharpness. When lighting conditions
-            are poor, selecting the matching conditions on the Scan page causes each frame
-            to be preprocessed before being sent to the pose model. This does{" "}
-            <strong className="text-fg">not</strong> affect the ORB background crop —
-            ORB feature matching uses pixel normalisation (histogram equalisation) independently
-            to keep descriptor gradients consistent between the video and the uploaded photo.
+            Lighting is handled automatically — there are no manual exposure or contrast controls.
+            When the scan starts, the app analyses the reference frame (measuring exposure,
+            contrast, and sharpness inside the Climber and Route boxes) and adapts its
+            preprocessing to what it finds, so overexposed, backlit, and low-contrast footage all
+            work without any setup.
+          </p>
+
+          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
+            The two stages of the pipeline are preprocessed for different goals:
           </p>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-edge/50">
             <table className="w-full text-sm text-left text-fg-secondary">
               <thead className="border-b border-edge/40 bg-card/50">
                 <tr>
-                  <th className="px-4 py-3 font-medium text-fg">Condition</th>
+                  <th className="px-4 py-3 font-medium text-fg">Stage</th>
                   <th className="px-4 py-3 font-medium text-fg">Processing applied</th>
                   <th className="px-4 py-3 font-medium text-fg">Why</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-edge/30">
                 <tr>
-                  <td className="px-4 py-3">Washed out</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">equalizeHist blend (40 %)</td>
-                  <td className="px-4 py-3">Restores global contrast in overexposed regions</td>
+                  <td className="px-4 py-3">Pose detection</td>
+                  <td className="px-4 py-3">Runs on the raw colour frame</td>
+                  <td className="px-4 py-3">
+                    MediaPipe is trained on colour imagery — grayscale or heavily equalised input
+                    hurts keypoint confidence rather than helping it
+                  </td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3">Backlit</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">equalizeHist blend + gamma γ=1.4</td>
-                  <td className="px-4 py-3">Improves contrast then lifts midtones to reduce silhouette effect</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">Deep shadows</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">equalizeHist blend (60 %)</td>
-                  <td className="px-4 py-3">Stronger enhancement for heavily shadowed regions</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">Low contrast</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">equalizeHist blend (40 %)</td>
-                  <td className="px-4 py-3">Improves edge separation when climber blends into wall</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">Gym lighting</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">pre-blur (σ=3) + equalizeHist blend (40 %)</td>
-                  <td className="px-4 py-3">Evens out large fluorescent hot-spots before boosting contrast</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3">Dusty / hazy lens</td>
-                  <td className="px-4 py-3 font-mono text-xs text-fg">Unsharp mask (σ=1.5)</td>
-                  <td className="px-4 py-3">Restores edge clarity lost to lens fog or chalk dust</td>
+                  <td className="px-4 py-3">Feature matching (ORB)</td>
+                  <td className="px-4 py-3 font-mono text-xs text-fg">
+                    retinex illumination normalisation + histogram equalisation
+                  </td>
+                  <td className="px-4 py-3">
+                    Removes lighting gradients so wall-texture descriptors stay consistent between
+                    the video and a route photo shot under different light; a light unsharp mask is
+                    added when the frame is soft
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            Multiple conditions can be combined. When both a contrast-enhancement condition and{" "}
-            <em>Dusty lens</em> are selected, sharpening is applied to the contrast-enhanced image.
+            Because the ORB path is normalised independently, a route photo taken in daylight can
+            still match a video shot under gym lighting.
           </p>
         </section>
 
         {/* ---------------------------------------------------------------- */}
-        {/* Indoor vs Outdoor                                                 */}
+        {/* Detection quality                                                */}
         {/* ---------------------------------------------------------------- */}
-        <section className="mt-10" id="modes">
-          <h2 className="text-lg font-semibold text-fg">Indoor vs Outdoor mode</h2>
+        <section className="mt-10" id="quality">
+          <h2 className="text-lg font-semibold text-fg">Detection quality</h2>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            The primary difference is how pose detection is applied to each video frame.
+            A single <strong className="text-fg">quality tier</strong> — chosen in the Settings
+            popover on the Scan detection step — bundles the low-level detection knobs into one
+            Fast / Balanced / Accurate choice. Every tier crops and tracks the climber the same
+            way; the tier trades scan speed against pose fidelity.
           </p>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="border-l-2 border-edge/40 px-4 py-2">
-              <p className="text-sm font-semibold text-fg">Indoor</p>
+              <p className="text-sm font-semibold text-fg">Fast</p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
-                <li>Full-frame pose detection on every sampled frame.</li>
-                <li>Climber fills most of the frame — keypoints are easy to detect.</li>
-                <li>No crop, no interpolation, fastest processing.</li>
+                <li>Lite model, sparse sampling (every 15th frame).</li>
+                <li>Quickest scan; more interpolation between detections.</li>
               </ul>
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
-              <p className="text-sm font-semibold text-fg">Outdoor</p>
+              <p className="text-sm font-semibold text-fg">Balanced <span className="font-normal text-fg-muted">(default)</span></p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
-                <li>
-                  Crops a window around the detected hip position before each inference. The
-                  window size and starting position are set by the <strong className="text-fg">Climber crop</strong>{" "}
-                  box on the Scan page — it is re-centred on the hip each frame.
-                </li>
-                <li>Pose runs every N-th sampled frame (configurable 1–30).</li>
-                <li>
-                  Intermediate frames are filled by linear interpolation of the keypoints.
-                </li>
-                <li>Significantly improves keypoint confidence on small-in-frame climbers.</li>
+                <li>Full model, moderate sampling (every 10th frame).</li>
+                <li>Densifies clearly fast segments to catch quick moves.</li>
+              </ul>
+            </div>
+
+            <div className="border-l-2 border-edge/40 px-4 py-2">
+              <p className="text-sm font-semibold text-fg">Accurate</p>
+              <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
+                <li>Heavy model, dense sampling (every 5th frame).</li>
+                <li>Cleanest trajectory; slowest to process.</li>
               </ul>
             </div>
           </div>
 
           <p className="mt-4 text-base text-fg-secondary leading-relaxed">
-            <strong className="text-fg">Frame step</strong> (outdoor only) — controls how
-            often full pose detection runs. A step of 1 runs pose on every sampled frame (most
-            accurate, slowest). A step of 10 runs it every 10th frame and interpolates the rest,
-            which is faster but smoother rather than precisely tracked. For a first look at an
-            attempt, 5–10 is a good starting point.
+            <strong className="text-fg">Detection frequency (frame step)</strong> — how often
+            full pose detection runs, overridable in the same popover (1–30). A step of 1 runs pose
+            on every sampled frame (most accurate, slowest); a step of 10 runs it every 10th frame
+            and fills the rest by interpolation. Between detected anchors the pipeline
+            automatically re-samples segments where the climber moves quickly, so fast moves stay
+            sharp even at a coarse step.
           </p>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            <strong className="text-fg">Smoothing</strong> — after interpolation both
-            modes apply an exponential moving average (α = 0.3) over every keypoint track.
-            Brief dropouts (frames where a joint was not detected) are filled in before
-            smoothing. This reduces skeletal jitter in the final overlay video without
-            introducing noticeable lag.
+            <strong className="text-fg">Smoothing</strong> — after interpolation a One-Euro
+            adaptive filter is applied over every keypoint track. Brief dropouts (frames where a
+            joint was not detected) are filled in first. The filter smooths harder when a joint is
+            nearly still and eases off during fast motion, cutting skeletal jitter in the final
+            overlay without adding noticeable lag.
           </p>
         </section>
 
@@ -421,7 +413,8 @@ export default function DocsPage() {
                 MediaPipe requires a browser with WebGL / GPU support. Make
                 sure hardware acceleration is enabled in your browser settings. Very long videos
                 (over 5 minutes) can take several minutes to process. You can trim to just the
-                crux section before uploading. For outdoor mode, increase the frame step to skip
+                crux section before uploading, pick the <strong className="text-fg">Fast</strong>{" "}
+                quality tier, or increase the detection frequency (frame step) in Settings to skip
                 frames between pose detections.
               </div>
             </details>

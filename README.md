@@ -128,7 +128,7 @@ be toggled off).
 
 | Route | Purpose | Auth required |
 |---|---|---|
-| `/` | Landing page — choose Indoor or Outdoor mode | No |
+| `/` | Landing page — intro, live demo, and how-it-works summary | No |
 | `/login` | Sign in / sign up with email & password | No |
 | `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
 | `/compare` | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment | Yes |
