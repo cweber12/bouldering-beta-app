@@ -91,6 +91,17 @@ Render an annotated WebM video from processed frames.
 |---|---|---|
 | `renderPoseVideo` | `(options) → Promise<string>` | Draw skeleton overlay on route photo for every frame; encode via `MediaRecorder`; return object URL. |
 
+### `overlayVideoRecorder.ts`
+
+Shared WebM recorder behind both `renderPoseVideo` and `renderMultiPoseVideo`.
+Owns the `MediaRecorder` lifecycle, MIME selection, real-time-paced output loop,
+single-run cleanup, and blob-URL production. Each renderer supplies only a
+per-frame `drawFrame(frameIndex, timestampSec)`.
+
+| Export | Signature | Description |
+|---|---|---|
+| `recordOverlayVideo` | `({ canvas, fps, totalFrames, firstTimestamp, drawFrame, onProgress?, onCleanup? }) → Promise<string>` | Capture `canvas` to a WebM blob, calling `drawFrame` per output frame; return object URL. |
+
 ## Rules
 
 - No `async` — all OpenCV calls are synchronous.

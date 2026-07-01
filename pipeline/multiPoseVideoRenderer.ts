@@ -26,6 +26,7 @@ import {
   computeStableBodyScale,
   type SkeletonStyle,
 } from "@/pipeline/skeletonOverlay";
+import { recordOverlayVideo } from "@/pipeline/overlayVideoRecorder";
 
 export type { SkeletonStyle };
 
@@ -55,22 +56,6 @@ export interface MultiPoseVideoParams {
    * `framesRendered` is 1-based; `totalFrames` is the full count.
    */
   onProgress?: (framesRendered: number, totalFrames: number) => void;
-}
-
-/** Preferred MIME types; first supported one wins. */
-const CANDIDATE_TYPES = [
-  "video/webm;codecs=vp9",
-  "video/webm;codecs=vp8",
-  "video/webm",
-  "video/mp4",
-];
-
-function chooseMimeType(): string {
-  if (typeof MediaRecorder === "undefined") return "";
-  for (const t of CANDIDATE_TYPES) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
 }
 
 /**
@@ -157,17 +142,8 @@ export async function renderMultiPoseVideo({
     return { ...layer.skeletonStyle, bodyScale: stable };
   });
 
-  const frameDelay = Math.round(1000 / fps);
-  const stream = canvas.captureStream(fps);
-  const mimeType = chooseMimeType();
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  const chunks: Blob[] = [];
-
-  recorder.ondataavailable = (e) => {
-    if (e.data.size > 0) chunks.push(e.data);
-  };
-
-  // Per-layer floor cursors and keypoint caches for O(n) interpolated lookup.
+  // Per-layer floor cursors and keypoint caches, carried across drawFrame calls
+  // for O(n) interpolated lookup.
   const cursors = Array.from({ length: layers.length }, () => 0);
   const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] =
     layers.map(() => null);
@@ -176,84 +152,59 @@ export async function renderMultiPoseVideo({
     layers.map(() => null);
   const cachedCeilAt: number[] = layers.map(() => -1);
 
-  return new Promise<string>((resolve, reject) => {
-    recorder.onstop = () => {
-      imageBitmap.close();
-      const blob = new Blob(chunks, { type: mimeType || "video/webm" });
-      resolve(URL.createObjectURL(blob));
-    };
+  return recordOverlayVideo({
+    canvas,
+    fps,
+    totalFrames: totalOutputFrames,
+    firstTimestamp: firstTs,
+    onProgress,
+    onCleanup: () => imageBitmap.close(),
+    drawFrame: (i, t) => {
+      // Draw background image once per output frame.
+      ctx.drawImage(imageBitmap, 0, 0);
 
-    recorder.onerror = () => {
-      imageBitmap.close();
-      reject(new Error("MediaRecorder encountered an error during encoding."));
-    };
+      // Draw each layer's interpolated skeleton.
+      for (let li = 0; li < layers.length; li++) {
+        const sf = sortedLayerFrames[li];
+        if (sf.length === 0) continue;
 
-    recorder.start();
-
-    (async () => {
-      for (let i = 0; i < totalOutputFrames; i++) {
-        const t = firstTs + i / fps;
-
-        // Draw background image once per output frame.
-        ctx.drawImage(imageBitmap, 0, 0);
-
-        // Draw each layer's interpolated skeleton.
-        for (let li = 0; li < layers.length; li++) {
-          const sf = sortedLayerFrames[li];
-          if (sf.length === 0) continue;
-
-          // Advance floor cursor to last frame with timestamp ≤ t.
-          while (
-            cursors[li] < sf.length - 1 &&
-            sf[cursors[li] + 1].timestamp <= t
-          ) {
-            cursors[li]++;
-          }
-
-          const fi = cursors[li];
-
-          // Compute / reuse transformed keypoints for floor frame.
-          if (cachedFloorAt[li] !== fi) {
-            cachedFloorKp[li] = sf[fi].keypoints.length > 0
-              ? buildTransformedKeypoints(sf[fi], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-              : null;
-            cachedFloorAt[li] = fi;
-          }
-
-          if (!cachedFloorKp[li]) continue;
-
-          const ci = Math.min(fi + 1, sf.length - 1);
-
-          if (cachedCeilAt[li] !== ci) {
-            cachedCeilKp[li] = ci !== fi && sf[ci].keypoints.length > 0
-              ? buildTransformedKeypoints(sf[ci], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-              : null;
-            cachedCeilAt[li] = ci;
-          }
-
-          if (cachedCeilKp[li] && ci !== fi) {
-            const dt = sf[ci].timestamp - sf[fi].timestamp;
-            const alpha = dt > 0 ? (t - sf[fi].timestamp) / dt : 0;
-            drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layerStyles[li]);
-          } else {
-            drawSkeleton(ctx, cachedFloorKp[li]!, layerStyles[li]);
-          }
+        // Advance floor cursor to last frame with timestamp ≤ t.
+        while (
+          cursors[li] < sf.length - 1 &&
+          sf[cursors[li] + 1].timestamp <= t
+        ) {
+          cursors[li]++;
         }
 
-        onProgress?.(i + 1, totalOutputFrames);
+        const fi = cursors[li];
 
-        await new Promise<void>((r) => setTimeout(r, frameDelay));
-      }
+        // Compute / reuse transformed keypoints for floor frame.
+        if (cachedFloorAt[li] !== fi) {
+          cachedFloorKp[li] = sf[fi].keypoints.length > 0
+            ? buildTransformedKeypoints(sf[fi], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
+            : null;
+          cachedFloorAt[li] = fi;
+        }
 
-      recorder.stop();
-    })().catch((err) => {
-      imageBitmap.close();
-      try {
-        recorder.stop();
-      } catch {
-        // recorder may already be stopped; ignore
+        if (!cachedFloorKp[li]) continue;
+
+        const ci = Math.min(fi + 1, sf.length - 1);
+
+        if (cachedCeilAt[li] !== ci) {
+          cachedCeilKp[li] = ci !== fi && sf[ci].keypoints.length > 0
+            ? buildTransformedKeypoints(sf[ci], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
+            : null;
+          cachedCeilAt[li] = ci;
+        }
+
+        if (cachedCeilKp[li] && ci !== fi) {
+          const dt = sf[ci].timestamp - sf[fi].timestamp;
+          const alpha = dt > 0 ? (t - sf[fi].timestamp) / dt : 0;
+          drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layerStyles[li]);
+        } else {
+          drawSkeleton(ctx, cachedFloorKp[li]!, layerStyles[li]);
+        }
       }
-      reject(err);
-    });
+    },
   });
 }

@@ -27,6 +27,7 @@ import { computeHomography, ransacReprojThresholdFor, type KeyframeHomography } 
 import { capToPixelBudget } from "@/utils/imageHelpers";
 import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/skeletonOverlay";
 import { buildPanningSkeletonFrames } from "@/pipeline/skeletonRenderer";
+import { recordOverlayVideo } from "@/pipeline/overlayVideoRecorder";
 
 export type { SkeletonStyle };
 
@@ -67,22 +68,6 @@ export interface PoseVideoParams {
   onProgress?: (framesRendered: number, totalFrames: number) => void;
   /** Visual style for the skeleton overlay. Falls back to built-in defaults. */
   skeletonStyle?: SkeletonStyle;
-}
-
-/** Preferred MIME type order; first supported type wins. */
-const CANDIDATE_TYPES = [
-  "video/webm;codecs=vp9",
-  "video/webm;codecs=vp8",
-  "video/webm",
-  "video/mp4",
-];
-
-function chooseMimeType(): string {
-  if (typeof MediaRecorder === "undefined") return "";
-  for (const t of CANDIDATE_TYPES) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return "";
 }
 
 /**
@@ -155,16 +140,6 @@ export async function renderPoseVideo({
   }
 
   const fps = targetFps;
-  const frameDelay = Math.round(1000 / fps);
-  const stream = canvas.captureStream(fps);
-  const mimeType = chooseMimeType();
-  const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  const chunks: Blob[] = [];
-
-  recorder.ondataavailable = (e) => {
-    if (e.data.size > 0) chunks.push(e.data);
-  };
-
   const sortedFrames = [...frames].sort((a, b) => a.timestamp - b.timestamp);
 
   // Derive total output duration from start- to end-timestamp of pose data.
@@ -200,93 +175,64 @@ export async function renderPoseVideo({
       );
   const styleWithScale: SkeletonStyle = { ...skeletonStyle, bodyScale: stableScale };
 
-  return new Promise<string>((resolve, reject) => {
-    recorder.onstop = () => {
-      imageBitmap.close();
-      const blob = new Blob(chunks, { type: mimeType || "video/webm" });
-      resolve(URL.createObjectURL(blob));
-    };
+  // Floor-bracket interpolation state, carried across drawFrame calls: advance
+  // the cursor to the last frame ≤ t, then lerp between that frame and the next
+  // for smooth motion. Cached transformed keypoints avoid recomputing the same
+  // floor/ceil frame on every output tick.
+  let floorIdx = 0;
+  let cachedFloorKp: Record<string, { x: number; y: number }> | null = null;
+  let cachedFloorAt = -1;
+  let cachedCeilKp: Record<string, { x: number; y: number }> | null = null;
+  let cachedCeilAt = -1;
 
-    recorder.onerror = () => {
-      imageBitmap.close();
-      reject(new Error("MediaRecorder encountered an error during encoding."));
-    };
-
-    recorder.start();
-
-    (async () => {
-      // Floor-bracket interpolation: advance cursor to the last frame ≤ t,
-      // then lerp between that frame and the next for smooth motion.
-      let floorIdx = 0;
-      let cachedFloorKp: Record<string, { x: number; y: number }> | null = null;
-      let cachedFloorAt = -1;
-      let cachedCeilKp: Record<string, { x: number; y: number }> | null = null;
-      let cachedCeilAt = -1;
-
-      for (let i = 0; i < totalOutputFrames; i++) {
-        // MediaRecorder samples canvas.captureStream in wall-clock real time, so
-        // the loop must pace at ~frameDelay per frame. Measure the per-frame draw
-        // work and subtract it from the wait so the period tracks real time
-        // rather than drifting to (work + frameDelay) and dragging export past
-        // the clip's own duration.
-        const frameStart = performance.now();
-        const t = firstTs + (i / fps);
-
-        while (floorIdx < sortedFrames.length - 1 && sortedFrames[floorIdx + 1].timestamp <= t) {
-          floorIdx++;
-        }
-
-        ctx.drawImage(imageBitmap, 0, 0, canvasW, canvasH);
-
-        if (panningFrames) {
-          // Panning Capture: draw the pre-computed time-varying overlay and skip
-          // the single-homography caching path entirely.
-          const kp = panningFrames[i]?.keypoints;
-          if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, styleWithScale);
-        } else {
-          // Compute / reuse transformed keypoints for floor frame.
-          if (cachedFloorAt !== floorIdx) {
-            cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
-              ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
-              : null;
-            cachedFloorAt = floorIdx;
-          }
-
-          if (cachedFloorKp) {
-            const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
-
-            if (cachedCeilAt !== ceilIdx) {
-              cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
-                ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
-                : null;
-              cachedCeilAt = ceilIdx;
-            }
-
-            if (cachedCeilKp && ceilIdx !== floorIdx) {
-              const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
-              const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
-              drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), styleWithScale);
-            } else {
-              drawSkeleton(ctx, cachedFloorKp, styleWithScale);
-            }
-          }
-        }
-
-        onProgress?.(i + 1, totalOutputFrames);
-
-        const elapsed = performance.now() - frameStart;
-        await new Promise<void>((r) => setTimeout(r, Math.max(0, frameDelay - elapsed)));
+  return recordOverlayVideo({
+    canvas,
+    fps,
+    totalFrames: totalOutputFrames,
+    firstTimestamp: firstTs,
+    onProgress,
+    onCleanup: () => imageBitmap.close(),
+    drawFrame: (i, t) => {
+      while (floorIdx < sortedFrames.length - 1 && sortedFrames[floorIdx + 1].timestamp <= t) {
+        floorIdx++;
       }
 
-      recorder.stop();
-    })().catch((err) => {
-      imageBitmap.close();
-      try {
-        recorder.stop();
-      } catch {
-        // recorder may already be stopped; ignore
+      ctx.drawImage(imageBitmap, 0, 0, canvasW, canvasH);
+
+      if (panningFrames) {
+        // Panning Capture: draw the pre-computed time-varying overlay and skip
+        // the single-homography caching path entirely.
+        const kp = panningFrames[i]?.keypoints;
+        if (kp && Object.keys(kp).length > 0) drawSkeleton(ctx, kp, styleWithScale);
+        return;
       }
-      reject(err);
-    });
+
+      // Compute / reuse transformed keypoints for floor frame.
+      if (cachedFloorAt !== floorIdx) {
+        cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
+          ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
+          : null;
+        cachedFloorAt = floorIdx;
+      }
+
+      if (!cachedFloorKp) return;
+
+      const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
+
+      if (cachedCeilAt !== ceilIdx) {
+        cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
+          ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
+          : null;
+        cachedCeilAt = ceilIdx;
+      }
+
+      if (cachedCeilKp && ceilIdx !== floorIdx) {
+        const dt = sortedFrames[ceilIdx].timestamp - sortedFrames[floorIdx].timestamp;
+        const alpha = dt > 0 ? (t - sortedFrames[floorIdx].timestamp) / dt : 0;
+        drawSkeleton(ctx, lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha), styleWithScale);
+      } else {
+        drawSkeleton(ctx, cachedFloorKp, styleWithScale);
+      }
+    },
   });
 }
