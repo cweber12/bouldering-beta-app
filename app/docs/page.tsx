@@ -58,7 +58,7 @@ export default function DocsPage() {
               hip so a small-in-frame subject still resolves cleanly, and the sparse detections are
               interpolated and smoothed into a continuous pose timeline.
               <Figure
-                src="/docs/skeleton-holds.png"
+                src="/docs/skeleton-holds.jpg"
                 alt="Climbing video frame with the estimated skeleton drawn in green and inferred holds ringed in blue and orange"
                 caption="The estimated skeleton (green) tracked across the video, with inferred hand and foot holds ringed on the wall."
               />
@@ -70,7 +70,7 @@ export default function DocsPage() {
               texture used for matching. The Route always contains the Climber, and its lower edge
               trims the ground and crash pad that would otherwise pollute feature matching.
               <Figure
-                src="/docs/detection-crops.png"
+                src="/docs/detection-crops.jpg"
                 alt="Scan page detection step showing a large outer Route crop box and a smaller nested Climber crop box over the boulder"
                 caption="The nested Climber (inner) and Route (outer) crop boxes on the detection step."
               />
@@ -82,7 +82,7 @@ export default function DocsPage() {
               the camera pans during the climb, features are gathered across several keyframes so the
               whole wall stays represented.
               <Figure
-                src="/docs/orb-features.png"
+                src="/docs/orb-features.jpg"
                 alt="Video frame overlaid with red ORB feature points densely covering the boulder's textured face"
                 caption="ORB feature points (red) sampled from the wall texture inside the Route box."
               />
@@ -93,7 +93,7 @@ export default function DocsPage() {
               homography — a perspective transform — is fitted with RANSAC to map any point from
               video space into the photo.
               <Figure
-                src="/docs/route-photo.png"
+                src="/docs/route-photo.jpg"
                 alt="A clean photo of the boulder route shot from a similar angle, ready to receive the overlay"
                 caption="The uploaded route photo. Shots taken from a similar angle to the video match most reliably."
               />
@@ -106,7 +106,7 @@ export default function DocsPage() {
               the order they were first used. The finished sequence renders to a WebM video you can
               download.
               <Figure
-                src="/docs/pose-overlay.png"
+                src="/docs/pose-overlay.jpg"
                 alt="Route photo with the reprojected skeleton and blue and orange hold rings tracing the climb"
                 caption="The reprojected skeleton and hold rings composited onto the route photo — the exported result."
               />
