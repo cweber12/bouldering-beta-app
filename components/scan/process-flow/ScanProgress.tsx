@@ -21,13 +21,15 @@ import { dark } from "@/utils/theme";
 //   • ORB starfield — the wall feature field (climber masked out) the matcher
 //     relies on, extracted once from the reference frame and drawn as a faint
 //     neutral field. It appears first and persists for the whole scan.
-//   • Pose skeletons — every detected pose stays visible. The live pose is
-//     accented (green, full silhouette) and glides between detections; each
-//     superseded pose is demoted to a muted ghost-green "motion trail".
+//   • Pose skeletons — the live pose is accented (bright green, full
+//     silhouette) and glides between detections. Each superseded pose is
+//     demoted to a neutral "motion trail" that fades out over the following
+//     detections, so the wake recedes and the live pose is always the one
+//     bright figure to pinpoint.
 //
-// The trail + starfield accumulate on a static offscreen canvas (drawn once
-// each), so only the single accented skeleton is re-rendered per animation
-// frame.
+// Three offscreen layers composite onto the display: the ORB starfield (drawn
+// once), the trail (faded then stamped as each pose is demoted), and — redrawn
+// live per animation frame — the single accented skeleton.
 // ---------------------------------------------------------------------------
 
 export interface ScanProgressProps {
@@ -51,8 +53,15 @@ const CANVAS_BASE = 900;
 const GLIDE_MS = 300;
 /** Faint neutral starfield colour (warm stone, low alpha) for ORB keypoints. */
 const ORB_COLOR = "rgba(232, 228, 222, 0.38)";
-/** Muted ghost of the accent for the trailing (previous) skeletons. */
-const TRAIL_COLOR = "rgba(34, 197, 94, 0.16)";
+/** Neutral (desaturated slate) colour a demoted pose is stamped in. */
+const TRAIL_COLOR = "rgba(148, 163, 184, 0.5)";
+/**
+ * Alpha erased from the whole trail layer each time a new pose is demoted, so
+ * older poses fade out over the following detections instead of accumulating
+ * into a bright tangle. ~0.2 keeps roughly the last dozen poses as a receding
+ * wake before they vanish.
+ */
+const TRAIL_FADE = 0.2;
 
 /** Build a canvas-space keypoint map from a normalised PoseFrame. */
 function toOverlay(pose: PoseFrame, w: number, h: number): Record<string, OverlayPoint> {
@@ -74,7 +83,16 @@ function drawStarfield(ctx: CanvasRenderingContext2D, pts: NormalizedPoint[], w:
   ctx.restore();
 }
 
-/** Stamp a muted, lines-only skeleton (the motion trail) onto a context. */
+/** Fade the whole trail layer toward transparent so old poses recede. */
+function fadeTrail(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = `rgba(0, 0, 0, ${TRAIL_FADE})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.restore();
+}
+
+/** Stamp a demoted pose into the trail layer: neutral, lines-only, muted. */
 function stampTrail(ctx: CanvasRenderingContext2D, kp: Record<string, OverlayPoint>): void {
   drawSkeleton(ctx, kp, {
     silhouetteVisible: false,
@@ -85,13 +103,15 @@ function stampTrail(ctx: CanvasRenderingContext2D, kp: Record<string, OverlayPoi
   });
 }
 
-/** Draw the live, accented skeleton (green, full silhouette) onto a context. */
+/** Draw the live, accented skeleton (bright green, full silhouette) so it reads
+ *  as the single hot figure above the neutral wake. */
 function drawLive(ctx: CanvasRenderingContext2D, kp: Record<string, OverlayPoint>): void {
   drawSkeleton(ctx, kp, {
     silhouetteColor: dark.accent,
-    silhouetteOpacity: 0.2,
+    silhouetteOpacity: 0.24,
     lineColor: dark.accent,
-    jointColor: dark.accent,
+    lineThickness: 0.02,
+    jointColor: "#7cf0b0", // brighter mint so joints pop off the lines
   });
 }
 
@@ -117,32 +137,36 @@ export default function ScanProgress({
       : { cw: Math.max(1, Math.round(CANVAS_BASE * ar)), ch: CANVAS_BASE };
   }, [aspectW, aspectH]);
 
-  // Static layer (ORB starfield + accumulated trail); the accented skeleton is
-  // composited over it live. Refs so accumulation survives re-renders.
-  const staticRef = useRef<HTMLCanvasElement | null>(null);
+  // Offscreen layers composited under the live skeleton. Refs so accumulation
+  // survives re-renders. ORB is drawn once; the trail fades + stamps over time.
+  const orbRef = useRef<HTMLCanvasElement | null>(null);
+  const trailRef = useRef<HTMLCanvasElement | null>(null);
   const orbDrawnRef = useRef(false);
   const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
   const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
   const animRef = useRef<{ from: Record<string, OverlayPoint>; to: Record<string, OverlayPoint>; start: number } | null>(null);
   const rafRef = useRef<number | null>(null);
 
-  // Composite the static layer + the current live skeleton onto the display.
+  // Composite the ORB starfield + trail + the current live skeleton on top.
   const render = useCallback((live: Record<string, OverlayPoint> | null) => {
     const display = displayRef.current;
     const dctx = display?.getContext("2d");
     if (!display || !dctx) return;
     dctx.clearRect(0, 0, cw, ch);
-    if (staticRef.current) dctx.drawImage(staticRef.current, 0, 0);
+    if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
+    if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
     if (live) drawLive(dctx, live);
   }, [cw, ch]);
 
-  // (Re)initialise the static canvas whenever the render size changes — this is
+  // (Re)initialise the offscreen canvases whenever the render size changes —
   // effectively a fresh scan; reset all accumulation.
   useEffect(() => {
-    const s = document.createElement("canvas");
-    s.width = cw;
-    s.height = ch;
-    staticRef.current = s;
+    const orb = document.createElement("canvas");
+    orb.width = cw; orb.height = ch;
+    orbRef.current = orb;
+    const trail = document.createElement("canvas");
+    trail.width = cw; trail.height = ch;
+    trailRef.current = trail;
     orbDrawnRef.current = false;
     prevTargetRef.current = null;
     lastLiveRef.current = null;
@@ -153,22 +177,25 @@ export default function ScanProgress({
   // Draw the ORB starfield once, under everything, when it arrives.
   useEffect(() => {
     if (!orbPreview || orbDrawnRef.current) return;
-    const sctx = staticRef.current?.getContext("2d");
-    if (!sctx) return;
-    drawStarfield(sctx, orbPreview, cw, ch);
+    const octx = orbRef.current?.getContext("2d");
+    if (!octx) return;
+    drawStarfield(octx, orbPreview, cw, ch);
     orbDrawnRef.current = true;
     render(lastLiveRef.current);
   }, [orbPreview, cw, ch, render]);
 
-  // Each new detected pose: demote the previous one to the trail, then glide the
-  // accented skeleton from the last shown pose to the new one (snap if the user
-  // prefers reduced motion).
+  // Each new detected pose: fade the existing trail a notch and stamp the just-
+  // superseded pose into it (neutral), then glide the accented skeleton from the
+  // last shown pose to the new one (snap if the user prefers reduced motion).
   useEffect(() => {
     if (!currentPose || currentPose.keypoints.length === 0) return;
     const target = toOverlay(currentPose, cw, ch);
 
-    const sctx = staticRef.current?.getContext("2d");
-    if (sctx && prevTargetRef.current) stampTrail(sctx, prevTargetRef.current);
+    const tctx = trailRef.current?.getContext("2d");
+    if (tctx && prevTargetRef.current) {
+      fadeTrail(tctx, cw, ch);
+      stampTrail(tctx, prevTargetRef.current);
+    }
     prevTargetRef.current = target;
 
     const reduceMotion =
