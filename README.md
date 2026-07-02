@@ -194,10 +194,15 @@ optional details (grade, notes) progressively disclosed in the save sheet.
 
 **Match / Compare pages:**
 
-Drag the overlay on the uploaded route photo before clicking **Place on route**.
-The ORB features are extracted only from the cropped region; keypoints are
-offset back to full-image coordinates automatically, so homography computation
-is unaffected.
+Adding a route photo opens the same auto-framed crop-confirm step as the scan
+pipeline: a preliminary match projects the first loaded climb's saved climber
+crop into the photo so the box lands over the route, ready to adjust, then
+**Place on route** runs the match for every loaded climb. If auto-framing is too
+weak (a different viewpoint, or no saved crop), a hint asks you to drag the box
+over the route area yourself before placing. The ORB features are extracted only
+from the cropped region; keypoints are offset back to full-image coordinates
+automatically, so homography computation is unaffected. After placing, **Refine**
+reopens the crop to re-match without re-uploading.
 
 On the **Compare** page, all climbs for a route sit under one grouped surface.
 Each climb shows a clean metadata line (colour swatch · date · time · a green

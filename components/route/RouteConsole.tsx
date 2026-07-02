@@ -18,9 +18,10 @@ import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import type { ImageMatchResult } from "@/hooks/useImageMatcher";
+import { useImageMatcher, type ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
+import { DEFAULT_CROP } from "@/utils/cropFraction";
 import { dataUrlToFile } from "@/utils/imageHelpers";
 import { buildRouteUrl, type ConsoleMode } from "@/utils/routeUrl";
 
@@ -74,6 +75,10 @@ export default function RouteConsole({
   const { cv } = useOpenCV();
   const router = useRouter();
   const { downloadAttempt } = useS3Storage();
+  // Auto-frame estimator — a standalone matcher instance used only to project the
+  // reference climber box onto a freshly-added route photo (estimateCrop). The
+  // per-slot matches run inside each CompareSlot's own useImageMatcher.
+  const { estimateCrop, autoFrameStatus } = useImageMatcher();
 
   // The comparison is a fixed set of up to MAX_SLOTS slots. `slotKeys` is the S3
   // key occupying each slot (the value mirrored into the URL); `attempts` is the
@@ -128,10 +133,19 @@ export default function RouteConsole({
   );
 
   // Crop box for ORB detection on the shared route photo.
-  const [imageCrop, setImageCrop] = useState<CropFraction>({ x: 0, y: 0, w: 1, h: 1 });
+  const [imageCrop, setImageCrop] = useState<CropFraction>(DEFAULT_CROP);
   // Incremented to (re)run matching across all slots. Starts at 0 (no match yet);
-  // the auto-match effect bumps it to 1 once a photo and a climb are both ready.
+  // Place on route bumps it to 1 once the user has confirmed the crop.
   const [matchTrigger, setMatchTrigger] = useState(0);
+  // Crop-confirm gate (mirrors the scan pipeline's Place on route). While false,
+  // the uploaded photo is shown with an adjustable crop box and matching is held;
+  // handlePlaceOnRoute flips it true and kicks off the per-slot matches.
+  const [routeMatchTriggered, setRouteMatchTriggered] = useState(false);
+  // True once a preliminary match auto-positioned the crop box over the route.
+  const [autoFramed, setAutoFramed] = useState(false);
+  // The photo the auto-frame estimate has already been attempted for, so the
+  // estimate runs at most once per uploaded file (even as climbs finish loading).
+  const framedFileRef = useRef<File | null>(null);
 
   // Refine disclosure — the route photo + crop controls, collapsed by default.
   const [refineOpen, setRefineOpen] = useState(false);
@@ -259,14 +273,30 @@ export default function RouteConsole({
     return () => { cancelled = true; };
   }, [userId, state, area, route]);
 
-  // Auto-match: as soon as a route photo and at least one climb are both ready,
-  // run the match once — no "Apply" gate. Newly added slots match on their own
-  // (CompareSlot re-runs when its attempt id changes and matchTrigger is non-zero).
   const anyLoaded = attempts.some(Boolean);
+
+  // Auto-frame: as soon as a route photo, OpenCV, and at least one loaded climb
+  // are all ready, project that climb's reference climber box onto the photo and
+  // pre-position the crop for the user to confirm (mirrors the scan pipeline).
+  // Runs at most once per uploaded file — a failed estimate leaves the default
+  // inset box for manual framing rather than retrying. Matching itself stays
+  // gated behind Place on route (handlePlaceOnRoute), so nothing runs here.
   useEffect(() => {
-    if (!cv || !imageFile || !anyLoaded) return;
-    setMatchTrigger(t => (t === 0 ? 1 : t));
-  }, [cv, imageFile, anyLoaded]);
+    if (!imageFile || routeMatchTriggered || !cv) return;
+    if (framedFileRef.current === imageFile) return; // already attempted this file
+    const ref = attempts.find((a): a is RouteAttempt => Boolean(a));
+    if (!ref) return; // wait for the first climb to finish loading
+    framedFileRef.current = imageFile;
+    let cancelled = false;
+    (async () => {
+      const estimate = await estimateCrop(imageFile, ref.id, cv);
+      if (!cancelled && estimate) {
+        setImageCrop(estimate.crop);
+        setAutoFramed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [imageFile, routeMatchTriggered, cv, attempts, estimateCrop]);
 
   // Auto re-match when the crop changes (debounced). Once an initial match has
   // run, adjusting the crop in the Refine panel re-runs matching automatically —
@@ -350,12 +380,18 @@ export default function RouteConsole({
     setSlotOffsets((prev) => { const n = [...prev]; n[idx] = 0; return n; });
   }, []);
 
-  /** Applies a chosen photo through the shared selection path: resets the crop
-   *  and clears stale matches so every slot re-matches against the new photo. */
+  /** Applies a chosen photo through the shared selection path: re-arms the
+   *  crop-confirm gate, resets the crop to a grabbable inset box, and clears
+   *  stale matches so the user re-frames and places the new photo. The auto-frame
+   *  effect then repositions the crop once a climb + OpenCV are ready. */
   function applyPhoto(file: File) {
     setImageFileWithPreview(file);
-    setImageCrop({ x: 0, y: 0, w: 1, h: 1 });
+    setImageCrop(DEFAULT_CROP);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    setRouteMatchTriggered(false);
+    setAutoFramed(false);
+    setMatchTrigger(0);
+    framedFileRef.current = null; // allow the auto-frame estimate to run for this file
   }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -385,6 +421,14 @@ export default function RouteConsole({
       setShowUpdateMenu(false);
     } catch { /* leave the chooser up — the user can take/upload instead */ }
     finally { setLoadingSaved(false); }
+  }
+
+  /** Confirms the crop and runs the first match across all loaded slots — the
+   *  scan pipeline's Place on route, applied to the shared route photo. */
+  function handlePlaceOnRoute() {
+    if (!anyLoaded) return;
+    setRouteMatchTriggered(true);
+    setMatchTrigger(t => t + 1);
   }
 
   /** Re-runs matching across all slots (after a crop or photo change). */
@@ -430,8 +474,9 @@ export default function RouteConsole({
   }, [slotKeys, slotColors]);
 
   // Stage controls live in the header (in line with the route info) so the
-  // overlay previews get the full height below. Only shown once a photo exists.
-  const headerActions = hasPhoto ? (
+  // overlay previews get the full height below. Shown once the climb has been
+  // placed on the route — the pre-place crop-confirm view has its own controls.
+  const headerActions = hasPhoto && routeMatchTriggered ? (
     <CompareToolbar
       consoleMode={consoleMode}
       viewMode={viewMode}
@@ -451,6 +496,56 @@ export default function RouteConsole({
       onToggleRefine={() => setRefineOpen(v => !v)}
     />
   ) : undefined;
+
+  // Corner "Update photo" dropdown — shared by the pre-place crop view and the
+  // post-place Refine panel (only one is mounted at a time, so the single
+  // updateMenuRef/showUpdateMenu pair is unambiguous).
+  const updatePhotoDropdown = (
+    <div ref={updateMenuRef} className="absolute top-2 right-2">
+      <button
+        onClick={() => setShowUpdateMenu(v => !v)}
+        className="ui-control flex items-center gap-1.5 bg-surface/80 px-3 py-1.5 text-xs font-medium text-fg"
+      >
+        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+        </svg>
+        Update photo
+      </button>
+      {showUpdateMenu && (
+        <div className="ui-popover animate-fade-in absolute right-0 z-10 mt-1 w-44 overflow-hidden">
+          <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg">
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+            </svg>
+            Select file
+            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+          </label>
+          <button
+            onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+            </svg>
+            Take a photo
+          </button>
+          {savedPhotoKey && (
+            <button
+              onClick={handleUseSavedPhoto}
+              disabled={loadingSaved}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg disabled:cursor-wait disabled:opacity-60"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+              </svg>
+              {loadingSaved ? "Loading…" : "Use saved photo"}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -545,8 +640,65 @@ export default function RouteConsole({
         </div>
       )}
 
-      {/* Comparison view — shows immediately once a photo is available. */}
-      {hasPhoto && (
+      {/* Crop-confirm — photo uploaded but not yet placed. Auto-frame positions
+          the crop over the projected climb; the user adjusts it (or draws their
+          own when auto-framing fails), then places the climb on the route. This
+          mirrors the scan pipeline's Place on route step. */}
+      {hasPhoto && !routeMatchTriggered && (
+        <div className="flex-1 overflow-y-auto">
+          <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-4 py-5 sm:px-6">
+            <p className="text-center text-sm text-fg-secondary">
+              {autoFrameStatus === "estimating"
+                ? "Finding your route…"
+                : autoFramed
+                  ? "We framed the route — adjust if needed, then place your climb."
+                  : "Frame the route area, then place your climb on it."}
+            </p>
+
+            {/* Auto-frame failed: prompt the user to draw the route area. */}
+            {autoFrameStatus === "failed" && !autoFramed && (
+              <p className="feedback-banner feedback-banner-caution w-full text-center">
+                Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route area yourself.
+              </p>
+            )}
+
+            <div className="relative w-full" style={mediaContainerStyle(imageSize.w, imageSize.h, "13rem")}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imagePreviewUrl!}
+                alt="Route photo"
+                className="absolute inset-0 h-full w-full rounded-lg border border-edge/50 bg-surface-alt/40 object-fill"
+                onLoad={(e) => {
+                  const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                  if (w && h) setImageSize({ w, h });
+                }}
+              />
+              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
+              {updatePhotoDropdown}
+            </div>
+
+            <button
+              onClick={handlePlaceOnRoute}
+              disabled={!anyLoaded}
+              className="ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Place on route
+            </button>
+            {!anyLoaded && (
+              <p className="text-center text-xs text-fg-muted">
+                Add a climb from the list to place it on the route.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Comparison view — shown once the climb has been placed on the route. */}
+      {hasPhoto && routeMatchTriggered && (
         <>
           {/* Refine panel — route photo + crop, collapsed by default. */}
           {refineOpen && (
@@ -566,50 +718,7 @@ export default function RouteConsole({
                   <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
 
                   {/* Update route photo — corner dropdown */}
-                  <div ref={updateMenuRef} className="absolute top-2 right-2">
-                    <button
-                      onClick={() => setShowUpdateMenu(v => !v)}
-                      className="ui-control flex items-center gap-1.5 bg-surface/80 px-3 py-1.5 text-xs font-medium text-fg"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
-                      </svg>
-                      Update photo
-                    </button>
-                    {showUpdateMenu && (
-                      <div className="ui-popover animate-fade-in absolute right-0 z-10 mt-1 w-44 overflow-hidden">
-                        <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg">
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
-                          </svg>
-                          Select file
-                          <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-                        </label>
-                        <button
-                          onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
-                          className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
-                        >
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-                          </svg>
-                          Take a photo
-                        </button>
-                        {savedPhotoKey && (
-                          <button
-                            onClick={handleUseSavedPhoto}
-                            disabled={loadingSaved}
-                            className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg disabled:cursor-wait disabled:opacity-60"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
-                            </svg>
-                            {loadingSaved ? "Loading…" : "Use saved photo"}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {updatePhotoDropdown}
                 </div>
 
                 <div className="flex items-center justify-between gap-3">
