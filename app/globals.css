@@ -7,6 +7,10 @@
   --color-card:        #1b2130;   /* subtle teal-grey tint — scanner identity */
   --color-card-hover:  #222c3d;
   --color-inset:       #0f1318;
+  /* Scan loading stage — an always-dark "instrument display" backdrop for the
+     ORB starfield + pose skeletons. Intentionally not overridden in
+     .theme-light: it stays near-black in both themes for contrast. */
+  --color-scan-stage:  #080a0d;
 
   /* ─── Foreground / text ─────────────────────────────── */
   --color-fg:             #e8e4de;   /* warm stone-100, bright and legible */

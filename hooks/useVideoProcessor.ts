@@ -112,6 +112,68 @@ function deriveWallRegion(
   return { x, y, width, height, srcWidth: frameW, srcHeight: frameH };
 }
 
+/**
+ * Extract the wall ORB feature field from the reference frame as full-frame
+ * normalised points, with the climber body masked out via the first pose. This
+ * is a display-only pass for the scan loading view (the "x-ray" starfield) — it
+ * mirrors the region/masking logic of the real matching extraction so the field
+ * shown is the same wall texture the matcher relies on, but it does not feed
+ * matching (that path runs unchanged at the end of the seek loop, so matching
+ * quality is untouched). Returns points in [0, 1] relative to the frame.
+ */
+function extractWallFeaturePoints(
+  cv: CV,
+  referenceImageData: ImageData,
+  firstPoseKeypoints: { x: number; y: number }[] | null,
+  analysis: FrameAnalysis | null,
+  cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction },
+  wallCropPx: OrbCropBox | undefined,
+  videoWidth: number,
+  videoHeight: number,
+): NormalizedPoint[] {
+  // Apply the same ORB preprocessing (retinex LCN + equalisation) as matching.
+  let processed = referenceImageData;
+  const orbCanvas = document.createElement("canvas");
+  orbCanvas.width = videoWidth;
+  orbCanvas.height = videoHeight;
+  const orbCtx = orbCanvas.getContext("2d");
+  if (orbCtx && analysis) {
+    orbCtx.putImageData(referenceImageData, 0, 0);
+    applyOrbPreprocessing(cv, orbCanvas, analysis);
+    processed = orbCtx.getImageData(0, 0, videoWidth, videoHeight);
+  }
+
+  const poseLandmarks: NormalizedPoint[] = firstPoseKeypoints
+    ? firstPoseKeypoints.map(kp => ({ x: kp.x, y: kp.y }))
+    : [];
+
+  if (cropOptions.climberCrop || wallCropPx) {
+    const wallBox = wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
+    const croppedData = cropImageData(processed, wallBox);
+    const remapped: NormalizedPoint[] = poseLandmarks
+      .map(lm => ({
+        x: (lm.x * videoWidth  - wallBox.x) / wallBox.width,
+        y: (lm.y * videoHeight - wallBox.y) / wallBox.height,
+      }))
+      .filter(lm => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
+    const feats = remapped.length >= 3
+      ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
+      : extractFeatures(cv, croppedData, false);
+    return feats.keypoints.map(kp => ({
+      x: (kp.pt.x + wallBox.x) / videoWidth,
+      y: (kp.pt.y + wallBox.y) / videoHeight,
+    }));
+  }
+
+  const feats = poseLandmarks.length >= 3
+    ? extractFeaturesExcludingClimber(cv, processed, poseLandmarks, false)
+    : extractFeatures(cv, processed, false);
+  return feats.keypoints.map(kp => ({
+    x: kp.pt.x / videoWidth,
+    y: kp.pt.y / videoHeight,
+  }));
+}
+
 export interface VideoProcessorResult {
   /**
    * Start processing the supplied video File.
@@ -183,17 +245,19 @@ export interface VideoProcessorResult {
    */
   scanDiagnostics: ScanDiagnostics | null;
   /**
-   * A live, downscaled snapshot of the frame currently being scanned, refreshed
-   * on each detection frame. Drives the full-bleed loading view so the user sees
-   * the scan read up the wall. Null before the first detection frame.
+   * The wall ORB feature field from the reference frame, as full-frame
+   * normalised points with the climber masked out. Emitted once, at the first
+   * detection frame, so the scan loading view can paint it as the ambient
+   * "starfield" the pose skeletons climb through. Null before it is ready.
    */
-  currentFrameImage: ImageData | null;
+  orbPreview: NormalizedPoint[] | null;
   /**
-   * The current Adaptive Crop as a frame fraction, refreshed alongside
-   * {@link currentFrameImage}. The loading view's green band grows from the
-   * frame bottom up to this crop's top. Null until the Climber is first found.
+   * The pose detected on the current detection frame (normalised keypoints),
+   * refreshed as the seek loop advances. Drives the live (accented) skeleton in
+   * the scan loading view; each prior pose becomes part of the muted trail. Null
+   * before the first pose is detected.
    */
-  currentClimberCrop: CropFraction | null;
+  currentPose: PoseFrame | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -229,8 +293,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [firstFrameFile, setFirstFrameFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [scanDiagnostics, setScanDiagnostics] = useState<ScanDiagnostics | null>(null);
-  const [currentFrameImage, setCurrentFrameImage] = useState<ImageData | null>(null);
-  const [currentClimberCrop, setCurrentClimberCrop] = useState<CropFraction | null>(null);
+  const [orbPreview, setOrbPreview] = useState<NormalizedPoint[] | null>(null);
+  const [currentPose, setCurrentPose] = useState<PoseFrame | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -265,8 +329,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setFirstFrameFile(null);
       setErrorMessage(null);
       setScanDiagnostics(null);
-      setCurrentFrameImage(null);
-      setCurrentClimberCrop(null);
+      setOrbPreview(null);
+      setCurrentPose(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -296,18 +360,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const { duration, videoWidth, videoHeight } = video;
         canvas.width = videoWidth;
         canvas.height = videoHeight;
-
-        // Preview canvas for the live loading view: a copy of the frame currently
-        // being scanned. Kept near source resolution so it reads as crisply as the
-        // Step 2 video preview; only oversized (4K+) footage is capped.
-        const PREVIEW_MAX = 1920;
-        const previewScale = Math.min(1, PREVIEW_MAX / Math.max(videoWidth, videoHeight));
-        const previewW = Math.max(1, Math.round(videoWidth * previewScale));
-        const previewH = Math.max(1, Math.round(videoHeight * previewScale));
-        const framePreviewCanvas = document.createElement("canvas");
-        framePreviewCanvas.width = previewW;
-        framePreviewCanvas.height = previewH;
-        const framePreviewCtx = framePreviewCanvas.getContext("2d", { willReadFrequently: true });
 
         const totalFrameCount = Math.ceil((duration * 1000) / frameIntervalMs);
         const startFrame = startTime > 0 ? Math.floor((startTime * 1000) / frameIntervalMs) : 0;
@@ -363,6 +415,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
+        // Emit the ORB starfield for the loading view once, at the first frame
+        // that yields a pose (so the climber mask is available).
+        let orbPreviewSent = false;
 
         // Lighting analysis — seeded from frame 0, adapted at intervals
         let currentAnalysis: FrameAnalysis | null = null;
@@ -611,23 +666,24 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
             }
 
-            // Surface a live, downscaled snapshot of the frame being scanned plus
-            // the Adaptive Crop, so the loading view shows the scan reading up the
-            // wall with the green box tracking the Climber. The box shown is the
-            // actual detection region this frame was searched in (`region`), so it
-            // is honest about where the Climber was looked for — including the
-            // forward-looking margin — rather than the tighter contained-pose box.
-            if (framePreviewCtx && mountedRef.current) {
-              framePreviewCtx.drawImage(canvas, 0, 0, videoWidth, videoHeight, 0, 0, previewW, previewH);
-              setCurrentFrameImage(framePreviewCtx.getImageData(0, 0, previewW, previewH));
-              const displayBox = region ?? lastClimberBox;
-              if (displayBox) {
-                setCurrentClimberCrop({
-                  x: displayBox.x / videoWidth,
-                  y: displayBox.y / videoHeight,
-                  w: displayBox.width / videoWidth,
-                  h: displayBox.height / videoHeight,
-                });
+            // Feed the scan loading view (the "x-ray"): the live detected pose
+            // drives the accented skeleton, and the first pose also triggers a
+            // one-time ORB wall-feature field (the ambient starfield). Both are
+            // painted at true frame-relative positions on a dark backdrop.
+            if (chosen && mountedRef.current) {
+              setCurrentPose(chosen);
+              if (!orbPreviewSent && referenceImageData) {
+                orbPreviewSent = true;
+                try {
+                  setOrbPreview(
+                    extractWallFeaturePoints(
+                      cv, referenceImageData, chosen.keypoints, currentAnalysis,
+                      cropOptions, wallCropPx, videoWidth, videoHeight,
+                    ),
+                  );
+                } catch (err) {
+                  console.warn("[useVideoProcessor] ORB preview extraction failed", err);
+                }
               }
             }
           }
@@ -1036,8 +1092,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setFirstFrameFile(null);
       setErrorMessage(null);
       setScanDiagnostics(null);
-      setCurrentFrameImage(null);
-      setCurrentClimberCrop(null);
+      setOrbPreview(null);
+      setCurrentPose(null);
     }
   }, []);
 
@@ -1050,5 +1106,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, currentFrameImage, currentClimberCrop };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose };
 }

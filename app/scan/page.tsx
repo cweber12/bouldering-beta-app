@@ -158,7 +158,7 @@ function ScanPageInner() {
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, currentFrameImage, currentClimberCrop } =
+  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose } =
     useVideoProcessor(100);
   const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
   const { matchImage, estimateCrop, autoFrameStatus, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
@@ -172,6 +172,9 @@ function ScanPageInner() {
   const [notes, setNotes]       = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
+  // Natural pixel dimensions of the selected video — shapes the scan loading
+  // stage so the ORB starfield + skeletons keep their true frame proportions.
+  const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved]   = useState(false);
@@ -376,6 +379,16 @@ function ScanPageInner() {
     const url = URL.createObjectURL(file);
     previewUrlRef.current = url;
     setVideoPreviewUrl(url);
+    // Probe the natural dimensions for the loading-stage aspect ratio.
+    setVideoAspect(null);
+    const probe = document.createElement("video");
+    probe.preload = "metadata";
+    probe.onloadedmetadata = () => {
+      if (probe.videoWidth && probe.videoHeight) {
+        setVideoAspect({ w: probe.videoWidth, h: probe.videoHeight });
+      }
+    };
+    probe.src = url;
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
     setWallCrop(DEFAULT_CROP);
@@ -741,9 +754,9 @@ function ScanPageInner() {
 
       {step === "landmarks" && showScanLoading && (
         <ScanProgress
-          frameImage={currentFrameImage}
-          seedCrop={climberCrop}
-          adaptiveCrop={currentClimberCrop}
+          orbPreview={orbPreview}
+          currentPose={currentPose}
+          videoAspect={videoAspect}
           progressPct={progressPct}
           finishing={!isProcessing || progressPct >= 100}
           onCancel={handleCancelScan}

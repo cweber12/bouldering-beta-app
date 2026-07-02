@@ -1,36 +1,42 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { CropFraction } from "@/utils/cropFraction";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import type { NormalizedPoint } from "@/pipeline/matching/orbDetector";
+import type { PoseFrame } from "@/pipeline/pose/poseDetection";
+import { drawSkeleton, lerpKeypoints, type OverlayPoint } from "@/pipeline/overlay/skeletonOverlay";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { fitMediaStyle } from "@/utils/mediaContainerStyle";
+import { dark } from "@/utils/theme";
 
 // ---------------------------------------------------------------------------
 // ScanProgress — the loading view shown while a scan runs. It mirrors the
-// Step 2 (StepSetDetection) layout exactly: the same top/bottom bars and the
-// same measured, square-bounded media stage, so the frame window keeps its
-// size and placement. The bars carry no controls — the top bar just labels the
-// step and the bottom bar shows the percentage.
+// Step 2 (StepSetDetection) layout: the same top/bottom bars and the same
+// measured, aspect-bounded media stage. The bars carry no controls — the top
+// bar labels the step, the bottom bar shows the percentage and the cancel X.
 //
-// The stage is a spotlight on the scanner's own work. The frame currently being
-// scanned is painted live (crossfaded between stills so the moving climber does
-// not snap), and the Adaptive Crop is drawn over it as a green-tinted box — the
-// same accent colours as the Step 2 detection band — while the rest of the
-// frame is dimmed by a 75% black layer. The box starts on the tap-derived seed
-// crop and moves onto the Climber once the first Adaptive Crop is found, then
-// tracks it. Both the frame and its box come from the same source
-// (useVideoProcessor) and are refreshed together in one render, so each time a
-// new frame crossfades in the box moves — over the same duration — to the spot
-// it was derived from, appearing to step from one location to the next.
+// The stage is an "x-ray" of the frame we no longer paint: a plain, always-dark
+// backdrop carrying only the scanner's own findings, all at their true
+// frame-relative positions.
+//
+//   • ORB starfield — the wall feature field (climber masked out) the matcher
+//     relies on, extracted once from the reference frame and drawn as a faint
+//     neutral field. It appears first and persists for the whole scan.
+//   • Pose skeletons — every detected pose stays visible. The live pose is
+//     accented (green, full silhouette) and glides between detections; each
+//     superseded pose is demoted to a muted ghost-green "motion trail".
+//
+// The trail + starfield accumulate on a static offscreen canvas (drawn once
+// each), so only the single accented skeleton is re-rendered per animation
+// frame.
 // ---------------------------------------------------------------------------
 
 export interface ScanProgressProps {
-  /** Live snapshot of the frame currently being scanned; null until ready. */
-  frameImage: ImageData | null;
-  /** The tap-derived Climber seed crop — the spotlight's starting box. */
-  seedCrop: CropFraction;
-  /** Per-frame Adaptive Crop (fraction); null until the Climber is first found. */
-  adaptiveCrop: CropFraction | null;
+  /** Wall ORB feature field (full-frame normalised); null until ready. */
+  orbPreview: NormalizedPoint[] | null;
+  /** The pose detected on the current detection frame; null until first found. */
+  currentPose: PoseFrame | null;
+  /** Natural video dimensions, to shape the stage; defaults to portrait 9:16. */
+  videoAspect: { w: number; h: number } | null;
   /** Seek-loop progress, 0–100. */
   progressPct: number;
   /** True once the seek loop is done and refinement / ORB are still running. */
@@ -39,78 +45,156 @@ export interface ScanProgressProps {
   onCancel: () => void;
 }
 
-/** Crossfade duration between consecutive frame stills (and the box fade-in). */
-const FRAME_FADE_MS = 300;
-/**
- * How long the spotlight box takes to move to a new Adaptive Crop. Matched to
- * FRAME_FADE_MS so the box and the frame it belongs to transition together —
- * the box moves quickly and lands exactly as the new frame finishes crossfading.
- */
-const BOX_GLIDE_MS = FRAME_FADE_MS;
+/** Longest-edge resolution of the internal render canvas (CSS stretches to fit). */
+const CANVAS_BASE = 900;
+/** Glide duration between consecutive detected poses. */
+const GLIDE_MS = 300;
+/** Faint neutral starfield colour (warm stone, low alpha) for ORB keypoints. */
+const ORB_COLOR = "rgba(232, 228, 222, 0.38)";
+/** Muted ghost of the accent for the trailing (previous) skeletons. */
+const TRAIL_COLOR = "rgba(34, 197, 94, 0.16)";
+
+/** Build a canvas-space keypoint map from a normalised PoseFrame. */
+function toOverlay(pose: PoseFrame, w: number, h: number): Record<string, OverlayPoint> {
+  const out: Record<string, OverlayPoint> = {};
+  for (const kp of pose.keypoints) out[kp.name] = { x: kp.x * w, y: kp.y * h, score: kp.score };
+  return out;
+}
+
+/** Paint the faint ORB starfield onto a context. */
+function drawStarfield(ctx: CanvasRenderingContext2D, pts: NormalizedPoint[], w: number, h: number): void {
+  ctx.save();
+  ctx.fillStyle = ORB_COLOR;
+  const r = Math.max(1, Math.min(w, h) * 0.0024);
+  for (const p of pts) {
+    ctx.beginPath();
+    ctx.arc(p.x * w, p.y * h, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Stamp a muted, lines-only skeleton (the motion trail) onto a context. */
+function stampTrail(ctx: CanvasRenderingContext2D, kp: Record<string, OverlayPoint>): void {
+  drawSkeleton(ctx, kp, {
+    silhouetteVisible: false,
+    jointsVisible: false,
+    linesVisible: true,
+    lineColor: TRAIL_COLOR,
+    estimatedDimThreshold: 0, // trail reads uniformly; no per-joint dimming
+  });
+}
+
+/** Draw the live, accented skeleton (green, full silhouette) onto a context. */
+function drawLive(ctx: CanvasRenderingContext2D, kp: Record<string, OverlayPoint>): void {
+  drawSkeleton(ctx, kp, {
+    silhouetteColor: dark.accent,
+    silhouetteOpacity: 0.2,
+    lineColor: dark.accent,
+    jointColor: dark.accent,
+  });
+}
 
 export default function ScanProgress({
-  frameImage,
-  seedCrop,
-  adaptiveCrop,
+  orbPreview,
+  currentPose,
+  videoAspect,
   progressPct,
   finishing,
   onCancel,
 }: ScanProgressProps) {
-  // Two stacked canvases ping-ponged for the still crossfade.
-  const aRef = useRef<HTMLCanvasElement>(null);
-  const bRef = useRef<HTMLCanvasElement>(null);
-  const topRef = useRef<"a" | "b">("a");
-  // Measures the media stage so the frame is square-bounded to the exact
-  // available height — identical to StepSetDetection's stage.
   const [stageRef, stageHeight] = useMeasuredHeight();
-  // Fades the spotlight (box + dim) in once on mount.
-  const [mounted, setMounted] = useState(false);
+  const displayRef = useRef<HTMLCanvasElement>(null);
 
+  const aspectW = videoAspect?.w ?? 9;
+  const aspectH = videoAspect?.h ?? 16;
+
+  // Internal canvas resolution, longest edge capped to CANVAS_BASE.
+  const { cw, ch } = useMemo(() => {
+    const ar = aspectW / aspectH;
+    return ar >= 1
+      ? { cw: CANVAS_BASE, ch: Math.max(1, Math.round(CANVAS_BASE / ar)) }
+      : { cw: Math.max(1, Math.round(CANVAS_BASE * ar)), ch: CANVAS_BASE };
+  }, [aspectW, aspectH]);
+
+  // Static layer (ORB starfield + accumulated trail); the accented skeleton is
+  // composited over it live. Refs so accumulation survives re-renders.
+  const staticRef = useRef<HTMLCanvasElement | null>(null);
+  const orbDrawnRef = useRef(false);
+  const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
+  const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
+  const animRef = useRef<{ from: Record<string, OverlayPoint>; to: Record<string, OverlayPoint>; start: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
+
+  // Composite the static layer + the current live skeleton onto the display.
+  const render = useCallback((live: Record<string, OverlayPoint> | null) => {
+    const display = displayRef.current;
+    const dctx = display?.getContext("2d");
+    if (!display || !dctx) return;
+    dctx.clearRect(0, 0, cw, ch);
+    if (staticRef.current) dctx.drawImage(staticRef.current, 0, 0);
+    if (live) drawLive(dctx, live);
+  }, [cw, ch]);
+
+  // (Re)initialise the static canvas whenever the render size changes — this is
+  // effectively a fresh scan; reset all accumulation.
   useEffect(() => {
-    const raf = requestAnimationFrame(() => setMounted(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
+    const s = document.createElement("canvas");
+    s.width = cw;
+    s.height = ch;
+    staticRef.current = s;
+    orbDrawnRef.current = false;
+    prevTargetRef.current = null;
+    lastLiveRef.current = null;
+    animRef.current = null;
+    render(null);
+  }, [cw, ch, render]);
 
-  // Crossfade each new frame still over the previous one. The incoming frame is
-  // painted onto whichever layer is currently underneath, then faded up above
-  // the outgoing layer, so the moving climber dissolves between stills (which
-  // arrive only on detection frames, ~2 fps) instead of snapping.
+  // Draw the ORB starfield once, under everything, when it arrives.
   useEffect(() => {
-    if (!frameImage) return;
-    const a = aRef.current;
-    const b = bRef.current;
-    if (!a || !b) return;
+    if (!orbPreview || orbDrawnRef.current) return;
+    const sctx = staticRef.current?.getContext("2d");
+    if (!sctx) return;
+    drawStarfield(sctx, orbPreview, cw, ch);
+    orbDrawnRef.current = true;
+    render(lastLiveRef.current);
+  }, [orbPreview, cw, ch, render]);
 
-    const incoming = topRef.current === "a" ? b : a;
-    const outgoing = topRef.current === "a" ? a : b;
+  // Each new detected pose: demote the previous one to the trail, then glide the
+  // accented skeleton from the last shown pose to the new one (snap if the user
+  // prefers reduced motion).
+  useEffect(() => {
+    if (!currentPose || currentPose.keypoints.length === 0) return;
+    const target = toOverlay(currentPose, cw, ch);
 
-    if (incoming.width !== frameImage.width) incoming.width = frameImage.width;
-    if (incoming.height !== frameImage.height) incoming.height = frameImage.height;
-    incoming.getContext("2d")?.putImageData(frameImage, 0, 0);
+    const sctx = staticRef.current?.getContext("2d");
+    if (sctx && prevTargetRef.current) stampTrail(sctx, prevTargetRef.current);
+    prevTargetRef.current = target;
 
-    incoming.style.zIndex = "1";
-    outgoing.style.zIndex = "0";
-    outgoing.style.opacity = "1";
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    // Restart the fade: commit opacity 0 (no transition), force a reflow, then
-    // transition to 1 so the incoming still actually animates each time.
-    incoming.style.transition = "none";
-    incoming.style.opacity = "0";
-    void incoming.offsetWidth;
-    incoming.style.transition = `opacity ${FRAME_FADE_MS}ms ease`;
-    incoming.style.opacity = "1";
+    const from = reduceMotion ? target : (lastLiveRef.current ?? target);
+    animRef.current = { from, to: target, start: performance.now() };
 
-    topRef.current = topRef.current === "a" ? "b" : "a";
-  }, [frameImage]);
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    const step = () => {
+      const anim = animRef.current;
+      if (!anim) return;
+      const t = Math.min(1, (performance.now() - anim.start) / GLIDE_MS);
+      const live = t >= 1 ? anim.to : lerpKeypoints(anim.from, anim.to, t);
+      lastLiveRef.current = live;
+      render(live);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+      else rafRef.current = null;
+    };
+    rafRef.current = requestAnimationFrame(step);
 
-  // The spotlight box: the live Adaptive Crop once the Climber is found, else
-  // the tap-derived seed crop. The geometry change is CSS-transitioned over the
-  // frame-fade duration, so the box moves from the seed crop onto the Climber —
-  // and then from frame to frame — in step with each new still.
-  const box = adaptiveCrop ?? seedCrop;
-
-  const aspectW = frameImage?.width ?? 9;
-  const aspectH = frameImage?.height ?? 16;
+    return () => {
+      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    };
+  }, [currentPose, cw, ch, render]);
 
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="Scanning video">
@@ -121,59 +205,24 @@ export default function ScanProgress({
         </div>
       </header>
 
-      {/* Media stage — same structure and sizing as StepSetDetection. */}
+      {/* Media stage — same structure and sizing as StepSetDetection, but a
+          plain always-dark backdrop carrying only the scan's findings. */}
       <div className="flex min-h-0 flex-1 flex-col bg-surface">
         <div
           ref={stageRef}
           className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
         >
           <div
-            className="relative overflow-hidden"
+            className="relative overflow-hidden bg-scan-stage"
             style={fitMediaStyle(aspectW, aspectH, stageHeight)}
           >
-            {/* Base layer behind the frame canvases. */}
-            <div className="absolute inset-0 bg-inset" />
-
-            {/* Two stacked canvases crossfaded on each new still (1:1; CSS
-                stretches them to the stage). */}
             <canvas
-              ref={aRef}
+              ref={displayRef}
+              width={cw}
+              height={ch}
               className="absolute inset-0 h-full w-full object-fill"
-              style={{ opacity: 0 }}
+              aria-hidden="true"
             />
-            <canvas
-              ref={bRef}
-              className="absolute inset-0 h-full w-full object-fill"
-              style={{ opacity: 0 }}
-            />
-
-            {/* Spotlight: green-tinted Adaptive Crop with the rest of the frame
-                dimmed by the box's own 0.75 black outset shadow (clipped to the
-                frame by the container's overflow-hidden). One element carries
-                the border, tint, dim and move so they stay in sync. It sits at
-                zIndex 2 — above both crossfade canvases (which ping-pong between
-                zIndex 0 and 1) — so the rectangle and shadow stay painted over
-                every still and never flash out when a new frame fades in. */}
-            {frameImage && (
-              <div
-                className="absolute border-2 border-accent/80 bg-accent/20"
-                style={{
-                  left: `${box.x * 100}%`,
-                  top: `${box.y * 100}%`,
-                  width: `${box.w * 100}%`,
-                  height: `${box.h * 100}%`,
-                  zIndex: 2,
-                  borderRadius: "2px",
-                  boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)",
-                  opacity: mounted ? 1 : 0,
-                  transition:
-                    `left ${BOX_GLIDE_MS}ms ease-out, top ${BOX_GLIDE_MS}ms ease-out, ` +
-                    `width ${BOX_GLIDE_MS}ms ease-out, height ${BOX_GLIDE_MS}ms ease-out, ` +
-                    `opacity ${FRAME_FADE_MS}ms ease`,
-                }}
-                aria-hidden="true"
-              />
-            )}
           </div>
         </div>
       </div>
