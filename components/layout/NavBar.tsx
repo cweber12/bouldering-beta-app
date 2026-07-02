@@ -145,7 +145,7 @@ export default function NavBar() {
               width={21}
               height={24}
               unoptimized
-              className="h-6 w-auto"
+              className="h-8 w-auto"
             />
             <span className="text-sm font-semibold tracking-tight text-fg-inverse">
               Beta&nbsp;Scanner
