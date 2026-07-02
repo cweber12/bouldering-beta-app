@@ -138,10 +138,10 @@ export default function ScanProgress({
   }, [aspectW, aspectH]);
 
   // Offscreen layers composited under the live skeleton. Refs so accumulation
-  // survives re-renders. ORB is drawn once; the trail fades + stamps over time.
+  // survives re-renders. The ORB layer is owned by its own effect; the trail
+  // fades + stamps over time.
   const orbRef = useRef<HTMLCanvasElement | null>(null);
   const trailRef = useRef<HTMLCanvasElement | null>(null);
-  const orbDrawnRef = useRef(false);
   const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
   const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
   const animRef = useRef<{ from: Record<string, OverlayPoint>; to: Record<string, OverlayPoint>; start: number } | null>(null);
@@ -158,29 +158,30 @@ export default function ScanProgress({
     if (live) drawLive(dctx, live);
   }, [cw, ch]);
 
-  // (Re)initialise the offscreen canvases whenever the render size changes —
-  // effectively a fresh scan; reset all accumulation.
+  // (Re)initialise the trail layer whenever the render size changes —
+  // effectively a fresh scan; reset the pose accumulation.
   useEffect(() => {
-    const orb = document.createElement("canvas");
-    orb.width = cw; orb.height = ch;
-    orbRef.current = orb;
     const trail = document.createElement("canvas");
     trail.width = cw; trail.height = ch;
     trailRef.current = trail;
-    orbDrawnRef.current = false;
     prevTargetRef.current = null;
     lastLiveRef.current = null;
     animRef.current = null;
     render(null);
   }, [cw, ch, render]);
 
-  // Draw the ORB starfield once, under everything, when it arrives.
+  // ORB starfield — owned entirely by this effect. It always (re)builds its own
+  // layer from the current keypoints + size, so it can never be left blank by a
+  // re-init of the trail layer. Idempotent: no "drawn once" flag to fall out of
+  // sync with the canvas it guards.
   useEffect(() => {
-    if (!orbPreview || orbDrawnRef.current) return;
-    const octx = orbRef.current?.getContext("2d");
+    if (!orbPreview) { orbRef.current = null; render(lastLiveRef.current); return; }
+    const orb = document.createElement("canvas");
+    orb.width = cw; orb.height = ch;
+    const octx = orb.getContext("2d");
     if (!octx) return;
     drawStarfield(octx, orbPreview, cw, ch);
-    orbDrawnRef.current = true;
+    orbRef.current = orb;
     render(lastLiveRef.current);
   }, [orbPreview, cw, ch, render]);
 
