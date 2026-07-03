@@ -36,19 +36,19 @@ import { applyHomographyMatrix } from "@/pipeline/matching/homography";
 // Defaults (all thickness/size values are × body scale unless noted)
 // ---------------------------------------------------------------------------
 
-const DEFAULT_COLOR = "#333333"; // accent green — silhouette base colour
-/** Skeleton lines: a brighter variation of the accent so the thin pose reads
- *  crisply on top of the translucent silhouette. */
-const DEFAULT_SKELETON_COLOR = shiftLightness(DEFAULT_COLOR, 0.5);
-/** Joint points: lighter still than the lines, so points read as highlights. */
-const DEFAULT_JOINT_COLOR = shiftLightness(DEFAULT_COLOR, 0.75);
+const DEFAULT_COLOR = "#D6FB61";
+/** Kept for single-colour mode and panel defaults; anatomical mode computes per-limb colours. */
+const DEFAULT_SKELETON_COLOR = "#D6FB61";
+/** Kept for single-colour mode and panel defaults; anatomical mode computes per-joint colours. */
+const DEFAULT_JOINT_COLOR = "#D6FB61";
 const DEFAULT_SILHOUETTE_OPACITY = 0.25;
-/** Hue shifts (fraction of the wheel) that tint left vs right limbs and joints.
- *  Both rotate the accent *toward* green — never toward yellow — so each side
- *  reads as a distinct green; the right is simply the greener of the two. Centre
- *  bones (shoulder/hip spans) are left unshifted. */
+/** Hue shifts (fraction of the wheel) used in single-colour mode to tint left vs right. */
 const SIDE_HUE_SHIFT_LEFT = 0.04;
 const SIDE_HUE_SHIFT_RIGHT = 0.09;
+const ARM_HAND_COLOR = "#39B1D1";
+const LEG_FOOT_COLOR = "#F6850C";
+const ANATOMICAL_LEFT_HUE_SHIFT = -0.015;
+const ANATOMICAL_RIGHT_HUE_SHIFT = 0.015;
 /** Opacity multiplier for the silhouette head. The head now floats free (the
  *  neck capsule was removed), so keep it faint to make the detachment subtle. */
 const HEAD_SILHOUETTE_OPACITY = 0.55;
@@ -209,6 +209,16 @@ export interface SkeletonStyle {
   estimatedDimThreshold?: number;
   /** Opacity multiplier for dimmed Estimated Landmarks. Default {@link ESTIMATED_DIM_OPACITY}. */
   estimatedDimOpacity?: number;
+  /**
+   * Render with the global anatomical palette:
+   * - torso/head = lime
+   * - arms/hands = lime→cyan gradient
+   * - legs/feet = lime→orange gradient
+   * with subtle left/right variants.
+   *
+   * Default: auto (enabled only when using default colours).
+   */
+  anatomicalPalette?: boolean;
 }
 
 /**
@@ -355,6 +365,22 @@ function hslToCss(h: number, s: number, l: number): string {
   return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
 }
 
+function sameColor(a: string, b: string): boolean {
+  const pa = parseRgb(a);
+  const pb = parseRgb(b);
+  return pa.r === pb.r && pa.g === pb.g && pa.b === pb.b;
+}
+
+function mixCss(a: string, b: string, t: number): string {
+  const ta = Math.max(0, Math.min(1, t));
+  const ca = parseRgb(a);
+  const cb = parseRgb(b);
+  const r = Math.round(ca.r + (cb.r - ca.r) * ta);
+  const g = Math.round(ca.g + (cb.g - ca.g) * ta);
+  const bl = Math.round(ca.b + (cb.b - ca.b) * ta);
+  return `rgb(${r}, ${g}, ${bl})`;
+}
+
 /** `css` colour with its HSL lightness shifted by `delta` (clamped to [0, 1]). */
 function shiftLightness(css: string, delta: number): string {
   const { r, g, b } = parseRgb(css);
@@ -392,6 +418,64 @@ function sideColor(css: string, side: Side): string {
   if (side === "left") return shiftHue(css, SIDE_HUE_SHIFT_LEFT);
   if (side === "right") return shiftHue(css, SIDE_HUE_SHIFT_RIGHT);
   return css;
+}
+
+function anatomicalSideVariant(css: string, side: Side): string {
+  if (side === "left") return shiftHue(css, ANATOMICAL_LEFT_HUE_SHIFT);
+  if (side === "right") return shiftHue(css, ANATOMICAL_RIGHT_HUE_SHIFT);
+  return css;
+}
+
+function armProgress(name: string): number | null {
+  if (name.endsWith("_shoulder")) return 0;
+  if (name.endsWith("_elbow")) return 0.5;
+  if (name.endsWith("_wrist")) return 0.82;
+  if (name.endsWith("_thumb") || name.endsWith("_index") || name.endsWith("_pinky")) return 1;
+  return null;
+}
+
+function legProgress(name: string): number | null {
+  if (name.endsWith("_hip")) return 0;
+  if (name.endsWith("_knee")) return 0.5;
+  if (name.endsWith("_ankle")) return 0.82;
+  if (name.endsWith("_heel") || name.endsWith("_foot_index")) return 1;
+  return null;
+}
+
+function anatomicalPointColor(name: string): string {
+  const side = sideOf(name);
+  const armT = armProgress(name);
+  if (armT !== null && side !== "center") {
+    const start = anatomicalSideVariant(DEFAULT_COLOR, side);
+    const end = anatomicalSideVariant(ARM_HAND_COLOR, side);
+    return mixCss(start, end, armT);
+  }
+  const legT = legProgress(name);
+  if (legT !== null && side !== "center") {
+    const start = anatomicalSideVariant(DEFAULT_COLOR, side);
+    const end = anatomicalSideVariant(LEG_FOOT_COLOR, side);
+    return mixCss(start, end, legT);
+  }
+  return DEFAULT_COLOR;
+}
+
+function edgeStrokeStyle(
+  ctx: CanvasRenderingContext2D,
+  fromName: string,
+  toName: string,
+  from: Pt,
+  to: Pt,
+  useAnatomicalPalette: boolean,
+  singleColor: string,
+): string | CanvasGradient {
+  if (!useAnatomicalPalette) return sideColor(singleColor, edgeSide(fromName, toName));
+  const fromColor = anatomicalPointColor(fromName);
+  const toColor = anatomicalPointColor(toName);
+  if (sameColor(fromColor, toColor) || typeof ctx.createLinearGradient !== "function") return fromColor;
+  const g = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
+  g.addColorStop(0, fromColor);
+  g.addColorStop(1, toColor);
+  return g;
 }
 
 /** Does this 2D context support the `filter` property (blur)? jsdom and very old
@@ -586,12 +670,13 @@ function drawSilhouette(
   color: string,
   scale: number,
   limbThickness: number,
+  useAnatomicalPalette: boolean,
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
   const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
 
-  const dark = shiftLightness(color, RIM_DARK_SHIFT);
-  const light = shiftLightness(color, RIM_LIGHT_SHIFT);
+  const torsoHeadColor = useAnatomicalPalette ? DEFAULT_COLOR : color;
+  const dark = shiftLightness(torsoHeadColor, RIM_DARK_SHIFT);
 
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
   const lh = kp.left_hip, rh = kp.right_hip;
@@ -599,9 +684,30 @@ function drawSilhouette(
   const head = computeHeadGeometry(kp, scale);
   const sMid = midpoint(ls, rs);
 
-  const capsule = (a: Pt | undefined, b: Pt | undefined, r: number): void => {
+  const capsule = (
+    fromName: string,
+    toName: string,
+    a: Pt | undefined,
+    b: Pt | undefined,
+    r: number,
+    lightnessShift: number,
+  ): void => {
     if (!a || !b) return;
     sctx.lineWidth = 2 * r;
+    if (useAnatomicalPalette) {
+      const from = shiftLightness(anatomicalPointColor(fromName), lightnessShift);
+      const to = shiftLightness(anatomicalPointColor(toName), lightnessShift);
+      if (sameColor(from, to) || typeof sctx.createLinearGradient !== "function") {
+        sctx.strokeStyle = from;
+      } else {
+        const g = sctx.createLinearGradient(a.x, a.y, b.x, b.y);
+        g.addColorStop(0, from);
+        g.addColorStop(1, to);
+        sctx.strokeStyle = g;
+      }
+    } else {
+      sctx.strokeStyle = shiftLightness(sideColor(color, edgeSide(fromName, toName)), lightnessShift);
+    }
     sctx.beginPath();
     sctx.moveTo(a.x, a.y);
     sctx.lineTo(b.x, b.y);
@@ -612,9 +718,9 @@ function drawSilhouette(
   // at full width for the dark mask (pass 1) and eroded for the light cores
   // (pass 2). Each shared joint lines up because adjacent capsules meet round-capped.
   // No neck capsule — the head floats free (drawn faint below).
-  const bones = (rScale: number): void => {
-    for (const [a, b] of LIMB_EDGES) capsule(kp[a], kp[b], limbR * rScale);
-    for (const [a, b] of EXTREMITY_EDGES) capsule(kp[a], kp[b], extremityR * rScale);
+  const bones = (rScale: number, lightnessShift: number): void => {
+    for (const [a, b] of LIMB_EDGES) capsule(a, b, kp[a], kp[b], limbR * rScale, lightnessShift);
+    for (const [a, b] of EXTREMITY_EDGES) capsule(a, b, kp[a], kp[b], extremityR * rScale, lightnessShift);
   };
 
   const torsoPath = (): void => {
@@ -638,7 +744,7 @@ function drawSilhouette(
     sctx.lineWidth = 2 * limbR;
     sctx.stroke();
   }
-  bones(1);
+  bones(1, RIM_DARK_SHIFT);
   if (head) {
     // Faint — the head floats free now the neck capsule is gone.
     sctx.globalAlpha = HEAD_SILHOUETTE_OPACITY;
@@ -655,15 +761,14 @@ function drawSilhouette(
   sctx.globalCompositeOperation = "source-atop";
   sctx.lineCap = "round";
   sctx.lineJoin = "round";
-  sctx.strokeStyle = light;
   if (supportsFilter(sctx)) sctx.filter = `blur(${(limbR * RIM_BLUR_FRAC).toFixed(2)}px)`;
-  bones(RIM_CORE_FRAC);
+  bones(RIM_CORE_FRAC, RIM_LIGHT_SHIFT);
   sctx.restore();
 
   // ── Pass 3 — torso radial fill on top. ──
   if (hasTorso) {
-    const torsoEdge = shiftLightness(color, TORSO_EDGE_SHIFT);
-    const torsoCore = shiftLightness(color, TORSO_CORE_SHIFT);
+    const torsoEdge = shiftLightness(torsoHeadColor, TORSO_EDGE_SHIFT);
+    const torsoCore = shiftLightness(torsoHeadColor, TORSO_CORE_SHIFT);
     const hMid = midpoint(lh, rh)!;
     const halfLen = dist(sMid!, hMid) / 2;
     const halfWid = dist(ls!, rs!) / 2;
@@ -695,8 +800,8 @@ function drawSilhouette(
 
   // ── Pass 4 — head radial on top, drawn last (topmost). ──
   if (head) {
-    const headEdge = shiftLightness(color, HEAD_EDGE_SHIFT);
-    const headCore = shiftLightness(color, HEAD_CORE_SHIFT);
+    const headEdge = shiftLightness(torsoHeadColor, HEAD_EDGE_SHIFT);
+    const headCore = shiftLightness(torsoHeadColor, HEAD_CORE_SHIFT);
     sctx.save();
     sctx.globalAlpha = HEAD_SILHOUETTE_OPACITY;
     sctx.translate(head.cx, head.cy);
@@ -750,6 +855,10 @@ export function drawSkeleton(
   const names: Record<number, string> = options?.keypointNames ?? MP_KP_NAMES;
   const dimThreshold = options?.estimatedDimThreshold ?? ESTIMATED_DIM_THRESHOLD;
   const dimOpacity = options?.estimatedDimOpacity ?? ESTIMATED_DIM_OPACITY;
+  const useAnatomicalPalette = options?.anatomicalPalette ??
+    (sameColor(silhouetteColor, DEFAULT_COLOR) &&
+      sameColor(lineColor, DEFAULT_SKELETON_COLOR) &&
+      sameColor(jointColor, DEFAULT_JOINT_COLOR));
 
   // Prefer the sequence-stable scale so limb widths do not pulse with movement;
   // fall back to a per-frame scale only when a caller draws without supplying one.
@@ -760,7 +869,7 @@ export function drawSkeleton(
   if (silhouetteVisible && silhouetteOpacity > 0) {
     const scratch = getScratch(ctx.canvas.width, ctx.canvas.height);
     if (scratch) {
-      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness);
+      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness, useAnatomicalPalette);
       ctx.save();
       ctx.globalAlpha = silhouetteOpacity;
       ctx.drawImage(scratch.canvas, 0, 0);
@@ -789,7 +898,15 @@ export function drawSkeleton(
       const to = keypoints[toName];
       if (!from || !to) continue;
 
-      ctx.strokeStyle = sideColor(lineColor, edgeSide(fromName, toName));
+      ctx.strokeStyle = edgeStrokeStyle(
+        ctx,
+        fromName,
+        toName,
+        from,
+        to,
+        useAnatomicalPalette,
+        lineColor,
+      );
       ctx.lineWidth = lineWidth;
       ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
       ctx.beginPath();
@@ -803,7 +920,9 @@ export function drawSkeleton(
   if (jointsVisible) {
     const r = Math.max(0.5, jointRadius * scale);
     for (const [name, pt] of Object.entries(keypoints)) {
-      ctx.fillStyle = sideColor(jointColor, sideOf(name));
+      ctx.fillStyle = useAnatomicalPalette
+        ? anatomicalPointColor(name)
+        : sideColor(jointColor, sideOf(name));
       ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
