@@ -5,6 +5,7 @@ import {
   filterLandmarks,
   estimateMissingLandmarks,
   fillPersistentGaps,
+  constrainSkeleton,
   PERSISTENT_GAP_SCORE_FACTOR,
   applyLandmarkEstimator,
   type LandmarkEstimator,
@@ -732,5 +733,206 @@ describe("fillPersistentGaps", () => {
     // …and after it, no joint that is seen on both sides is ever absent between.
     const filled = fillPersistentGaps(est, "mediapipe");
     expect(countMidSequenceWinks(smoothPoseFrames(filled))).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// constrainSkeleton — rigid-body bone constraint
+// ---------------------------------------------------------------------------
+
+// A rigid left arm: static torso anchors, an upper arm of fixed length rotating
+// at `theta1`, and a forearm of fixed length at absolute angle `theta2`. Bone
+// lengths are constant by construction, so any deviation the pipeline produces
+// is measurable distortion.
+const RIG_SHOULDER = { x: 0.35, y: 0.3 };
+const RIG_UPPER = 0.16; // shoulder → elbow
+const RIG_FOREARM = 0.14; // elbow → wrist
+
+function rigidArmFrame(t: number, theta1: number, theta2: number, occludeWrist = false): PoseFrame {
+  const ex = RIG_SHOULDER.x + RIG_UPPER * Math.cos(theta1);
+  const ey = RIG_SHOULDER.y + RIG_UPPER * Math.sin(theta1);
+  const wx = ex + RIG_FOREARM * Math.cos(theta2);
+  const wy = ey + RIG_FOREARM * Math.sin(theta2);
+  const kps: Array<[string, number, number, number?]> = [
+    ["left_shoulder", RIG_SHOULDER.x, RIG_SHOULDER.y, 0.95],
+    ["right_shoulder", 0.65, 0.3, 0.95],
+    ["left_hip", 0.4, 0.6, 0.95],
+    ["right_hip", 0.6, 0.6, 0.95],
+    ["left_elbow", ex, ey, 0.95],
+  ];
+  if (!occludeWrist) kps.push(["left_wrist", wx, wy, 0.95]);
+  return frame(t, kps);
+}
+
+function forearmLength(f: PoseFrame): number | null {
+  const e = f.keypoints.find(k => k.name === "left_elbow");
+  const w = f.keypoints.find(k => k.name === "left_wrist");
+  return e && w ? Math.hypot(w.x - e.x, w.y - e.y) : null;
+}
+
+function forearmAngleDeg(f: PoseFrame): number | null {
+  const e = f.keypoints.find(k => k.name === "left_elbow");
+  const w = f.keypoints.find(k => k.name === "left_wrist");
+  return e && w ? Math.atan2(w.y - e.y, w.x - e.x) * 180 / Math.PI : null;
+}
+
+/** Max % deviation of the forearm length from its rigid ground truth. */
+function maxStretchPct(frames: PoseFrame[]): number {
+  let worst = 0;
+  for (const f of frames) {
+    const len = forearmLength(f);
+    if (len === null) continue;
+    worst = Math.max(worst, Math.abs(len - RIG_FOREARM) / RIG_FOREARM);
+  }
+  return worst * 100;
+}
+
+describe("constrainSkeleton", () => {
+  it("returns an empty array unchanged", () => {
+    expect(constrainSkeleton([], [])).toEqual([]);
+  });
+
+  it("keeps a rigid forearm rigid through the full pipeline (no occlusion)", () => {
+    // Dyno catch: forearm swings 120° over 0.4 s then holds — the sudden stop
+    // that makes independent x/y interpolation overshoot and foreshorten the
+    // bone. Sparse anchors every ~0.3 s, densified onto a 30 fps timeline.
+    const theta1 = -Math.PI / 2;
+    const theta2Of = (t: number) => {
+      const frac = t <= 0.3 ? 0 : t >= 0.7 ? 1 : (t - 0.3) / 0.4;
+      return (-100 + 120 * frac) * Math.PI / 180;
+    };
+    const allTs: number[] = [];
+    for (let i = 0; i <= 60; i++) allTs.push(+(i / 30).toFixed(4));
+    const anchors: PoseFrame[] = [];
+    for (let i = 0; i <= 60; i += 9) {
+      const t = +(i / 30).toFixed(4);
+      anchors.push(rigidArmFrame(t, theta1, theta2Of(t)));
+    }
+
+    const good = filterLandmarks(anchors, 0.3);
+    const smoothed = smoothPoseFrames(
+      fillPersistentGaps(estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"), "mediapipe"),
+    );
+
+    // Baseline: the x/y pipeline distorts the rigid bone badly (~25%+).
+    expect(maxStretchPct(smoothed)).toBeGreaterThan(15);
+
+    // The constraint pass restores rigidity to within a few percent.
+    const constrained = constrainSkeleton(smoothed, good, "mediapipe");
+    expect(maxStretchPct(constrained)).toBeLessThan(3);
+  });
+
+  it("interpolates an occluded forearm's ORIENTATION instead of copying it stale", () => {
+    // Forearm rotates 0°→180° over 2 s; the wrist is occluded across the middle
+    // anchors. The x/y pipeline reconstructs it from one bracket's stale bone
+    // vector (tens of degrees of error); bone-space interpolation tracks the
+    // true sweep.
+    const theta1 = -Math.PI / 2;
+    const theta2Of = (t: number) => (180 * (t / 2)) * Math.PI / 180;
+    const allTs: number[] = [];
+    for (let i = 0; i <= 60; i++) allTs.push(+(i / 30).toFixed(4));
+    const anchors: PoseFrame[] = [];
+    const nAnchors = 9;
+    for (let a = 0; a <= nAnchors; a++) {
+      const t = +(a * (2 / nAnchors)).toFixed(4);
+      anchors.push(rigidArmFrame(t, theta1, theta2Of(t), a >= 3 && a <= 6));
+    }
+
+    const good = filterLandmarks(anchors, 0.3);
+    const smoothed = smoothPoseFrames(
+      fillPersistentGaps(estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"), "mediapipe"),
+    );
+    const constrained = constrainSkeleton(smoothed, good, "mediapipe");
+
+    // Worst forearm-angle error vs the rigid ground truth, across the sequence.
+    let worst = 0;
+    for (const f of constrained) {
+      const a = forearmAngleDeg(f);
+      if (a === null) continue;
+      const g = theta2Of(f.timestamp) * 180 / Math.PI;
+      let d = Math.abs(a - g);
+      if (d > 180) d = 360 - d;
+      worst = Math.max(worst, d);
+    }
+    // Ground truth is linear in t and the reference angle is interpolated
+    // linearly between anchors, so the reconstruction is near-exact.
+    expect(worst).toBeLessThan(5);
+    // And the bone stays rigid through the occlusion.
+    expect(maxStretchPct(constrained)).toBeLessThan(3);
+  });
+
+  it("preserves genuine foreshortening at the anchors (does not pin to a fixed length)", () => {
+    // The forearm legitimately foreshortens as it rotates out of plane: its
+    // projected length shrinks from full to half across the anchors. The pass
+    // must honour each anchor's real projected length, not force a constant.
+    const anchors: PoseFrame[] = [];
+    const allTs: number[] = [];
+    for (let i = 0; i <= 20; i++) allTs.push(+(i / 10).toFixed(4));
+    for (let a = 0; a <= 4; a++) {
+      const t = a * 0.5;
+      const ex = 0.5, ey = 0.4;
+      const projLen = RIG_FOREARM * (1 - 0.5 * (a / 4)); // 0.14 → 0.07
+      anchors.push(frame(t, [
+        ["left_shoulder", 0.35, 0.3, 0.95],
+        ["right_shoulder", 0.65, 0.3, 0.95],
+        ["left_hip", 0.4, 0.6, 0.95],
+        ["right_hip", 0.6, 0.6, 0.95],
+        ["left_elbow", ex, ey, 0.95],
+        ["left_wrist", ex + projLen, ey, 0.95],
+      ]));
+    }
+    const good = filterLandmarks(anchors, 0.3);
+    const smoothed = smoothPoseFrames(interpolatePoseFrames(good, allTs));
+    const constrained = constrainSkeleton(smoothed, good, "mediapipe");
+
+    // At the first anchor (t=0) the projected length is full; at the last
+    // (t=2) it is half. The pass must reproduce both, not average them.
+    const first = constrained.find(f => f.timestamp === 0)!;
+    const last = constrained.find(f => Math.abs(f.timestamp - 2) < 1e-6)!;
+    expect(forearmLength(first)!).toBeCloseTo(RIG_FOREARM, 3);
+    expect(forearmLength(last)!).toBeCloseTo(RIG_FOREARM * 0.5, 3);
+  });
+
+  it("never invents a joint the earlier passes left absent", () => {
+    // The wrist is absent for the whole sequence — the constraint pass must not
+    // conjure it just because a bone reference exists elsewhere.
+    const frames: PoseFrame[] = [
+      frame(0, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.4, 0.45]]),
+      frame(1, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.42, 0.46]]),
+    ];
+    const refs: PoseFrame[] = [
+      frame(0, [["left_elbow", 0.4, 0.45], ["left_wrist", 0.4, 0.6]]),
+    ];
+    const out = constrainSkeleton(frames, refs, "mediapipe");
+    out.forEach(f => expect(f.keypoints.find(k => k.name === "left_wrist")).toBeUndefined());
+  });
+
+  it("leaves a child untouched when its parent is missing this frame", () => {
+    // Wrist present but elbow absent → nothing to anchor to; wrist stays put.
+    const frames: PoseFrame[] = [frame(0, [["left_wrist", 0.7, 0.7, 0.5]])];
+    const refs: PoseFrame[] = [frame(0, [["left_elbow", 0.4, 0.4], ["left_wrist", 0.5, 0.5]])];
+    const out = constrainSkeleton(frames, refs, "mediapipe");
+    const w = out[0].keypoints.find(k => k.name === "left_wrist")!;
+    expect(w.x).toBe(0.7);
+    expect(w.y).toBe(0.7);
+  });
+
+  it("does not move torso anchors and preserves scores", () => {
+    const frames: PoseFrame[] = [
+      frame(0, [
+        ["left_shoulder", 0.35, 0.3, 0.9],
+        ["left_elbow", 0.4, 0.45, 0.9],
+        ["left_wrist", 0.42, 0.6, 0.42],
+      ]),
+    ];
+    const refs: PoseFrame[] = [
+      frame(0, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.4, 0.45], ["left_wrist", 0.42, 0.6]]),
+    ];
+    const out = constrainSkeleton(frames, refs, "mediapipe");
+    const sh = out[0].keypoints.find(k => k.name === "left_shoulder")!;
+    expect(sh.x).toBe(0.35);
+    expect(sh.y).toBe(0.3);
+    // The wrist's carried-through (dimmed) score survives the reconstruction.
+    expect(out[0].keypoints.find(k => k.name === "left_wrist")!.score).toBe(0.42);
   });
 });

@@ -30,6 +30,7 @@ import {
   estimateMissingLandmarks,
   fillPersistentGaps,
   smoothPoseFrames,
+  constrainSkeleton,
 } from "@/pipeline/pose/poseInterpolator";
 import {
   detectFlips,
@@ -816,17 +817,24 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           kept.sort((a, b) => a.timestamp - b.timestamp);
         }
 
-        // Pipeline: filter → interpolate → estimate → fill persistent gaps → smooth.
-        // Filtering is climbing-weighted; tolerance comes from the quality tier
-        // (undefined → filterLandmarks' built-in default). The persistent-gap pass
-        // is the no-gap guarantee: any joint detected on both temporal sides is
-        // always present (dimmed), so an occluded limb cannot wink out mid-climb
-        // even across dropouts too long to bridge or too degraded to estimate.
+        // Pipeline: filter → interpolate → estimate → fill persistent gaps →
+        // smooth → constrain. Filtering is climbing-weighted; tolerance comes
+        // from the quality tier (undefined → filterLandmarks' built-in default).
+        // The persistent-gap pass is the no-gap guarantee: any joint detected on
+        // both temporal sides is always present (dimmed), so an occluded limb
+        // cannot wink out mid-climb even across dropouts too long to bridge or
+        // too degraded to estimate. The final constrain pass rebuilds each limb
+        // joint in bone space (angle + length interpolated between the real
+        // detections) so bones keep a rigid length and true orientation — the
+        // earlier x/y passes move each joint independently of its parent, which
+        // makes rotating limbs stretch/snap and occluded joints bend the wrong
+        // way (see ADR 0015).
         const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
         const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
         const filled       = fillPersistentGaps(estimated, backend);
-        const frames       = smoothPoseFrames(filled);
+        const smoothed     = smoothPoseFrames(filled);
+        const frames       = constrainSkeleton(smoothed, goodFrames, backend);
 
         // Author Holds at scan time in the Run's own video space (Fixed Capture
         // only). The result is persisted with the Run and editable on the

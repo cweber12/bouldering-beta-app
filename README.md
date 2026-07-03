@@ -56,12 +56,13 @@ reaching limb stays inside the crop instead of being clipped. If the climber is
 lost inside the crop, detection widens to the full frame and re-acquires by
 identity.
 
-After estimation, four post-processing passes are applied:
+After estimation, five post-processing passes are applied:
 
 1. **Interpolation** — `interpolatePoseFrames` densifies the sparse detected frames onto the full timestamp list, interpolating each joint along its own detection timeline (Catmull-Rom). A joint occluded longer than the bridge gap is omitted rather than stretched in a straight line.
 2. **Estimation** — `estimateMissingLandmarks` fills short gaps using temporal interpolation and skeletal bone-vector geometry.
 3. **Persistent-gap fill** — `fillPersistentGaps` is the no-gap guarantee: any joint the detector saw both before and after a frame is always present in that frame (structurally off a visible neighbour where possible, else temporal lerp), at a dimmed confidence. This stops an occluded limb from winking out across a dropout too long to bridge or too degraded to estimate.
 4. **Smoothing** — `smoothPoseFrames` runs a zero-phase (forward + backward) One-Euro adaptive filter that suppresses jitter without lag.
+5. **Bone constraint** — `constrainSkeleton` rebuilds each limb joint in bone space (`parent + polar(angle, len)`, with angle and projected length interpolated between the real detections) so bones keep a rigid length and true orientation. The earlier passes move each joint's x/y independently of its parent, which makes rotating limbs stretch/snap and occluded joints bend the wrong way; this pass removes both while still honouring genuine foreshortening at the detections (ADR 0015).
 
 ### Skeleton overlay
 

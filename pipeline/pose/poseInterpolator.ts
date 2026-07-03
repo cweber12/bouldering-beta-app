@@ -779,3 +779,180 @@ export function smoothPoseFrames(
   back.reverse();
   return back;
 }
+
+// ---------------------------------------------------------------------------
+// Rigid-body bone constraint (bone-space reconstruction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Skeleton bones as [parent, child] name pairs, ordered **proximal → distal**.
+ *
+ * The order is load-bearing: {@link constrainSkeleton} walks it in sequence and
+ * mutates joints as it goes, so a child is always reconstructed off an
+ * already-corrected parent (shoulder→elbow before elbow→wrist before
+ * wrist→hand). Only the limb + extremity chains are listed — the torso quad and
+ * the head are anchors / drawn separately, and the finger↔finger and heel↔toe
+ * web edges are cross-links, not tree bones, so they are omitted.
+ *
+ * MediaPipe / BlazePose topology (see {@link MP_KP_NAMES}).
+ */
+const BONE_TREE: readonly (readonly [string, string])[] = [
+  // Upper arms.
+  ["left_shoulder", "left_elbow"],
+  ["right_shoulder", "right_elbow"],
+  // Forearms.
+  ["left_elbow", "left_wrist"],
+  ["right_elbow", "right_wrist"],
+  // Hands (off the wrist).
+  ["left_wrist", "left_thumb"],
+  ["left_wrist", "left_index"],
+  ["left_wrist", "left_pinky"],
+  ["right_wrist", "right_thumb"],
+  ["right_wrist", "right_index"],
+  ["right_wrist", "right_pinky"],
+  // Thighs.
+  ["left_hip", "left_knee"],
+  ["right_hip", "right_knee"],
+  // Shins.
+  ["left_knee", "left_ankle"],
+  ["right_knee", "right_ankle"],
+  // Feet (off the ankle).
+  ["left_ankle", "left_heel"],
+  ["left_ankle", "left_foot_index"],
+  ["right_ankle", "right_heel"],
+  ["right_ankle", "right_foot_index"],
+];
+
+/** One real detection of a bone: its world angle and projected length. */
+interface BoneSample {
+  t: number;
+  /** atan2(child − parent) in the image plane (radians). */
+  angle: number;
+  /** |child − parent| — the projected bone length (honours foreshortening). */
+  len: number;
+}
+
+/** Shortest signed angular delta from `a` to `b`, wrapped to (−π, π]. */
+function shortestArc(a: number, b: number): number {
+  let d = b - a;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d <= -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+/**
+ * Interpolate a bone's {angle, len} at `t` from its own real-detection timeline.
+ *
+ * The angle follows the **shortest arc** between the bracketing detections (so a
+ * rotating limb sweeps its true arc instead of being copied stale), and the
+ * length is linear (so a limb that legitimately foreshortens between two anchors
+ * shrinks smoothly rather than being pinned to a fixed length). Before the first
+ * / after the last detection the nearest sample is held. Returns null only when
+ * the bone was never detected.
+ */
+function sampleBone(samples: BoneSample[], t: number): { angle: number; len: number } | null {
+  const n = samples.length;
+  if (n === 0) return null;
+  if (t <= samples[0].t) return { angle: samples[0].angle, len: samples[0].len };
+  if (t >= samples[n - 1].t) return { angle: samples[n - 1].angle, len: samples[n - 1].len };
+
+  // Binary search for the first sample with t' >= t.
+  let lo = 0, hi = n;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (samples[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  const b = samples[lo];
+  if (b.t === t) return { angle: b.angle, len: b.len };
+  const a = samples[lo - 1];
+  const frac = (t - a.t) / (b.t - a.t);
+  return {
+    angle: a.angle + shortestArc(a.angle, b.angle) * frac,
+    len: a.len + (b.len - a.len) * frac,
+  };
+}
+
+/**
+ * Enforce rigid-body bone geometry across a dense pose sequence — the final
+ * stage of the pose chain, run **after** {@link smoothPoseFrames}.
+ *
+ * The interpolation / estimation / smoothing passes above each move a joint's
+ * x and y **independently of its skeletal parent**, so a rotating limb's child
+ * joint is carried along the *chord* of its arc (the bone foreshortens then
+ * snaps back — the "limb stretches" artefact) and an occluded joint is placed by
+ * a bone vector copied verbatim from one bracketing frame (the "joint bends the
+ * wrong way" artefact). This pass removes both by reconstructing each child joint
+ * in **bone space**: its position is recomputed as `parent + polar(angle, len)`,
+ * where `angle` and `len` are interpolated between the bone's own **real
+ * detections** (`referenceFrames`) via {@link sampleBone}.
+ *
+ * Because the references are the true detections, the bone's *projected* length
+ * at each anchor — including legitimate foreshortening when the limb points
+ * toward the camera — is preserved and merely interpolated between anchors, so
+ * this does **not** flatten out-of-plane motion the way a fixed median length
+ * would. Walking {@link BONE_TREE} proximal→distal means each child is rebuilt
+ * off an already-corrected parent, propagating the fix down the limb.
+ *
+ * Conservative by construction:
+ *  - **Only present joints move.** A joint the earlier passes deliberately left
+ *    absent (dropout past the bridge/fill cap, before its first detection) stays
+ *    absent — this never invents a limb.
+ *  - **Parents must be present.** A child whose parent is missing this frame is
+ *    left untouched (nothing to anchor to).
+ *  - **Torso and head are untouched.** Only the limb + extremity chains in
+ *    {@link BONE_TREE} are constrained; shoulders/hips are the anchors and the
+ *    head is drawn separately.
+ *  - **Scores are preserved**, so the renderer's Estimated-Landmark dimming still
+ *    reflects how a joint was obtained.
+ *
+ * @param frames          - Dense PoseFrame array (output of smoothPoseFrames).
+ * @param referenceFrames - The sparse real detections (the filtered anchor
+ *                          frames fed to interpolation), ascending by timestamp.
+ * @param backend         - Pose backend; selects the topology. Default mediapipe.
+ */
+export function constrainSkeleton(
+  frames: PoseFrame[],
+  referenceFrames: PoseFrame[],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  backend?: PoseBackend,
+): PoseFrame[] {
+  if (frames.length === 0) return frames;
+
+  // Per-bone timeline of real detections (angle + projected length), from the
+  // reference detections only — never the interpolated/estimated dense frames.
+  const boneSamples: BoneSample[][] = BONE_TREE.map(([parent, child]) => {
+    const samples: BoneSample[] = [];
+    for (const rf of referenceFrames) {
+      const p = rf.keypoints.find(k => k.name === parent);
+      const c = rf.keypoints.find(k => k.name === child);
+      if (!p || !c) continue;
+      const dx = c.x - p.x;
+      const dy = c.y - p.y;
+      samples.push({ t: rf.timestamp, angle: Math.atan2(dy, dx), len: Math.hypot(dx, dy) });
+    }
+    // referenceFrames are ascending, so samples inherit ascending order.
+    return samples;
+  });
+
+  return frames.map(frame => {
+    // Mutable working map so tree propagation sees corrected parents downstream.
+    const kp = new Map(frame.keypoints.map(k => [k.name, { ...k }]));
+
+    for (let bi = 0; bi < BONE_TREE.length; bi++) {
+      const [parentName, childName] = BONE_TREE[bi];
+      const child = kp.get(childName);
+      if (!child) continue; // absent by design — do not invent it
+      const parent = kp.get(parentName);
+      if (!parent) continue; // no anchor this frame — leave the child as-is
+
+      const bone = sampleBone(boneSamples[bi], frame.timestamp);
+      if (!bone) continue; // bone never detected — nothing to constrain against
+
+      child.x = parent.x + Math.cos(bone.angle) * bone.len;
+      child.y = parent.y + Math.sin(bone.angle) * bone.len;
+    }
+
+    return { ...frame, keypoints: [...kp.values()] };
+  });
+}
