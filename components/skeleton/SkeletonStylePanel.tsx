@@ -13,18 +13,18 @@ import PreviewSidebar from "@/components/scan/controls/PreviewSidebar";
 // scale with the climber).
 // ---------------------------------------------------------------------------
 
-/** Silhouette base — the theme accent green. */
-const DEFAULT_SILHOUETTE_COLOR = "#b3e609";
-/** Skeleton lines — a brighter variation of the accent (accent +0.14 lightness). */
-const DEFAULT_LINE_COLOR = "#cdf73f";
-/** Joint points — lighter still than the lines (accent +0.26 lightness). */
-const DEFAULT_JOINT_COLOR = "#dcfa7a";
+/** Anatomical palette base (torso/head). */
+const DEFAULT_SILHOUETTE_COLOR = "#d6fb61";
+/** Kept in sync with pipeline defaults; anatomical mode computes per-limb gradients. */
+const DEFAULT_LINE_COLOR = "#d6fb61";
+/** Kept in sync with pipeline defaults; anatomical mode computes per-joint colours. */
+const DEFAULT_JOINT_COLOR = "#d6fb61";
 const DEFAULT_SILHOUETTE_OPACITY = 0.25;
 const DEFAULT_LIMB_THICKNESS = 0.18;
 const DEFAULT_LINE_THICKNESS = 0.015;
 const DEFAULT_JOINT_RADIUS = 0.09;
 
-/** Holds legend — kind is shown by ring colour (blue hand / orange foot), so the
+/** Holds legend — kind is shown by ring colour (cyan hand / orange foot), so the
  *  legend echoes the wall marker with a small colour ring (ADR 0012). */
 const HOLD_LEGEND: { kind: "hand" | "foot"; label: string; ring: string }[] = [
   { kind: "hand", label: "Hands", ring: "border-hand-hold" },

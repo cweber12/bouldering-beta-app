@@ -5,7 +5,7 @@
  * Detection Preview. The unit on the wall is a **single thin colour-coded ring**
  * placed at the hold's *exact* photo-space location — rings never move to make
  * room, so the circle always frames the wall hold it names, and its interior stays
- * clear so the rock reads through. **Blue marks a Hand Hold, orange a Foot Hold**
+ * clear so the rock reads through. **Cyan marks a Hand Hold, orange marks a Foot Hold**
  * (ADR 0012): colour carries the kind, the only thing the marker says. There is no
  * number, no hand/foot glyph, and no left/right side on the wall — `order` and
  * `side` live in the data but are not painted. The Skeleton already narrates
@@ -16,7 +16,7 @@
  * are never merged in detection, so a hold used by both hands yields several Holds
  * at one spot; at draw time the Holds within ~one ring radius collapse into a
  * **single ring** rather than a pile of overlapping circles. A spot used by **both
- * a hand and a foot** draws **two concentric rings** (blue outer, orange inner)
+ * a hand and a foot** draws **two concentric rings** (cyan outer, orange inner)
  * centred on the spot — the inner ring nested right inside the outer one (edges
  * touching) so both kinds show without a nudge and the clear interior stays large.
  *
@@ -51,7 +51,7 @@ import type { Hold } from "@/pipeline/holds/holdDetection";
 // ---------------------------------------------------------------------------
 // Marker colours — the single source of truth for the Holds look.
 //
-// Kind is shown by colour: blue = Hand Hold, orange = Foot Hold. A blue/orange
+// Kind is shown by colour: cyan = Hand Hold, orange = Foot Hold. A cyan/orange
 // pair is colour-blind-safe and sits clear of the green pose overlay, so a hold
 // ring never blends into the Skeleton when they overlap. Mirror these in
 // `app/globals.css` (--color-hand-hold / --color-foot-hold) and `utils/theme.ts`
@@ -60,8 +60,8 @@ import type { Hold } from "@/pipeline/holds/holdDetection";
 
 /** Ring colour per limb kind — the whole payload of a Hold marker (ADR 0012). */
 export const HOLD_RING_COLOR: Record<"hand" | "foot", string> = {
-  hand: "#3b82f6", // mirror of --color-hand-hold
-  foot: "#f97316", // mirror of --color-foot-hold
+  hand: "#39B1D1", // mirror of --color-hand-hold
+  foot: "#F6850C", // mirror of --color-foot-hold
 };
 
 // ---------------------------------------------------------------------------
