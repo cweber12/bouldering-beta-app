@@ -2,22 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-
-function DemoPreview() {
-  return (
-    <div className="relative w-full max-w-sm overflow-hidden rounded-md border border-edge/40 bg-surface">
-      <video
-        src="/run-1774824194693-pose-overlay.webm"
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="w-full block"
-        aria-label="Demo skeleton overlay video"
-      />
-    </div>
-  );
-}
+import XrayReplayDemo from "@/components/skeleton/XrayReplayDemo";
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -74,9 +59,9 @@ export default function Home() {
       {/* Demo */}
       <div className="mt-16 flex flex-col items-center gap-4 sm:mt-20">
         <p className="text-label font-semibold text-fg-muted uppercase tracking-label">Live Demo</p>
-        <DemoPreview />
+        <XrayReplayDemo />
         <p className="text-xs text-fg-muted max-w-xs text-center">
-          Skeleton overlay video &#8212; an example of what Route Scanner produces
+          The scanner&#8217;s x-ray &#8212; wall features and the tracked pose, replayed live
         </p>
       </div>
 

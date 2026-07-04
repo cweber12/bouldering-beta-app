@@ -129,7 +129,7 @@ be toggled off).
 
 | Route | Purpose | Auth required |
 |---|---|---|
-| `/` | Landing page — intro, live demo, and how-it-works summary | No |
+| `/` | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary | No |
 | `/login` | Sign in / sign up with email & password | No |
 | `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
 | `/compare` | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment | Yes |
@@ -357,6 +357,18 @@ npm run dev
 ```
 
 Open <http://localhost:3000>.
+
+The landing-page live demo replays a saved run's ORB starfield + pose as the
+scan loading animation, reading `public/landing-demo.json` as the default (a
+placeholder ships in the repo). Regenerate it from a folder of Save-to-device
+run files with:
+
+```powershell
+npm run make:landing-demo -- ./RouteData
+```
+
+It picks the newest Fixed-Capture run (one with `orbFeatures`), projects it to
+the slim replay shape, and writes `public/landing-demo.json`.
 
 ## Code quality
 
