@@ -430,7 +430,9 @@ function armProgress(name: string): number | null {
   if (name.endsWith("_shoulder")) return 0;
   if (name.endsWith("_elbow")) return 0.5;
   if (name.endsWith("_wrist")) return 0.82;
-  if (name.endsWith("_thumb") || name.endsWith("_index") || name.endsWith("_pinky")) return 1;
+  // `_foot_index` is a toe, not the hand index — exclude it so it stays a leg/foot point.
+  if (name.endsWith("_thumb") || name.endsWith("_pinky") ||
+      (name.endsWith("_index") && !name.endsWith("_foot_index"))) return 1;
   return null;
 }
 
