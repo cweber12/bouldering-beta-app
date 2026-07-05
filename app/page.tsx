@@ -57,12 +57,8 @@ export default function Home() {
       </div>
 
       {/* Demo */}
-      <div className="mt-16 flex flex-col items-center gap-4 sm:mt-20">
-        <p className="text-label font-semibold text-fg-muted uppercase tracking-label">Live Demo</p>
+      <div className="mt-16 w-full sm:mt-20">
         <XrayReplayDemo />
-        <p className="text-xs text-fg-muted max-w-xs text-center">
-          The scanner&#8217;s x-ray &#8212; wall features and the tracked pose, replayed live
-        </p>
       </div>
 
       {/* How it works */}

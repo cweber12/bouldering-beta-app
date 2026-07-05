@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { NormalizedPoint } from "@/pipeline/matching/orbDetector";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { ReplayData } from "@/pipeline/overlay/replayData.mjs";
@@ -30,29 +30,41 @@ export interface ReplayDriverState {
   resetSignal: number;
 }
 
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+/** Subscribe to the reduced-motion media query. */
+function subscribeReducedMotion(onChange: () => void): () => void {
+  if (typeof window === "undefined" || !window.matchMedia) return () => {};
+  const mq = window.matchMedia(REDUCED_MOTION_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
 /** True when the user has asked for reduced motion (client-only). */
 function usePrefersReducedMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+    () => false, // server snapshot — assume motion is fine until hydrated
+  );
 }
 
 /**
- * @param replayData Baked replay, or null while loading.
- * @param active     Advance only while true (paused when offscreen / tab hidden).
+ * @param replayData     Baked replay, or null while loading.
+ * @param active         Advance only while true (paused when offscreen / hidden).
+ * @param onLoopComplete Fired each time the pose loop wraps — lets a caller
+ *                       advance to the next run in a cycling playlist.
  */
 export function useReplayDriver(
   replayData: ReplayData | null,
   active: boolean,
+  onLoopComplete?: () => void,
 ): ReplayDriverState {
   const reduceMotion = usePrefersReducedMotion();
+
+  // Keep the latest callback without re-subscribing the interval each render.
+  const onLoopCompleteRef = useRef(onLoopComplete);
+  useEffect(() => { onLoopCompleteRef.current = onLoopComplete; }, [onLoopComplete]);
 
   const orbPreview = useMemo<NormalizedPoint[] | null>(
     () => (replayData ? replayData.starfield.map((p) => ({ x: p.x, y: p.y })) : null),
@@ -93,6 +105,7 @@ export function useReplayDriver(
       if (next >= poses.length) {
         indexRef.current = 0;
         setResetSignal((s) => s + 1); // clear the trail at the loop boundary
+        onLoopCompleteRef.current?.(); // advance a cycling playlist, if any
       } else {
         indexRef.current = next;
       }
