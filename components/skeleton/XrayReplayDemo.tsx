@@ -30,7 +30,17 @@ const MAX_RUNS = 5;
 /** Cap total downloads while hunting for starfield-bearing runs (Panning runs are skipped). */
 const MAX_DOWNLOADS = 8;
 
-export default function XrayReplayDemo() {
+interface XrayReplayDemoProps {
+  /**
+   * Optional CSS length that caps the frame height. When set (e.g. the hero
+   * column wants a shorter frame than the full viewport), width is derived from
+   * it and the aspect ratio. When omitted, the frame uses the scan-flow default
+   * (`mediaContainerStyle`), capped to the viewport so it never overflows.
+   */
+  maxHeight?: string;
+}
+
+export default function XrayReplayDemo({ maxHeight }: XrayReplayDemoProps = {}) {
   const { user } = useAuth();
   const { listAttempts, downloadAttempt, userPrefix } = useS3Storage();
   const [defaultReplay, setDefaultReplay] = useState<ReplayData | null>(null);
@@ -111,12 +121,21 @@ export default function XrayReplayDemo() {
   const { orbPreview, currentPose, resetSignal } = useReplayDriver(activeReplay, active, handleLoopComplete);
 
   // Match the scan-flow frame sizing: fill the width but cap the height to the
-  // viewport so a portrait clip never overflows vertically on first paint.
+  // viewport so a portrait clip never overflows vertically on first paint. When
+  // the parent supplies `maxHeight`, cap to that instead (hero column).
   const aspectStyle = useMemo(() => {
     const w = activeReplay?.aspect.w ?? 9;
     const h = activeReplay?.aspect.h ?? 16;
+    if (maxHeight) {
+      const ratio = (w / h).toFixed(6);
+      return {
+        width: `min(100%, calc(${maxHeight} * ${ratio}))`,
+        maxHeight,
+        aspectRatio: `${w} / ${h}`,
+      } as const;
+    }
     return mediaContainerStyle(w, h);
-  }, [activeReplay]);
+  }, [activeReplay, maxHeight]);
 
   return (
     <div

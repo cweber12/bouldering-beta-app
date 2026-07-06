@@ -1,4 +1,4 @@
-# Route Scanner
+# Beta Scanner
 
 Scan a climbing run in-browser using **MediaPipe Pose Landmarker** pose
 estimation and **OpenCV.js** ORB feature matching — then save results to
