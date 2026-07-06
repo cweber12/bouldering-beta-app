@@ -6,6 +6,7 @@ import { useReplayDriver } from "@/hooks/useReplayDriver";
 import { useAuth } from "@/hooks/useAuth";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { toReplayData, hasStarfield, type ReplayData } from "@/pipeline/overlay/replayData.mjs";
+import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // XrayReplayDemo — the landing-page hero. It replays the scan loading-screen
@@ -109,16 +110,18 @@ export default function XrayReplayDemo() {
   const activeReplay = replays[activeIndex] ?? replays[0] ?? null;
   const { orbPreview, currentPose, resetSignal } = useReplayDriver(activeReplay, active, handleLoopComplete);
 
+  // Match the scan-flow frame sizing: fill the width but cap the height to the
+  // viewport so a portrait clip never overflows vertically on first paint.
   const aspectStyle = useMemo(() => {
     const w = activeReplay?.aspect.w ?? 9;
     const h = activeReplay?.aspect.h ?? 16;
-    return { aspectRatio: `${w} / ${h}` } as const;
+    return mediaContainerStyle(w, h);
   }, [activeReplay]);
 
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden rounded-md border border-edge/40 bg-scan-stage"
+      className="relative mx-auto overflow-hidden rounded-md border border-edge/40 bg-scan-stage"
       style={aspectStyle}
       aria-label="Route Scanner x-ray demo"
     >
