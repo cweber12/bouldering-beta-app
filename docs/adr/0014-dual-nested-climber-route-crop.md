@@ -2,7 +2,8 @@
 
 ## Status
 
-accepted
+accepted (decisions 3 and 4 superseded by ADR 0016 — the Climber and Route crops
+are now independent, so the Route is no longer forced to contain the Climber)
 
 Supersedes ADR 0013 decision 1 (the Climber crop shown **locked**, no resize) and
 decision 4 (the Route/Wall crop defaulting to the **whole frame**). Keeps ADR

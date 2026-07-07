@@ -153,11 +153,11 @@ pick a different climber.
 | Target | Purpose |
 |---|---|
 | Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically. |
-| Route (outer) | Feature-matching region on the first video frame. Starts near full-frame with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to exclude sky or bystanders and line the climb up with the route photo. |
+| Route (outer) | Feature-matching region on the first video frame. Starts framed around the climber — inset from the frame edges with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to trim it down to just the rock face and line the climb up with the route photo. |
 
-The Climber box is dominant: moving it pushes the Route out to keep containing
-it, and the Route can never be dragged inside the Climber. Click **Scan video**
-after framing the boxes.
+The two boxes are independent — resize each freely. The Route is not tied to the
+Climber, so you can shrink it to just the target face even when the climber is
+wider than the rock. Click **Scan video** after framing the boxes.
 
 ## Guided scan flow
 

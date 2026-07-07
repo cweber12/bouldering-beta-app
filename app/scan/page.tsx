@@ -25,7 +25,7 @@ import type { HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
-import { containRoute, defaultRouteAroundClimber } from "@/utils/cropContainment";
+import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
@@ -483,27 +483,28 @@ function ScanPageInner() {
       const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
       const climber = derived ?? defaultClimberBox(point);
       setClimberCrop(climber);
-      // Route appears around the Climber: near full-frame, bottom pulled up to the
-      // Climber's bottom (ADR 0014). Keep the User's framing if they touched it.
-      setWallCrop((prev) => (wallTouchedRef.current ? containRoute(prev, climber) : defaultRouteAroundClimber(climber)));
+      // Route starts framed around the Climber (inset from the edges, floor
+      // trimmed). It is independent of the Climber, so keep the User's own
+      // framing untouched if they already sized it (ADR 0016).
+      setWallCrop((prev) => (wallTouchedRef.current ? prev : defaultRouteAroundClimber(climber)));
       return derived != null;
     },
     [model],
   );
 
   // The user dragged the Climber box — it overrides the detection seed region.
-  // The Climber is dominant, so it pushes the Route out to keep containing it.
+  // The Climber and Route are independent, so this leaves the Route alone.
   const handleClimberCropChange = useCallback((c: CropFraction) => {
     setClimberCrop(c);
-    setWallCrop((prev) => containRoute(prev, c));
   }, []);
 
   // The user dragged the Route box — remember it so a re-tap keeps their framing.
-  // The Route is subordinate: it can never cross inside the Climber.
+  // The Route is free to be any size (frame-clamped only), independent of the
+  // Climber, so the User can trim it down to just the rock face.
   const handleWallCropChange = useCallback((c: CropFraction) => {
     wallTouchedRef.current = true;
-    setWallCrop(containRoute(c, climberCrop));
-  }, [climberCrop]);
+    setWallCrop(frameClampCrop(c));
+  }, []);
 
   // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
   const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
