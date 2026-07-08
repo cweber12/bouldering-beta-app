@@ -8,14 +8,16 @@ import type { CropFraction } from "@/utils/cropFraction";
 // ---------------------------------------------------------------------------
 // useContrastAdjust — resolve a per-surface ContrastAdjust from a backdrop image.
 //
-// Decodes the backdrop once (memoised by File identity + crop rect + enabled),
-// samples its luminance band via the cv-free DOM sampler, and returns a
-// ContrastAdjust the overlay draw modules can thread down. Returns undefined when
-// Auto-contrast is off, no backdrop is available, or sampling fails — so the
-// overlay falls back to exactly the authored palette (the feature is additive).
+// Decodes the backdrop once (memoised by File identity + crop rect), samples its
+// luminance band via the cv-free DOM sampler, and returns a ContrastAdjust the
+// overlay draw modules can thread down. Returns undefined when no backdrop is
+// available or sampling fails.
 //
-// The model is static-per-surface, so this recomputes only when the photo, crop,
-// or the enabled flag changes — never per frame (that would shimmer and waste work).
+// It always samples (not gated by the user's opt-in), so callers can *detect*
+// poor contrast — `paletteContrastIsPoor(adjust)` — and offer the boost even
+// while adaptation is off. The caller decides whether to actually apply the
+// returned adjust. The model is static-per-surface, so this recomputes only when
+// the photo or crop changes — never per frame (that would shimmer and waste work).
 // ---------------------------------------------------------------------------
 
 /** Round a crop rect into a stable dependency key so tiny drags don't re-sample. */
@@ -28,19 +30,17 @@ function cropKey(crop?: CropFraction): string {
 /**
  * @param backdrop - The image the overlay is drawn over (route photo or wall crop
  *                   source). Null disables sampling.
- * @param enabled  - The Auto-contrast toggle. When false, returns undefined.
  * @param crop     - Optional fractional rect to sample (e.g. the wall crop).
  */
 export function useContrastAdjust(
   backdrop: File | null,
-  enabled: boolean,
   crop?: CropFraction,
 ): ContrastAdjust | undefined {
   const [adjust, setAdjust] = useState<ContrastAdjust | undefined>(undefined);
   const key = cropKey(crop);
 
   useEffect(() => {
-    if (!enabled || !backdrop) {
+    if (!backdrop) {
       setAdjust(undefined);
       return;
     }
@@ -65,7 +65,7 @@ export function useContrastAdjust(
     };
     // `key` captures the crop rect; `backdrop` identity captures the photo.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backdrop, enabled, key]);
+  }, [backdrop, key]);
 
   return adjust;
 }

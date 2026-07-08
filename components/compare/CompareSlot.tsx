@@ -10,8 +10,6 @@ import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
 import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
-import { adaptColor } from "@/pipeline/overlay/contrastAdapter";
-import { useContrastAdjust } from "@/hooks/useContrastAdjust";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
@@ -115,19 +113,14 @@ export default function CompareSlot({
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
   const [exportProgress, setExportProgress] = useState(0);
 
-  // Adapt this slot's identity colour for legibility against its route photo.
-  // The slot colour's hue is locked (climber identity preserved) and the shared
-  // white joint stays the neutral anchor — so we pre-adapt the slot colour here
-  // rather than threading a style-level adjust that would also touch the joint.
-  const contrastAdjust = useContrastAdjust(imageFile, true);
-
   // This climb's styled overlay — identity-coloured Silhouette + Skeleton, with
   // white joints for contrast. Derived once and reused for both the live player
   // layer and the download/export render path.
-  const skeletonStyle = useMemo<SkeletonStyle>(() => {
-    const adapted = adaptColor(limbColor, contrastAdjust);
-    return { silhouetteColor: adapted, lineColor: adapted, jointColor: JOINT_COLOR };
-  }, [limbColor, contrastAdjust]);
+  const skeletonStyle = useMemo<SkeletonStyle>(() => ({
+    silhouetteColor: limbColor,
+    lineColor: limbColor,
+    jointColor: JOINT_COLOR,
+  }), [limbColor]);
 
   async function handleDownload() {
     if (!cv || !imageFile || !attempt || !matchResult) return;

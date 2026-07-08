@@ -3,6 +3,7 @@ import {
   computeLumaStats,
   computeContrastAdjust,
   adaptColor,
+  paletteContrastIsPoor,
   TARGET_CONTRAST_RATIO,
   type ContrastAdjust,
 } from "@/pipeline/overlay/contrastAdapter";
@@ -140,10 +141,30 @@ describe("adaptColor", () => {
 
   it("moves a colour lighter on a dark wall and darker on a bright wall", () => {
     const base = luma(midGray);
-    const dark = adaptColor(midGray, computeContrastAdjust({ meanLuma: 0.15, stdLuma: 0.05 }));
-    const bright = adaptColor(midGray, computeContrastAdjust({ meanLuma: 0.85, stdLuma: 0.05 }));
+    const dark = adaptColor(midGray, computeContrastAdjust({ meanLuma: 0.28, stdLuma: 0.1 }));
+    const bright = adaptColor(midGray, computeContrastAdjust({ meanLuma: 0.72, stdLuma: 0.1 }));
     expect(luma(dark)).toBeGreaterThan(base);
     expect(luma(bright)).toBeLessThan(base);
+  });
+
+  it("never bottoms out at pure black or white (clamped result range)", () => {
+    // A bright wall would push a bright colour to near-black under a hard target;
+    // the clamp keeps it a deep, still-coloured version.
+    const adjust = computeContrastAdjust({ meanLuma: 0.6, stdLuma: 0.12 });
+    const out = adaptColor("#d6fb61", adjust);
+    expect(luma(out)).toBeGreaterThan(0.02);
+    expect(hsl(out)[1]).toBeGreaterThan(0.2); // hue survives (still saturated)
+  });
+});
+
+describe("paletteContrastIsPoor", () => {
+  it("flags a wall whose luma sits in the middle of the palette", () => {
+    // A mid-luma, busy wall blends with the lime/cyan/orange palette.
+    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.55, stdLuma: 0.15 }))).toBe(true);
+  });
+
+  it("does not flag a very dark, flat wall the bright palette clears easily", () => {
+    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.03, stdLuma: 0.01 }))).toBe(false);
   });
 });
 

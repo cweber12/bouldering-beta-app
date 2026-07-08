@@ -54,8 +54,10 @@ export interface StepMatchRoutePhotoProps {
   // Skeleton style
   onSkeletonStyleChange: (s: SkeletonStyle) => void;
   onHoldsStyleChange: (h: HoldStyle) => void;
-  /** Toggle backdrop adaptation for the whole overlay (Skeleton + Holds). */
-  onAutoContrastChange?: (on: boolean) => void;
+  // Contrast boost (opt-in) for the whole overlay (Skeleton + Holds).
+  contrastEnabled?: boolean;
+  onContrastToggle?: (on: boolean) => void;
+  contrastPoor?: boolean;
   // Export
   exportStatus: "idle" | "rendering" | "done";
   exportProgress: number;
@@ -100,7 +102,9 @@ export default function StepMatchRoutePhoto({
   holdStyle,
   onSkeletonStyleChange,
   onHoldsStyleChange,
-  onAutoContrastChange,
+  contrastEnabled,
+  onContrastToggle,
+  contrastPoor,
   exportStatus,
   exportProgress,
   onApplyMatch,
@@ -373,7 +377,10 @@ export default function StepMatchRoutePhoto({
                   onClose={() => setClimberOpen(false)}
                   onChange={onSkeletonStyleChange}
                   onHoldsChange={onHoldsStyleChange}
-                  onAutoContrastChange={onAutoContrastChange}
+                  contrastEnabled={contrastEnabled}
+                  onContrastToggle={onContrastToggle}
+                  contrastPoor={contrastPoor}
+                  contrastAvailable
                   footer={<DeveloperViewToggle />}
                 />
               </div>

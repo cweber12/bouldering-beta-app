@@ -4,8 +4,6 @@ import { useMemo, useState } from "react";
 import FramePlayer, { type FramePlayerLayer } from "@/components/skeleton/FramePlayer";
 import { buildMultiSkeletonFrames } from "@/pipeline/overlay/skeletonRenderer";
 import { renderMultiPoseVideo } from "@/pipeline/render/multiPoseVideoRenderer";
-import { adaptColor, type ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
-import { useContrastAdjust } from "@/hooks/useContrastAdjust";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
@@ -19,17 +17,9 @@ const JOINT_COLOR = "rgba(255,255,255,0.9)";
  * Overlay style for one climb in the multi-climb composite. The Silhouette is
  * disabled here — several overlapping translucent bodies would muddy into one
  * another, so each climb shows as its slot-coloured Skeleton instead.
- *
- * Adaptive contrast is applied to the slot line colour only (its hue is locked,
- * so climbers stay distinguishable) while the shared white joint stays the
- * neutral anchor — it is deliberately excluded from adaptation.
  */
-function overlayStyle(slotColor: string, adjust?: ContrastAdjust): SkeletonStyle {
-  return {
-    silhouetteVisible: false,
-    lineColor: adaptColor(slotColor, adjust),
-    jointColor: JOINT_COLOR,
-  };
+function overlayStyle(slotColor: string): SkeletonStyle {
+  return { silhouetteVisible: false, lineColor: slotColor, jointColor: JOINT_COLOR };
 }
 
 // ---------------------------------------------------------------------------
@@ -58,10 +48,6 @@ export default function CompareOverlayPlayer({
   slotColors,
   slotOffsets,
 }: CompareOverlayPlayerProps) {
-  // One adaptation path for the shared route photo: each slot's line colour is
-  // nudged for legibility while its hue (climber identity) is preserved.
-  const contrastAdjust = useContrastAdjust(imageFile, true);
-
   // Pre-compute multi-layer skeleton frames (sync, instant).
   const multiData = useMemo(() => {
     if (!cv) return null;
@@ -96,13 +82,13 @@ export default function CompareOverlayPlayer({
         layers.push({
           frames: multiData.layers[layerIdx].frames,
           timeOffset: slotOffsets?.[i] ?? 0,
-          style: overlayStyle(slotColors[i], contrastAdjust),
+          style: overlayStyle(slotColors[i]),
         });
         layerIdx++;
       }
     }
     return layers;
-  }, [multiData, attempts, matchResults, slotColors, slotOffsets, contrastAdjust]);
+  }, [multiData, attempts, matchResults, slotColors, slotOffsets]);
 
   // On-demand video export.
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -121,7 +107,7 @@ export default function CompareOverlayPlayer({
         orbFeatures: att.orbFeatures,
         queryOrb: mr.queryOrb,
         matches: mr.matches,
-        skeletonStyle: overlayStyle(slotColors[i], contrastAdjust),
+        skeletonStyle: overlayStyle(slotColors[i]),
       });
     }
     if (layerInputs.length === 0) return;

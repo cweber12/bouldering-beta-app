@@ -25,9 +25,13 @@
 // is a one-line change (no logic edits).
 // ---------------------------------------------------------------------------
 
-/** Contrast ratio a colour must clear against the backdrop band. WCAG's bar for
- *  graphical objects / UI components is 3:1. */
-export const TARGET_CONTRAST_RATIO = 3;
+/** Contrast ratio a colour must clear against the backdrop band. Deliberately
+ *  below WCAG's 3:1 graphical-object bar: on a mid-to-bright wall a bright
+ *  overlay cannot get *brighter* than the wall, so a hard 3:1 target forces it
+ *  all the way to near-black to satisfy the ratio on the dark side. A gentler
+ *  target keeps the adjustment a nudge, not a blackout, while still lifting a
+ *  blending colour clear of the wall. */
+export const TARGET_CONTRAST_RATIO = 2.2;
 
 /** Band multiplier: a colour must beat the near edge of `mean ± k·stdDev`, so a
  *  high-variance (busy) wall demands a firmer shift than a flat one. */
@@ -36,12 +40,27 @@ export const BAND_K = 1.0;
 /** WCAG contrast offset: ratio = (Lhi + OFFSET) / (Llo + OFFSET). */
 const CONTRAST_OFFSET = 0.05;
 
-/** How aggressively saturation is rescued as a colour is pushed toward black or
- *  white. Fraction of the remaining head-room (1 − s) added at full extremity. */
-const SAT_RESCUE = 0.6;
+/** Hard clamp on the adapted lightness so a nudge never bottoms out at pure
+ *  black or blows out to pure white — the colour keeps its identity even when
+ *  the wall would otherwise push it to an extreme. */
+const MIN_RESULT_L = 0.16;
+const MAX_RESULT_L = 0.9;
 
-/** Lightness beyond which (toward 1 or 0) vividness rescue starts ramping in. */
-const EXTREME_L = 0.85;
+/** How aggressively saturation is rescued as a colour is pushed toward black or
+ *  white. Fraction of the remaining head-room (1 − s) added at full extremity.
+ *  Stronger than a subtle touch so a darkened colour reads as a deep, saturated
+ *  version of its hue rather than a muddy near-grey. */
+const SAT_RESCUE = 0.85;
+
+/** Distance from mid-lightness (0.5) past which vividness rescue starts ramping
+ *  in, and the distance over which it reaches full strength. */
+const RESCUE_ONSET = 0.2;
+const RESCUE_SPAN = 0.3;
+
+/** The authored overlay palette identities used to detect poor contrast against
+ *  a wall (the anatomical Skeleton lime/cyan/orange and the Holds cyan/orange).
+ *  The shared white joint is intentionally excluded — it is a neutral anchor. */
+export const OVERLAY_PALETTE = ["#d6fb61", "#39b1d1", "#f6850c"];
 
 // ---------------------------------------------------------------------------
 // Value objects
@@ -215,32 +234,42 @@ function solveLForLuma(
   return (lo + hi) / 2;
 }
 
+/** The near-edge luminances of the backdrop band a colour must beat. */
+function bandEdges(adjust: ContrastAdjust): { light: number; dark: number } {
+  return {
+    light: clamp01(adjust.meanLuma + adjust.k * adjust.stdLuma),
+    dark: clamp01(adjust.meanLuma - adjust.k * adjust.stdLuma),
+  };
+}
+
+/** Does a colour of relative luminance `lc` already clear the target against the
+ *  band? A colour lighter than the band must beat the light edge; darker must
+ *  beat the dark edge; one *inside* the band fails on both sides. */
+function clearsBand(lc: number, light: number, dark: number, target: number): boolean {
+  if (lc >= light) return contrastRatio(lc, light) >= target - 1e-9;
+  if (lc <= dark) return contrastRatio(lc, dark) >= target - 1e-9;
+  return false;
+}
+
 /**
  * Work out how to nudge one colour so it clears the target contrast against the
  * backdrop band. Returns a zero adjustment when the colour already passes.
  *
  * The colour may move lighter (to beat the band's light edge, `mean + k·std`) or
  * darker (to beat the dark edge, `mean − k·std`); the direction requiring the
- * smaller lightness move wins, which naturally biases away from the extremes
- * that would wash the hue out.
+ * smaller lightness move wins, which biases away from the extremes that would
+ * wash the hue out. The result is clamped away from pure black/white so the
+ * nudge stays a nudge.
  */
 function computeAdjustment(css: string, adjust: ContrastAdjust): Adjustment {
   const { r, g, b } = parseRgb(css);
   const [h, s, l] = rgbToHsl(r, g, b);
   const { target } = adjust;
-
-  const light = clamp01(adjust.meanLuma + adjust.k * adjust.stdLuma);
-  const dark = clamp01(adjust.meanLuma - adjust.k * adjust.stdLuma);
+  const { light, dark } = bandEdges(adjust);
 
   const [cr, cg, cb] = hslToRgb01(h, s, l);
   const cur = relLuma(cr, cg, cb);
-
-  const clears = (lc: number): boolean => {
-    if (lc >= light) return contrastRatio(lc, light) >= target - 1e-9;
-    if (lc <= dark) return contrastRatio(lc, dark) >= target - 1e-9;
-    return false; // inside the band → failing on both sides
-  };
-  if (clears(cur)) return { dl: 0, s };
+  if (clearsBand(cur, light, dark, target)) return { dl: 0, s };
 
   // Luminance needed to clear the target on each side of the band.
   const wantUp = target * (light + CONTRAST_OFFSET) - CONTRAST_OFFSET;
@@ -261,31 +290,55 @@ function computeAdjustment(css: string, adjust: ContrastAdjust): Adjustment {
   } else if (downReachable) {
     targetLuma = wantDown;
   } else {
-    // Neither side reachable — go to the nearest extreme.
-    return { dl: (cur >= light ? 1 : 0) - l, s };
+    // Neither side reachable — go to the nearest (clamped) extreme.
+    const extreme = cur >= light ? MAX_RESULT_L : MIN_RESULT_L;
+    return { dl: extreme - l, s };
   }
 
   // Vividness rescue: the closer the final lightness sits to black/white, the
   // more the hue would grey out — add saturation to keep it recognisable. Sized
   // from a preliminary lightness estimate, then the lightness is re-solved with
-  // the boosted saturation so the target luminance is still hit exactly. Never
-  // subtracts, so the authored saturation is always a floor.
+  // the boosted saturation so the target luminance is still hit. Never subtracts,
+  // so the authored saturation is always a floor.
   const prelimL = solveLForLuma(h, s, targetLuma, 0, 1);
-  const extremity =
-    prelimL > 0.5
-      ? Math.max(0, (prelimL - EXTREME_L) / (1 - EXTREME_L))
-      : Math.max(0, ((1 - EXTREME_L) - prelimL) / (1 - EXTREME_L));
-  const sFinal = clamp01(s + (extremity > 0 ? (1 - s) * extremity * SAT_RESCUE : 0));
+  const extremity = Math.max(0, (Math.abs(prelimL - 0.5) - RESCUE_ONSET) / RESCUE_SPAN);
+  const sFinal = clamp01(s + Math.min(1, extremity) * (1 - s) * SAT_RESCUE);
 
-  const finalL = solveLForLuma(h, sFinal, targetLuma, 0, 1);
+  const finalL = clamp01Range(solveLForLuma(h, sFinal, targetLuma, 0, 1));
   return { dl: finalL - l, s: sFinal };
+}
+
+/** Clamp a lightness into the safe result range (never pure black/white). */
+function clamp01Range(l: number): number {
+  return l < MIN_RESULT_L ? MIN_RESULT_L : l > MAX_RESULT_L ? MAX_RESULT_L : l;
 }
 
 /** Apply a computed {@link Adjustment} to a colour, preserving hue. */
 function applyAdjustment(css: string, dl: number, s: number): string {
   const { r, g, b } = parseRgb(css);
   const [h, , l] = rgbToHsl(r, g, b);
-  return hslToCss(h, clamp01(s), clamp01(l + dl));
+  return hslToCss(h, clamp01(s), clamp01Range(l + dl));
+}
+
+/**
+ * Whether a colour fails the target contrast against the backdrop band — i.e.
+ * adapting it would actually change it. Drives the "low contrast on this wall"
+ * detection that surfaces the opt-in boost.
+ */
+export function colorNeedsAdaptation(css: string, adjust: ContrastAdjust): boolean {
+  const { r, g, b } = parseRgb(css);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  const { light, dark } = bandEdges(adjust);
+  const [cr, cg, cb] = hslToRgb01(h, s, l);
+  return !clearsBand(relLuma(cr, cg, cb), light, dark, adjust.target);
+}
+
+/**
+ * True when any of the authored overlay palette identities fails the target
+ * against this backdrop — a cue to offer the user the contrast boost.
+ */
+export function paletteContrastIsPoor(adjust: ContrastAdjust): boolean {
+  return OVERLAY_PALETTE.some((c) => colorNeedsAdaptation(c, adjust));
 }
 
 /**

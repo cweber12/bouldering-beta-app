@@ -60,12 +60,17 @@ export interface SkeletonStylePanelProps {
    */
   onHoldsChange?: (style: HoldStyle) => void;
   /**
-   * Called whenever the Auto-contrast toggle changes. When on (the default), the
-   * parent samples the backdrop and threads a `contrastAdjust` into the Skeleton
-   * and Holds styles; when off, the parent emits neither and the overlay renders
-   * the authored palette exactly.
+   * Contrast-boost control (opt-in, off by default). When a backdrop is
+   * available (`contrastAvailable`) the panel shows a "Boost contrast" toggle;
+   * when the wall is detected to give the palette poor contrast
+   * (`contrastPoor`) it surfaces a one-click prompt to switch it on. The parent
+   * owns the state and only threads a `contrastAdjust` into the styles while
+   * `contrastEnabled` is true.
    */
-  onAutoContrastChange?: (on: boolean) => void;
+  contrastEnabled?: boolean;
+  onContrastToggle?: (on: boolean) => void;
+  contrastPoor?: boolean;
+  contrastAvailable?: boolean;
   /** Drawer heading. Defaults to "Climber". */
   label?: string;
   /** Optional content rendered at the bottom of the open panel, under a divider.
@@ -93,14 +98,13 @@ export default function SkeletonStylePanel({
   onClose,
   onChange,
   onHoldsChange,
-  onAutoContrastChange,
+  contrastEnabled = false,
+  onContrastToggle,
+  contrastPoor = false,
+  contrastAvailable = false,
   label = "Climber",
   footer,
 }: SkeletonStylePanelProps) {
-  // ── Auto-contrast — gates backdrop adaptation for BOTH Skeleton and Holds.
-  // Default on so overlays are legible without any configuration; off renders
-  // exactly the authored palette. ──
-  const [autoContrast, setAutoContrast] = useState(true);
   // ── Silhouette pass ──
   const [silhouetteVisible, setSilhouetteVisible] = useState(true);
   const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_SILHOUETTE_COLOR);
@@ -125,8 +129,6 @@ export default function SkeletonStylePanel({
   useEffect(() => { onChangeRef.current = onChange; });
   const onHoldsChangeRef = useRef(onHoldsChange);
   useEffect(() => { onHoldsChangeRef.current = onHoldsChange; });
-  const onAutoContrastChangeRef = useRef(onAutoContrastChange);
-  useEffect(() => { onAutoContrastChangeRef.current = onAutoContrastChange; });
 
   // Emit updated style whenever any setting changes.
   useEffect(() => {
@@ -148,22 +150,34 @@ export default function SkeletonStylePanel({
     onHoldsChangeRef.current?.({ holdsVisible });
   }, [holdsVisible]);
 
-  // Emit the Auto-contrast state so the parent can sample the backdrop (or not).
-  useEffect(() => {
-    onAutoContrastChangeRef.current?.(autoContrast);
-  }, [autoContrast]);
-
   return (
     <PreviewSidebar open={open} onClose={onClose} title={label}>
-          {/* ── Auto-contrast — one switch gating backdrop adaptation for the
-              whole overlay (Skeleton + Holds). Placed above the Silhouette row. ── */}
-          <label className="flex items-center gap-2 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-            <input type="checkbox" checked={autoContrast}
-              onChange={e => setAutoContrast(e.target.checked)}
-              className="accent-accent rounded" />
-            Auto-contrast
-            <span className="text-fg-muted font-normal">— keep colours legible on the wall</span>
-          </label>
+          {/* ── Contrast boost — opt-in (off by default). When the wall gives the
+              palette poor contrast, a one-click prompt is surfaced; otherwise a
+              plain toggle. Gates backdrop adaptation for the whole overlay. ── */}
+          {contrastAvailable && (
+            <div className="flex flex-col gap-1.5">
+              {contrastPoor && !contrastEnabled ? (
+                <button
+                  type="button"
+                  onClick={() => onContrastToggle?.(true)}
+                  className="flex items-center gap-2 rounded-md border border-caution-border bg-caution-surface px-2.5 py-1.5 text-xs font-medium text-caution transition hover:brightness-110 text-left"
+                >
+                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  Low contrast on this wall — boost it
+                </button>
+              ) : (
+                <label className="flex items-center gap-2 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+                  <input type="checkbox" checked={contrastEnabled}
+                    onChange={e => onContrastToggle?.(e.target.checked)}
+                    className="accent-accent rounded" />
+                  Boost contrast for the wall
+                </label>
+              )}
+            </div>
+          )}
 
           {/* ── Silhouette ── */}
           <div className="flex flex-col gap-2">

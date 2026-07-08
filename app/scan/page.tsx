@@ -15,6 +15,7 @@ import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
 import { useContrastAdjust } from "@/hooks/useContrastAdjust";
+import { paletteContrastIsPoor } from "@/pipeline/overlay/contrastAdapter";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -205,9 +206,9 @@ function ScanPageInner() {
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({});
   // Holds overlay style — the Overlay panel emits a full HoldStyle on mount.
   const [holdStyle, setHoldStyle] = useState<HoldStyle>({});
-  // Auto-contrast — one switch (default on) gating backdrop adaptation for both
-  // the Skeleton and Holds overlays. Off renders the authored palette exactly.
-  const [autoContrast, setAutoContrast] = useState(true);
+  // Contrast boost — opt-in (off by default). When on, gates backdrop adaptation
+  // for both the Skeleton and Holds overlays. Off renders the authored palette.
+  const [contrastEnabled, setContrastEnabled] = useState(false);
 
   // On-demand video export state
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -234,14 +235,18 @@ function ScanPageInner() {
   // Derive topology-aware skeleton style
   const activeAttemptId0 = (status === "done") ? attemptId : null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
-  // Adaptive contrast — sample each surface's backdrop luminance band once
-  // (memoised by file identity + crop) so the Skeleton and Holds colours stay
-  // legible against it. Undefined when Auto-contrast is off, so the overlay then
-  // renders the authored palette exactly.
+  // Adaptive contrast — always sample each surface's backdrop luminance band once
+  // (memoised by file identity + crop) so we can *detect* poor contrast and offer
+  // the opt-in boost. The sampled adjust is only applied when the user turns the
+  // boost on (contrastEnabled); otherwise the overlay renders the authored palette.
   //  • post-scan review (Skeleton over the first video frame) → the wall crop.
   //  • route-photo overlay + exported WebM → the whole route photo.
-  const wallContrastAdjust = useContrastAdjust(firstFrameFile, autoContrast, wallCrop);
-  const routeContrastAdjust = useContrastAdjust(routePhotoFile, autoContrast);
+  const wallContrastAdjust = useContrastAdjust(firstFrameFile, wallCrop);
+  const routeContrastAdjust = useContrastAdjust(routePhotoFile);
+
+  // Poor-contrast detection drives the panel's one-click prompt.
+  const wallContrastPoor = !!wallContrastAdjust && paletteContrastIsPoor(wallContrastAdjust);
+  const routeContrastPoor = !!routeContrastAdjust && paletteContrastIsPoor(routeContrastAdjust);
 
   const baseTopoStyle: SkeletonStyle = useMemo(() => {
     const backend = activeAttempt0?.poseBackend ?? "mediapipe";
@@ -250,20 +255,21 @@ function ScanPageInner() {
   }, [skeletonStyle, activeAttempt0]);
 
   // Per-surface styles: the review step adapts to the wall, the match step (and
-  // the exported WebM, via styleRef) adapts to the route photo.
+  // the exported WebM, via styleRef) adapts to the route photo — only while the
+  // boost is enabled.
   const landmarksTopoStyle: SkeletonStyle = useMemo(
-    () => ({ ...baseTopoStyle, contrastAdjust: wallContrastAdjust }),
-    [baseTopoStyle, wallContrastAdjust],
+    () => ({ ...baseTopoStyle, contrastAdjust: contrastEnabled ? wallContrastAdjust : undefined }),
+    [baseTopoStyle, contrastEnabled, wallContrastAdjust],
   );
   const topoStyle: SkeletonStyle = useMemo(
-    () => ({ ...baseTopoStyle, contrastAdjust: routeContrastAdjust }),
-    [baseTopoStyle, routeContrastAdjust],
+    () => ({ ...baseTopoStyle, contrastAdjust: contrastEnabled ? routeContrastAdjust : undefined }),
+    [baseTopoStyle, contrastEnabled, routeContrastAdjust],
   );
 
   // Holds style with the route-photo adaptation merged in for the overlay pass.
   const topoHoldStyle: HoldStyle = useMemo(
-    () => ({ ...holdStyle, contrastAdjust: routeContrastAdjust }),
-    [holdStyle, routeContrastAdjust],
+    () => ({ ...holdStyle, contrastAdjust: contrastEnabled ? routeContrastAdjust : undefined }),
+    [holdStyle, contrastEnabled, routeContrastAdjust],
   );
 
   // Keep styleRef in sync
@@ -808,7 +814,9 @@ function ScanPageInner() {
           firstFrameSkeletonData={firstFrameSkeletonData}
           topoStyle={landmarksTopoStyle}
           onSkeletonStyleChange={setSkeletonStyle}
-          onAutoContrastChange={setAutoContrast}
+          contrastEnabled={contrastEnabled}
+          onContrastToggle={setContrastEnabled}
+          contrastPoor={wallContrastPoor}
           onEditClimb={handleEditClimb}
           onScanAnother={handleSaveComplete}
           orbReady={orbReady}
@@ -844,7 +852,9 @@ function ScanPageInner() {
           holdStyle={topoHoldStyle}
           onSkeletonStyleChange={setSkeletonStyle}
           onHoldsStyleChange={setHoldStyle}
-          onAutoContrastChange={setAutoContrast}
+          contrastEnabled={contrastEnabled}
+          onContrastToggle={setContrastEnabled}
+          contrastPoor={routeContrastPoor}
           exportStatus={exportStatus}
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}
