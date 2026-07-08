@@ -125,6 +125,26 @@ drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off).
 
+### Adaptive overlay contrast
+
+An **Auto-contrast** toggle in the Climber panel (default on) keeps the overlay
+legible against the wall it is drawn on. The backdrop's luminance band is sampled
+once per surface (`useContrastAdjust` → `sampleBackdropLuma` draws the photo, or
+the wall crop, to a small offscreen canvas and hands the pixels to the pure
+`computeLumaStats`), and `contrastAdapter.adaptColor` nudges each overlay colour's
+**lightness only** just far enough to clear a 3:1 contrast target against that
+band. Hue never moves — cyan still means Hand Hold, orange still means Foot Hold
+(ADR 0012), and the anatomical Skeleton keeps its limb identities — and
+saturation is only ever raised (to rescue a hue a lightness push would wash out),
+never lowered. The review step samples the wall crop; the route-photo overlay and
+the exported/baked WebM sample the route photo; Compare adapts each climber's line
+colour (hue-locked, so climbers stay distinguishable) while the shared white joint
+stays a neutral anchor. Turning Auto-contrast off renders the authored palette
+exactly — the feature is purely additive, and nothing is persisted (the adjustment
+is recomputed deterministically from the photo, so saved runs need no migration).
+The contrast target and band width are named constants
+(`TARGET_CONTRAST_RATIO`, `BAND_K`) at the top of `contrastAdapter.ts`.
+
 ## Pages
 
 | Route | Purpose | Auth required |

@@ -36,6 +36,8 @@ export interface StepViewLandmarksProps {
   firstFrameSkeletonData: SkeletonFrameData | null;
   topoStyle: SkeletonStyle;
   onSkeletonStyleChange: (s: SkeletonStyle) => void;
+  /** Toggle backdrop adaptation for the Skeleton overlay (samples the wall crop). */
+  onAutoContrastChange?: (on: boolean) => void;
   // Navigation
   /** Back to the detection step (Step 2). */
   onEditClimb: () => void;
@@ -71,6 +73,7 @@ export default function StepViewLandmarks({
   firstFrameSkeletonData,
   topoStyle,
   onSkeletonStyleChange,
+  onAutoContrastChange,
   onEditClimb,
   onScanAnother,
   orbReady,
@@ -364,6 +367,7 @@ export default function StepViewLandmarks({
                       open={openSidebar === "climber"}
                       onClose={() => setOpenSidebar(null)}
                       onChange={onSkeletonStyleChange}
+                      onAutoContrastChange={onAutoContrastChange}
                       footer={<DeveloperViewToggle />}
                     />
                   </div>

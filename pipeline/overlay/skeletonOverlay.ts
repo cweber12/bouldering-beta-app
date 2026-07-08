@@ -31,6 +31,7 @@
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
 import { applyHomographyMatrix } from "@/pipeline/matching/homography";
+import { adaptColor, adaptRamp, type ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 
 // ---------------------------------------------------------------------------
 // Defaults (all thickness/size values are × body scale unless noted)
@@ -47,8 +48,8 @@ const SIDE_HUE_SHIFT_LEFT = 0.04;
 const SIDE_HUE_SHIFT_RIGHT = 0.09;
 const ARM_HAND_COLOR = "#39B1D1";
 const LEG_FOOT_COLOR = "#F6850C";
-const ANATOMICAL_LEFT_HUE_SHIFT = -0.015;
-const ANATOMICAL_RIGHT_HUE_SHIFT = 0.015;
+const ANATOMICAL_LEFT_HUE_SHIFT = -0.025;
+const ANATOMICAL_RIGHT_HUE_SHIFT = 0.025;
 /** Opacity multiplier for the silhouette head. The head now floats free (the
  *  neck capsule was removed), so keep it faint to make the detachment subtle. */
 const HEAD_SILHOUETTE_OPACITY = 0.55;
@@ -219,6 +220,14 @@ export interface SkeletonStyle {
    * Default: auto (enabled only when using default colours).
    */
   anatomicalPalette?: boolean;
+
+  /**
+   * When set, every emitted overlay colour is nudged (lightness only, hue-locked)
+   * for legibility against the sampled backdrop this describes. Omit — or pass
+   * with Auto-contrast off — to render the authored palette exactly. See
+   * {@link adaptColor}.
+   */
+  contrastAdjust?: ContrastAdjust;
 }
 
 /**
@@ -469,10 +478,17 @@ function edgeStrokeStyle(
   to: Pt,
   useAnatomicalPalette: boolean,
   singleColor: string,
+  adjust: ContrastAdjust | undefined,
 ): string | CanvasGradient {
-  if (!useAnatomicalPalette) return sideColor(singleColor, edgeSide(fromName, toName));
-  const fromColor = anatomicalPointColor(fromName);
-  const toColor = anatomicalPointColor(toName);
+  if (!useAnatomicalPalette) {
+    return adaptColor(sideColor(singleColor, edgeSide(fromName, toName)), adjust);
+  }
+  // Adapt the ramp endpoints together so the arm/leg gradient never compresses.
+  const [fromColor, toColor] = adaptRamp(
+    anatomicalPointColor(fromName),
+    anatomicalPointColor(toName),
+    adjust,
+  );
   if (sameColor(fromColor, toColor) || typeof ctx.createLinearGradient !== "function") return fromColor;
   const g = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
   g.addColorStop(0, fromColor);
@@ -673,11 +689,14 @@ function drawSilhouette(
   scale: number,
   limbThickness: number,
   useAnatomicalPalette: boolean,
+  adjust: ContrastAdjust | undefined,
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
   const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
 
-  const torsoHeadColor = useAnatomicalPalette ? DEFAULT_COLOR : color;
+  // Adapt the base BEFORE deriving depth shades, so the rim/core relationship
+  // stays relative to the nudged colour (ADR-0005 shades are lightness shifts).
+  const torsoHeadColor = adaptColor(useAnatomicalPalette ? DEFAULT_COLOR : color, adjust);
   const dark = shiftLightness(torsoHeadColor, RIM_DARK_SHIFT);
 
   const ls = kp.left_shoulder, rs = kp.right_shoulder;
@@ -697,8 +716,14 @@ function drawSilhouette(
     if (!a || !b) return;
     sctx.lineWidth = 2 * r;
     if (useAnatomicalPalette) {
-      const from = shiftLightness(anatomicalPointColor(fromName), lightnessShift);
-      const to = shiftLightness(anatomicalPointColor(toName), lightnessShift);
+      // Adapt the ramp endpoints together, then shade each for depth.
+      const [fromBase, toBase] = adaptRamp(
+        anatomicalPointColor(fromName),
+        anatomicalPointColor(toName),
+        adjust,
+      );
+      const from = shiftLightness(fromBase, lightnessShift);
+      const to = shiftLightness(toBase, lightnessShift);
       if (sameColor(from, to) || typeof sctx.createLinearGradient !== "function") {
         sctx.strokeStyle = from;
       } else {
@@ -708,7 +733,10 @@ function drawSilhouette(
         sctx.strokeStyle = g;
       }
     } else {
-      sctx.strokeStyle = shiftLightness(sideColor(color, edgeSide(fromName, toName)), lightnessShift);
+      sctx.strokeStyle = shiftLightness(
+        adaptColor(sideColor(color, edgeSide(fromName, toName)), adjust),
+        lightnessShift,
+      );
     }
     sctx.beginPath();
     sctx.moveTo(a.x, a.y);
@@ -862,6 +890,11 @@ export function drawSkeleton(
       sameColor(lineColor, DEFAULT_SKELETON_COLOR) &&
       sameColor(jointColor, DEFAULT_JOINT_COLOR));
 
+  // Adaptive contrast: when supplied, every emitted colour is nudged (lightness
+  // only, hue-locked) for legibility against the sampled backdrop. Undefined ⇒
+  // exactly today's palette (the feature is purely additive).
+  const adjust = options?.contrastAdjust;
+
   // Prefer the sequence-stable scale so limb widths do not pulse with movement;
   // fall back to a per-frame scale only when a caller draws without supplying one.
   const scale = options?.bodyScale ?? bodyScale(keypoints, ctx.canvas.width, ctx.canvas.height);
@@ -871,7 +904,7 @@ export function drawSkeleton(
   if (silhouetteVisible && silhouetteOpacity > 0) {
     const scratch = getScratch(ctx.canvas.width, ctx.canvas.height);
     if (scratch) {
-      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness, useAnatomicalPalette);
+      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness, useAnatomicalPalette, adjust);
       ctx.save();
       ctx.globalAlpha = silhouetteOpacity;
       ctx.drawImage(scratch.canvas, 0, 0);
@@ -908,6 +941,7 @@ export function drawSkeleton(
         to,
         useAnatomicalPalette,
         lineColor,
+        adjust,
       );
       ctx.lineWidth = lineWidth;
       ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
@@ -923,8 +957,8 @@ export function drawSkeleton(
     const r = Math.max(0.5, jointRadius * scale);
     for (const [name, pt] of Object.entries(keypoints)) {
       ctx.fillStyle = useAnatomicalPalette
-        ? anatomicalPointColor(name)
-        : sideColor(jointColor, sideOf(name));
+        ? adaptColor(anatomicalPointColor(name), adjust)
+        : adaptColor(sideColor(jointColor, sideOf(name)), adjust);
       ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);

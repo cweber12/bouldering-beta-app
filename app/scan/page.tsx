@@ -14,6 +14,7 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
+import { useContrastAdjust } from "@/hooks/useContrastAdjust";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -204,6 +205,9 @@ function ScanPageInner() {
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({});
   // Holds overlay style — the Overlay panel emits a full HoldStyle on mount.
   const [holdStyle, setHoldStyle] = useState<HoldStyle>({});
+  // Auto-contrast — one switch (default on) gating backdrop adaptation for both
+  // the Skeleton and Holds overlays. Off renders the authored palette exactly.
+  const [autoContrast, setAutoContrast] = useState(true);
 
   // On-demand video export state
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -230,11 +234,37 @@ function ScanPageInner() {
   // Derive topology-aware skeleton style
   const activeAttemptId0 = (status === "done") ? attemptId : null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
-  const topoStyle: SkeletonStyle = useMemo(() => {
+  // Adaptive contrast — sample each surface's backdrop luminance band once
+  // (memoised by file identity + crop) so the Skeleton and Holds colours stay
+  // legible against it. Undefined when Auto-contrast is off, so the overlay then
+  // renders the authored palette exactly.
+  //  • post-scan review (Skeleton over the first video frame) → the wall crop.
+  //  • route-photo overlay + exported WebM → the whole route photo.
+  const wallContrastAdjust = useContrastAdjust(firstFrameFile, autoContrast, wallCrop);
+  const routeContrastAdjust = useContrastAdjust(routePhotoFile, autoContrast);
+
+  const baseTopoStyle: SkeletonStyle = useMemo(() => {
     const backend = activeAttempt0?.poseBackend ?? "mediapipe";
     const topo = getTopology(backend);
     return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
   }, [skeletonStyle, activeAttempt0]);
+
+  // Per-surface styles: the review step adapts to the wall, the match step (and
+  // the exported WebM, via styleRef) adapts to the route photo.
+  const landmarksTopoStyle: SkeletonStyle = useMemo(
+    () => ({ ...baseTopoStyle, contrastAdjust: wallContrastAdjust }),
+    [baseTopoStyle, wallContrastAdjust],
+  );
+  const topoStyle: SkeletonStyle = useMemo(
+    () => ({ ...baseTopoStyle, contrastAdjust: routeContrastAdjust }),
+    [baseTopoStyle, routeContrastAdjust],
+  );
+
+  // Holds style with the route-photo adaptation merged in for the overlay pass.
+  const topoHoldStyle: HoldStyle = useMemo(
+    () => ({ ...holdStyle, contrastAdjust: routeContrastAdjust }),
+    [holdStyle, routeContrastAdjust],
+  );
 
   // Keep styleRef in sync
   useEffect(() => { styleRef.current = topoStyle; }, [topoStyle]);
@@ -776,8 +806,9 @@ function ScanPageInner() {
           activeAttempt={activeAttempt}
           firstFrameFile={firstFrameFile}
           firstFrameSkeletonData={firstFrameSkeletonData}
-          topoStyle={topoStyle}
+          topoStyle={landmarksTopoStyle}
           onSkeletonStyleChange={setSkeletonStyle}
+          onAutoContrastChange={setAutoContrast}
           onEditClimb={handleEditClimb}
           onScanAnother={handleSaveComplete}
           orbReady={orbReady}
@@ -810,9 +841,10 @@ function ScanPageInner() {
           isFrameReady={isFrameReady}
           isMatching={isMatching}
           holds={holds}
-          holdStyle={holdStyle}
+          holdStyle={topoHoldStyle}
           onSkeletonStyleChange={setSkeletonStyle}
           onHoldsStyleChange={setHoldStyle}
+          onAutoContrastChange={setAutoContrast}
           exportStatus={exportStatus}
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}

@@ -59,6 +59,13 @@ export interface SkeletonStylePanelProps {
    * Holds row is hidden (e.g. surfaces with no Route Overlay).
    */
   onHoldsChange?: (style: HoldStyle) => void;
+  /**
+   * Called whenever the Auto-contrast toggle changes. When on (the default), the
+   * parent samples the backdrop and threads a `contrastAdjust` into the Skeleton
+   * and Holds styles; when off, the parent emits neither and the overlay renders
+   * the authored palette exactly.
+   */
+  onAutoContrastChange?: (on: boolean) => void;
   /** Drawer heading. Defaults to "Climber". */
   label?: string;
   /** Optional content rendered at the bottom of the open panel, under a divider.
@@ -86,9 +93,14 @@ export default function SkeletonStylePanel({
   onClose,
   onChange,
   onHoldsChange,
+  onAutoContrastChange,
   label = "Climber",
   footer,
 }: SkeletonStylePanelProps) {
+  // ── Auto-contrast — gates backdrop adaptation for BOTH Skeleton and Holds.
+  // Default on so overlays are legible without any configuration; off renders
+  // exactly the authored palette. ──
+  const [autoContrast, setAutoContrast] = useState(true);
   // ── Silhouette pass ──
   const [silhouetteVisible, setSilhouetteVisible] = useState(true);
   const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_SILHOUETTE_COLOR);
@@ -113,6 +125,8 @@ export default function SkeletonStylePanel({
   useEffect(() => { onChangeRef.current = onChange; });
   const onHoldsChangeRef = useRef(onHoldsChange);
   useEffect(() => { onHoldsChangeRef.current = onHoldsChange; });
+  const onAutoContrastChangeRef = useRef(onAutoContrastChange);
+  useEffect(() => { onAutoContrastChangeRef.current = onAutoContrastChange; });
 
   // Emit updated style whenever any setting changes.
   useEffect(() => {
@@ -134,8 +148,23 @@ export default function SkeletonStylePanel({
     onHoldsChangeRef.current?.({ holdsVisible });
   }, [holdsVisible]);
 
+  // Emit the Auto-contrast state so the parent can sample the backdrop (or not).
+  useEffect(() => {
+    onAutoContrastChangeRef.current?.(autoContrast);
+  }, [autoContrast]);
+
   return (
     <PreviewSidebar open={open} onClose={onClose} title={label}>
+          {/* ── Auto-contrast — one switch gating backdrop adaptation for the
+              whole overlay (Skeleton + Holds). Placed above the Silhouette row. ── */}
+          <label className="flex items-center gap-2 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+            <input type="checkbox" checked={autoContrast}
+              onChange={e => setAutoContrast(e.target.checked)}
+              className="accent-accent rounded" />
+            Auto-contrast
+            <span className="text-fg-muted font-normal">— keep colours legible on the wall</span>
+          </label>
+
           {/* ── Silhouette ── */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
