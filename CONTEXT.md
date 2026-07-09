@@ -32,23 +32,37 @@ Climber, then re-derived each detection frame from the previous pose so it
 follows the Climber as they move and change scale. Sized and positioned to hold
 the whole body **and** the next move inside the region — so a reaching limb is
 not clipped out of detection. The Climber is the **only** thing the Adaptive
-Crop frames, and a tap is the only Climber input: there is no hand-drawn Climber
-box.
+Crop frames. It is seeded at scan start by the **Climber Crop** (the tap creates
+that seed box; the User may adjust it), then re-derived per frame from landmarks
+— the manual box only seeds first acquisition, it does not track.
 _Avoid_: bounding box, ROI, the (manual) "crop box".
 
 **Manual Crop**:
-A user-adjustable box. The **Wall Crop** is now the only Manual Crop: it
-auto-renders around the Climber and the **User** may resize it. The Climber is
-no longer framed by a Manual Crop — it is selected by a tap and framed by the
-**Adaptive Crop**.
+A user-adjustable box. There are now **two**, independent of each other (ADR
+0016): the **Climber Crop** and the **Wall Crop**. Both are shown together and
+directly grabbable (`DualCropOverlay`); dragging one never moves the other. The
+per-frame **Adaptive Crop** is _not_ a Manual Crop — it stays landmark-derived
+during the scan.
 _Avoid_: selection, region.
+
+**Climber Crop**:
+The User-adjustable seed box for the **Climber** (code: `climberCrop`). It sets
+MediaPipe's first-acquisition search region and the lighting-analysis region for
+the **Climber**. Tap-seeded (`climberPoint`) and manually overridable, but it
+only seeds — the per-frame **Adaptive Crop** re-derives from landmarks during the
+scan, so hand-adjusting the Climber Crop does not change tracking, only where the
+first pose is acquired and where lighting is measured.
+_Avoid_: seed box (in prose), bounding box.
 
 **Wall Crop**:
 A region of stable wall texture (excluding the Climber) used to extract ORB
-features for route-photo matching. Defaults to the whole frame (the Climber is
-masked out during extraction) so matching has the most wall texture; the User
-may shrink it to exclude sky, ground, or bystanders.
-_Avoid_: background crop.
+features for route-photo matching (code: `wallCrop`). Independent of the
+**Climber Crop** (ADR 0016): the User may trim it down to just the rock face.
+Defaults inset from the frame edges with the bottom pulled up to the Climber's
+bottom (trimming floor/pad), and the User may shrink it further to exclude sky,
+ground, or bystanders.
+_Avoid_: background crop; Route crop (the ADRs drifted to this — it collides
+with **Route** the problem; the term is Wall Crop).
 
 **Quality Tier**:
 A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects the
@@ -251,6 +265,29 @@ features, so the features always travel with the conditions under which they wer
 extracted. The one piece of diagnostic data that lives in S3 rather than locally;
 read back at match time to build a **Match Diagnostics** record.
 _Avoid_: frame stats (too generic).
+
+### Test corpus (detection eval harness)
+
+**Test Video**:
+A climbing video downloaded by a separate program to evaluate detection quality —
+_not_ a **Run** a **User** recorded. It never touches S3; it lives in that
+program's per-video bundle (a `metadata.json` of human-labelled conditions, a
+`final_frame.png`, and a `detections/` folder). Its `route_folder` groups Test
+Videos of the same wall, so a `route_folder` maps to a **Route**, one Test Video
+maps to one **Run** of it, and each `final_frame.png` is a candidate **Route
+Photo** for matching the _other_ Runs of that Route (a later cross-video phase).
+_Avoid_: sample, clip, Run (a Run is User-recorded and saved to S3).
+
+**Scan Setup**:
+The frozen set of manual scan inputs attached to a **Test Video** so its scan can
+be replayed headlessly with no **User**: the **Climber Crop**, the **Wall Crop**,
+the Climber tap (`climberPoint`), the **Fixed**/**Panning Capture** flag, and the
+**Quality Tier**. Set once in a manual calibration pass (which also fires a first
+detection run) and reused verbatim by every later batch re-run, so a quality
+change between runs is attributable to detection-logic changes, not setup drift.
+Stored as `setup.json` in the Test Video's bundle.
+_Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
+Setup), config, calibration, fixture.
 
 ## Relationships
 
