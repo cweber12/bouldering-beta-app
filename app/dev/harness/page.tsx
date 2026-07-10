@@ -385,8 +385,19 @@ function Calibrator({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ video_path: item.videoPath, pose, orb }),
         });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? "Failed to relay detection run.");
+        const text = await res.text();
+        if (!res.ok) {
+          // The relay passes the downloader's status + body through verbatim, so
+          // surface its message (error or FastAPI's `detail`) with the status.
+          let detail = text;
+          try {
+            const j = JSON.parse(text);
+            detail = j.error ?? j.detail ?? text;
+          } catch {
+            /* non-JSON body — use the raw text */
+          }
+          throw new Error(`Relay failed (${res.status}): ${detail}`);
+        }
         setPhase("done");
         await onDone();
       } catch (err) {
@@ -428,8 +439,8 @@ function Calibrator({
   };
 
   return (
-    <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-fg">{item.routeFolder}</div>
           <div className="truncate font-mono text-xs text-fg-muted">{item.videoKey}</div>
@@ -451,27 +462,29 @@ function Calibrator({
         </div>
       </div>
 
-      <StepSetDetection
-        videoPreviewUrl={videoUrl}
-        climberCrop={climberCrop}
-        wallCrop={wallCrop}
-        onClimberCropChange={setClimberCrop}
-        onWallCropChange={handleWallCropChange}
-        climberPoint={climberPoint}
-        onClimberPointChange={handleClimberPointChange}
-        onClimberTapDetect={handleClimberTapDetect}
-        tier={tier}
-        onTierChange={handleTierChange}
-        modelVariant={modelVariant}
-        onModelVariantChange={setModelVariant}
-        frameStep={frameStep}
-        onFrameStepChange={setFrameStep}
-        panning={panning}
-        onPanningChange={setPanning}
-        canScan={!!model && cvReady && !busy}
-        onScan={() => void handleConfirmAndRun()}
-        onBack={onBack}
-      />
+      <div className="min-h-0 flex-1">
+        <StepSetDetection
+          videoPreviewUrl={videoUrl}
+          climberCrop={climberCrop}
+          wallCrop={wallCrop}
+          onClimberCropChange={setClimberCrop}
+          onWallCropChange={handleWallCropChange}
+          climberPoint={climberPoint}
+          onClimberPointChange={handleClimberPointChange}
+          onClimberTapDetect={handleClimberTapDetect}
+          tier={tier}
+          onTierChange={handleTierChange}
+          modelVariant={modelVariant}
+          onModelVariantChange={setModelVariant}
+          frameStep={frameStep}
+          onFrameStepChange={setFrameStep}
+          panning={panning}
+          onPanningChange={setPanning}
+          canScan={!!model && cvReady && !busy}
+          onScan={() => void handleConfirmAndRun()}
+          onBack={onBack}
+        />
+      </div>
     </div>
   );
 }
