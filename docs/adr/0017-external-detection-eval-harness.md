@@ -73,11 +73,15 @@ Three forces shape the design:
 3. **Payloads reuse the Scan Diagnostics record, routed by source.** One record
    builder. Real dev scans keep appending to local JSONL (ADR 0006, unchanged).
    Test-corpus scans send the same record to the external bundle instead. The
-   `pose` payload is the Scan Diagnostics pose metrics plus the sparse detected
-   `PoseFrame[]` (dense/smoothed frames are derived, so omitted). The `orb`
-   payload is capture-time extraction data only — the **Reference Frame
-   Metadata** (keypoint count, region brightness/contrast/sharpness, condition
-   flags). No match runs at capture time.
+   `pose` payload carries the whole self-contained `ScanDiagnostics` record plus
+   the pose `frames`; the `orb` payload is capture-time extraction data only —
+   the **Reference Frame Metadata** (keypoint count, region
+   brightness/contrast/sharpness, condition flags) — and no match runs at capture
+   time. The frames are the **dense/smoothed** frames the pipeline already saves
+   to `sessionStore`, not the sparse detected array: `useVideoProcessor` does not
+   expose the sparse frames, and the dense frames are exactly what the overlay
+   renders, so a regression eyeballs faithfully without touching the production
+   hook.
 
 4. **Every run is self-attributing.** Each `pose`/`orb` payload stamps
    `appVersion` (git SHA), the resolved detection config (tier, model variant,
