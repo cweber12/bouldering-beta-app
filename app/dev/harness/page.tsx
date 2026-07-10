@@ -5,19 +5,23 @@
  *
  * Lists the external downloader's Test Video corpus (via /api/dev/corpus) and
  * lets you calibrate each video's Scan Setup — Climber Crop, Wall Crop, tap,
- * panning, Quality Tier — by reusing the production StepSetDetection UI. Saving
- * writes setup.json into the bundle. The baseline detection run is wired in a
- * later slice. Rendered only in development. See docs/adr/0017.
+ * panning, Quality Tier — by reusing the production StepSetDetection UI.
+ * Confirming (Scan) saves setup.json AND runs one baseline detection, relaying
+ * the pose + orb run to the downloader. "Save setup only" persists the Setup
+ * without running. Rendered only in development. See docs/adr/0017.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
+import { useVideoProcessor } from "@/hooks/useVideoProcessor";
+import { getAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
+import { buildHarnessPayloads } from "@/utils/harnessPayloads";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -32,6 +36,9 @@ interface CorpusItem {
   runCount: number;
   analysisInputs: unknown;
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CV = any;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
@@ -85,9 +92,10 @@ export default function HarnessPage() {
     return (
       <Calibrator
         item={selected}
+        cv={cv}
         cvReady={!!cv}
         onBack={() => setSelected(null)}
-        onSaved={async () => {
+        onDone={async () => {
           await refreshList();
           setSelected(null);
         }}
@@ -174,25 +182,32 @@ export default function HarnessPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Calibrator — loads a Test Video + its existing Setup and reuses the
-// production StepSetDetection UI to author the Scan Setup.
+// Calibrator — loads a Test Video + its Setup, reuses StepSetDetection to
+// author the Scan Setup, and on confirm saves it and runs one baseline
+// detection, relaying the run to the downloader.
 // ---------------------------------------------------------------------------
+
+type RunPhase = "idle" | "saving" | "running" | "posting" | "done" | "error";
 
 function Calibrator({
   item,
+  cv,
   cvReady,
   onBack,
-  onSaved,
+  onDone,
 }: {
   item: CorpusItem;
+  cv: CV;
   cvReady: boolean;
   onBack: () => void;
-  onSaved: () => void | Promise<void>;
+  onDone: () => void | Promise<void>;
 }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<RunPhase>("idle");
+  const [phaseError, setPhaseError] = useState<string | null>(null);
+  const setupHashRef = useRef<string | null>(null);
 
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
@@ -209,8 +224,17 @@ function Calibrator({
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
+  const { process, status, orbStatus, scanDiagnostics, attemptId, errorMessage } = useVideoProcessor(100);
 
-  // Load the video bytes and any existing Scan Setup for this bundle.
+  function handleTierChange(t: QualityTier) {
+    setTier(t);
+    const cfg = getTierConfig(t);
+    setModelVariant(cfg.variant);
+    setFrameStep(cfg.frameStep);
+    setMaxPoses(cfg.maxPoses);
+  }
+
+  // Load the video bytes + any existing Scan Setup for this bundle.
   useEffect(() => {
     let revoked = false;
     let url: string | null = null;
@@ -224,7 +248,9 @@ function Calibrator({
         if (!vidRes.ok) throw new Error("Failed to load video.");
         const blob = await vidRes.blob();
         url = URL.createObjectURL(blob);
-        if (!revoked) setVideoUrl(url);
+        if (revoked) return;
+        setVideoUrl(url);
+        setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
 
         const { setup } = await setupRes.json();
         if (setup && !revoked) {
@@ -243,15 +269,7 @@ function Calibrator({
       revoked = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [item.key]);
-
-  function handleTierChange(t: QualityTier) {
-    setTier(t);
-    const cfg = getTierConfig(t);
-    setModelVariant(cfg.variant);
-    setFrameStep(cfg.frameStep);
-    setMaxPoses(cfg.maxPoses);
-  }
+  }, [item.key, item.videoKey]);
 
   const handleClimberTapDetect = useCallback(
     (frame: ImageData, point: { x: number; y: number }, timestampSec: number): boolean => {
@@ -274,24 +292,111 @@ function Calibrator({
     setWallCrop(frameClampCrop(c));
   }, []);
 
-  async function handleSave() {
-    setSaving(true);
-    setSaveError(null);
+  /** PUT setup.json; returns the authoritative setupHash, or null on failure. */
+  const saveSetup = useCallback(async (): Promise<string | null> => {
+    const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(item.key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ climberCrop, wallCrop, climberPoint, panning, qualityTier: tier }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error ?? "Failed to save setup.");
+    return body.setup?.setupHash ?? null;
+  }, [item.key, climberCrop, wallCrop, climberPoint, panning, tier]);
+
+  // Save the Setup only, without a baseline run (quick calibration).
+  async function handleSaveOnly() {
+    setPhase("saving");
+    setPhaseError(null);
     try {
-      const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(item.key)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ climberCrop, wallCrop, climberPoint, panning, qualityTier: tier }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Failed to save setup.");
-      await onSaved();
+      await saveSetup();
+      setPhase("done");
+      await onDone();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSaving(false);
+      setPhase("error");
+      setPhaseError(err instanceof Error ? err.message : String(err));
     }
   }
+
+  // Confirm: save the Setup, then run one baseline detection (the effect below
+  // relays the result once the pipeline finishes).
+  async function handleConfirmAndRun() {
+    if (!videoFile || !model || !cv) return;
+    setPhase("saving");
+    setPhaseError(null);
+    try {
+      setupHashRef.current = await saveSetup();
+      setPhase("running");
+      const cfg = getTierConfig(tier);
+      await process(
+        videoFile,
+        model,
+        cv,
+        frameStep,
+        { state: "", area: "", route: item.routeFolder },
+        { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning },
+        0,
+        "mediapipe",
+        {
+          maxRecoveryFrames: cfg.maxRecoveryFrames,
+          filterTolerance: cfg.filterTolerance,
+          motionThreshold: cfg.motionThreshold,
+          refineStride: cfg.refineStride,
+        },
+      );
+    } catch (err) {
+      setPhase("error");
+      setPhaseError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  // Relay the run once the pipeline has produced diagnostics (which are assembled
+  // only after ORB extraction completes).
+  useEffect(() => {
+    if (phase !== "running") return;
+    if (status === "error") {
+      setPhase("error");
+      setPhaseError(errorMessage ?? "Detection failed.");
+      return;
+    }
+    if (status !== "done") return;
+    if (!scanDiagnostics) {
+      // "done" fires before ORB/diagnostics; only treat as failure once ORB has.
+      if (orbStatus === "failed") {
+        setPhase("error");
+        setPhaseError("ORB extraction failed — no diagnostics produced.");
+      }
+      return;
+    }
+
+    const attempt = attemptId ? getAttempt(attemptId) : undefined;
+    const { pose, orb } = buildHarnessPayloads({
+      diagnostics: scanDiagnostics,
+      frames: attempt?.frames ?? [],
+      referenceFrameMeta: attempt?.referenceFrameMeta ?? null,
+      setupHash: setupHashRef.current ?? "",
+    });
+
+    setPhase("posting");
+    (async () => {
+      try {
+        const res = await fetch("/api/dev/detections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ video_path: item.videoPath, pose, orb }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "Failed to relay detection run.");
+        setPhase("done");
+        await onDone();
+      } catch (err) {
+        setPhase("error");
+        setPhaseError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+    // onDone is stable enough for a dev tool; exclude to avoid re-firing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage, item.videoPath]);
 
   if (loadError) {
     return (
@@ -312,6 +417,16 @@ function Calibrator({
     );
   }
 
+  const busy = phase === "saving" || phase === "running" || phase === "posting";
+  const phaseLabel: Record<RunPhase, string> = {
+    idle: "",
+    saving: "Saving setup…",
+    running: "Running detection…",
+    posting: "Posting run…",
+    done: "Saved + run posted",
+    error: phaseError ?? "Error",
+  };
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
@@ -319,15 +434,21 @@ function Calibrator({
           <div className="truncate text-sm font-medium text-fg">{item.routeFolder}</div>
           <div className="truncate font-mono text-xs text-fg-muted">{item.videoKey}</div>
         </div>
-        {saveError && <span className="truncate text-xs text-danger">{saveError}</span>}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Save setup"}
-        </button>
+        <div className="flex items-center gap-2">
+          {phase !== "idle" && (
+            <span className={`text-xs ${phase === "error" ? "text-danger" : "text-fg-muted"}`}>
+              {phaseLabel[phase]}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void handleSaveOnly()}
+            disabled={busy}
+            className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
+          >
+            Save setup only
+          </button>
+        </div>
       </div>
 
       <StepSetDetection
@@ -347,8 +468,8 @@ function Calibrator({
         onFrameStepChange={setFrameStep}
         panning={panning}
         onPanningChange={setPanning}
-        canScan={!!model && cvReady}
-        onScan={() => void handleSave()}
+        canScan={!!model && cvReady && !busy}
+        onScan={() => void handleConfirmAndRun()}
         onBack={onBack}
       />
     </div>
