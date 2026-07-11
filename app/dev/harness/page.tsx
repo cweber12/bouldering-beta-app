@@ -21,6 +21,7 @@ import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
+import ScanProgress from "@/components/scan/process-flow/ScanProgress";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
@@ -246,6 +247,7 @@ function Calibrator({
 }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [phase, setPhase] = useState<RunPhase>("idle");
   const [phaseError, setPhaseError] = useState<string | null>(null);
@@ -271,8 +273,20 @@ function Calibrator({
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, status, orbStatus, scanDiagnostics, attemptId, errorMessage, firstFrameFile } =
-    useVideoProcessor(100);
+  const {
+    process,
+    reset: resetProcessor,
+    status,
+    orbStatus,
+    scanDiagnostics,
+    attemptId,
+    errorMessage,
+    firstFrameFile,
+    currentFrame,
+    totalFrames,
+    orbPreview,
+    currentPose,
+  } = useVideoProcessor(100);
 
   function handleTierChange(t: QualityTier) {
     setTier(t);
@@ -299,6 +313,16 @@ function Calibrator({
         if (revoked) return;
         setVideoUrl(url);
         setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
+
+        // Probe natural dimensions to shape the scan-progress stage.
+        const probe = document.createElement("video");
+        probe.preload = "metadata";
+        probe.onloadedmetadata = () => {
+          if (probe.videoWidth && probe.videoHeight && !revoked) {
+            setVideoAspect({ w: probe.videoWidth, h: probe.videoHeight });
+          }
+        };
+        probe.src = url;
 
         const { setup } = await setupRes.json();
         if (setup && !revoked) {
@@ -470,6 +494,13 @@ function Calibrator({
     setPhase("idle");
   }
 
+  // Abort an in-flight scan from the progress view and return to calibration.
+  function handleCancelRun() {
+    resetProcessor();
+    setPhaseError(null);
+    setPhase("idle");
+  }
+
   if (loadError) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8">
@@ -489,6 +520,31 @@ function Calibrator({
     );
   }
 
+  // ── In-scan progress: the scan flow's live x-ray + percentage + a bar ──
+  if (phase === "running" || phase === "posting") {
+    const pct = totalFrames > 0 ? Math.min(100, Math.round((currentFrame / totalFrames) * 100)) : 0;
+    const finishing =
+      phase === "posting" || status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
+    return (
+      <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
+        <div className="absolute inset-x-0 top-0 z-10 h-1 bg-edge/30" aria-hidden="true">
+          <div
+            className="h-full bg-send transition-[width] duration-200"
+            style={{ width: `${finishing ? 100 : pct}%` }}
+          />
+        </div>
+        <ScanProgress
+          orbPreview={orbPreview}
+          currentPose={currentPose}
+          videoAspect={videoAspect}
+          progressPct={pct}
+          finishing={finishing}
+          onCancel={handleCancelRun}
+        />
+      </div>
+    );
+  }
+
   // ── Post-scan Detection Preview (review only; the run is already posted) ──
   if (phase === "preview") {
     const skel = buildFirstFrameSkeleton(previewAttempt);
@@ -500,7 +556,7 @@ function Calibrator({
     const orbKeypoints = previewAttempt?.orbFeatures?.keypoints.map((kp) => kp.pt);
 
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
           <div className="min-w-0">
             <div className="truncate text-sm font-medium text-fg">{item.routeFolder}</div>
@@ -553,7 +609,8 @@ function Calibrator({
     );
   }
 
-  const busy = phase === "saving" || phase === "running" || phase === "posting";
+  // running / posting / preview return earlier, so only "saving" is busy here.
+  const busy = phase === "saving";
   const phaseLabel: Record<RunPhase, string> = {
     idle: "",
     saving: "Saving setup…",
@@ -565,7 +622,7 @@ function Calibrator({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-medium text-fg">{item.routeFolder}</div>
