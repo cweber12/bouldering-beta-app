@@ -27,6 +27,8 @@ type DiagnosticsRecord = ScanDiagnostics | MatchDiagnostics;
 export interface DiagnosticsPanelProps {
   /** The assembled diagnostics record, or null before one is ready. */
   record: DiagnosticsRecord | null;
+  /** Start expanded rather than collapsed (the dev harness opens it by default). */
+  defaultOpen?: boolean;
 }
 
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -79,8 +81,8 @@ function Flags({ flags }: { flags: ConditionFlags }) {
   );
 }
 
-export default function DiagnosticsPanel({ record }: DiagnosticsPanelProps) {
-  const [open, setOpen] = useState(false);
+export default function DiagnosticsPanel({ record, defaultOpen = false }: DiagnosticsPanelProps) {
+  const [open, setOpen] = useState(defaultOpen);
   // The manual tag override is keyed to its record so a new record drops back to
   // that record's own tag without an effect (avoids set-state-in-effect).
   const [override, setOverride] = useState<{ record: DiagnosticsRecord; tag: string } | null>(null);

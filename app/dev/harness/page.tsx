@@ -7,20 +7,30 @@
  * lets you calibrate each video's Scan Setup — Climber Crop, Wall Crop, tap,
  * panning, Quality Tier — by reusing the production StepSetDetection UI.
  * Confirming (Scan) saves setup.json AND runs one baseline detection, relaying
- * the pose + orb run to the downloader. "Save setup only" persists the Setup
- * without running. Rendered only in development. See docs/adr/0017.
+ * the pose + orb run to the downloader, then shows a Detection Preview (the same
+ * FramePlayer skeleton overlay + DiagnosticsPanel as the scan flow) to review
+ * detection quality. "Save setup only" persists the Setup without running.
+ * Dev views (ORB feature points, diagnostics) are open by default here, without
+ * touching the app-wide Developer-view preference. Rendered only in development.
+ * See docs/adr/0017.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
-import { getAttempt } from "@/storage/sessionStore";
+import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
+import FramePlayer from "@/components/skeleton/FramePlayer";
+import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
+import { getTopology } from "@/utils/poseConstants";
+import { type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
+import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
 import { buildHarnessPayloads } from "@/utils/harnessPayloads";
 
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -42,6 +52,38 @@ type CV = any;
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
+}
+
+interface FirstFrameSkeleton {
+  frames: RenderedSkeletonFrame[];
+  duration: number;
+  fps: number;
+}
+
+/**
+ * Build the video-space skeleton animation for the Detection Preview, mirroring
+ * the app/scan firstFrameSkeletonData memo: start playback at the first detected
+ * frame and map normalised keypoints into video-pixel space.
+ */
+function buildFirstFrameSkeleton(attempt: RouteAttempt | null): FirstFrameSkeleton | null {
+  if (!attempt) return null;
+  const { frames, videoMeta } = attempt;
+  if (!frames.length) return null;
+  const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
+  const firstDetected = sorted.find((f) => f.keypoints.length > 0);
+  if (!firstDetected) return null;
+  const firstTs = firstDetected.timestamp;
+  const lastTs = sorted[sorted.length - 1].timestamp;
+  const duration = Math.max(lastTs - firstTs, 0.1);
+  const rendered: RenderedSkeletonFrame[] = sorted
+    .filter((f) => f.timestamp >= firstTs)
+    .map((f) => ({
+      timestamp: f.timestamp - firstTs,
+      keypoints: Object.fromEntries(
+        f.keypoints.map((kp) => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }]),
+      ),
+    }));
+  return { frames: rendered, duration, fps: videoMeta.fps ?? 30 };
 }
 
 /** Soft fallback Climber box centred on the tap when no pose is found. */
@@ -187,7 +229,7 @@ export default function HarnessPage() {
 // detection, relaying the run to the downloader.
 // ---------------------------------------------------------------------------
 
-type RunPhase = "idle" | "saving" | "running" | "posting" | "done" | "error";
+type RunPhase = "idle" | "saving" | "running" | "posting" | "preview" | "done" | "error";
 
 function Calibrator({
   item,
@@ -209,6 +251,11 @@ function Calibrator({
   const [phaseError, setPhaseError] = useState<string | null>(null);
   const setupHashRef = useRef<string | null>(null);
 
+  // Post-scan review state (Detection Preview).
+  const [previewAttempt, setPreviewAttempt] = useState<RouteAttempt | null>(null);
+  const [previewDiag, setPreviewDiag] = useState<ScanDiagnostics | null>(null);
+  const [relayStatus, setRelayStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
   const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
@@ -224,7 +271,8 @@ function Calibrator({
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, status, orbStatus, scanDiagnostics, attemptId, errorMessage } = useVideoProcessor(100);
+  const { process, status, orbStatus, scanDiagnostics, attemptId, errorMessage, firstFrameFile } =
+    useVideoProcessor(100);
 
   function handleTierChange(t: QualityTier) {
     setTier(t);
@@ -369,7 +417,7 @@ function Calibrator({
       return;
     }
 
-    const attempt = attemptId ? getAttempt(attemptId) : undefined;
+    const attempt = attemptId ? getAttempt(attemptId) ?? null : null;
     const { pose, orb } = buildHarnessPayloads({
       diagnostics: scanDiagnostics,
       frames: attempt?.frames ?? [],
@@ -377,8 +425,14 @@ function Calibrator({
       setupHash: setupHashRef.current ?? "",
     });
 
+    // Capture the review data now; the relay runs in the background and its
+    // outcome is shown in the preview (the preview appears either way).
+    setPreviewAttempt(attempt);
+    setPreviewDiag(scanDiagnostics);
+    setRelayStatus(null);
     setPhase("posting");
     (async () => {
+      let relay: { ok: boolean; message: string };
       try {
         const res = await fetch("/api/dev/detections", {
           method: "POST",
@@ -398,16 +452,23 @@ function Calibrator({
           }
           throw new Error(`Relay failed (${res.status}): ${detail}`);
         }
-        setPhase("done");
-        await onDone();
+        relay = { ok: true, message: "Run posted to the corpus." };
       } catch (err) {
-        setPhase("error");
-        setPhaseError(err instanceof Error ? err.message : String(err));
+        relay = { ok: false, message: err instanceof Error ? err.message : String(err) };
       }
+      setRelayStatus(relay);
+      setPhase("preview");
     })();
-    // onDone is stable enough for a dev tool; exclude to avoid re-firing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage, item.videoPath]);
+
+  // Return to calibration from the preview, keeping the current Setup in place.
+  function handleRescan() {
+    setRelayStatus(null);
+    setPreviewAttempt(null);
+    setPreviewDiag(null);
+    setPhaseError(null);
+    setPhase("idle");
+  }
 
   if (loadError) {
     return (
@@ -428,12 +489,77 @@ function Calibrator({
     );
   }
 
+  // ── Post-scan Detection Preview (review only; the run is already posted) ──
+  if (phase === "preview") {
+    const skel = buildFirstFrameSkeleton(previewAttempt);
+    const topo = getTopology(previewAttempt?.poseBackend ?? "mediapipe");
+    const topoStyle: SkeletonStyle = {
+      skeletonEdges: topo.skeletonEdges,
+      keypointNames: topo.keypointNames,
+    };
+    const orbKeypoints = previewAttempt?.orbFeatures?.keypoints.map((kp) => kp.pt);
+
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-fg">{item.routeFolder}</div>
+            <div className="truncate font-mono text-xs text-fg-muted">{item.videoKey}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            {relayStatus && (
+              <span className={`max-w-xs truncate text-xs ${relayStatus.ok ? "text-send" : "text-danger"}`}>
+                {relayStatus.message}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleRescan}
+              className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
+            >
+              Re-scan
+            </button>
+            <button
+              type="button"
+              onClick={() => void onDone()}
+              className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse"
+            >
+              Back to corpus
+            </button>
+          </div>
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 flex-col bg-surface">
+          {firstFrameFile && skel ? (
+            <FramePlayer
+              imageFile={firstFrameFile}
+              layers={[{ frames: skel.frames, style: topoStyle }]}
+              duration={skel.duration}
+              autoPlay
+              orbKeypoints={orbKeypoints}
+              fit="contain"
+              bare
+              className="min-h-0 flex-1 rounded-none"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
+              No climber detected — the Detection Preview has nothing to show. See the
+              diagnostics for why.
+            </div>
+          )}
+          <DiagnosticsPanel record={previewDiag} defaultOpen />
+        </div>
+      </div>
+    );
+  }
+
   const busy = phase === "saving" || phase === "running" || phase === "posting";
   const phaseLabel: Record<RunPhase, string> = {
     idle: "",
     saving: "Saving setup…",
     running: "Running detection…",
     posting: "Posting run…",
+    preview: "",
     done: "Saved + run posted",
     error: phaseError ?? "Error",
   };

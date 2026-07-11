@@ -59,7 +59,12 @@ Three forces shape the design:
    fully props-driven and owns none of the S3 save flow) to set a video's **Scan
    Setup** — `climberCrop`, `wallCrop`, `climberPoint`, the panning flag, and the
    **Quality Tier**. Confirming writes `setup.json` into the bundle **and** fires
-   a first detection run. Phase two replays the stored Setup headlessly through
+   a first detection run, then shows a **Detection Preview** — the scan flow's
+   `FramePlayer` skeleton overlay plus the `DiagnosticsPanel` — to review
+   detection quality (the run is already posted; the preview is review-only). Dev
+   surfaces (ORB feature points, the diagnostics panel) are open by default in the
+   harness, scoped locally so the app-wide Developer-view preference is untouched.
+   Phase two replays the stored Setup headlessly through
    `useVideoProcessor` whenever detection logic changes, with no human in the
    loop. The Quality Tier is pinned in the Setup (not swept), so setup is held
    constant across re-runs. The batch pass is driven by a **Playwright script**
