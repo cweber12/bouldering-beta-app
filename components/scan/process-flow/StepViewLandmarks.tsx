@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import ProcessFlowShell from "@/components/scan/process-flow/ProcessFlowShell";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
@@ -32,6 +32,7 @@ export interface StepViewLandmarksProps {
   processingError: string | null;
   // Results
   activeAttempt: RouteAttempt | null;
+  sourceVideoUrl?: string | null;
   firstFrameFile: File | null;
   firstFrameSkeletonData: SkeletonFrameData | null;
   topoStyle: SkeletonStyle;
@@ -71,6 +72,7 @@ export default function StepViewLandmarks({
   frameStep,
   processingError,
   activeAttempt,
+  sourceVideoUrl,
   firstFrameFile,
   firstFrameSkeletonData,
   topoStyle,
@@ -96,6 +98,13 @@ export default function StepViewLandmarks({
   const toggleSidebar = (id: "holds" | "climber") =>
     setOpenSidebar((cur) => (cur === id ? null : id));
   const previewPlayerRef = useRef<FramePlayerHandle>(null);
+  const videoTimeOffset = useMemo(() => {
+    if (!activeAttempt) return 0;
+    const firstDetected = [...activeAttempt.frames]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .find((frame) => frame.keypoints.length > 0);
+    return firstDetected?.timestamp ?? 0;
+  }, [activeAttempt]);
 
   // Scan-stage Holds editing — Fixed Capture only (a Panning Capture Run, which
   // carries keyframes, has no single whole-Route frame to author on; its Holds
@@ -349,6 +358,8 @@ export default function StepViewLandmarks({
                     <FramePlayer
                       ref={previewPlayerRef}
                       imageFile={firstFrameFile}
+                      videoSrc={sourceVideoUrl ?? null}
+                      videoTimeOffset={videoTimeOffset}
                       layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
                       duration={firstFrameSkeletonData.duration}
                       autoPlay

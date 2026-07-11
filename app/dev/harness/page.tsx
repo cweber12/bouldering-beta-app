@@ -59,6 +59,7 @@ interface FirstFrameSkeleton {
   frames: RenderedSkeletonFrame[];
   duration: number;
   fps: number;
+  startOffsetSec: number;
 }
 
 /**
@@ -84,7 +85,7 @@ function buildFirstFrameSkeleton(attempt: RouteAttempt | null): FirstFrameSkelet
         f.keypoints.map((kp) => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }]),
       ),
     }));
-  return { frames: rendered, duration, fps: videoMeta.fps ?? 30 };
+  return { frames: rendered, duration, fps: videoMeta.fps ?? 30, startOffsetSec: firstTs };
 }
 
 /** Soft fallback Climber box centred on the tap when no pose is found. */
@@ -589,6 +590,8 @@ function Calibrator({
           {firstFrameFile && skel ? (
             <FramePlayer
               imageFile={firstFrameFile}
+              videoSrc={videoUrl}
+              videoTimeOffset={skel.startOffsetSec}
               layers={[{ frames: skel.frames, style: topoStyle }]}
               duration={skel.duration}
               autoPlay

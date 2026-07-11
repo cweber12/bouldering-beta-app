@@ -211,8 +211,8 @@ export default function DocsPage() {
                   Detection quality
                 </a>{" "}
                 below). The same popover exposes the pose model, detection frequency, and the{" "}
-                <strong className="text-fg">Long route (panning)</strong> toggle for shots where
-                the camera pans up the wall.
+                <strong className="text-fg">Moving camera</strong> toggle for panning, handheld,
+                or shaky shots where the camera moves during the climb.
               </p>
               <p className="mt-2 text-base text-fg-secondary">
                 Lighting is handled automatically — there are no manual exposure controls to set

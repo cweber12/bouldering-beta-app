@@ -117,10 +117,16 @@ _Avoid_: tripod mode, static mode.
 A **Run** recorded while deliberately panning the camera along a longer **Route**
 that does not fit in one frame. Aligned to the **Route Photo** per-**Keyframe**
 rather than by a single homography, so the skeleton overlay tracks the wall as
-the camera moves. Opt-in via a scan-setup toggle; it does not replace **Fixed
-Capture**.
-_Avoid_: handheld mode, moving-camera mode (it is specifically a _deliberate
-pan_, not shake/jitter correction — fast handheld shake is out of scope).
+the camera moves. This mode also covers handheld / shaky moving-camera footage
+where the wall drifts in frame, so the UI label may refer to "Moving camera".
+Opt-in via a scan-setup toggle; it does not replace **Fixed Capture**.
+_Avoid_: tripod mode (use **Fixed Capture** there).
+
+**Scan Loading View**:
+The in-scan x-ray stage shown while detection runs: a live pose skeleton over a
+live ORB wall-feature starfield in video space (no homography). The starfield is
+throttled and refreshed during processing so it moves with camera motion.
+_Avoid_: detection preview, route overlay.
 
 **Keyframe**:
 A sampled video frame in a **Panning Capture** at which **Wall Crop** features
@@ -158,13 +164,14 @@ _Avoid_: route image, background photo.
 ### Overlay & review
 
 **Detection Preview**:
-The skeleton played back over the **Run**'s own first video frame, in raw
-video-pixel space with **no homography** applied. Its purpose is to review
-detection quality (did the pose pipeline track the **Climber** cleanly) before a
-**Route Photo** is involved. Shown on the review step immediately after a scan.
-It is also where **Holds** are reviewed, added, and removed before the Run is
-saved (Fixed Capture only — a Panning Capture Run has no single frame that shows
-the whole **Route**).
+The skeleton played back over the **Run**'s own source video, in raw video-pixel
+space with **no homography** applied (first frame used as a temporary fallback
+poster while video is preparing). Its purpose is to review detection quality
+(did the pose pipeline track the **Climber** cleanly) before a **Route Photo**
+is involved. Shown on the review step immediately after a scan. It is also where
+**Holds** are reviewed, added, and removed before the Run is saved (Fixed
+Capture only — a Panning Capture Run has no single frame that shows the whole
+**Route**).
 _Avoid_: preview, landmark preview (ambiguous with the **Route Overlay**).
 
 **Route Overlay**:

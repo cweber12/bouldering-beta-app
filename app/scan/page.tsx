@@ -810,6 +810,7 @@ function ScanPageInner() {
           frameStep={frameStep}
           processingError={status === "error" ? errorMessage : null}
           activeAttempt={activeAttempt}
+          sourceVideoUrl={videoPreviewUrl}
           firstFrameFile={firstFrameFile}
           firstFrameSkeletonData={firstFrameSkeletonData}
           topoStyle={landmarksTopoStyle}

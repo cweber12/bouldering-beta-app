@@ -30,8 +30,12 @@ export interface FramePlayerHandle {
 }
 
 interface FramePlayerProps {
-  /** Image drawn as the background of every frame. */
-  imageFile: File;
+  /** Optional static image drawn as the background of every frame. */
+  imageFile?: File | null;
+  /** Optional video source URL used as the moving background. */
+  videoSrc?: string | null;
+  /** Seconds to offset the video timeline when sampling skeleton frames. */
+  videoTimeOffset?: number;
   /** One or more skeleton layers to draw on top of the image. */
   layers: FramePlayerLayer[];
   /** Total animation duration in seconds. */
@@ -140,6 +144,8 @@ function formatTime(s: number): string {
  */
 const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer({
   imageFile,
+  videoSrc,
+  videoTimeOffset = 0,
   layers,
   duration,
   loop = true,
@@ -156,6 +162,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const layersRef = useRef(layers);
   const orbKeypointsRef = useRef<{ x: number; y: number }[]>([]);
   const holdsRef = useRef<Hold[]>([]);
@@ -173,12 +180,17 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const startOffsetRef = useRef(startOffset);
   const playingRef = useRef(false);
   const animRef = useRef(0);
+  const videoAnimRef = useRef(0);
   const lastTickRef = useRef(0);
   const lastUiRef = useRef(0);
+  const videoOffsetRef = useRef(videoTimeOffset);
 
   const [playing, setPlaying] = useState(false);
   const [displayTime, setDisplayTime] = useState(0);
   const [ready, setReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+
+  const useVideoBackdrop = !!videoSrc;
 
   // Keep layers ref current without re-triggering animation loop.
   useEffect(() => {
@@ -206,8 +218,19 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     startOffsetRef.current = startOffset;
   }, [startOffset]);
 
-  // Load the image as an ImageBitmap.
   useEffect(() => {
+    videoOffsetRef.current = videoTimeOffset;
+  }, [videoTimeOffset]);
+
+  // Load the fallback image as an ImageBitmap.
+  useEffect(() => {
+    if (!imageFile) {
+      if (bitmapRef.current) {
+        bitmapRef.current.close();
+        bitmapRef.current = null;
+      }
+      return;
+    }
     let cancelled = false;
     createImageBitmap(imageFile).then((bmp) => {
       if (cancelled) {
@@ -223,25 +246,71 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         bitmapRef.current.close();
         bitmapRef.current = null;
       }
-      setReady(false);
     };
-  }, [imageFile]);
+  }, [imageFile, useVideoBackdrop]);
+
+  // Prepare a video backdrop when provided.
+  useEffect(() => {
+    if (!videoSrc) {
+      const prev = videoRef.current;
+      if (prev) {
+        prev.pause();
+        prev.removeAttribute("src");
+        prev.load();
+      }
+      videoRef.current = null;
+      return;
+    }
+
+    const video = document.createElement("video");
+    video.preload = "auto";
+    video.muted = true;
+    video.playsInline = true;
+    video.src = videoSrc;
+    videoRef.current = video;
+
+    const onLoadedMetadata = () => {
+      video.currentTime = Math.max(0, videoOffsetRef.current);
+      setVideoReady(true);
+      setReady(true);
+    };
+    video.addEventListener("loadedmetadata", onLoadedMetadata);
+
+    return () => {
+      video.pause();
+      video.removeEventListener("loadedmetadata", onLoadedMetadata);
+      video.removeAttribute("src");
+      video.load();
+      if (videoRef.current === video) videoRef.current = null;
+    };
+  }, [videoSrc]);
 
   // Draw a single frame at the given time (seconds).
   const drawFrame = useCallback((t: number) => {
     const canvas = canvasRef.current;
     const bmp = bitmapRef.current;
-    if (!canvas || !bmp) return;
+    const video = videoRef.current;
+    const useVideo = !!videoSrc && !!video && videoReady;
+    if (!canvas || (!bmp && !useVideo)) return;
 
-    if (canvas.width !== bmp.width || canvas.height !== bmp.height) {
-      canvas.width = bmp.width;
-      canvas.height = bmp.height;
+    const sourceW = useVideo ? (video.videoWidth || canvas.width) : (bmp?.width ?? canvas.width);
+    const sourceH = useVideo ? (video.videoHeight || canvas.height) : (bmp?.height ?? canvas.height);
+
+    if (sourceW > 0 && sourceH > 0 && (canvas.width !== sourceW || canvas.height !== sourceH)) {
+      canvas.width = sourceW;
+      canvas.height = sourceH;
     }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    ctx.drawImage(bmp, 0, 0);
+    if (useVideo && video.videoWidth > 0 && video.videoHeight > 0) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } else if (bmp) {
+      ctx.drawImage(bmp, 0, 0);
+    } else {
+      return;
+    }
 
     // Draw ORB reference keypoints as bright-red background dots. Sized as a
     // small fraction of the canvas so they stay visible at any photo resolution.
@@ -289,13 +358,14 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
       }
     }
-  }, []);
+  }, [videoSrc, videoReady]);
 
   // rAF loop — runs at display refresh rate with no React re-renders per frame.
   // Stored in a ref to avoid self-reference issues with useCallback.
   const tickRef = useRef<FrameRequestCallback | null>(null);
 
   useEffect(() => {
+    if (useVideoBackdrop) return;
     tickRef.current = (now: number) => {
       if (!playingRef.current) return;
 
@@ -329,10 +399,11 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
 
       animRef.current = requestAnimationFrame(tickRef.current!);
     };
-  }, [duration, loop, drawFrame]);
+  }, [duration, loop, drawFrame, useVideoBackdrop]);
 
   // Start / stop animation loop.
   useEffect(() => {
+    if (useVideoBackdrop) return;
     if (playing) {
       lastTickRef.current = performance.now();
       lastUiRef.current = performance.now();
@@ -343,26 +414,106 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
       cancelAnimationFrame(animRef.current);
     }
     return () => cancelAnimationFrame(animRef.current);
-  }, [playing]);
+  }, [playing, useVideoBackdrop]);
 
-  // Draw the first frame when the image is ready; auto-play if requested.
-  // Start at the anchor so an aligned player begins at its set start.
+  useEffect(() => {
+    if (!useVideoBackdrop || !videoReady) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    const clampTime = (logical: number): number => Math.max(0, Math.min(duration, logical));
+    const nowMs = () => performance.now();
+    const videoWithRaf = video as HTMLVideoElement & {
+      requestVideoFrameCallback?: (cb: (now: number) => void) => number;
+      cancelVideoFrameCallback?: (id: number) => void;
+    };
+
+    const renderFromVideo = () => {
+      let logical = clampTime(video.currentTime - videoOffsetRef.current);
+      if (logical >= duration) {
+        if (loop) {
+          logical = 0;
+          video.currentTime = videoOffsetRef.current;
+        } else {
+          logical = duration;
+          setPlaying(false);
+          video.pause();
+        }
+      }
+      timeRef.current = logical;
+      drawFrame(logical);
+      const n = nowMs();
+      if (n - lastUiRef.current > 100) {
+        setDisplayTime(logical);
+        lastUiRef.current = n;
+      }
+    };
+
+    const schedule = () => {
+      if (!playingRef.current) return;
+      const hasVideoRaf = typeof videoWithRaf.requestVideoFrameCallback === "function";
+      if (hasVideoRaf) {
+        videoAnimRef.current = videoWithRaf.requestVideoFrameCallback!(() => {
+          renderFromVideo();
+          schedule();
+        });
+      } else {
+        videoAnimRef.current = requestAnimationFrame(() => {
+          renderFromVideo();
+          schedule();
+        });
+      }
+    };
+
+    if (playing) {
+      playingRef.current = true;
+      lastUiRef.current = nowMs();
+      void video.play().catch(() => {
+        setPlaying(false);
+      });
+      schedule();
+    } else {
+      playingRef.current = false;
+      video.pause();
+      renderFromVideo();
+    }
+
+    return () => {
+      playingRef.current = false;
+      if (videoAnimRef.current) {
+        const hasVideoRaf = typeof videoWithRaf.requestVideoFrameCallback === "function";
+        if (hasVideoRaf && typeof videoWithRaf.cancelVideoFrameCallback === "function") {
+          videoWithRaf.cancelVideoFrameCallback(videoAnimRef.current);
+        } else {
+          cancelAnimationFrame(videoAnimRef.current);
+        }
+      }
+      videoAnimRef.current = 0;
+    };
+  }, [playing, duration, loop, drawFrame, useVideoBackdrop, videoReady]);
+
+  // Draw the first frame when the backdrop is ready; auto-play if requested.
   useEffect(() => {
     if (!ready) return;
-    timeRef.current = startOffsetRef.current;
-    holdsHighWaterRef.current = startOffsetRef.current;
+    const initialTime = useVideoBackdrop ? 0 : startOffsetRef.current;
+    const video = videoRef.current;
+    if (useVideoBackdrop && videoReady && video) {
+      video.currentTime = Math.max(0, videoOffsetRef.current);
+    }
+    timeRef.current = initialTime;
+    holdsHighWaterRef.current = initialTime;
     setDisplayTime(timeRef.current);
     drawFrame(timeRef.current);
     if (!autoPlay) return;
     const id = requestAnimationFrame(() => setPlaying(true));
     return () => cancelAnimationFrame(id);
-  }, [ready, drawFrame, autoPlay]);
+  }, [ready, drawFrame, autoPlay, useVideoBackdrop, videoReady]);
 
   // Re-draw current frame when layers or Holds change (e.g. style sliders,
   // visibility toggles) while paused.
   useEffect(() => {
     if (ready && !playing) drawFrame(timeRef.current);
-  }, [layers, holds, holdStyle, ready, playing, drawFrame]);
+  }, [layers, holds, holdStyle, ready, playing, drawFrame, videoReady]);
 
   // Expose imperative controls to parent via ref.
   useImperativeHandle(ref, () => ({
@@ -371,10 +522,15 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     seek: (t: number) => {
       timeRef.current = t;
       setDisplayTime(t);
+      const video = videoRef.current;
+      if (useVideoBackdrop && videoReady && video) {
+        const target = Math.max(0, Math.min((video.duration || Infinity), t + videoOffsetRef.current));
+        video.currentTime = target;
+      }
       drawFrame(t);
     },
     getCurrentTime: () => timeRef.current,
-  }), [drawFrame]);
+  }), [drawFrame, useVideoBackdrop, videoReady]);
 
   function togglePlay() {
     setPlaying((p) => !p);
@@ -383,16 +539,26 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   // Replay the Holds reveal: seek back to the anchor and re-arm the high-water
   // mark so Holds reveal in first-use order again (ADR 0009).
   function handleResetHolds() {
-    timeRef.current = startOffsetRef.current;
-    holdsHighWaterRef.current = startOffsetRef.current;
-    setDisplayTime(startOffsetRef.current);
-    drawFrame(startOffsetRef.current);
+    const resetTo = useVideoBackdrop ? 0 : startOffsetRef.current;
+    timeRef.current = resetTo;
+    holdsHighWaterRef.current = resetTo;
+    setDisplayTime(resetTo);
+    const video = videoRef.current;
+    if (useVideoBackdrop && videoReady && video) {
+      video.currentTime = Math.max(0, videoOffsetRef.current);
+    }
+    drawFrame(resetTo);
   }
 
   function handleSeek(e: React.ChangeEvent<HTMLInputElement>) {
     const t = parseFloat(e.target.value);
     timeRef.current = t;
     setDisplayTime(t);
+    const video = videoRef.current;
+    if (useVideoBackdrop && videoReady && video) {
+      const target = Math.max(0, Math.min((video.duration || Infinity), t + videoOffsetRef.current));
+      video.currentTime = target;
+    }
     drawFrame(t);
   }
 

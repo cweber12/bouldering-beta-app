@@ -79,6 +79,14 @@ export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
  */
 const POSE_REANALYSIS_INTERVAL = 20;
 
+/** Processed-time cadence (seconds) for loading-screen ORB preview refresh. */
+export const ORB_PREVIEW_UPDATE_INTERVAL_SEC = 0.75;
+
+/** Gate ORB preview refreshes to a bounded display cadence. */
+export function shouldEmitOrbPreview(currentTimeSec: number, lastEmitTimeSec: number): boolean {
+  return lastEmitTimeSec < 0 || (currentTimeSec - lastEmitTimeSec) >= ORB_PREVIEW_UPDATE_INTERVAL_SEC;
+}
+
 /**
  * Module-level monotonic counter (seconds) for MediaPipe timestamps.
  * Each run advances by the video duration + gap so detectForVideo()
@@ -234,9 +242,9 @@ export interface VideoProcessorResult {
   attemptId: string | null;
   /**
    * The pristine first video frame as a PNG File, captured during the seek loop
-   * for the Detection Preview background. Available shortly after processing
-   * starts; null before. Reusing the already-decoded frame avoids a fragile
-   * second video decode on the review step.
+    * as a Detection Preview fallback poster while the source video is preparing.
+    * Available shortly after processing starts; null before. Reusing the already-
+    * decoded frame avoids a fragile second video decode on the review step.
    */
   firstFrameFile: File | null;
   errorMessage: string | null;
@@ -247,9 +255,9 @@ export interface VideoProcessorResult {
   scanDiagnostics: ScanDiagnostics | null;
   /**
    * The wall ORB feature field from the reference frame, as full-frame
-   * normalised points with the climber masked out. Emitted once, at the first
-   * detection frame, so the scan loading view can paint it as the ambient
-   * "starfield" the pose skeletons climb through. Null before it is ready.
+    * normalised points with the climber masked out. Emitted on a throttled
+    * cadence while the seek loop runs so the loading "starfield" stays coherent
+    * with camera motion. Null before the first emission.
    */
   orbPreview: NormalizedPoint[] | null;
   /**
@@ -416,9 +424,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
-        // Emit the ORB starfield for the loading view once, at the first frame
-        // that yields a pose (so the climber mask is available).
-        let orbPreviewSent = false;
+        // ORB preview emission state for the loading view. The starfield is
+        // refreshed on a throttled cadence so it moves with camera motion.
+        let lastOrbPreviewEmitSec = -Infinity;
+        let latestPreviewFrameData: ImageData | null = null;
 
         // Lighting analysis — seeded from frame 0, adapted at intervals
         let currentAnalysis: FrameAnalysis | null = null;
@@ -558,6 +567,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (i === 0) {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+            latestPreviewFrameData = referenceImageData;
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
             // Snapshot the frame-0 conditions for diagnostics before currentAnalysis
             // is re-assigned by the periodic re-analysis below.
@@ -664,24 +674,42 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             detectionFrameCount++;
             if (detectionFrameCount % POSE_REANALYSIS_INTERVAL === 0) {
               const reData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+              latestPreviewFrameData = reData;
               currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
             }
 
             // Feed the scan loading view (the "x-ray"): the live detected pose
-            // drives the accented skeleton, and the first pose also triggers a
-            // one-time ORB wall-feature field (the ambient starfield). Both are
-            // painted at true frame-relative positions on a dark backdrop.
+            // drives the accented skeleton. The ORB starfield is refreshed on a
+            // throttled cadence so it scrolls with the wall while staying cheap.
             if (chosen && mountedRef.current) {
               setCurrentPose(chosen);
-              if (!orbPreviewSent && referenceImageData) {
-                orbPreviewSent = true;
+              if (shouldEmitOrbPreview(video.currentTime, lastOrbPreviewEmitSec)) {
+                lastOrbPreviewEmitSec = video.currentTime;
                 try {
-                  setOrbPreview(
-                    extractWallFeaturePoints(
-                      cv, referenceImageData, chosen.keypoints, currentAnalysis,
-                      cropOptions, wallCropPx, videoWidth, videoHeight,
-                    ),
-                  );
+                  if (panning && keyframes.length > 0) {
+                    const latestKeyframe = keyframes[keyframes.length - 1];
+                    setOrbPreview(
+                      latestKeyframe.features.keypoints.map((kp) => ({
+                        x: kp.pt.x / videoWidth,
+                        y: kp.pt.y / videoHeight,
+                      })),
+                    );
+                  } else {
+                    const previewFrameData: ImageData = latestPreviewFrameData ?? ctx.getImageData(0, 0, videoWidth, videoHeight);
+                    latestPreviewFrameData = previewFrameData;
+                    setOrbPreview(
+                      extractWallFeaturePoints(
+                        cv,
+                        previewFrameData,
+                        chosen.keypoints,
+                        currentAnalysis,
+                        cropOptions,
+                        wallCropPx,
+                        videoWidth,
+                        videoHeight,
+                      ),
+                    );
+                  }
                 } catch (err) {
                   console.warn("[useVideoProcessor] ORB preview extraction failed", err);
                 }
