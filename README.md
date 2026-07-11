@@ -152,6 +152,12 @@ persisted (the adjustment is recomputed deterministically from the photo, so sav
 runs need no migration). The target and band width are named constants
 (`TARGET_CONTRAST_RATIO`, `BAND_K`) at the top of `contrastAdapter.ts`.
 
+The route console (single, side-by-side, and multi-climb overlay) carries the
+same boost via a **Contrast** toggle in its stage toolbar, sampling the route
+photo. Because every climb differs by hue and hue never moves, adaptation can only
+slide lightness within each identity, so slots stay distinguishable; the shared
+white joint is a neutral anchor and is exempt from adaptation.
+
 ## Pages
 
 | Route | Purpose | Auth required |

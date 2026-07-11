@@ -69,7 +69,9 @@ describe("drawSkeleton adaptive contrast thread-through", () => {
     silhouetteVisible: false,
     linesVisible: false,
     jointsVisible: true,
-    jointColor: "rgb(128, 128, 128)",
+    // A chromatic joint colour so the thread-through is exercised (a neutral joint
+    // is a deliberate anchor and is asserted separately below).
+    jointColor: "#39B1D1",
     anatomicalPalette: false,
     bodyScale: 100,
   };
@@ -77,7 +79,7 @@ describe("drawSkeleton adaptive contrast thread-through", () => {
   it("reproduces the authored colour when no contrastAdjust is supplied", () => {
     const { ctx, fills } = makeCtx();
     drawSkeleton(ctx, keypoints, options);
-    expect(fills).toContain("rgb(128, 128, 128)");
+    expect(fills).toContain("#39B1D1");
   });
 
   it("nudges the emitted colour when a contrastAdjust is supplied", () => {
@@ -85,6 +87,16 @@ describe("drawSkeleton adaptive contrast thread-through", () => {
     const contrastAdjust = computeContrastAdjust({ meanLuma: 0.5, stdLuma: 0 });
     drawSkeleton(ctx, keypoints, { ...options, contrastAdjust });
     expect(fills.length).toBeGreaterThan(0);
-    expect(fills).not.toContain("rgb(128, 128, 128)");
+    expect(fills).not.toContain("#39B1D1");
+  });
+
+  it("leaves a neutral (white) joint anchor unadapted even with a contrastAdjust", () => {
+    const { ctx, fills } = makeCtx();
+    // A bright, busy wall would darken any chromatic colour — but the white joint
+    // is a fixed neutral anchor (PRD) and must pass through unchanged.
+    const contrastAdjust = computeContrastAdjust({ meanLuma: 0.85, stdLuma: 0.1 });
+    const white = "rgba(255,255,255,0.9)";
+    drawSkeleton(ctx, keypoints, { ...options, jointColor: white, contrastAdjust });
+    expect(fills).toContain(white);
   });
 });

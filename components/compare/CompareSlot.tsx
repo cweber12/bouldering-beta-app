@@ -13,6 +13,7 @@ import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
 import { getAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 import RunStatusDot from "@/components/run/RunStatusDot";
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 
@@ -41,6 +42,13 @@ export interface CompareSlotProps {
   cv: CV;
   /** This climb's identity colour — drives the Silhouette and Skeleton lines. */
   limbColor: string;
+  /**
+   * When set, the overlay colours are nudged (lightness only, hue-locked) for
+   * legibility against the sampled route photo. Omit to render the exact identity
+   * colours. Threaded into the live player layer and the exported WebM so the
+   * download carries the same adapted look. The white joint anchor is exempt.
+   */
+  contrastAdjust?: ContrastAdjust;
   /** When true, the FramePlayer + download are hidden (overlay mode). */
   hidePlayer?: boolean;
   /** When true, the FramePlayer's built-in play button is hidden. */
@@ -75,6 +83,7 @@ export default function CompareSlot({
   matchTrigger,
   cv,
   limbColor,
+  contrastAdjust,
   hidePlayer = false,
   hidePlayButton = false,
   fillHeight = false,
@@ -120,7 +129,8 @@ export default function CompareSlot({
     silhouetteColor: limbColor,
     lineColor: limbColor,
     jointColor: JOINT_COLOR,
-  }), [limbColor]);
+    contrastAdjust,
+  }), [limbColor, contrastAdjust]);
 
   async function handleDownload() {
     if (!cv || !imageFile || !attempt || !matchResult) return;
