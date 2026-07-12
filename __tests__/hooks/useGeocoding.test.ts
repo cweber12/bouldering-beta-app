@@ -64,7 +64,10 @@ describe("useGeocoding", () => {
   });
 
   it("reverseGeocode returns null on fetch error", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({ ok: false })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve({ ok: false })),
+    );
 
     const { result } = renderHook(() => useGeocoding());
     let geocodeResult: Awaited<ReturnType<typeof result.current.reverseGeocode>>;
@@ -95,9 +98,7 @@ describe("useGeocoding", () => {
     });
 
     expect(onResults).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ lat: 39.7392, lng: -104.9903 }),
-      ]),
+      expect.arrayContaining([expect.objectContaining({ lat: 39.7392, lng: -104.9903 })]),
     );
   });
 

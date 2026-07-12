@@ -89,7 +89,9 @@ export default function ClimbGrid({ userId, search, state, area, sort }: ClimbGr
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, page, search, state, area, sort]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -109,7 +111,11 @@ export default function ClimbGrid({ userId, search, state, area, sort }: ClimbGr
   }
 
   if (climbs.length === 0) {
-    return <p className="px-3 py-8 text-center text-xs text-fg-muted">No climbs match the current filters.</p>;
+    return (
+      <p className="px-3 py-8 text-center text-xs text-fg-muted">
+        No climbs match the current filters.
+      </p>
+    );
   }
 
   return (
@@ -135,22 +141,37 @@ export default function ClimbGrid({ userId, search, state, area, sort }: ClimbGr
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center text-fg-muted/30">
-                  <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                  <svg
+                    className="h-10 w-10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                    />
                   </svg>
                 </div>
               )}
             </div>
             <div className="px-2 py-2">
               <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-              <p className="truncate text-[10px] text-fg-muted">{c.area}&nbsp;&middot;&nbsp;{c.state}</p>
+              <p className="truncate text-[10px] text-fg-muted">
+                {c.area}&nbsp;&middot;&nbsp;{c.state}
+              </p>
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 <RunTypeBadge
                   runType={c.runType}
                   className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
                 />
                 {c.rating && (
-                  <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">{c.rating}</span>
+                  <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
+                    {c.rating}
+                  </span>
                 )}
                 <span className="text-[9px] text-fg-muted">{c.timestamp}</span>
               </div>
@@ -169,7 +190,9 @@ export default function ClimbGrid({ userId, search, state, area, sort }: ClimbGr
           >
             Previous
           </button>
-          <span className="text-xs text-fg-muted">Page {page} of {totalPages}</span>
+          <span className="text-xs text-fg-muted">
+            Page {page} of {totalPages}
+          </span>
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}

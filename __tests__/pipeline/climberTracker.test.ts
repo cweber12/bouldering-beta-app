@@ -153,11 +153,11 @@ describe("selectClimberPose", () => {
     // Climber drifts right slowly; a bystander sweeps across from the left.
     // Each frame we predict from history and must keep selecting the climber.
     let history = [
-      { x: 0.50, y: 0.5 },
+      { x: 0.5, y: 0.5 },
       { x: 0.51, y: 0.5 },
     ];
     const climberPath = [0.52, 0.53, 0.54, 0.55];
-    const bystanderPath = [0.30, 0.45, 0.60, 0.75]; // passes through the climber
+    const bystanderPath = [0.3, 0.45, 0.6, 0.75]; // passes through the climber
 
     for (let f = 0; f < climberPath.length; f++) {
       const climber = makePose(climberPath[f], 0.5);
@@ -360,7 +360,7 @@ describe("predictDetectionRegion", () => {
 
   it("grows the margin with move speed", () => {
     const slow = predictDetectionRegion(box, { x: 0.5, y: 0.48 }, { x: 0.5, y: 0.5 }, 1000, 1000);
-    const fast = predictDetectionRegion(box, { x: 0.5, y: 0.30 }, { x: 0.5, y: 0.5 }, 1000, 1000);
+    const fast = predictDetectionRegion(box, { x: 0.5, y: 0.3 }, { x: 0.5, y: 0.5 }, 1000, 1000);
     expect(fast.height).toBeGreaterThan(slow.height);
   });
 
@@ -417,9 +417,7 @@ describe("pickAcquisitionRegion", () => {
     const last = { x: 200, y: 200, width: 100, height: 100 };
     const motion = { predicted: { x: 0.3, y: 0.2 }, last: { x: 0.25, y: 0.25 } };
     const region = pickAcquisitionRegion(last, crop, 1000, 1000, motion);
-    expect(region).toEqual(
-      predictDetectionRegion(last, motion.predicted, motion.last, 1000, 1000),
-    );
+    expect(region).toEqual(predictDetectionRegion(last, motion.predicted, motion.last, 1000, 1000));
   });
 
   it("returns null (full-frame search) when neither a track nor a crop exists", () => {

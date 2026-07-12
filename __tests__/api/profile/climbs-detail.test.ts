@@ -83,7 +83,10 @@ describe("GET /api/profile/[userId]/climbs/detail", () => {
 
   it("returns 401 when unauthenticated", async () => {
     mockGetAuthUserId.mockResolvedValueOnce(null);
-    const res = await GET(makeRequest("RouteData/user-1/CO/Area/Route/run-123-attempt.json"), makeParams("user-1"));
+    const res = await GET(
+      makeRequest("RouteData/user-1/CO/Area/Route/run-123-attempt.json"),
+      makeParams("user-1"),
+    );
     expect(res.status).toBe(401);
   });
 
@@ -110,10 +113,7 @@ describe("GET /api/profile/[userId]/climbs/detail", () => {
 
   it("returns 400 for path traversal in key", async () => {
     mockGetAuthUserId.mockResolvedValueOnce("viewer");
-    const res = await GET(
-      makeRequest("RouteData/user-1/../secret.json"),
-      makeParams("user-1"),
-    );
+    const res = await GET(makeRequest("RouteData/user-1/../secret.json"), makeParams("user-1"));
     expect(res.status).toBe(400);
   });
 

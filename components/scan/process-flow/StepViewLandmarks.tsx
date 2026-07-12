@@ -93,15 +93,15 @@ export default function StepViewLandmarks({
   // Scan-stage Holds editing — Fixed Capture only (a Panning Capture Run, which
   // carries keyframes, has no single whole-Route frame to author on; its Holds
   // stay on the on-the-fly path). ADR 0009.
-  const holdsEditable = !!activeAttempt && !(activeAttempt.keyframes?.length);
+  const holdsEditable = !!activeAttempt && !activeAttempt.keyframes?.length;
   const scanHolds = useScanHolds(activeAttempt, holdsEditable);
 
   function handleAddHold(kind: "hand" | "foot", side: "left" | "right") {
     scanHolds.addLimb(kind, side, previewPlayerRef.current?.getCurrentTime() ?? 0);
   }
 
-  const showResults = !isProcessing && !!activeAttempt &&
-    (orbStatus === "ready" || orbStatus === "failed");
+  const showResults =
+    !isProcessing && !!activeAttempt && (orbStatus === "ready" || orbStatus === "failed");
 
   // No pose frame carried any keypoints → the Climber was never detected. The
   // Detection Preview has nothing to show, and Save/Test would be meaningless.
@@ -136,13 +136,40 @@ export default function StepViewLandmarks({
       title="Save this scan without a route photo"
     >
       {s3Loading ? (
-        <svg className="h-4 w-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        <svg
+          className="h-4 w-4 animate-spin shrink-0"
+          fill="none"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <circle
+            className="opacity-25"
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+          />
+          <path
+            className="opacity-75"
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+          />
         </svg>
       ) : (
-        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z" />
+        <svg
+          className="h-4 w-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"
+          />
         </svg>
       )}
       Save scan
@@ -189,8 +216,19 @@ export default function StepViewLandmarks({
       className="motion-cta ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold"
       title="Place your climb on a photo of the route"
     >
-      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      <svg
+        className="h-4 w-4 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+        />
       </svg>
       Place on route
     </button>
@@ -198,190 +236,223 @@ export default function StepViewLandmarks({
 
   return (
     <>
-    <ProcessFlowShell
-      step={3}
-      totalSteps={4}
-      stepName={isProcessing ? "Scanning video" : "Review climb"}
-      instruction={isProcessing ? "detecting pose frame by frame" : undefined}
-      onBack={showFooterActions ? onEditClimb : undefined}
-      primaryAction={showFooterActions ? (placeOnRouteButton ?? saveScanButton) : undefined}
-      secondaryAction={showFooterActions && placeOnRouteButton ? saveScanButton : undefined}
-    >
-      <div className="h-full overflow-hidden">
-
-        {/* ── Processing: vertically centered scan animation ── */}
-        {isProcessing && (
-          <div className="flex h-full flex-col items-center justify-center gap-6 px-6 py-8">
-            <div className="relative h-32 w-52 overflow-hidden rounded-(--radius-panel) border border-accent/30 bg-inset">
-              <div
-                className="absolute inset-0 opacity-[0.08] pointer-events-none"
-                style={{
-                  backgroundImage: "linear-gradient(var(--color-accent) 1px, transparent 1px), linear-gradient(90deg, var(--color-accent) 1px, transparent 1px)",
-                  backgroundSize: "18px 18px",
-                }}
-              />
-              <div
-                className="absolute inset-x-0 top-0 bg-accent/15 transition-all duration-300"
-                style={{ height: `${progressPct}%` }}
-              />
-              <div
-                className="absolute inset-x-0 h-10 pointer-events-none transition-all duration-300"
-                style={{ top: `calc(${progressPct}% - 1.25rem)` }}
-              >
-                <div className="w-full h-full bg-linear-to-b from-transparent via-accent/30 to-transparent" />
-              </div>
-              <div
-                className="absolute inset-x-0 h-px bg-accent transition-all duration-300"
-                style={{ top: `${progressPct}%` }}
-              />
-            </div>
-
-            <div className="text-center leading-none">
-              <span className="text-5xl font-bold tabular-nums text-fg tracking-tight">{progressPct}</span>
-              <span className="text-xl font-medium text-fg-secondary ml-1">%</span>
-            </div>
-
-            <p className="text-sm text-fg-secondary">
-              Frame {currentFrame} of {totalFrames}
-              <span className="ml-1.5 text-fg-muted">· every {frameStep} frames</span>
-            </p>
-          </div>
-        )}
-
-        {/* ── Post-processing state ── */}
-        {!isProcessing && orbStatus === "extracting" && (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-fg-secondary">Reading the wall texture&#8230;</p>
-          </div>
-        )}
-
-        {/* ── Results — preview fills the stage, banners pinned above ── */}
-        {(showResults || (!isProcessing && orbStatus === "failed") || processingError) && (
-          <div className="flex h-full w-full flex-col">
-
-            {/* Banners — constrained + centered, never stretched to the stage width */}
-            <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 px-4 pt-4 empty:hidden sm:px-6">
-            {!isProcessing && orbStatus === "failed" && (
-              <p className="text-center text-sm text-caution">
-                We couldn&rsquo;t read the wall texture, so placing your climb on a route photo isn&rsquo;t available. You can still save the scan.
-              </p>
-            )}
-
-            {/* Upload success banner */}
-            {showResults && s3Saved && (
-              <div className="w-full rounded-(--radius-panel) border border-send/30 bg-send-surface px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
-                <div className="flex items-center gap-2 flex-1">
-                  <svg className="h-4 w-4 shrink-0 text-send" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-sm font-medium text-send">Scan saved successfully</p>
+      <ProcessFlowShell
+        step={3}
+        totalSteps={4}
+        stepName={isProcessing ? "Scanning video" : "Review climb"}
+        instruction={isProcessing ? "detecting pose frame by frame" : undefined}
+        onBack={showFooterActions ? onEditClimb : undefined}
+        primaryAction={showFooterActions ? (placeOnRouteButton ?? saveScanButton) : undefined}
+        secondaryAction={showFooterActions && placeOnRouteButton ? saveScanButton : undefined}
+      >
+        <div className="h-full overflow-hidden">
+          {/* ── Processing: vertically centered scan animation ── */}
+          {isProcessing && (
+            <div className="flex h-full flex-col items-center justify-center gap-6 px-6 py-8">
+              <div className="relative h-32 w-52 overflow-hidden rounded-(--radius-panel) border border-accent/30 bg-inset">
+                <div
+                  className="absolute inset-0 opacity-[0.08] pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(var(--color-accent) 1px, transparent 1px), linear-gradient(90deg, var(--color-accent) 1px, transparent 1px)",
+                    backgroundSize: "18px 18px",
+                  }}
+                />
+                <div
+                  className="absolute inset-x-0 top-0 bg-accent/15 transition-all duration-300"
+                  style={{ height: `${progressPct}%` }}
+                />
+                <div
+                  className="absolute inset-x-0 h-10 pointer-events-none transition-all duration-300"
+                  style={{ top: `calc(${progressPct}% - 1.25rem)` }}
+                >
+                  <div className="w-full h-full bg-linear-to-b from-transparent via-accent/30 to-transparent" />
                 </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={onScanAnother}
-                    className="ui-control rounded-md px-3 py-1.5 text-xs font-medium"
-                  >
-                    Scan another
-                  </button>
-                  <button
-                    onClick={onViewScans}
-                    className="rounded-md border border-send/40 bg-send/10 px-3 py-1.5 text-xs font-medium text-send transition hover:bg-send/20"
-                  >
-                    View my scans
-                  </button>
-                </div>
+                <div
+                  className="absolute inset-x-0 h-px bg-accent transition-all duration-300"
+                  style={{ top: `${progressPct}%` }}
+                />
               </div>
-            )}
 
-            {saveError && <p className="w-full text-center text-xs text-danger">{saveError}</p>}
+              <div className="text-center leading-none">
+                <span className="text-5xl font-bold tabular-nums text-fg tracking-tight">
+                  {progressPct}
+                </span>
+                <span className="text-xl font-medium text-fg-secondary ml-1">%</span>
+              </div>
 
-            {processingError && (
-              <p className="w-full rounded-(--radius-panel) border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
-                {processingError}
+              <p className="text-sm text-fg-secondary">
+                Frame {currentFrame} of {totalFrames}
+                <span className="ml-1.5 text-fg-muted">· every {frameStep} frames</span>
               </p>
-            )}
             </div>
+          )}
 
-            {/* No climber detected → explicit empty state instead of a dead spinner */}
-            {showResults && !hasSkeleton && (
-              <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 text-center">
-                <svg className="h-10 w-10 text-fg-muted" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
-                </svg>
-                <div>
-                  <p className="text-sm font-medium text-fg">No climber detected in this scan</p>
-                  <p className="mt-1 text-xs text-fg-secondary">
-                    Try re-framing the climber or tapping them to seed tracking, then scan again.
+          {/* ── Post-processing state ── */}
+          {!isProcessing && orbStatus === "extracting" && (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-fg-secondary">Reading the wall texture&#8230;</p>
+            </div>
+          )}
+
+          {/* ── Results — preview fills the stage, banners pinned above ── */}
+          {(showResults || (!isProcessing && orbStatus === "failed") || processingError) && (
+            <div className="flex h-full w-full flex-col">
+              {/* Banners — constrained + centered, never stretched to the stage width */}
+              <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 px-4 pt-4 empty:hidden sm:px-6">
+                {!isProcessing && orbStatus === "failed" && (
+                  <p className="text-center text-sm text-caution">
+                    We couldn&rsquo;t read the wall texture, so placing your climb on a route photo
+                    isn&rsquo;t available. You can still save the scan.
                   </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={onEditClimb}
-                    className="ui-control-primary rounded-md px-4 py-2 text-sm font-medium"
-                  >
-                    Adjust detection
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onScanAnother}
-                    className="ui-control rounded-md px-4 py-2 text-sm font-medium"
-                  >
-                    Scan another
-                  </button>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Animated preview — control bar above, drawers anchored to the frame */}
-            {showResults && hasSkeleton && (
-              firstFrameFile && firstFrameSkeletonData ? (
-                <>
-                  {previewBar}
-                  <div className="relative flex min-h-0 flex-1 flex-col">
-                    <FramePlayer
-                      ref={previewPlayerRef}
-                      imageFile={firstFrameFile}
-                      layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
-                      duration={firstFrameSkeletonData.duration}
-                      autoPlay
-                      holds={scanHolds.previewHolds}
-                      orbKeypoints={advanced ? activeAttempt?.orbFeatures?.keypoints.map(kp => kp.pt) : undefined}
-                      fit="contain"
-                      bare
-                      className="min-h-0 flex-1 rounded-none"
-                    />
-                    {holdsEditable && (
-                      <HoldsEditor
-                        open={openSidebar === "holds"}
-                        onClose={() => setOpenSidebar(null)}
-                        entries={scanHolds.entries}
-                        onAdd={handleAddHold}
-                        onRemove={(entry) => scanHolds.removeHold(entry.hold)}
-                      />
-                    )}
-                    <SkeletonStylePanel
-                      open={openSidebar === "climber"}
-                      onClose={() => setOpenSidebar(null)}
-                      onChange={onSkeletonStyleChange}
-                      footer={<DeveloperViewToggle />}
-                    />
+                {/* Upload success banner */}
+                {showResults && s3Saved && (
+                  <div className="w-full rounded-(--radius-panel) border border-send/30 bg-send-surface px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-2 flex-1">
+                      <svg
+                        className="h-4 w-4 shrink-0 text-send"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                      </svg>
+                      <p className="text-sm font-medium text-send">Scan saved successfully</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={onScanAnother}
+                        className="ui-control rounded-md px-3 py-1.5 text-xs font-medium"
+                      >
+                        Scan another
+                      </button>
+                      <button
+                        onClick={onViewScans}
+                        className="rounded-md border border-send/40 bg-send/10 px-3 py-1.5 text-xs font-medium text-send transition hover:bg-send/20"
+                      >
+                        View my scans
+                      </button>
+                    </div>
                   </div>
-                </>
-              ) : (
-                <p className="flex-1 px-4 py-4 text-center text-xs text-fg-muted sm:px-6">Loading preview&#8230;</p>
-              )
-            )}
-          </div>
-        )}
-      </div>
-    </ProcessFlowShell>
-    <RoutePhotoChooser
-      open={showPhotoChooser}
-      onClose={() => setShowPhotoChooser(false)}
-      onPhoto={(file) => { setShowPhotoChooser(false); onViewOnRoutePhoto(file); }}
-    />
-    <DiagnosticsPanel record={scanDiagnostics ?? null} />
+                )}
+
+                {saveError && <p className="w-full text-center text-xs text-danger">{saveError}</p>}
+
+                {processingError && (
+                  <p className="w-full rounded-(--radius-panel) border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger">
+                    {processingError}
+                  </p>
+                )}
+              </div>
+
+              {/* No climber detected → explicit empty state instead of a dead spinner */}
+              {showResults && !hasSkeleton && (
+                <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-4 text-center">
+                  <svg
+                    className="h-10 w-10 text-fg-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15.182 16.318A4.486 4.486 0 0012.016 15a4.486 4.486 0 00-3.198 1.318M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z"
+                    />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-fg">No climber detected in this scan</p>
+                    <p className="mt-1 text-xs text-fg-secondary">
+                      Try re-framing the climber or tapping them to seed tracking, then scan again.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={onEditClimb}
+                      className="ui-control-primary rounded-md px-4 py-2 text-sm font-medium"
+                    >
+                      Adjust detection
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onScanAnother}
+                      className="ui-control rounded-md px-4 py-2 text-sm font-medium"
+                    >
+                      Scan another
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Animated preview — control bar above, drawers anchored to the frame */}
+              {showResults &&
+                hasSkeleton &&
+                (firstFrameFile && firstFrameSkeletonData ? (
+                  <>
+                    {previewBar}
+                    <div className="relative flex min-h-0 flex-1 flex-col">
+                      <FramePlayer
+                        ref={previewPlayerRef}
+                        imageFile={firstFrameFile}
+                        layers={[{ frames: firstFrameSkeletonData.frames, style: topoStyle }]}
+                        duration={firstFrameSkeletonData.duration}
+                        autoPlay
+                        holds={scanHolds.previewHolds}
+                        orbKeypoints={
+                          advanced
+                            ? activeAttempt?.orbFeatures?.keypoints.map((kp) => kp.pt)
+                            : undefined
+                        }
+                        fit="contain"
+                        bare
+                        className="min-h-0 flex-1 rounded-none"
+                      />
+                      {holdsEditable && (
+                        <HoldsEditor
+                          open={openSidebar === "holds"}
+                          onClose={() => setOpenSidebar(null)}
+                          entries={scanHolds.entries}
+                          onAdd={handleAddHold}
+                          onRemove={(entry) => scanHolds.removeHold(entry.hold)}
+                        />
+                      )}
+                      <SkeletonStylePanel
+                        open={openSidebar === "climber"}
+                        onClose={() => setOpenSidebar(null)}
+                        onChange={onSkeletonStyleChange}
+                        footer={<DeveloperViewToggle />}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <p className="flex-1 px-4 py-4 text-center text-xs text-fg-muted sm:px-6">
+                    Loading preview&#8230;
+                  </p>
+                ))}
+            </div>
+          )}
+        </div>
+      </ProcessFlowShell>
+      <RoutePhotoChooser
+        open={showPhotoChooser}
+        onClose={() => setShowPhotoChooser(false)}
+        onPhoto={(file) => {
+          setShowPhotoChooser(false);
+          onViewOnRoutePhoto(file);
+        }}
+      />
+      <DiagnosticsPanel record={scanDiagnostics ?? null} />
     </>
   );
 }

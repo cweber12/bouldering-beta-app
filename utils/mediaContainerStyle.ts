@@ -13,7 +13,11 @@ import type { CSSProperties } from "react";
 export function mediaContainerStyle(w: number, h: number, navOffset = "1rem"): CSSProperties {
   const ratio = (w / h).toFixed(6);
   const maxH = `calc(100dvh - var(--nav-h) - ${navOffset})`;
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
+  return {
+    width: `min(100%, calc(${maxH} * ${ratio}))`,
+    maxHeight: maxH,
+    aspectRatio: `${w} / ${h}`,
+  };
 }
 
 /**
@@ -22,7 +26,11 @@ export function mediaContainerStyle(w: number, h: number, navOffset = "1rem"): C
 export function fsMediaContainerStyle(w: number, h: number): CSSProperties {
   const ratio = (w / h).toFixed(6);
   const maxH = "calc(100dvh - 8rem)";
-  return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
+  return {
+    width: `min(100%, calc(${maxH} * ${ratio}))`,
+    maxHeight: maxH,
+    aspectRatio: `${w} / ${h}`,
+  };
 }
 
 // ---------------------------------------------------------------------------

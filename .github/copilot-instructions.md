@@ -2,16 +2,16 @@
 
 ## Stack
 
-| Concern | Version |
-|---|---|
-| Framework | Next.js **16.2.1** — App Router, `"use client"` boundary, webpack 5 |
-| UI | React **19.2.4** |
-| Language | TypeScript **strict** — `"module": "esnext"`, `"moduleResolution": "bundler"` |
-| Styling | Tailwind CSS v4 |
-| Computer vision | `@techstark/opencv-js ^4.12.0` (WASM, main thread synchronous) |
-| Pose estimation | `@mediapipe/tasks-vision ^0.10.34` (MediaPipe Pose Landmarker, GPU delegate) |
-| Testing | Vitest **^4.1.1** + jsdom + `@testing-library/react ^16.3.2` |
-| Path alias | `@/*` → project root |
+| Concern         | Version                                                                       |
+| --------------- | ----------------------------------------------------------------------------- |
+| Framework       | Next.js **16.2.1** — App Router, `"use client"` boundary, webpack 5           |
+| UI              | React **19.2.4**                                                              |
+| Language        | TypeScript **strict** — `"module": "esnext"`, `"moduleResolution": "bundler"` |
+| Styling         | Tailwind CSS v4                                                               |
+| Computer vision | `@techstark/opencv-js ^4.12.0` (WASM, main thread synchronous)                |
+| Pose estimation | `@mediapipe/tasks-vision ^0.10.34` (MediaPipe Pose Landmarker, GPU delegate)  |
+| Testing         | Vitest **^4.1.1** + jsdom + `@testing-library/react ^16.3.2`                  |
+| Path alias      | `@/*` → project root                                                          |
 
 > **⚠ This is NOT the Next.js you know.** APIs and file conventions may differ from your training data. Read guides in `node_modules/next/dist/docs/` before writing code. Heed deprecation notices.
 
@@ -51,6 +51,7 @@ workers/             Legacy — keep, do not delete
 ## Non-negotiable Rules
 
 ### Color system and theming
+
 - All colors must use semantic CSS tokens defined in `app/globals.css` (`@theme inline` for dark defaults, `.theme-light` class for light overrides).
 - **Never** use raw Tailwind palette classes for status/semantic colors: no `red-400`, `amber-900`, `emerald-500`, `black/60` etc. where a semantic token exists.
 - Semantic token classes available: `text-danger`, `bg-danger-surface`, `border-danger-border`, `text-caution`, `bg-caution-surface`, `border-caution-border`, `text-send`, `bg-send`, `bg-send-surface`, `text-attempt`, `bg-attempt`, `bg-attempt-surface`, `text-fg-inverse`.
@@ -63,32 +64,38 @@ workers/             Legacy — keep, do not delete
 - Canvas drawing values (map pins, skeleton overlays) use `utils/theme.ts` `dark`/`light` objects — keep them in sync with `globals.css` tokens.
 
 ### OpenCV
+
 - Runs **synchronously on the main thread** via `cv` from `useOpenCV`.
 - **Never** create WASM inside a Worker — `onRuntimeInitialized` is unreliable in worker scope.
 - Every OpenCV allocation **must** be freed in a `finally` block.
 - Pass `cv` explicitly as a function parameter — never read from `window`.
 
 ### pipeline/ boundary
+
 - Zero React imports in `pipeline/`.
 - All pipeline functions take `cv` as their first argument (`type CV = any`).
 - All pipeline functions are synchronous.
 
 ### Hooks
+
 - Hooks call pipeline functions and own React state/error boundaries.
 - `useVideoProcessor` exposes `orbStatus: "idle" | "extracting" | "ready" | "failed"`.
 - `imageFile` state lives in the parent component; hooks receive it as a parameter.
 
 ### TypeScript
+
 - `any` is only permitted for `type CV = any` and `type PoseDetector = any`.
 - Never use `any` elsewhere. Never disable `tsc` checks.
 
 ### Testing
+
 - Test files mirror source tree under `__tests__/`.
 - Use `vi.stubGlobal` / `vi.unstubAllGlobals()` for DOM globals.
 - `ImageData` not in jsdom — cast plain objects: `{ data, width, height, colorSpace } as ImageData`.
 - Mock `pipeline/orbDetector` or `pipeline/homography` at module boundary — never exercise WASM directly.
 
 ### Media previews with crop overlays
+
 - **Never** display media with `object-contain` CSS when a `CropBoxOverlay` is involved — letterboxing causes crop fractions to map to the container rather than the actual media bounds.
 - Use an aspect-ratio-constrained container with `object-fill` class on the media element so the container IS the media bounds. Crop fractions then map 1:1 to media pixels.
 - CSS variable `--nav-h: 3rem` (NavBar height) is defined in `app/globals.css` `:root`.
@@ -97,7 +104,11 @@ workers/             Legacy — keep, do not delete
   function mediaContainerStyle(w: number, h: number): React.CSSProperties {
     const ratio = (w / h).toFixed(6);
     const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
-    return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
   }
   // Media element: className="absolute inset-0 w-full h-full object-fill"
   ```
@@ -110,6 +121,7 @@ workers/             Legacy — keep, do not delete
 - Fullscreen video uses a separate `useRef<HTMLVideoElement>` so it plays independently; sync `currentTime` on open and back to the inline player on close.
 
 ### Run classification & S3 key format
+
 - `RouteAttempt.runType` is `"attempt" | "send"` (re-exported as `RunType`).
 - Optional `rating?: string` and `notes?: string` are stored alongside each run.
 - S3 key format: `RouteData/{userId}/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
@@ -118,6 +130,7 @@ workers/             Legacy — keep, do not delete
 - UI colours: amber for attempts, emerald for sends.
 
 ### Profile & social
+
 - Profile data stored at `ProfileData/{userId}/profile.json` (displayName, location, bio, profilePicture as base64 data URL).
 - Search index at `ProfileData/_index/{userId}.json` (displayName, email, location) — updated on every profile save.
 - Following list at `ProfileData/{userId}/following.json` — array of user IDs.
@@ -129,6 +142,7 @@ workers/             Legacy — keep, do not delete
 - `utils/supabase/service.ts` is removed. Profile and following data now live in S3 under the `ProfileData/` prefix in the same bucket as route data.
 
 ### Authentication (Firebase)
+
 - Auth uses Firebase Auth (email/password) with HTTP-only session cookies.
 - `utils/firebase/client.ts` — browser Firebase app + auth (`getFirebaseApp`, `getFirebaseAuth`).
 - `utils/firebase/admin.ts` — Firebase Admin SDK (`getAdminAuth`). Server-side only, never import in client bundles.
@@ -178,6 +192,7 @@ New `pipeline/` and `hooks/` files must have corresponding `__tests__/` coverage
 automatically — do not wait for the user to ask.**
 
 ### README maintenance
+
 - When a code change adds, removes, or renames user-visible features, pages,
   storage formats, or API behaviour, update `README.md` in the same commit.
 - Keep the S3 key format example, Pages table, and feature summary in the README

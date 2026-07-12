@@ -30,7 +30,9 @@ describe("isValidKey", () => {
   const uid = "test-user-id";
 
   it("accepts a well-formed key", () => {
-    expect(isValidKey(`${S3_PREFIX}/${uid}/CO/RedRocks/Classic/run-1-attempt.json`, uid)).toBe(true);
+    expect(isValidKey(`${S3_PREFIX}/${uid}/CO/RedRocks/Classic/run-1-attempt.json`, uid)).toBe(
+      true,
+    );
   });
 
   it("rejects keys that don't start with the prefix", () => {

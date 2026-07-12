@@ -29,7 +29,10 @@ class FakeMediaRecorder {
   state: "recording" | "inactive" = "inactive";
   ondataavailable: ((e: { data: Blob }) => void) | null = null;
   onstop: (() => void) | null = null;
-  constructor(public stream: MediaStream, public options?: { mimeType?: string }) {}
+  constructor(
+    public stream: MediaStream,
+    public options?: { mimeType?: string },
+  ) {}
   start() {
     this.state = "recording";
   }

@@ -6,6 +6,7 @@ Run the full post-change checklist in order and report a one-line summary for ea
 4. `npx eslint .` — report error and warning counts
 
 If all four steps pass (zero TypeScript errors, all tests green, no lint errors):
+
 - Stage all changes: `git add .`
 - Commit with an appropriate conventional commit message
 - Push: `git push`

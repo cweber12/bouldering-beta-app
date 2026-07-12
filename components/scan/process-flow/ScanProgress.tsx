@@ -71,7 +71,12 @@ function toOverlay(pose: PoseFrame, w: number, h: number): Record<string, Overla
 }
 
 /** Paint the faint ORB starfield onto a context. */
-function drawStarfield(ctx: CanvasRenderingContext2D, pts: NormalizedPoint[], w: number, h: number): void {
+function drawStarfield(
+  ctx: CanvasRenderingContext2D,
+  pts: NormalizedPoint[],
+  w: number,
+  h: number,
+): void {
   ctx.save();
   ctx.fillStyle = ORB_COLOR;
   const r = Math.max(1, Math.min(w, h) * 0.0024);
@@ -144,25 +149,33 @@ export default function ScanProgress({
   const trailRef = useRef<HTMLCanvasElement | null>(null);
   const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
   const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
-  const animRef = useRef<{ from: Record<string, OverlayPoint>; to: Record<string, OverlayPoint>; start: number } | null>(null);
+  const animRef = useRef<{
+    from: Record<string, OverlayPoint>;
+    to: Record<string, OverlayPoint>;
+    start: number;
+  } | null>(null);
   const rafRef = useRef<number | null>(null);
 
   // Composite the ORB starfield + trail + the current live skeleton on top.
-  const render = useCallback((live: Record<string, OverlayPoint> | null) => {
-    const display = displayRef.current;
-    const dctx = display?.getContext("2d");
-    if (!display || !dctx) return;
-    dctx.clearRect(0, 0, cw, ch);
-    if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
-    if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
-    if (live) drawLive(dctx, live);
-  }, [cw, ch]);
+  const render = useCallback(
+    (live: Record<string, OverlayPoint> | null) => {
+      const display = displayRef.current;
+      const dctx = display?.getContext("2d");
+      if (!display || !dctx) return;
+      dctx.clearRect(0, 0, cw, ch);
+      if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
+      if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
+      if (live) drawLive(dctx, live);
+    },
+    [cw, ch],
+  );
 
   // (Re)initialise the trail layer whenever the render size changes —
   // effectively a fresh scan; reset the pose accumulation.
   useEffect(() => {
     const trail = document.createElement("canvas");
-    trail.width = cw; trail.height = ch;
+    trail.width = cw;
+    trail.height = ch;
     trailRef.current = trail;
     prevTargetRef.current = null;
     lastLiveRef.current = null;
@@ -175,9 +188,14 @@ export default function ScanProgress({
   // re-init of the trail layer. Idempotent: no "drawn once" flag to fall out of
   // sync with the canvas it guards.
   useEffect(() => {
-    if (!orbPreview) { orbRef.current = null; render(lastLiveRef.current); return; }
+    if (!orbPreview) {
+      orbRef.current = null;
+      render(lastLiveRef.current);
+      return;
+    }
     const orb = document.createElement("canvas");
-    orb.width = cw; orb.height = ch;
+    orb.width = cw;
+    orb.height = ch;
     const octx = orb.getContext("2d");
     if (!octx) return;
     drawStarfield(octx, orbPreview, cw, ch);
@@ -220,7 +238,10 @@ export default function ScanProgress({
     rafRef.current = requestAnimationFrame(step);
 
     return () => {
-      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [currentPose, cw, ch, render]);
 
@@ -265,12 +286,23 @@ export default function ScanProgress({
             title="Cancel scan"
             className="ui-control -ml-1 flex h-8 w-8 shrink-0 items-center justify-center p-0 text-fg-muted"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
 
-          <div className="flex flex-1 items-center justify-center gap-2" role="status" aria-live="polite">
+          <div
+            className="flex flex-1 items-center justify-center gap-2"
+            role="status"
+            aria-live="polite"
+          >
             {finishing ? (
               <span className="text-sm font-medium text-fg-secondary">Finishing up&#8230;</span>
             ) : (

@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -74,41 +67,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signIn = useCallback(
-    async (email: string, password: string): Promise<string | null> => {
-      try {
-        const auth = getFirebaseAuth();
-        const credential = await signInWithEmailAndPassword(auth, email, password);
-        const idToken = await credential.user.getIdToken();
-        await createServerSession(idToken);
-        return null;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return msg;
-      }
-    },
-    [],
-  );
+  const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
+    try {
+      const auth = getFirebaseAuth();
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const idToken = await credential.user.getIdToken();
+      await createServerSession(idToken);
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg;
+    }
+  }, []);
 
-  const signUp = useCallback(
-    async (email: string, password: string): Promise<string | null> => {
-      try {
-        const auth = getFirebaseAuth();
-        const credential = await createUserWithEmailAndPassword(auth, email, password);
-        // Send email verification — non-blocking; failure is non-fatal.
-        sendEmailVerification(credential.user).catch((e) =>
-          console.warn("[auth] sendEmailVerification failed:", e),
-        );
-        const idToken = await credential.user.getIdToken();
-        await createServerSession(idToken);
-        return null;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        return msg;
-      }
-    },
-    [],
-  );
+  const signUp = useCallback(async (email: string, password: string): Promise<string | null> => {
+    try {
+      const auth = getFirebaseAuth();
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      // Send email verification — non-blocking; failure is non-fatal.
+      sendEmailVerification(credential.user).catch((e) =>
+        console.warn("[auth] sendEmailVerification failed:", e),
+      );
+      const idToken = await credential.user.getIdToken();
+      await createServerSession(idToken);
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return msg;
+    }
+  }, []);
 
   const signOut = useCallback(async () => {
     const auth = getFirebaseAuth();

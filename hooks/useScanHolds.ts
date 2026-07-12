@@ -73,7 +73,7 @@ export function useScanHolds(attempt: RouteAttempt | null, editable: boolean): S
   const seededKeyRef = useRef<string | null | undefined>(undefined);
   if (seededKeyRef.current !== seedKey) {
     seededKeyRef.current = seedKey;
-    setHolds(seedKey && attempt ? attempt.holds ?? [] : []);
+    setHolds(seedKey && attempt ? (attempt.holds ?? []) : []);
   }
 
   // Video-space projector + the preview-clock rebasing offset (the first detected

@@ -20,7 +20,10 @@ export default function FixSuggestionsPanel({ suggestions }: FixSuggestionsPanel
       <p className="text-xs font-semibold uppercase tracking-wide text-caution">Suggested fixes</p>
       <div className="mt-2 flex flex-col gap-2">
         {suggestions.map((s) => (
-          <div key={s.id} className="rounded-xl border border-caution-border/60 bg-surface-alt/40 px-3 py-2.5">
+          <div
+            key={s.id}
+            className="rounded-xl border border-caution-border/60 bg-surface-alt/40 px-3 py-2.5"
+          >
             <p className="text-xs font-semibold text-fg">{s.title}</p>
             <p className="mt-0.5 text-xs text-fg-secondary">{s.detail}</p>
             <button

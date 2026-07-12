@@ -30,7 +30,14 @@ export interface CompareToolbarProps {
 
 function OverlayIcon() {
   return (
-    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
+    <svg
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 5-9 5-9-5 9-5z" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 16l9 5 9-5" />
     </svg>
@@ -39,9 +46,24 @@ function OverlayIcon() {
 
 function SideBySideIcon() {
   return (
-    <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 5.5A1.5 1.5 0 015.5 4h2A1.5 1.5 0 019 5.5v13A1.5 1.5 0 017.5 20h-2A1.5 1.5 0 014 18.5v-13z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 5.5A1.5 1.5 0 0116.5 4h2A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-2a1.5 1.5 0 01-1.5-1.5v-13z" />
+    <svg
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 5.5A1.5 1.5 0 015.5 4h2A1.5 1.5 0 019 5.5v13A1.5 1.5 0 017.5 20h-2A1.5 1.5 0 014 18.5v-13z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 5.5A1.5 1.5 0 0116.5 4h2A1.5 1.5 0 0120 5.5v13a1.5 1.5 0 01-1.5 1.5h-2a1.5 1.5 0 01-1.5-1.5v-13z"
+      />
     </svg>
   );
 }
@@ -72,7 +94,11 @@ export default function CompareToolbar({
       {isMultiple && (
         <>
           {/* View-mode segmented control */}
-          <div className="inline-flex items-center rounded-lg bg-inset p-0.5" role="group" aria-label="View mode">
+          <div
+            className="inline-flex items-center rounded-lg bg-inset p-0.5"
+            role="group"
+            aria-label="View mode"
+          >
             {VIEW_MODES.map((m) => (
               <button
                 key={m.id}
@@ -103,9 +129,29 @@ export default function CompareToolbar({
               aria-label={masterPlaying ? "Pause all climbs" : "Play all climbs"}
             >
               {masterPlaying ? (
-                <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>Pause</>
+                <>
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
+                  </svg>
+                  Pause
+                </>
               ) : (
-                <><svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>Play all</>
+                <>
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                  Play all
+                </>
               )}
             </button>
           )}
@@ -127,11 +173,29 @@ export default function CompareToolbar({
             : "border border-transparent text-fg-muted hover:bg-inset/60 hover:text-fg",
         )}
       >
-        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 3v12m0 0a2.25 2.25 0 100 4.5A2.25 2.25 0 006 15zm12-3V3m0 9a2.25 2.25 0 110 4.5A2.25 2.25 0 0118 12zm0 0V9" />
+        <svg
+          className="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 3v12m0 0a2.25 2.25 0 100 4.5A2.25 2.25 0 006 15zm12-3V3m0 9a2.25 2.25 0 110 4.5A2.25 2.25 0 0118 12zm0 0V9"
+          />
         </svg>
         Refine
-        <svg className={cn("h-3 w-3 transition-transform", refineOpen && "rotate-180")} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className={cn("h-3 w-3 transition-transform", refineOpen && "rotate-180")}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>

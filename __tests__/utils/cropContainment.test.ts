@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  frameClampCrop,
-  containRoute,
-  defaultRouteAroundClimber,
-} from "@/utils/cropContainment";
+import { frameClampCrop, containRoute, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import type { CropFraction } from "@/utils/cropFraction";
 
 const close = (a: number, b: number) => Math.abs(a - b) < 1e-9;

@@ -103,9 +103,7 @@ async function loadModelAssetBuffer(variant: MediaPipeVariant): Promise<Uint8Arr
 }
 
 async function loadMediaPipe(variant: MediaPipeVariant, maxPoses: number): Promise<void> {
-  const { FilesetResolver, PoseLandmarker } = await import(
-    "@mediapipe/tasks-vision"
-  );
+  const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
 
   const vision = await FilesetResolver.forVisionTasks(MP_WASM_BASE);
   const modelAssetBuffer = await loadModelAssetBuffer(variant);
@@ -161,9 +159,7 @@ async function loadModel(config: PoseModelConfig): Promise<void> {
  * trigger a reload. When the config changes, the old model is discarded and
  * the new one is loaded.
  */
-export function usePoseModel(
-  config: PoseModelConfig = DEFAULT_POSE_MODEL,
-): UsePoseModelResult {
+export function usePoseModel(config: PoseModelConfig = DEFAULT_POSE_MODEL): UsePoseModelResult {
   const key = configKey(config);
 
   const [, rerender] = useState(0);
@@ -180,12 +176,14 @@ export function usePoseModel(
     // model load per config key to avoid racing MediaPipe WASM initialisation.
     if (!loadPromise) {
       loadingConfigKey = key;
-      loadPromise = loadModel(config).catch((err) => {
-        console.error("[usePoseModel] Failed to load model:", err);
-      }).finally(() => {
-        loadPromise = null;
-        loadingConfigKey = null;
-      });
+      loadPromise = loadModel(config)
+        .catch((err) => {
+          console.error("[usePoseModel] Failed to load model:", err);
+        })
+        .finally(() => {
+          loadPromise = null;
+          loadingConfigKey = null;
+        });
     } else if (loadingConfigKey !== key && cachedConfigKey !== key) {
       // A different config was requested while another model was loading.
       // Queue one follow-up load after the current one settles.

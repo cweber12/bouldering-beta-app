@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
 const STORAGE_KEY = "advancedView";
 
@@ -36,15 +29,10 @@ function readStored(): boolean {
  * internals, raw algorithm copy) so the default experience stays clean.
  *
  * Mirrors the ThemeProvider pattern but needs no FOUC/<html>-class handling:
- * it carries no visual class, so there is no hydration flash to avoid. State
- * starts OFF (SSR-safe) and syncs to the stored value on mount.
+ * it carries no visual class, so there is no hydration flash to avoid.
  */
 export function AdvancedViewProvider({ children }: { children: ReactNode }) {
-  const [advanced, setAdvancedState] = useState(false);
-
-  // Sync to the persisted value on first client render (external-store read).
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setAdvancedState(readStored()); }, []);
+  const [advanced, setAdvancedState] = useState<boolean>(() => readStored());
 
   const persist = useCallback((on: boolean) => {
     try {
@@ -54,13 +42,16 @@ export function AdvancedViewProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setAdvanced = useCallback((on: boolean) => {
-    setAdvancedState(on);
-    persist(on);
-  }, [persist]);
+  const setAdvanced = useCallback(
+    (on: boolean) => {
+      setAdvancedState(on);
+      persist(on);
+    },
+    [persist],
+  );
 
   const toggle = useCallback(() => {
-    setAdvancedState(prev => {
+    setAdvancedState((prev) => {
       const next = !prev;
       persist(next);
       return next;

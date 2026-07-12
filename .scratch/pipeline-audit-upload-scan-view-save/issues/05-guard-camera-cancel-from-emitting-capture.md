@@ -24,4 +24,3 @@ tracks safely without advancing the scan flow.
 ## Blocked by
 
 None - can start immediately
-

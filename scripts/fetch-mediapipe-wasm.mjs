@@ -56,7 +56,9 @@ async function main() {
     console.log(`[setup:mediapipe-wasm] Copied ${file}`);
   }
 
-  console.log("[setup:mediapipe-wasm] MediaPipe WASM runtime files are ready in public/mediapipe/wasm");
+  console.log(
+    "[setup:mediapipe-wasm] MediaPipe WASM runtime files are ready in public/mediapipe/wasm",
+  );
 }
 
 main().catch((err) => {

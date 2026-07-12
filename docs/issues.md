@@ -9,6 +9,7 @@ the pass the whole plan is published as a PRD + issues (no implementation this p
 except Issue #1 which was already implemented and committed before plan mode began).
 
 Pipeline map being audited:
+
 - **Upload/Scan**: `StepPickVideo` → `StepSetDetection` (`useVideoProcessor` seek
   loop → `poseDetection.estimateFrameUnified`) → ORB extraction on frame 0.
 - **View**: `StepViewLandmarks` (interpolate + smooth + `useSkeletonFrames`) →
@@ -24,7 +25,7 @@ Pipeline map being audited:
 
 ---
 
-## Issue #1 — Atomic two-object storage split (was: unbounded self-inflating save payload)  🔶 INCREMENT 1 COMMITTED (`3bf7493`) — needs completion
+## Issue #1 — Atomic two-object storage split (was: unbounded self-inflating save payload) 🔶 INCREMENT 1 COMMITTED (`3bf7493`) — needs completion
 
 **Problem.** `uploadAttempt` serialised the entire `RouteAttempt` (dense `frames`,
 `matchesPerFrame`, `orbFeatures.descriptors` as a `number[]` ≈4× blowup, base64
@@ -33,6 +34,7 @@ card/detail readers (`S3RoutePicker.fetchMeta`, `climbs/detail`, `climbs/page`)
 then downloaded the whole multi-MB blob just to render small metadata.
 
 **Decision — Option B (+ base64 from A).** Split each saved run into two S3 objects:
+
 - `{id}-{runType}.json` — small queryable metadata (keeps the existing key, so all
   metadata-only readers got lighter for free).
 - `{id}-{runType}.data.json` — heavy `frames` / `matchesPerFrame` / `frameCaptures`
@@ -46,10 +48,11 @@ README updated; Option C deferred to `docs/roadmap.md`.
 
 **Remaining to complete this work item — atomic write ordering (folds in what was
 briefly tracked as a separate finding).** S3 has no multi-object transaction, so the
-two PUTs must be ordered so a partial failure fails *closed* (run invisible), not
-*open* (listed but unopenable). Increment 1 writes metadata-first, which fails open:
+two PUTs must be ordered so a partial failure fails _closed_ (run invisible), not
+_open_ (listed but unopenable). Increment 1 writes metadata-first, which fails open:
 if the data PUT fails, an orphaned metadata `.json` still appears in listings and
 breaks on open (`downloadAttempt` finds no data sibling → `frames`-less attempt).
+
 - **Write data first, metadata last** so the metadata `.json` is the commit marker.
   Listings are gated entirely on the metadata key, and `.data.json` is excluded from
   all listings — so a partial failure leaves only an invisible, GC-able `.data.json`
@@ -68,7 +71,7 @@ versioning.
 
 ---
 
-## Issue #2 — Match step runs ORB at the route photo's full native resolution  ✅ DECIDED (Option A)
+## Issue #2 — Match step runs ORB at the route photo's full native resolution ✅ DECIDED (Option A)
 
 **Problem.** `useImageMatcher` loads the uploaded photo at full
 `naturalWidth × naturalHeight` and runs `ORB(3000)` synchronously on the main
@@ -78,6 +81,7 @@ expensive re-anchor pass and a weaker homography). Inputs arrive at varying
 resolutions on **both** sides today; will trend toward phone-captured frames later.
 
 **Decision — Option A, refined to a reference-aware query downscale.**
+
 - Before extraction, downscale the query so its longest edge ≈ the reference frame's
   longest edge (from `attempt.videoMeta.width/height`), capped at a hard maximum
   (~1600 px). Run ORB in downscaled space, then scale the returned keypoints back to
@@ -86,7 +90,7 @@ resolutions on **both** sides today; will trend toward phone-captured frames lat
 - Self-tunes per attempt; backward-compatible with already-saved references (no scan/
   save-side change); degrades to a near-no-op for the future phone-to-phone case.
 
-**Why not B (coarse-to-fine).** B *contains* A (its coarse step is "match at low
+**Why not B (coarse-to-fine).** B _contains_ A (its coarse step is "match at low
 res") and adds a precision-refinement pass. It does not by itself solve the
 varying-resolution problem — that is a normalization problem, which is A's job. A
 skeleton overlay is forgiving of sub-pixel homography error, so B's refinement is
@@ -103,7 +107,7 @@ effort/risk and does nothing for match quality.
 
 ---
 
-## Issue #3 — User-supplied run text has no length limit before storage  ✅ DECIDED (Option C)
+## Issue #3 — User-supplied run text has no length limit before storage ✅ DECIDED (Option C)
 
 **Problem.** `state`, `area`, `route`, `rating`, `notes` are stored unbounded —
 violates the security checklist ("user strings must be length-limited before
@@ -114,6 +118,7 @@ profile fields. Data is user-scoped, so this is data-hygiene + checklist complia
 (the 25 MB body cap is already the cross-user/abuse backstop), not a cross-user vuln.
 
 **Decision — Option C: clamp at the serialization boundary + `maxLength` for UX.**
+
 - Add a `ROUTE_TEXT_LIMIT` (≈500, mirroring `PROFILE_TEXT_LIMIT` in
   `app/api/s3/shared.ts`) and enforce it in a small helper at the point a
   `RouteAttempt` becomes a stored object (in `utils/fsHelpers.ts`, applied within/
@@ -137,7 +142,7 @@ stores `route-image.json`) to the `RouteAttempt` field schema.
 > guard) was folded into Issue #1 above per decision X — it is a completion
 > requirement of the storage split, not a standalone bug. No separate issue.
 
-## Issue #4 — A stuck video seek hangs the entire scan with no recovery  ✅ DECIDED (Option A)
+## Issue #4 — A stuck video seek hangs the entire scan with no recovery ✅ DECIDED (Option A)
 
 **Problem.** The scan loop awaits one `onseeked` per frame
 (`useVideoProcessor.ts` ~L254). If `seeked` never fires — seeking to exactly
@@ -158,7 +163,7 @@ to both seek sites (main loop + gap-recovery loop).
 **Why not B (`requestVideoFrameCallback` rewrite).** More correct long-term (also
 kills the paint race), but a larger core-loop rewrite needing a no-rVFC fallback →
 **roadmap**, reach for it only if the paint race produces bad captures in practice.
-**Why not C (abort-only race).** Fixes cancellation but leaves *unattended* hangs
+**Why not C (abort-only race).** Fixes cancellation but leaves _unattended_ hangs
 (no human to abort) intact.
 
 **Touch points:** `hooks/useVideoProcessor.ts` (both `await onseeked` sites — main
@@ -167,18 +172,18 @@ helper.
 
 ---
 
-## Issue #5 — Cancelling mid-recording can still emit a capture after unmount  ✅ DECIDED (Option A)
+## Issue #5 — Cancelling mid-recording can still emit a capture after unmount ✅ DECIDED (Option A)
 
 **Problem.** `CameraRecorderModal`'s unmount cleanup stops the stream tracks but
 never stops the `MediaRecorder`. Stopping tracks while recording makes the recorder
-fire `onstop`, which *unconditionally* calls `onCapture(file)`. So Cancel / ESC /
+fire `onstop`, which _unconditionally_ calls `onCapture(file)`. So Cancel / ESC /
 backdrop **while recording** unmounts the modal yet still hands the parent a partial
 recording and advances the wizard. `onstop` cannot tell a deliberate stop from
 teardown.
 
 **Decision — Option A: distinguish intentional stop from teardown.** Add an
 `intentionalStopRef`; the **Stop & save** button sets it before `mr.stop()`. `onstop`
-calls `onCapture` only when the flag is set. On unmount, stop the recorder *and*
+calls `onCapture` only when the flag is set. On unmount, stop the recorder _and_
 tracks with the flag false, so teardown (incl. ESC/backdrop) never emits a capture.
 
 **Why not B (cancelled-guard).** A subset of A framed from the cancel side; still
@@ -219,7 +224,7 @@ No further implementation in this pass. On approval, publish:
 
 1. A **PRD** summarising the audit and the five decided work items.
 2. One **issue per work item**, each carrying its decided option + touch points:
-   - #1 Atomic two-object storage split — *complete* the committed increment
+   - #1 Atomic two-object storage split — _complete_ the committed increment
      (data-first PUT order + download-side guard in `hooks/useS3Storage.ts`).
    - #2 Reference-aware query downscale before ORB (`hooks/useImageMatcher.ts`,
      new `downscaleImageData` helper).

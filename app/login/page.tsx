@@ -13,9 +13,10 @@ function LoginForm() {
   const searchParams = useSearchParams();
   // Validate redirect to prevent open-redirect attacks (OWASP A01:2021).
   const rawRedirect = searchParams.get("redirect") ?? "/scan";
-  const redirect = rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("://")
-    ? rawRedirect
-    : "/scan";
+  const redirect =
+    rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") && !rawRedirect.includes("://")
+      ? rawRedirect
+      : "/scan";
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -130,11 +131,7 @@ function LoginForm() {
             disabled={submitting || authLoading}
             className="rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-surface shadow-lg shadow-accent/20 transition-all duration-200 hover:bg-accent-hover hover:shadow-accent/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none active:scale-[0.98]"
           >
-            {submitting
-              ? "Please wait\u2026"
-              : mode === "login"
-                ? "Sign in"
-                : "Create account"}
+            {submitting ? "Please wait\u2026" : mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
 
@@ -143,7 +140,11 @@ function LoginForm() {
             <>
               Don&apos;t have an account?{" "}
               <button
-                onClick={() => { setMode("signup"); setError(null); setSignupSuccess(false); }}
+                onClick={() => {
+                  setMode("signup");
+                  setError(null);
+                  setSignupSuccess(false);
+                }}
                 className="font-medium text-accent hover:text-accent-hover transition"
               >
                 Sign up
@@ -153,7 +154,11 @@ function LoginForm() {
             <>
               Already have an account?{" "}
               <button
-                onClick={() => { setMode("login"); setError(null); setSignupSuccess(false); }}
+                onClick={() => {
+                  setMode("login");
+                  setError(null);
+                  setSignupSuccess(false);
+                }}
                 className="font-medium text-accent hover:text-accent-hover transition"
               >
                 Sign in

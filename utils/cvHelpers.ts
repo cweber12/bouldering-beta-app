@@ -26,9 +26,9 @@ export function cropImageData(
 
   // Compute the overlapping region between the box and source bounds.
   const srcStartCol = Math.max(0, box.x);
-  const srcEndCol   = Math.min(src.width, box.x + box.width);
+  const srcEndCol = Math.min(src.width, box.x + box.width);
   const srcStartRow = Math.max(0, box.y);
-  const srcEndRow   = Math.min(src.height, box.y + box.height);
+  const srcEndRow = Math.min(src.height, box.y + box.height);
 
   if (srcStartCol < srcEndCol && srcStartRow < srcEndRow) {
     const dstColOffset = srcStartCol - box.x;
@@ -41,7 +41,12 @@ export function cropImageData(
     }
   }
 
-  return { data: dst, width: box.width, height: box.height, colorSpace: "srgb" } as unknown as ImageData;
+  return {
+    data: dst,
+    width: box.width,
+    height: box.height,
+    colorSpace: "srgb",
+  } as unknown as ImageData;
 }
 
 /**

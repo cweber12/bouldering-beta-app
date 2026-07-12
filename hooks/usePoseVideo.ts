@@ -51,7 +51,9 @@ export function usePoseVideo(
   // Stable ref for skeletonStyle — avoids re-triggering the render effect on
   // every slider change while still reading the latest value when a render starts.
   const styleRef = useRef<SkeletonStyle | undefined>(skeletonStyle);
-  useEffect(() => { styleRef.current = skeletonStyle; }, [skeletonStyle]);
+  useEffect(() => {
+    styleRef.current = skeletonStyle;
+  }, [skeletonStyle]);
 
   useEffect(() => {
     if (!cv || !imageFile || !attemptId || !matchResult) return;

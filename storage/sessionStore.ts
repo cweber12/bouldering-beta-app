@@ -11,7 +11,12 @@ import type { OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/matchin
 import type { CropBox } from "@/pipeline/tracking/cropDetector";
 import type { PoseBackend } from "@/utils/poseConstants";
 import type { ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
-export type { OrbKeypoint, OrbFeatures, OrbMatch, KeyframeFeatures } from "@/pipeline/matching/orbDetector";
+export type {
+  OrbKeypoint,
+  OrbFeatures,
+  OrbMatch,
+  KeyframeFeatures,
+} from "@/pipeline/matching/orbDetector";
 export type { CropBox } from "@/pipeline/tracking/cropDetector";
 export type { PoseBackend } from "@/utils/poseConstants";
 

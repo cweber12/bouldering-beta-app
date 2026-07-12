@@ -6,7 +6,7 @@ accepted
 
 ## Context
 
-MediaPipe Pose Landmarker has no notion of *who* the climber is; it returns the
+MediaPipe Pose Landmarker has no notion of _who_ the climber is; it returns the
 most-prominent pose(s) per frame. With `numPoses: 1` the pipeline followed
 whoever the model rated most prominent, so a bystander entering the user's crop
 could steal the track for the rest of the clip. The manual crop box was also the

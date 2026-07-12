@@ -68,31 +68,23 @@ function fakeInput(id = "attempt-1", matchCount = 10): MultiPoseInput {
 
 describe("useMultiPoseVideo — initial state", () => {
   it("starts idle when cv is null", () => {
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(null, fakeFile(), [fakeInput()]),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(null, fakeFile(), [fakeInput()]));
     expect(result.current.status).toBe("idle");
     expect(result.current.videoUrl).toBeNull();
   });
 
   it("starts idle when imageFile is null", () => {
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, null, [fakeInput()]),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, null, [fakeInput()]));
     expect(result.current.status).toBe("idle");
   });
 
   it("starts idle when inputs array is empty", () => {
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, fakeFile(), []),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, fakeFile(), []));
     expect(result.current.status).toBe("idle");
   });
 
   it("exposes renderProgress as 0 initially", () => {
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(null, null, []),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(null, null, []));
     expect(result.current.renderProgress).toBe(0);
   });
 });
@@ -114,9 +106,7 @@ describe("useMultiPoseVideo — rendering", () => {
   it("transitions to ready and sets videoUrl when render resolves", async () => {
     vi.mocked(renderMultiPoseVideo).mockResolvedValue("blob:overlay");
 
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, fakeFile(), [fakeInput()]),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, fakeFile(), [fakeInput()]));
 
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.videoUrl).toBe("blob:overlay");
@@ -126,9 +116,7 @@ describe("useMultiPoseVideo — rendering", () => {
   it("transitions to error when renderMultiPoseVideo rejects", async () => {
     vi.mocked(renderMultiPoseVideo).mockRejectedValue(new Error("homography failed"));
 
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, fakeFile(), [fakeInput()]),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, fakeFile(), [fakeInput()]));
 
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.errorMessage).toBe("homography failed");
@@ -139,9 +127,7 @@ describe("useMultiPoseVideo — rendering", () => {
     const input = fakeInput();
     input.attempt.orbFeatures = null;
 
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, fakeFile(), [input]),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, fakeFile(), [input]));
 
     // Should remain idle — no render attempt started.
     expect(result.current.status).toBe("idle");
@@ -155,9 +141,7 @@ describe("useMultiPoseVideo — rendering", () => {
     const file = fakeFile();
     const inputs = [fakeInput()];
 
-    const { result } = renderHook(() =>
-      useMultiPoseVideo(mockCv, file, inputs),
-    );
+    const { result } = renderHook(() => useMultiPoseVideo(mockCv, file, inputs));
 
     await waitFor(() => expect(result.current.status).toBe("ready"));
 

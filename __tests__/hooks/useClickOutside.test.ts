@@ -81,10 +81,9 @@ describe("useClickOutside", () => {
     const first = vi.fn();
     const second = vi.fn();
     const ref = { current: inside };
-    const { rerender } = renderHook(
-      ({ cb }) => useClickOutside(ref, cb),
-      { initialProps: { cb: first } },
-    );
+    const { rerender } = renderHook(({ cb }) => useClickOutside(ref, cb), {
+      initialProps: { cb: first },
+    });
 
     rerender({ cb: second });
     outside.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));

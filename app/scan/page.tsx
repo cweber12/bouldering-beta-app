@@ -122,13 +122,13 @@ async function saveAttemptToDevice(
   }
 
   const state = sanitizeDirName(attempt.state ?? "unknown_state");
-  const area  = sanitizeDirName(attempt.area  ?? "unknown_area");
+  const area = sanitizeDirName(attempt.area ?? "unknown_area");
   const route = sanitizeDirName(attempt.route ?? "unknown_route");
 
-  const betaDir  = await root.getDirectoryHandle(BETA_FOLDER, { create: true });
+  const betaDir = await root.getDirectoryHandle(BETA_FOLDER, { create: true });
   const stateDir = await betaDir.getDirectoryHandle(state, { create: true });
-  const areaDir  = await stateDir.getDirectoryHandle(area,  { create: true });
-  const routeDir = await areaDir.getDirectoryHandle(route,  { create: true });
+  const areaDir = await stateDir.getDirectoryHandle(area, { create: true });
+  const routeDir = await areaDir.getDirectoryHandle(route, { create: true });
 
   const json = serializeAttemptForJson(attempt);
   const fileName = `${attempt.id}-${attempt.runType ?? "attempt"}.json`;
@@ -151,25 +151,53 @@ function ScanPageInner() {
   // Quality tier is the primary detection control; it seeds the model variant,
   // frame step, and maxPoses. The advanced panel can override variant/frameStep.
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
-  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(
+    getTierConfig(DEFAULT_TIER).variant,
+  );
   const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
     [modelVariant, maxPoses],
   );
   const { model } = usePoseModel(poseModelConfig);
-  const { process, reset: resetProcessor, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose } =
-    useVideoProcessor(100);
-  const { uploadAttempt, listPrefixes, listAttempts, userPrefix, status: s3Status } = useS3Storage();
-  const { matchImage, estimateCrop, autoFrameStatus, reset: resetMatcher, status: matchStatus, result: matchResult, errorMessage: matchError, matchDiagnostics } =
-    useImageMatcher();
+  const {
+    process,
+    reset: resetProcessor,
+    status,
+    orbStatus,
+    currentFrame,
+    totalFrames,
+    attemptId,
+    firstFrameFile,
+    errorMessage,
+    scanDiagnostics,
+    orbPreview,
+    currentPose,
+  } = useVideoProcessor(100);
+  const {
+    uploadAttempt,
+    listPrefixes,
+    listAttempts,
+    userPrefix,
+    status: s3Status,
+  } = useS3Storage();
+  const {
+    matchImage,
+    estimateCrop,
+    autoFrameStatus,
+    reset: resetMatcher,
+    status: matchStatus,
+    result: matchResult,
+    errorMessage: matchError,
+    matchDiagnostics,
+  } = useImageMatcher();
 
-  const [state, setState]   = useState("");
-  const [area,  setArea]    = useState("");
-  const [route, setRoute]   = useState("");
-  const [runType, setRunType]   = useState<RunType>("attempt");
-  const [rating, setRating]     = useState("");
-  const [notes, setNotes]       = useState("");
+  const [state, setState] = useState("");
+  const [area, setArea] = useState("");
+  const [route, setRoute] = useState("");
+  const [runType, setRunType] = useState<RunType>("attempt");
+  const [rating, setRating] = useState("");
+  const [notes, setNotes] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
   // Natural pixel dimensions of the selected video — shapes the scan loading
@@ -177,9 +205,11 @@ function ScanPageInner() {
   const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [s3Saved, setS3Saved]   = useState(false);
+  const [s3Saved, setS3Saved] = useState(false);
   const [locationWarning, setLocationWarning] = useState(false);
-  const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [savedRouteDirHandle, setSavedRouteDirHandle] = useState<FileSystemDirectoryHandle | null>(
+    null,
+  );
   const [showCamera, setShowCamera] = useState(false);
   const previewUrlRef = useRef<string | null>(cachedVideoUrl);
 
@@ -228,20 +258,29 @@ function ScanPageInner() {
   const bottomSheetActionRef = useRef<"save" | "upload">("save");
 
   // Derive topology-aware skeleton style
-  const activeAttemptId0 = (status === "done") ? attemptId : null;
+  const activeAttemptId0 = status === "done" ? attemptId : null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
   const topoStyle: SkeletonStyle = useMemo(() => {
     const backend = activeAttempt0?.poseBackend ?? "mediapipe";
     const topo = getTopology(backend);
-    return { ...skeletonStyle, skeletonEdges: topo.skeletonEdges, keypointNames: topo.keypointNames };
+    return {
+      ...skeletonStyle,
+      skeletonEdges: topo.skeletonEdges,
+      keypointNames: topo.keypointNames,
+    };
   }, [skeletonStyle, activeAttempt0]);
 
   // Keep styleRef in sync
-  useEffect(() => { styleRef.current = topoStyle; }, [topoStyle]);
+  useEffect(() => {
+    styleRef.current = topoStyle;
+  }, [topoStyle]);
 
   // Pre-compute skeleton frames for the inline route photo overlay
-  const { data: skeletonData, status: frameStatus, errorMessage: frameError } =
-    useSkeletonFrames(cv, activeAttemptId0 || null, matchResult);
+  const {
+    data: skeletonData,
+    status: frameStatus,
+    errorMessage: frameError,
+  } = useSkeletonFrames(cv, activeAttemptId0 || null, matchResult);
 
   // Derive the Holds overlay on the fly from the same pose frames + match result.
   const { holds } = useHolds(cv, activeAttemptId0 || null, matchResult);
@@ -253,14 +292,16 @@ function ScanPageInner() {
   const { reverseGeocode } = useGeocoding();
 
   // S3-backed suggestions for location fields
-  const [stateSuggestions, setStateSuggestions]   = useState<string[]>([]);
-  const [areaSuggestions, setAreaSuggestions]     = useState<string[]>([]);
-  const [routeSuggestions, setRouteSuggestions]   = useState<string[]>([]);
+  const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
+  const [areaSuggestions, setAreaSuggestions] = useState<string[]>([]);
+  const [routeSuggestions, setRouteSuggestions] = useState<string[]>([]);
 
   // Fetch state suggestions from S3 on mount
   useEffect(() => {
     if (!userPrefix) return;
-    listPrefixes(`${userPrefix}/`).then(setStateSuggestions).catch(() => {});
+    listPrefixes(`${userPrefix}/`)
+      .then(setStateSuggestions)
+      .catch(() => {});
   }, [listPrefixes, userPrefix]);
 
   // Refresh area suggestions when state changes.
@@ -269,7 +310,9 @@ function ScanPageInner() {
     setAreaSuggestions([]);
     setRouteSuggestions([]);
     if (val.trim() && userPrefix) {
-      listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
+      listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`)
+        .then(setAreaSuggestions)
+        .catch(() => {});
     }
   }
 
@@ -278,7 +321,9 @@ function ScanPageInner() {
     setArea(val);
     setRouteSuggestions([]);
     if (state.trim() && val.trim() && userPrefix) {
-      listPrefixes(`${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
+      listPrefixes(`${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(val)}/`)
+        .then(setRouteSuggestions)
+        .catch(() => {});
     }
   }
 
@@ -288,38 +333,47 @@ function ScanPageInner() {
     // Auto-populate rating from the most recent run for this route.
     if (val.trim() && state.trim() && area.trim() && userPrefix) {
       const prefix = `${userPrefix}/${sanitizeDirName(state)}/${sanitizeDirName(area)}/${sanitizeDirName(val)}/`;
-      listAttempts(prefix).then(async (entries) => {
-        const runs = entries
-          .filter(e => e.key.endsWith(".json") && !e.key.endsWith(".data.json") && !e.key.endsWith("/route-image.json"))
-          .sort((a, b) => {
-            const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
-            const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
-            return tsB - tsA;
-          });
-        if (runs.length === 0) return;
-        try {
-          const res = await fetch(`/api/s3/get?key=${encodeURIComponent(runs[0].key)}`);
-          if (!res.ok) return;
-          const raw = (await res.json()) as Record<string, unknown>;
-          if (typeof raw.rating === "string" && raw.rating) setRating(raw.rating);
-          if (raw.coordinates && typeof raw.coordinates === "object") {
-            const c = raw.coordinates as { lat?: number; lng?: number };
-            if (typeof c.lat === "number" && typeof c.lng === "number") {
-              setCoordinates({ lat: c.lat, lng: c.lng });
+      listAttempts(prefix)
+        .then(async (entries) => {
+          const runs = entries
+            .filter(
+              (e) =>
+                e.key.endsWith(".json") &&
+                !e.key.endsWith(".data.json") &&
+                !e.key.endsWith("/route-image.json"),
+            )
+            .sort((a, b) => {
+              const tsA = parseInt((a.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+              const tsB = parseInt((b.key.match(/(?:attempt|run)-(\d+)/) ?? ["", "0"])[1], 10);
+              return tsB - tsA;
+            });
+          if (runs.length === 0) return;
+          try {
+            const res = await fetch(`/api/s3/get?key=${encodeURIComponent(runs[0].key)}`);
+            if (!res.ok) return;
+            const raw = (await res.json()) as Record<string, unknown>;
+            if (typeof raw.rating === "string" && raw.rating) setRating(raw.rating);
+            if (raw.coordinates && typeof raw.coordinates === "object") {
+              const c = raw.coordinates as { lat?: number; lng?: number };
+              if (typeof c.lat === "number" && typeof c.lng === "number") {
+                setCoordinates({ lat: c.lat, lng: c.lng });
+              }
             }
+          } catch {
+            /* ignore */
           }
-        } catch { /* ignore */ }
-      }).catch(() => {});
+        })
+        .catch(() => {});
     }
   }
 
   // Only show the location warning while any required field is still empty.
   const showLocationWarning = locationWarning && (!state.trim() || !area.trim() || !route.trim());
 
-  const progressPct  = totalFrames > 0 ? Math.round((currentFrame / totalFrames) * 100) : 0;
+  const progressPct = totalFrames > 0 ? Math.round((currentFrame / totalFrames) * 100) : 0;
   const isProcessing = status === "processing";
-  const isDone       = status === "done";
-  const orbReady     = orbStatus === "ready";
+  const isDone = status === "done";
+  const orbReady = orbStatus === "ready";
 
   // Loading view: shown from the moment Scan is pressed until results are ready —
   // through the seek loop (isProcessing) and the post-loop tail where refinement
@@ -331,20 +385,31 @@ function ScanPageInner() {
 
   // Active attempt — only from the current scan session
   const activeAttemptId = isDone ? attemptId : null;
-  const activeAttempt   = activeAttemptId ? (getAttempt(activeAttemptId) ?? null) : null;
+  const activeAttempt = activeAttemptId ? (getAttempt(activeAttemptId) ?? null) : null;
 
   // Cache file and URL in module scope so state survives re-renders.
-  useEffect(() => { cachedPendingFile = pendingFile; }, [pendingFile]);
-  useEffect(() => { cachedVideoUrl = videoPreviewUrl; }, [videoPreviewUrl]);
+  useEffect(() => {
+    cachedPendingFile = pendingFile;
+  }, [pendingFile]);
+  useEffect(() => {
+    cachedVideoUrl = videoPreviewUrl;
+  }, [videoPreviewUrl]);
 
   // Cleanup on unmount — clear session and cached state so the next visit starts fresh.
   useEffect(() => {
     return () => {
-      try { window.sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
+      try {
+        window.sessionStorage.removeItem(SESSION_KEY);
+      } catch {
+        /* ignore */
+      }
       cachedPendingFile = null;
       cachedVideoUrl = null;
       if (routePhotoPreviewUrlRef.current) URL.revokeObjectURL(routePhotoPreviewUrlRef.current);
-      if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
     };
   }, []);
 
@@ -358,17 +423,20 @@ function ScanPageInner() {
     const { frames, videoMeta } = activeAttempt;
     if (!frames.length) return null;
     const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
-    const firstDetected = sorted.find(f => f.keypoints.length > 0);
+    const firstDetected = sorted.find((f) => f.keypoints.length > 0);
     if (!firstDetected) return null;
     const firstTs = firstDetected.timestamp;
-    const lastTs  = sorted[sorted.length - 1].timestamp;
+    const lastTs = sorted[sorted.length - 1].timestamp;
     const duration = Math.max(lastTs - firstTs, 0.1);
     const renderedFrames: RenderedSkeletonFrame[] = sorted
-      .filter(f => f.timestamp >= firstTs)
-      .map(f => ({
+      .filter((f) => f.timestamp >= firstTs)
+      .map((f) => ({
         timestamp: f.timestamp - firstTs,
         keypoints: Object.fromEntries(
-          f.keypoints.map(kp => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }])
+          f.keypoints.map((kp) => [
+            kp.name,
+            { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height },
+          ]),
         ),
       }));
     return { frames: renderedFrames, duration, fps: videoMeta.fps ?? 30 };
@@ -485,7 +553,9 @@ function ScanPageInner() {
       setClimberCrop(climber);
       // Route appears around the Climber: near full-frame, bottom pulled up to the
       // Climber's bottom (ADR 0014). Keep the User's framing if they touched it.
-      setWallCrop((prev) => (wallTouchedRef.current ? containRoute(prev, climber) : defaultRouteAroundClimber(climber)));
+      setWallCrop((prev) =>
+        wallTouchedRef.current ? containRoute(prev, climber) : defaultRouteAroundClimber(climber),
+      );
       return derived != null;
     },
     [model],
@@ -500,10 +570,13 @@ function ScanPageInner() {
 
   // The user dragged the Route box — remember it so a re-tap keeps their framing.
   // The Route is subordinate: it can never cross inside the Climber.
-  const handleWallCropChange = useCallback((c: CropFraction) => {
-    wallTouchedRef.current = true;
-    setWallCrop(containRoute(c, climberCrop));
-  }, [climberCrop]);
+  const handleWallCropChange = useCallback(
+    (c: CropFraction) => {
+      wallTouchedRef.current = true;
+      setWallCrop(containRoute(c, climberCrop));
+    },
+    [climberCrop],
+  );
 
   // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
   const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
@@ -515,16 +588,29 @@ function ScanPageInner() {
     if (!pendingFile || !model || !cv) return;
     clearRoutePhoto();
     const cfg = getTierConfig(tier);
-    process(pendingFile, model, cv, frameStep, {
-      state, area, route, runType,
-      rating: rating || undefined,
-      notes: notes || undefined,
-    }, { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning }, startTime, "mediapipe", {
-      maxRecoveryFrames: cfg.maxRecoveryFrames,
-      filterTolerance: cfg.filterTolerance,
-      motionThreshold: cfg.motionThreshold,
-      refineStride: cfg.refineStride,
-    });
+    process(
+      pendingFile,
+      model,
+      cv,
+      frameStep,
+      {
+        state,
+        area,
+        route,
+        runType,
+        rating: rating || undefined,
+        notes: notes || undefined,
+      },
+      { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning },
+      startTime,
+      "mediapipe",
+      {
+        maxRecoveryFrames: cfg.maxRecoveryFrames,
+        filterTolerance: cfg.filterTolerance,
+        motionThreshold: cfg.motionThreshold,
+        refineStride: cfg.refineStride,
+      },
+    );
     setStep("landmarks");
   }
 
@@ -553,13 +639,20 @@ function ScanPageInner() {
   function handleSaveComplete() {
     setShowBottomSheet(false);
     setStep("pick");
-    if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
     setVideoPreviewUrl(null);
     setPendingFile(null);
     cachedPendingFile = null;
     cachedVideoUrl = null;
     clearRoutePhoto();
-    try { window.sessionStorage.removeItem(SESSION_KEY); } catch { /* quota */ }
+    try {
+      window.sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* quota */
+    }
   }
 
   const handleExportVideo = useCallback(async () => {
@@ -599,7 +692,7 @@ function ScanPageInner() {
   }, [cv, routePhotoFile, activeAttemptId, matchResult]);
 
   const isFrameReady = frameStatus === "ready" && !!skeletonData;
-  const isMatching   = matchStatus === "matching";
+  const isMatching = matchStatus === "matching";
 
   async function handleSaveToDevice() {
     if (!activeAttemptId) return;
@@ -620,7 +713,9 @@ function ScanPageInner() {
     if (!savedRouteDirHandle || !activeAttemptId) return;
     setSaveError(null);
     try {
-      await savedRouteDirHandle.removeEntry(`${activeAttemptId}-${activeAttempt?.runType ?? "attempt"}.json`);
+      await savedRouteDirHandle.removeEntry(
+        `${activeAttemptId}-${activeAttempt?.runType ?? "attempt"}.json`,
+      );
       setSavedRouteDirHandle(null);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Delete failed.");
@@ -709,7 +804,10 @@ function ScanPageInner() {
     onRouteChange: handleRouteChange,
     onClearCoordinates: () => setCoordinates(null),
     onUseGPS: handleUseGPS,
-    onOpenMapPicker: () => { setShowBottomSheet(false); setShowMapPicker(true); },
+    onOpenMapPicker: () => {
+      setShowBottomSheet(false);
+      setShowMapPicker(true);
+    },
     onRunTypeChange: setRunType,
     onRatingChange: setRating,
     onNotesChange: setNotes,
@@ -722,10 +820,7 @@ function ScanPageInner() {
     <div className="flex-1 flex flex-col min-h-0">
       {/* -- Step content (each step renders its own ProcessFlowShell header) -- */}
       {step === "pick" && (
-        <StepPickVideo
-          onFile={handleSelectFile}
-          onCamera={() => setShowCamera(true)}
-        />
+        <StepPickVideo onFile={handleSelectFile} onCamera={() => setShowCamera(true)} />
       )}
 
       {step === "detection" && pendingFile && videoPreviewUrl && (
@@ -748,7 +843,9 @@ function ScanPageInner() {
           onPanningChange={setPanning}
           canScan={!!(model && cv)}
           onScan={handleScan}
-          onBack={() => { setStep("pick"); }}
+          onBack={() => {
+            setStep("pick");
+          }}
         />
       )}
 
@@ -795,7 +892,10 @@ function ScanPageInner() {
           routePhotoFile={routePhotoFile}
           routePhotoPreviewUrl={routePhotoPreviewUrl}
           routePhotoCrop={routePhotoCrop}
-          onRoutePhotoCropChange={(c) => { setRoutePhotoCrop(c); setAutoFramed(false); }}
+          onRoutePhotoCropChange={(c) => {
+            setRoutePhotoCrop(c);
+            setAutoFramed(false);
+          }}
           routeMatchTriggered={routeMatchTriggered}
           autoFramed={autoFramed}
           autoFrameStatus={autoFrameStatus}
@@ -816,7 +916,9 @@ function ScanPageInner() {
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}
           onExportVideo={handleExportVideo}
-          onChangePhoto={(file) => { void handleSetRoutePhoto(file); }}
+          onChangePhoto={(file) => {
+            void handleSetRoutePhoto(file);
+          }}
           onBack={handleBackToLandmarks}
           onSaveToDevice={handleOpenSaveSheet}
           onUpload={handleOpenUploadSheet}
@@ -832,7 +934,10 @@ function ScanPageInner() {
       {/* Camera recording modal */}
       {showCamera && (
         <CameraRecorderModal
-          onCapture={(file) => { handleSelectFile(file); setShowCamera(false); }}
+          onCapture={(file) => {
+            handleSelectFile(file);
+            setShowCamera(false);
+          }}
           onClose={() => setShowCamera(false)}
         />
       )}
@@ -842,8 +947,17 @@ function ScanPageInner() {
         open={showMapPicker}
         initialLat={coordinates?.lat}
         initialLng={coordinates?.lng}
-        onConfirm={(lat, lng) => { setCoordinates({ lat, lng }); setShowMapPicker(false); setBottomSheetAction(bottomSheetActionRef.current); setShowBottomSheet(true); }}
-        onClose={() => { setShowMapPicker(false); setBottomSheetAction(bottomSheetActionRef.current); setShowBottomSheet(true); }}
+        onConfirm={(lat, lng) => {
+          setCoordinates({ lat, lng });
+          setShowMapPicker(false);
+          setBottomSheetAction(bottomSheetActionRef.current);
+          setShowBottomSheet(true);
+        }}
+        onClose={() => {
+          setShowMapPicker(false);
+          setBottomSheetAction(bottomSheetActionRef.current);
+          setShowBottomSheet(true);
+        }}
       />
 
       {/* Metadata bottom sheet — for save / upload */}

@@ -103,10 +103,7 @@ export default function Home() {
               body: "Download a WebM video of your skeleton overlaid on the route photo. Compare multiple runs side by side on the Compare page.",
             },
           ].map(({ step, title, body }) => (
-            <div
-              key={step}
-              className="relative flex flex-col gap-3 border-l-2 border-edge/45 pl-4"
-            >
+            <div key={step} className="relative flex flex-col gap-3 border-l-2 border-edge/45 pl-4">
               <div className="flex h-7 w-7 items-center justify-center rounded-sm bg-accent/10 text-xs font-bold text-accent">
                 {step}
               </div>

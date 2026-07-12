@@ -196,15 +196,15 @@ describe("buildMultiSkeletonFrames", () => {
   });
 
   it("throws when layers array is empty", () => {
-    expect(() =>
-      buildMultiSkeletonFrames({ cv: mockCv, layers: [], targetFps: 10 }),
-    ).toThrow(/at least one layer/i);
+    expect(() => buildMultiSkeletonFrames({ cv: mockCv, layers: [], targetFps: 10 })).toThrow(
+      /at least one layer/i,
+    );
   });
 
   it("throws when any layer has insufficient matches", () => {
     vi.mocked(computeHomography)
       .mockReturnValueOnce(FAKE_H) // layer 0 OK
-      .mockReturnValueOnce(null);  // layer 1 fails
+      .mockReturnValueOnce(null); // layer 1 fails
 
     expect(() =>
       buildMultiSkeletonFrames({

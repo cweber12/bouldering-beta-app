@@ -304,9 +304,7 @@ describe("buildTransformedKeypoints", () => {
     };
 
     const result = buildTransformedKeypoints(frame, IDENTITY, 100, 100);
-    expect(Object.keys(result)).toEqual(
-      expect.arrayContaining(["left_wrist", "right_wrist"]),
-    );
+    expect(Object.keys(result)).toEqual(expect.arrayContaining(["left_wrist", "right_wrist"]));
     expect(Object.keys(result)).toHaveLength(2);
   });
 });
@@ -392,12 +390,12 @@ describe("drawSkeleton", () => {
       alphasByFill.push(ctx.globalAlpha);
     });
     drawSkeleton(ctx, {
-      nose: { x: 50, y: 50, score: 0.9 },       // confident → full alpha
+      nose: { x: 50, y: 50, score: 0.9 }, // confident → full alpha
       left_eye_inner: { x: 40, y: 40, score: 0.1 }, // estimated → dimmed
     });
     expect(alphasByFill).toContain(1);
     // The low-confidence joint is drawn at reduced opacity.
-    expect(alphasByFill.some(a => a < 1)).toBe(true);
+    expect(alphasByFill.some((a) => a < 1)).toBe(true);
   });
 
   it("never dims keypoints that carry no score (legacy callers)", () => {
@@ -407,7 +405,7 @@ describe("drawSkeleton", () => {
       alphasByFill.push(ctx.globalAlpha);
     });
     drawSkeleton(ctx, { nose: { x: 50, y: 50 }, left_eye_inner: { x: 40, y: 40 } });
-    expect(alphasByFill.every(a => a === 1)).toBe(true);
+    expect(alphasByFill.every((a) => a === 1)).toBe(true);
   });
 
   it("estimatedDimThreshold: 0 disables confidence dimming", () => {
@@ -416,12 +414,8 @@ describe("drawSkeleton", () => {
     (ctx.fill as ReturnType<typeof vi.fn>).mockImplementation(() => {
       alphasByFill.push(ctx.globalAlpha);
     });
-    drawSkeleton(
-      ctx,
-      { nose: { x: 50, y: 50, score: 0.01 } },
-      { estimatedDimThreshold: 0 },
-    );
-    expect(alphasByFill.every(a => a === 1)).toBe(true);
+    drawSkeleton(ctx, { nose: { x: 50, y: 50, score: 0.01 } }, { estimatedDimThreshold: 0 });
+    expect(alphasByFill.every((a) => a === 1)).toBe(true);
   });
 });
 
@@ -478,7 +472,9 @@ describe("computeHomography stats out-param", () => {
   it("labels too_few_matches before touching OpenCV", () => {
     const cv = makeCv({ homography: IDENTITY, inliers: 0 });
     const stats = emptyHomographyStats();
-    const result = computeHomography(cv, makeMatches(3), makeFeatures(3), makeFeatures(3), { stats });
+    const result = computeHomography(cv, makeMatches(3), makeFeatures(3), makeFeatures(3), {
+      stats,
+    });
 
     expect(result).toBeNull();
     expect(cv.findHomography).not.toHaveBeenCalled();
@@ -494,7 +490,9 @@ describe("computeHomography stats out-param", () => {
   it("labels a null homography as degenerate", () => {
     const cv = makeCv({ homography: null, inliers: 0 });
     const stats = emptyHomographyStats();
-    const result = computeHomography(cv, makeMatches(8), makeFeatures(8), makeFeatures(8), { stats });
+    const result = computeHomography(cv, makeMatches(8), makeFeatures(8), makeFeatures(8), {
+      stats,
+    });
 
     expect(result).toBeNull();
     expect(stats.failureReason).toBe("degenerate");

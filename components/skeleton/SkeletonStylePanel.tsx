@@ -91,40 +91,58 @@ export default function SkeletonStylePanel({
 }: SkeletonStylePanelProps) {
   // ── Silhouette pass ──
   const [silhouetteVisible, setSilhouetteVisible] = useState(true);
-  const [silhouetteColor,   setSilhouetteColor]   = useState(DEFAULT_SILHOUETTE_COLOR);
+  const [silhouetteColor, setSilhouetteColor] = useState(DEFAULT_SILHOUETTE_COLOR);
   const [silhouetteOpacity, setSilhouetteOpacity] = useState(DEFAULT_SILHOUETTE_OPACITY);
-  const [limbThickness,     setLimbThickness]     = useState(DEFAULT_LIMB_THICKNESS);
+  const [limbThickness, setLimbThickness] = useState(DEFAULT_LIMB_THICKNESS);
 
   // ── Skeleton lines ──
-  const [linesVisible,  setLinesVisible]  = useState(true);
-  const [lineColor,     setLineColor]     = useState(DEFAULT_LINE_COLOR);
+  const [linesVisible, setLinesVisible] = useState(true);
+  const [lineColor, setLineColor] = useState(DEFAULT_LINE_COLOR);
   const [lineThickness, setLineThickness] = useState(DEFAULT_LINE_THICKNESS);
 
   // ── Joints ──
   const [jointsVisible, setJointsVisible] = useState(true);
-  const [jointColor,    setJointColor]    = useState(DEFAULT_JOINT_COLOR);
-  const [jointRadius,   setJointRadius]   = useState(DEFAULT_JOINT_RADIUS);
+  const [jointColor, setJointColor] = useState(DEFAULT_JOINT_COLOR);
+  const [jointRadius, setJointRadius] = useState(DEFAULT_JOINT_RADIUS);
 
   // ── Holds pass (independent of the pose overlay) ──
   const [holdsVisible, setHoldsVisible] = useState(true);
 
   // Stable refs for the callbacks to avoid re-emitting on every parent render.
   const onChangeRef = useRef(onChange);
-  useEffect(() => { onChangeRef.current = onChange; });
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
   const onHoldsChangeRef = useRef(onHoldsChange);
-  useEffect(() => { onHoldsChangeRef.current = onHoldsChange; });
+  useEffect(() => {
+    onHoldsChangeRef.current = onHoldsChange;
+  });
 
   // Emit updated style whenever any setting changes.
   useEffect(() => {
     onChangeRef.current({
-      silhouetteVisible, silhouetteColor, silhouetteOpacity, limbThickness,
-      linesVisible, lineColor, lineThickness,
-      jointsVisible, jointColor, jointRadius,
+      silhouetteVisible,
+      silhouetteColor,
+      silhouetteOpacity,
+      limbThickness,
+      linesVisible,
+      lineColor,
+      lineThickness,
+      jointsVisible,
+      jointColor,
+      jointRadius,
     });
   }, [
-    silhouetteVisible, silhouetteColor, silhouetteOpacity, limbThickness,
-    linesVisible, lineColor, lineThickness,
-    jointsVisible, jointColor, jointRadius,
+    silhouetteVisible,
+    silhouetteColor,
+    silhouetteOpacity,
+    limbThickness,
+    linesVisible,
+    lineColor,
+    lineThickness,
+    jointsVisible,
+    jointColor,
+    jointRadius,
   ]);
 
   // Emit the Holds style whenever any Holds setting changes. The marker look is
@@ -136,92 +154,145 @@ export default function SkeletonStylePanel({
 
   return (
     <PreviewSidebar open={open} onClose={onClose} title={label}>
-          {/* ── Silhouette ── */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-                <input type="checkbox" checked={silhouetteVisible}
-                  onChange={e => setSilhouetteVisible(e.target.checked)}
-                  className="accent-accent rounded" />
-                Silhouette
-              </label>
-              <input type="color" value={cssToHex(silhouetteColor)}
-                onChange={e => setSilhouetteColor(e.target.value)}
-                className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
-                title="Silhouette colour" />
-              <input type="range" min="0.05" max="0.45" step="0.01" value={limbThickness}
-                onChange={e => setLimbThickness(parseFloat(e.target.value))}
-                className="flex-1 accent-accent" aria-label="Silhouette thickness"
-                title="Silhouette thickness" />
-            </div>
-            <div className="flex items-center gap-2 pl-22">
-              <span className="shrink-0 text-xs text-fg-muted">Opacity</span>
-              <input type="range" min="0.1" max="1" step="0.05" value={silhouetteOpacity}
-                onChange={e => setSilhouetteOpacity(parseFloat(e.target.value))}
-                className="flex-1 accent-accent" aria-label="Silhouette opacity"
-                title="Silhouette opacity" />
-            </div>
+      {/* ── Silhouette ── */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={silhouetteVisible}
+              onChange={(e) => setSilhouetteVisible(e.target.checked)}
+              className="accent-accent rounded"
+            />
+            Silhouette
+          </label>
+          <input
+            type="color"
+            value={cssToHex(silhouetteColor)}
+            onChange={(e) => setSilhouetteColor(e.target.value)}
+            className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
+            title="Silhouette colour"
+          />
+          <input
+            type="range"
+            min="0.05"
+            max="0.45"
+            step="0.01"
+            value={limbThickness}
+            onChange={(e) => setLimbThickness(parseFloat(e.target.value))}
+            className="flex-1 accent-accent"
+            aria-label="Silhouette thickness"
+            title="Silhouette thickness"
+          />
+        </div>
+        <div className="flex items-center gap-2 pl-22">
+          <span className="shrink-0 text-xs text-fg-muted">Opacity</span>
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            value={silhouetteOpacity}
+            onChange={(e) => setSilhouetteOpacity(parseFloat(e.target.value))}
+            className="flex-1 accent-accent"
+            aria-label="Silhouette opacity"
+            title="Silhouette opacity"
+          />
+        </div>
+      </div>
+
+      {/* ── Lines ── */}
+      <div className="flex items-center gap-2">
+        <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={linesVisible}
+            onChange={(e) => setLinesVisible(e.target.checked)}
+            className="accent-accent rounded"
+          />
+          Lines
+        </label>
+        <input
+          type="color"
+          value={cssToHex(lineColor)}
+          onChange={(e) => setLineColor(e.target.value)}
+          className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
+          title="Line colour"
+        />
+        <input
+          type="range"
+          min="0.005"
+          max="0.06"
+          step="0.005"
+          value={lineThickness}
+          onChange={(e) => setLineThickness(parseFloat(e.target.value))}
+          className="flex-1 accent-accent"
+          aria-label="Line thickness"
+          title="Line thickness"
+        />
+      </div>
+
+      {/* ── Joints ── */}
+      <div className="flex items-center gap-2">
+        <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={jointsVisible}
+            onChange={(e) => setJointsVisible(e.target.checked)}
+            className="accent-accent rounded"
+          />
+          Joints
+        </label>
+        <input
+          type="color"
+          value={cssToHex(jointColor)}
+          onChange={(e) => setJointColor(e.target.value)}
+          className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
+          title="Joint colour"
+        />
+        <input
+          type="range"
+          min="0.02"
+          max="0.25"
+          step="0.01"
+          value={jointRadius}
+          onChange={(e) => setJointRadius(parseFloat(e.target.value))}
+          className="flex-1 accent-accent"
+          aria-label="Joint size"
+          title="Joint size"
+        />
+      </div>
+
+      {/* ── Holds (independent overlay pass) ── */}
+      {onHoldsChange && (
+        <div className="flex flex-col gap-2 border-t border-edge/60 pt-3">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={holdsVisible}
+              onChange={(e) => setHoldsVisible(e.target.checked)}
+              className="accent-accent rounded"
+            />
+            Holds
+          </label>
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {HOLD_LEGEND.map(({ label, ring }) => (
+              <span
+                key={label}
+                className="flex items-center gap-1.5 text-xs text-fg-muted select-none"
+              >
+                <span
+                  className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", ring)}
+                  aria-hidden="true"
+                />
+                {label}
+              </span>
+            ))}
           </div>
+        </div>
+      )}
 
-          {/* ── Lines ── */}
-          <div className="flex items-center gap-2">
-            <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-              <input type="checkbox" checked={linesVisible}
-                onChange={e => setLinesVisible(e.target.checked)}
-                className="accent-accent rounded" />
-              Lines
-            </label>
-            <input type="color" value={cssToHex(lineColor)}
-              onChange={e => setLineColor(e.target.value)}
-              className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
-              title="Line colour" />
-            <input type="range" min="0.005" max="0.06" step="0.005" value={lineThickness}
-              onChange={e => setLineThickness(parseFloat(e.target.value))}
-              className="flex-1 accent-accent" aria-label="Line thickness"
-              title="Line thickness" />
-          </div>
-
-          {/* ── Joints ── */}
-          <div className="flex items-center gap-2">
-            <label className="flex w-20 shrink-0 items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-              <input type="checkbox" checked={jointsVisible}
-                onChange={e => setJointsVisible(e.target.checked)}
-                className="accent-accent rounded" />
-              Joints
-            </label>
-            <input type="color" value={cssToHex(jointColor)}
-              onChange={e => setJointColor(e.target.value)}
-              className="h-6 w-8 shrink-0 cursor-pointer rounded border border-edge bg-inset p-0.5"
-              title="Joint colour" />
-            <input type="range" min="0.02" max="0.25" step="0.01" value={jointRadius}
-              onChange={e => setJointRadius(parseFloat(e.target.value))}
-              className="flex-1 accent-accent" aria-label="Joint size"
-              title="Joint size" />
-          </div>
-
-          {/* ── Holds (independent overlay pass) ── */}
-          {onHoldsChange && (
-            <div className="flex flex-col gap-2 border-t border-edge/60 pt-3">
-              <label className="flex items-center gap-1.5 text-xs font-medium text-fg-secondary cursor-pointer select-none">
-                <input type="checkbox" checked={holdsVisible}
-                  onChange={e => setHoldsVisible(e.target.checked)}
-                  className="accent-accent rounded" />
-                Holds
-              </label>
-              <div className="flex flex-wrap gap-x-3 gap-y-1">
-                {HOLD_LEGEND.map(({ label, ring }) => (
-                  <span key={label} className="flex items-center gap-1.5 text-xs text-fg-muted select-none">
-                    <span className={cn("h-3.5 w-3.5 shrink-0 rounded-full border-2", ring)} aria-hidden="true" />
-                    {label}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {footer && (
-            <div className="border-t border-edge/60 pt-3">{footer}</div>
-          )}
+      {footer && <div className="border-t border-edge/60 pt-3">{footer}</div>}
     </PreviewSidebar>
   );
 }

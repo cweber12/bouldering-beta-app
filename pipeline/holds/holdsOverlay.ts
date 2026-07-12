@@ -162,7 +162,14 @@ function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): 
     const earliest = (kind: "hand" | "foot") =>
       Math.min(...members.filter((m) => m.kind === kind).map((m) => m.firstUseTime));
     if (hasHand) {
-      rings.push({ cx, cy, kind: "hand", radius: circleR, earliestReveal: earliest("hand"), clusterId });
+      rings.push({
+        cx,
+        cy,
+        kind: "hand",
+        radius: circleR,
+        earliestReveal: earliest("hand"),
+        clusterId,
+      });
     }
     if (hasFoot) {
       rings.push({

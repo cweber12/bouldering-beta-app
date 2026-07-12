@@ -16,7 +16,7 @@ on the next frame. Two problems traced back to how it was sized and placed
 ([climberTracker.ts] `deriveClimberCrop` / `pickAcquisitionRegion`,
 [useVideoProcessor.ts] seek loop):
 
-- **The crop clipped fast limbs.** It was centred on the *previous* pose and
+- **The crop clipped fast limbs.** It was centred on the _previous_ pose and
   padded by a fixed fraction (`DEFAULT_CROP_PAD = 0.25`, slack-expanded `0.15`)
   that did **not** scale with `frameStep`. At the default `frameStep=5` ×
   `100ms` that is ~500ms of travel between detections. A climber reaching up or
@@ -26,10 +26,10 @@ on the next frame. Two problems traced back to how it was sized and placed
   (full-frame re-acquire) and Adaptive Refinement. So "missing limbs" and
   "MediaPipe runs more than necessary" were the same defect.
 - **Two ways to frame the Climber.** The Climber was seeded by either a hand-drawn
-  **Manual Crop** *or* a tap, and the drawn box could then be resized — duplicate,
+  **Manual Crop** _or_ a tap, and the drawn box could then be resized — duplicate,
   fiddly UX for a region the pipeline already derives better from landmarks.
 
-Per-frame detection is inherent (each call *is* how a frame's landmarks are
+Per-frame detection is inherent (each call _is_ how a frame's landmarks are
 obtained); the only avoidable calls are failure-driven, so a crop that stops
 clipping is also the efficiency fix.
 

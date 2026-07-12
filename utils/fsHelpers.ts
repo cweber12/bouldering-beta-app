@@ -136,7 +136,13 @@ export function base64ToUint8(b64: string): Uint8Array {
 export const ATTEMPT_SCHEMA_VERSION = 2;
 
 /** Keys whose values are "heavy" and live in the sibling `.data.json` object. */
-const HEAVY_KEYS = ["frames", "matchesPerFrame", "frameCaptures", "orbFeatures", "keyframes"] as const;
+const HEAVY_KEYS = [
+  "frames",
+  "matchesPerFrame",
+  "frameCaptures",
+  "orbFeatures",
+  "keyframes",
+] as const;
 
 /**
  * Maximum length for user-supplied route metadata text fields (state, area,
@@ -167,9 +173,7 @@ function serializeOrbFeatures(
   return {
     ...features,
     descriptors:
-      mode === "base64"
-        ? uint8ToBase64(features.descriptors)
-        : Array.from(features.descriptors),
+      mode === "base64" ? uint8ToBase64(features.descriptors) : Array.from(features.descriptors),
   };
 }
 
@@ -178,7 +182,7 @@ function serializeKeyframes(
   keyframes: KeyframeFeatures[],
   mode: "array" | "base64",
 ): Array<Record<string, unknown>> {
-  return keyframes.map(kf => ({
+  return keyframes.map((kf) => ({
     timestamp: kf.timestamp,
     features: serializeOrbFeatures(kf.features, mode),
   }));
@@ -202,17 +206,13 @@ function rehydrateOrbDescriptors(orb: Record<string, unknown>): void {
  * descriptors) from `Uint8Array` to a plain `number[]`. Retained for local file
  * import/export round-trips; the S3 save path uses the split serialisers below.
  */
-export function serializeAttemptForJson(
-  attempt: RouteAttempt,
-): Record<string, unknown> {
+export function serializeAttemptForJson(attempt: RouteAttempt): Record<string, unknown> {
   return {
     ...attempt,
-    orbFeatures: attempt.orbFeatures
-      ? serializeOrbFeatures(attempt.orbFeatures, "array")
-      : null,
+    orbFeatures: attempt.orbFeatures ? serializeOrbFeatures(attempt.orbFeatures, "array") : null,
     keyframes: attempt.keyframes
       ? serializeKeyframes(attempt.keyframes, "array")
-      : attempt.keyframes ?? null,
+      : (attempt.keyframes ?? null),
   };
 }
 
@@ -221,9 +221,7 @@ export function serializeAttemptForJson(
  * picker / climb list / detail views read). Heavy fields are excluded — they go
  * in the sibling object produced by {@link serializeAttemptData}.
  */
-export function serializeAttemptMetadata(
-  attempt: RouteAttempt,
-): Record<string, unknown> {
+export function serializeAttemptMetadata(attempt: RouteAttempt): Record<string, unknown> {
   const meta: Record<string, unknown> = { schemaVersion: ATTEMPT_SCHEMA_VERSION };
   for (const [k, v] of Object.entries(attempt)) {
     if (HEAVY_KEYS.includes(k as (typeof HEAVY_KEYS)[number])) continue;
@@ -238,19 +236,15 @@ export function serializeAttemptMetadata(
  * Serialise the heavy fields of an attempt (dense frames, per-frame matches,
  * frame captures, ORB features). `descriptors` is base64-encoded.
  */
-export function serializeAttemptData(
-  attempt: RouteAttempt,
-): Record<string, unknown> {
+export function serializeAttemptData(attempt: RouteAttempt): Record<string, unknown> {
   return {
     frames: attempt.frames,
     matchesPerFrame: attempt.matchesPerFrame,
     frameCaptures: attempt.frameCaptures,
-    orbFeatures: attempt.orbFeatures
-      ? serializeOrbFeatures(attempt.orbFeatures, "base64")
-      : null,
+    orbFeatures: attempt.orbFeatures ? serializeOrbFeatures(attempt.orbFeatures, "base64") : null,
     keyframes: attempt.keyframes
       ? serializeKeyframes(attempt.keyframes, "base64")
-      : attempt.keyframes ?? null,
+      : (attempt.keyframes ?? null),
   };
 }
 

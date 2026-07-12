@@ -11,28 +11,28 @@ Implements ADR 0013. See `CONTEXT.md` for the resolved language.
 
 ## Confirmed decisions
 
-| Area | Decision |
-|---|---|
-| Click behaviour | Tap runs MediaPipe once on the displayed frame, picks the pose at the tap (`selectClimberByPoint`), derives the box from landmarks |
-| No-pose fallback | Detect in a zoomed window around the tap; if empty, drop a default climber-proportional box and proceed (never block) |
-| Sizing lever | `deriveClimberCrop` sizes the box (seed + per-frame); the per-frame **detection region** grows with it |
-| Predictive/motion | Region recentred on `predictCentroid`, motion margin carried by per-step velocity (so it scales with `frameStep`) |
-| Floor | Drop the frame-proportional `MIN_CROP_FRAC`; keep only a small absolute degenerate-pose guard |
-| Display | The green box on the loading view **is** the region actually detected in |
-| Climber UI | Locked box + tap marker, re-tap to change, **no resize handles** |
-| Wall/Route crop | Auto-renders from the climber-expanded region on tap, stays **editable** |
+| Area              | Decision                                                                                                                           |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Click behaviour   | Tap runs MediaPipe once on the displayed frame, picks the pose at the tap (`selectClimberByPoint`), derives the box from landmarks |
+| No-pose fallback  | Detect in a zoomed window around the tap; if empty, drop a default climber-proportional box and proceed (never block)              |
+| Sizing lever      | `deriveClimberCrop` sizes the box (seed + per-frame); the per-frame **detection region** grows with it                             |
+| Predictive/motion | Region recentred on `predictCentroid`, motion margin carried by per-step velocity (so it scales with `frameStep`)                  |
+| Floor             | Drop the frame-proportional `MIN_CROP_FRAC`; keep only a small absolute degenerate-pose guard                                      |
+| Display           | The green box on the loading view **is** the region actually detected in                                                           |
+| Climber UI        | Locked box + tap marker, re-tap to change, **no resize handles**                                                                   |
+| Wall/Route crop   | Auto-renders from the climber-expanded region on tap, stays **editable**                                                           |
 
 ## Recommended starting constants (tunable — verify against `climberFrameCoverage` Scan Diagnostics)
 
-| Constant | Old | New (start) | Meaning |
-|---|---|---|---|
-| `DEFAULT_CROP_PAD` | `0.25` | `0.6` | Base pad as a fraction of bbox half-extent, each side (box ≈ 1.6× bbox) |
-| `CROP_PAD_V_BIAS` | — | `1.25` | Extra vertical multiplier on the base pad (reaches are mostly up) |
-| `MIN_CROP_FRAC` | `0.18` | **removed** | Replaced by the absolute guard below |
-| `ABS_MIN_CROP_FRAC` | — | `0.06` | Degenerate-pose safety floor (frame fraction), not the normal size |
-| `MOTION_MARGIN_K` | — | `1.0` | Region margin = `K ×` per-step velocity magnitude (covers ~one more step) |
-| `REGION_BASE_SLACK` | `0.15` (slack) | `0.10` | Residual symmetric slack folded into the region builder |
-| `TAP_WINDOW` | `0.34 × 0.6` (fixed seed) | `0.45 × 0.75` | Click-time detection window around the tap (portrait, clamped) |
+| Constant            | Old                       | New (start)   | Meaning                                                                   |
+| ------------------- | ------------------------- | ------------- | ------------------------------------------------------------------------- |
+| `DEFAULT_CROP_PAD`  | `0.25`                    | `0.6`         | Base pad as a fraction of bbox half-extent, each side (box ≈ 1.6× bbox)   |
+| `CROP_PAD_V_BIAS`   | —                         | `1.25`        | Extra vertical multiplier on the base pad (reaches are mostly up)         |
+| `MIN_CROP_FRAC`     | `0.18`                    | **removed**   | Replaced by the absolute guard below                                      |
+| `ABS_MIN_CROP_FRAC` | —                         | `0.06`        | Degenerate-pose safety floor (frame fraction), not the normal size        |
+| `MOTION_MARGIN_K`   | —                         | `1.0`         | Region margin = `K ×` per-step velocity magnitude (covers ~one more step) |
+| `REGION_BASE_SLACK` | `0.15` (slack)            | `0.10`        | Residual symmetric slack folded into the region builder                   |
+| `TAP_WINDOW`        | `0.34 × 0.6` (fixed seed) | `0.45 × 0.75` | Click-time detection window around the tap (portrait, clamped)            |
 
 ---
 
@@ -52,12 +52,14 @@ Implements ADR 0013. See `CONTEXT.md` for the resolved language.
 
 2. **Add a predictive region builder** — extend `pickAcquisitionRegion` with an
    optional `motion` arg:
+
    ```ts
    pickAcquisitionRegion(
      lastClimberBox, climberCropPx, frameW, frameH,
      motion?: { predicted: Point; last: Point; frameStep: number },
    ): CropBox | null
    ```
+
    - No `lastClimberBox` → unchanged (return `climberCropPx` or `null`).
    - With `lastClimberBox` **and** `motion`:
      - `shift = (predicted - last)` in px — the per-step velocity (already
@@ -71,6 +73,7 @@ Implements ADR 0013. See `CONTEXT.md` for the resolved language.
    - This **replaces the standalone `0.15` slack** so the box isn't double-padded.
 
 **Tests** (`__tests__/pipeline/climberTracker.test.ts`):
+
 - `deriveClimberCrop`: a normal pose yields ≈1.6× bbox; a 2-keypoint degenerate
   pose hits the `ABS_MIN_CROP_FRAC` floor, not a frame-proportional size; a pose
   near an edge clamps the affected side to `0`/max without shrinking the opposite
@@ -89,7 +92,10 @@ Implements ADR 0013. See `CONTEXT.md` for the resolved language.
   ```ts
   const last = history[history.length - 1] ?? null;
   const region = pickAcquisitionRegion(
-    lastClimberBox, climberCropPx ?? null, videoWidth, videoHeight,
+    lastClimberBox,
+    climberCropPx ?? null,
+    videoWidth,
+    videoHeight,
     last && predicted ? { predicted, last, frameStep } : undefined,
   );
   ```
@@ -112,11 +118,13 @@ No change to flip detection, refinement, ORB, or persistence.
 
 1. **Pipeline helper** — `pipeline/climberTracker.ts` (or a small new module),
    pure, `detector` passed in:
+
    ```ts
    deriveTapCrop(
      detector, frame: ImageData, point: Point, frameW, frameH,
    ): { climberCrop: CropFraction } | null
    ```
+
    - Build the `TAP_WINDOW` region around `point` (clamped).
    - Draw the window to a canvas, `estimateFramesMediaPipe(detector, canvas, ts)`,
      map keypoints to full frame, `selectClimberByPoint(poses, point)`.
@@ -124,6 +132,7 @@ No change to flip detection, refinement, ORB, or persistence.
      (caller applies the default-box fallback).
 
 2. **Page callback** — `app/scan/page.tsx` owns `model`/`cv`:
+
    ```ts
    const handleClimberTapDetect = (frame: ImageData, point: Point) => {
      const r = model ? deriveTapCrop(model, frame, point, w, h) : null;
@@ -133,6 +142,7 @@ No change to flip detection, refinement, ORB, or persistence.
      return r != null;
    };
    ```
+
    - `deriveWallFraction` = `deriveWallRegion` expressed as a `CropFraction`
      (climber-expanded region), the agreed Wall Crop default.
    - Re-tap clears the boxes and the `wallTouched` flag.

@@ -9,7 +9,10 @@ vi.mock("@/pipeline/matching/homography", async (importActual) => {
 });
 
 import { computeHomography } from "@/pipeline/matching/homography";
-import { estimateRouteCrop, AUTO_FRAME_CONFIDENCE_MATCHES } from "@/pipeline/tracking/routeCropEstimator";
+import {
+  estimateRouteCrop,
+  AUTO_FRAME_CONFIDENCE_MATCHES,
+} from "@/pipeline/tracking/routeCropEstimator";
 
 const cv = {} as unknown;
 
@@ -69,7 +72,15 @@ describe("estimateRouteCrop", () => {
   it("flags a low-confidence estimate below the match threshold", () => {
     // prettier-ignore
     vi.mocked(computeHomography).mockReturnValue(new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]));
-    const est = estimateRouteCrop(cv, manyMatches(AUTO_FRAME_CONFIDENCE_MATCHES - 1), refWithCrop(), queryStub, 1000, 1000, opts);
+    const est = estimateRouteCrop(
+      cv,
+      manyMatches(AUTO_FRAME_CONFIDENCE_MATCHES - 1),
+      refWithCrop(),
+      queryStub,
+      1000,
+      1000,
+      opts,
+    );
     expect(est!.confidence).toBe("low");
   });
 
@@ -94,6 +105,8 @@ describe("estimateRouteCrop", () => {
   it("returns null for non-positive photo dimensions", () => {
     // prettier-ignore
     vi.mocked(computeHomography).mockReturnValue(new Float64Array([1, 0, 0, 0, 1, 0, 0, 0, 1]));
-    expect(estimateRouteCrop(cv, manyMatches(20), refWithCrop(), queryStub, 0, 1000, opts)).toBeNull();
+    expect(
+      estimateRouteCrop(cv, manyMatches(20), refWithCrop(), queryStub, 0, 1000, opts),
+    ).toBeNull();
   });
 });

@@ -111,11 +111,14 @@ describe("renderMultiPoseVideo — success", () => {
     vi.useFakeTimers();
     vi.mocked(computeHomography).mockClear();
     vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
-    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({
-      width: 100,
-      height: 80,
-      close: vi.fn(),
-    }));
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn().mockResolvedValue({
+        width: 100,
+        height: 80,
+        close: vi.fn(),
+      }),
+    );
     vi.stubGlobal("URL", {
       ...URL,
       createObjectURL: vi.fn().mockReturnValue("blob:fake-overlay"),

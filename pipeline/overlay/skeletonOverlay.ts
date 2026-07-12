@@ -104,10 +104,14 @@ const RIM_BLUR_FRAC = 0.45;
 
 /** Bones stroked at the base limb width — arms and legs. */
 const LIMB_EDGES: [string, string][] = [
-  ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
-  ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
-  ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
-  ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
+  ["left_shoulder", "left_elbow"],
+  ["left_elbow", "left_wrist"],
+  ["right_shoulder", "right_elbow"],
+  ["right_elbow", "right_wrist"],
+  ["left_hip", "left_knee"],
+  ["left_knee", "left_ankle"],
+  ["right_hip", "right_knee"],
+  ["right_knee", "right_ankle"],
 ];
 
 /** Hand + foot edges stroked at the reduced extremity width. These are the real
@@ -115,14 +119,20 @@ const LIMB_EDGES: [string, string][] = [
  *  (heel + toe). A missing endpoint silently skips its edge. */
 const EXTREMITY_EDGES: [string, string][] = [
   // Hands — wrist fan + the index↔pinky web.
-  ["left_wrist", "left_index"], ["left_wrist", "left_pinky"],
-  ["left_wrist", "left_thumb"], ["left_index", "left_pinky"],
-  ["right_wrist", "right_index"], ["right_wrist", "right_pinky"],
-  ["right_wrist", "right_thumb"], ["right_index", "right_pinky"],
+  ["left_wrist", "left_index"],
+  ["left_wrist", "left_pinky"],
+  ["left_wrist", "left_thumb"],
+  ["left_index", "left_pinky"],
+  ["right_wrist", "right_index"],
+  ["right_wrist", "right_pinky"],
+  ["right_wrist", "right_thumb"],
+  ["right_index", "right_pinky"],
   // Feet — ankle→heel→toe triangle.
-  ["left_ankle", "left_heel"], ["left_ankle", "left_foot_index"],
+  ["left_ankle", "left_heel"],
+  ["left_ankle", "left_foot_index"],
   ["left_heel", "left_foot_index"],
-  ["right_ankle", "right_heel"], ["right_ankle", "right_foot_index"],
+  ["right_ankle", "right_heel"],
+  ["right_ankle", "right_foot_index"],
   ["right_heel", "right_foot_index"],
 ];
 
@@ -137,9 +147,17 @@ const ESTIMATED_DIM_OPACITY = 0.4;
 /** Keypoint names that make up the head — used to size the oval and to skip
  *  the (now redundant) face edges in the Skeleton pass. */
 const HEAD_NAMES = new Set([
-  "nose", "left_eye_inner", "left_eye", "left_eye_outer",
-  "right_eye_inner", "right_eye", "right_eye_outer",
-  "left_ear", "right_ear", "mouth_left", "mouth_right",
+  "nose",
+  "left_eye_inner",
+  "left_eye",
+  "left_eye_outer",
+  "right_eye_inner",
+  "right_eye",
+  "right_eye_outer",
+  "left_ear",
+  "right_ear",
+  "mouth_left",
+  "mouth_right",
 ]);
 
 /** A transformed overlay point. `score` (when present) drives confidence dimming. */
@@ -329,8 +347,11 @@ function parseRgb(css: string): { r: number; g: number; b: number } {
 }
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
   const l = (max + min) / 2;
   if (max === min) return [0, 0, l];
   const d = max - min;
@@ -471,7 +492,8 @@ function edgeStrokeStyle(
   if (!useAnatomicalPalette) return sideColor(singleColor, edgeSide(fromName, toName));
   const fromColor = anatomicalPointColor(fromName);
   const toColor = anatomicalPointColor(toName);
-  if (sameColor(fromColor, toColor) || typeof ctx.createLinearGradient !== "function") return fromColor;
+  if (sameColor(fromColor, toColor) || typeof ctx.createLinearGradient !== "function")
+    return fromColor;
   const g = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
   g.addColorStop(0, fromColor);
   g.addColorStop(1, toColor);
@@ -491,8 +513,10 @@ function supportsFilter(ctx: CanvasRenderingContext2D): boolean {
  * to a sequence-stable scale).
  */
 function bodyScaleFromKp(kp: Record<string, { x: number; y: number }>): number | null {
-  const ls = kp.left_shoulder, rs = kp.right_shoulder;
-  const lh = kp.left_hip, rh = kp.right_hip;
+  const ls = kp.left_shoulder,
+    rs = kp.right_shoulder;
+  const lh = kp.left_hip,
+    rh = kp.right_hip;
 
   if (ls && rs) {
     const d = dist(ls, rs);
@@ -513,11 +537,7 @@ function bodyScaleFromKp(kp: Record<string, { x: number; y: number }>): number |
 
 /** Per-frame body scale with a canvas-fraction fallback (used only when no
  *  sequence-stable scale was supplied via {@link SkeletonStyle.bodyScale}). */
-function bodyScale(
-  kp: Record<string, OverlayPoint>,
-  canvasW: number,
-  canvasH: number,
-): number {
+function bodyScale(kp: Record<string, OverlayPoint>, canvasW: number, canvasH: number): number {
   return bodyScaleFromKp(kp) ?? Math.min(canvasW, canvasH) * 0.15;
 }
 
@@ -592,12 +612,11 @@ interface HeadGeometry {
  * (no artificial lift; the bridge is what keeps the head attached). Returns null
  * when there are too few head points to place an oval.
  */
-function computeHeadGeometry(
-  kp: Record<string, OverlayPoint>,
-  scale: number,
-): HeadGeometry | null {
-  const le = kp.left_eye, re = kp.right_eye;
-  const lEar = kp.left_ear, rEar = kp.right_ear;
+function computeHeadGeometry(kp: Record<string, OverlayPoint>, scale: number): HeadGeometry | null {
+  const le = kp.left_eye,
+    re = kp.right_eye;
+  const lEar = kp.left_ear,
+    rEar = kp.right_ear;
 
   // Centre on the eyes (fallback to the nose).
   let cx: number, cy: number;
@@ -616,7 +635,8 @@ function computeHeadGeometry(
   // chin bridge (below) still keeps the head attached to the body.
   const sMid = midpoint(kp.left_shoulder, kp.right_shoulder);
   if (sMid) {
-    const dx = cx - sMid.x, dy = cy - sMid.y;
+    const dx = cx - sMid.x,
+      dy = cy - sMid.y;
     const d = Math.hypot(dx, dy);
     const maxD = scale * NECK_MAX_DIST;
     if (d > maxD && d > 0) {
@@ -638,11 +658,16 @@ function computeHeadGeometry(
   // Head-up axis (perpendicular to the eye line), disambiguated to point away
   // from the shoulder-midpoint (handles a climber leaned back on an overhang);
   // fall back to image-up when shoulders are absent.
-  let ux = Math.sin(angle), uy = -Math.cos(angle);
+  let ux = Math.sin(angle),
+    uy = -Math.cos(angle);
   if (sMid) {
-    if (ux * (cx - sMid.x) + uy * (cy - sMid.y) < 0) { ux = -ux; uy = -uy; }
+    if (ux * (cx - sMid.x) + uy * (cy - sMid.y) < 0) {
+      ux = -ux;
+      uy = -uy;
+    }
   } else if (uy > 0) {
-    ux = -ux; uy = -uy;
+    ux = -ux;
+    uy = -uy;
   }
 
   // Bottom edge of the oval, toward the neck — the neck capsule connects here.
@@ -678,8 +703,10 @@ function drawSilhouette(
   const torsoHeadColor = useAnatomicalPalette ? DEFAULT_COLOR : color;
   const dark = shiftLightness(torsoHeadColor, RIM_DARK_SHIFT);
 
-  const ls = kp.left_shoulder, rs = kp.right_shoulder;
-  const lh = kp.left_hip, rh = kp.right_hip;
+  const ls = kp.left_shoulder,
+    rs = kp.right_shoulder;
+  const lh = kp.left_hip,
+    rh = kp.right_hip;
   const hasTorso = !!(ls && rs && lh && rh);
   const head = computeHeadGeometry(kp, scale);
   const sMid = midpoint(ls, rs);
@@ -706,7 +733,10 @@ function drawSilhouette(
         sctx.strokeStyle = g;
       }
     } else {
-      sctx.strokeStyle = shiftLightness(sideColor(color, edgeSide(fromName, toName)), lightnessShift);
+      sctx.strokeStyle = shiftLightness(
+        sideColor(color, edgeSide(fromName, toName)),
+        lightnessShift,
+      );
     }
     sctx.beginPath();
     sctx.moveTo(a.x, a.y);
@@ -720,7 +750,8 @@ function drawSilhouette(
   // No neck capsule — the head floats free (drawn faint below).
   const bones = (rScale: number, lightnessShift: number): void => {
     for (const [a, b] of LIMB_EDGES) capsule(a, b, kp[a], kp[b], limbR * rScale, lightnessShift);
-    for (const [a, b] of EXTREMITY_EDGES) capsule(a, b, kp[a], kp[b], extremityR * rScale, lightnessShift);
+    for (const [a, b] of EXTREMITY_EDGES)
+      capsule(a, b, kp[a], kp[b], extremityR * rScale, lightnessShift);
   };
 
   const torsoPath = (): void => {
@@ -785,8 +816,8 @@ function drawSilhouette(
       const cy = (ls!.y + rs!.y + lh!.y + rh!.y) / 4;
       const axis = Math.atan2(hMid.y - sMid!.y, hMid.x - sMid!.x);
       sctx.translate(cx, cy);
-      sctx.rotate(axis);                    // local +x now runs shoulders→hips
-      sctx.scale(halfLen, halfWid * 0.5);   // tall along the torso, narrow across
+      sctx.rotate(axis); // local +x now runs shoulders→hips
+      sctx.scale(halfLen, halfWid * 0.5); // tall along the torso, narrow across
       const g = sctx.createRadialGradient(0, 0, 0, 0, 0, 1);
       g.addColorStop(0, torsoCore);
       g.addColorStop(1, torsoEdge);
@@ -806,7 +837,7 @@ function drawSilhouette(
     sctx.globalAlpha = HEAD_SILHOUETTE_OPACITY;
     sctx.translate(head.cx, head.cy);
     sctx.rotate(head.angle);
-    sctx.scale(head.major, head.minor);     // unit circle → the head ellipse
+    sctx.scale(head.major, head.minor); // unit circle → the head ellipse
     const g = sctx.createRadialGradient(0, 0, 0, 0, 0, 1);
     g.addColorStop(0, headCore);
     g.addColorStop(1, headEdge);
@@ -855,7 +886,8 @@ export function drawSkeleton(
   const names: Record<number, string> = options?.keypointNames ?? MP_KP_NAMES;
   const dimThreshold = options?.estimatedDimThreshold ?? ESTIMATED_DIM_THRESHOLD;
   const dimOpacity = options?.estimatedDimOpacity ?? ESTIMATED_DIM_OPACITY;
-  const useAnatomicalPalette = options?.anatomicalPalette ??
+  const useAnatomicalPalette =
+    options?.anatomicalPalette ??
     (sameColor(silhouetteColor, DEFAULT_COLOR) &&
       sameColor(lineColor, DEFAULT_SKELETON_COLOR) &&
       sameColor(jointColor, DEFAULT_JOINT_COLOR));
@@ -869,7 +901,14 @@ export function drawSkeleton(
   if (silhouetteVisible && silhouetteOpacity > 0) {
     const scratch = getScratch(ctx.canvas.width, ctx.canvas.height);
     if (scratch) {
-      drawSilhouette(scratch.ctx, keypoints, silhouetteColor, scale, limbThickness, useAnatomicalPalette);
+      drawSilhouette(
+        scratch.ctx,
+        keypoints,
+        silhouetteColor,
+        scale,
+        limbThickness,
+        useAnatomicalPalette,
+      );
       ctx.save();
       ctx.globalAlpha = silhouetteOpacity;
       ctx.drawImage(scratch.canvas, 0, 0);
