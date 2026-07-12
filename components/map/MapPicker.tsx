@@ -19,12 +19,7 @@ export interface MapPickerProps {
  *
  * Must be used via `next/dynamic` with `{ ssr: false }`.
  */
-export default function MapPicker({
-  initialLat,
-  initialLng,
-  onConfirm,
-  onCancel,
-}: MapPickerProps) {
+export default function MapPicker({ initialLat, initialLng, onConfirm, onCancel }: MapPickerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
@@ -62,7 +57,9 @@ export default function MapPicker({
 
       // Place initial marker if coords provided.
       if (initialLat != null && initialLng != null) {
-        const marker = L.marker([initialLat, initialLng], { draggable: true, icon: pinIcon }).addTo(map);
+        const marker = L.marker([initialLat, initialLng], { draggable: true, icon: pinIcon }).addTo(
+          map,
+        );
         marker.on("dragend", () => {
           const pos = marker.getLatLng();
           setPickedLat(pos.lat);

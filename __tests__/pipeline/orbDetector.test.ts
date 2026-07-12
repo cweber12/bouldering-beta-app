@@ -1,5 +1,17 @@
 ﻿import { describe, it, expect, vi, beforeEach } from "vitest";
-import { extractFeatures, extractFeaturesFromCrop, matchOrbFeatures, createQueryMatcher, buildClimberExclusionMask, extractFeaturesExcludingClimber, downscaleImageData, rescaleFeaturesToNative, queryMaxEdgeFor, QUERY_MAX_EDGE, QUERY_MIN_EDGE } from "@/pipeline/matching/orbDetector";
+import {
+  extractFeatures,
+  extractFeaturesFromCrop,
+  matchOrbFeatures,
+  createQueryMatcher,
+  buildClimberExclusionMask,
+  extractFeaturesExcludingClimber,
+  downscaleImageData,
+  rescaleFeaturesToNative,
+  queryMaxEdgeFor,
+  QUERY_MAX_EDGE,
+  QUERY_MIN_EDGE,
+} from "@/pipeline/matching/orbDetector";
 import type { OrbFeatures, OrbCropBox, NormalizedPoint } from "@/pipeline/matching/orbDetector";
 
 // ---------------------------------------------------------------------------
@@ -49,8 +61,7 @@ function makeMockCv(
   } = {},
 ) {
   const kps = opts.keypoints ?? [{ x: 10, y: 20 }];
-  const descData =
-    opts.descriptorData ?? new Uint8Array(kps.length * 32).fill(0xab);
+  const descData = opts.descriptorData ?? new Uint8Array(kps.length * 32).fill(0xab);
   const pairs = opts.matchPairs ?? [];
 
   // Track Mat instances so tests can verify .delete() was called.
@@ -203,8 +214,7 @@ describe("extractFeatures", () => {
 
     expect(cv._orb.delete).toHaveBeenCalled();
     expect(cv._kpVec.delete).toHaveBeenCalled();
-    const srcMat = cv.matFromImageData.mock.results[0]
-      .value as ReturnType<typeof makeMockMat>;
+    const srcMat = cv.matFromImageData.mock.results[0].value as ReturnType<typeof makeMockMat>;
     expect(srcMat.delete).toHaveBeenCalled();
   });
 
@@ -220,8 +230,7 @@ describe("extractFeatures", () => {
     });
 
     expect(() => extractFeatures(cv, fakeImageData())).toThrow("ORB boom");
-    const srcMat = cv.matFromImageData.mock.results[0]
-      .value as ReturnType<typeof makeMockMat>;
+    const srcMat = cv.matFromImageData.mock.results[0].value as ReturnType<typeof makeMockMat>;
     expect(srcMat.delete).toHaveBeenCalled();
   });
 });
@@ -343,7 +352,10 @@ describe("extractFeaturesFromCrop", () => {
       { x: 10, y: 20 },
       { x: 30, y: 40 },
     ];
-    const cv = makeMockCv({ keypoints: kps, descriptorData: new Uint8Array(kps.length * 32).fill(0xab) });
+    const cv = makeMockCv({
+      keypoints: kps,
+      descriptorData: new Uint8Array(kps.length * 32).fill(0xab),
+    });
 
     const cropBox: OrbCropBox = {
       x: 100,
@@ -365,7 +377,14 @@ describe("extractFeaturesFromCrop", () => {
 
   it("stores the cropBox on the returned OrbFeatures", () => {
     const cv = makeMockCv({ keypoints: [{ x: 5, y: 5 }] });
-    const cropBox: OrbCropBox = { x: 20, y: 10, width: 100, height: 80, srcWidth: 320, srcHeight: 240 };
+    const cropBox: OrbCropBox = {
+      x: 20,
+      y: 10,
+      width: 100,
+      height: 80,
+      srcWidth: 320,
+      srcHeight: 240,
+    };
     const result = extractFeaturesFromCrop(cv, fakeImageData(), cropBox);
     expect(result.cropBox).toEqual(cropBox);
   });
@@ -438,7 +457,8 @@ describe("rescaleFeaturesToNative", () => {
 
   it("round-trips: downscaled detection rescaled back equals native position", () => {
     const scale = 0.4;
-    const nativeX = 1000, nativeY = 600;
+    const nativeX = 1000,
+      nativeY = 600;
     const detected = { x: nativeX * scale, y: nativeY * scale };
     const f: OrbFeatures = {
       keypoints: [{ pt: detected, size: 3, angle: 0, response: 1, octave: 0 }],
@@ -456,7 +476,14 @@ describe("rescaleFeaturesToNative", () => {
       cropBox: { x: 10, y: 20, width: 30, height: 40, srcWidth: 100, srcHeight: 80 },
     };
     const native = rescaleFeaturesToNative(f, 0.5);
-    expect(native.cropBox).toEqual({ x: 20, y: 40, width: 60, height: 80, srcWidth: 200, srcHeight: 160 });
+    expect(native.cropBox).toEqual({
+      x: 20,
+      y: 40,
+      width: 60,
+      height: 80,
+      srcWidth: 200,
+      srcHeight: 160,
+    });
   });
 });
 
@@ -477,11 +504,17 @@ function makeMaskCv(): any {
   cv.CV_32SC2 = 14;
   cv.MORPH_ELLIPSE = 2;
   cv.FILLED = -1;
-  cv.Scalar = vi.fn().mockImplementation(function (v: number) { return { val: v }; });
-  cv.Size = vi.fn().mockImplementation(function (w: number, h: number) { return { width: w, height: h }; });
+  cv.Scalar = vi.fn().mockImplementation(function (v: number) {
+    return { val: v };
+  });
+  cv.Size = vi.fn().mockImplementation(function (w: number, h: number) {
+    return { width: w, height: h };
+  });
 
   // Mat.zeros is called with `new` in source — must use `function` keyword.
-  cv.Mat.zeros = vi.fn().mockImplementation(function () { return zerosMat; });
+  cv.Mat.zeros = vi.fn().mockImplementation(function () {
+    return zerosMat;
+  });
 
   // MatVector used for drawContours.
   cv.MatVector = vi.fn().mockImplementation(function () {
@@ -504,7 +537,10 @@ function makeMaskCv(): any {
 describe("buildClimberExclusionMask", () => {
   it("returns a white mask when fewer than 3 landmarks", () => {
     const cv = makeMaskCv();
-    const twoLandmarks: NormalizedPoint[] = [{ x: 0.5, y: 0.5 }, { x: 0.6, y: 0.6 }];
+    const twoLandmarks: NormalizedPoint[] = [
+      { x: 0.5, y: 0.5 },
+      { x: 0.6, y: 0.6 },
+    ];
     const mask = buildClimberExclusionMask(cv, 100, 100, twoLandmarks);
     // Should construct a white-filled Mat via Scalar(255), not use convexHull.
     expect(cv.convexHull).not.toHaveBeenCalled();
@@ -552,7 +588,9 @@ describe("buildClimberExclusionMask", () => {
     const pointsMat = cv.matFromArray.mock.results[0].value as ReturnType<typeof makeMockMat>;
     expect(pointsMat.delete).toHaveBeenCalled();
     // getStructuringElement creates dilateKernel — freed in finally.
-    const dilateKernel = cv.getStructuringElement.mock.results[0].value as ReturnType<typeof makeMockMat>;
+    const dilateKernel = cv.getStructuringElement.mock.results[0].value as ReturnType<
+      typeof makeMockMat
+    >;
     expect(dilateKernel.delete).toHaveBeenCalled();
   });
 });

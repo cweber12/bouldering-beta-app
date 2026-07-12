@@ -11,7 +11,7 @@ Type: AFK
 
 `estimateFrameWithRetry` in `pipeline/poseDetection.ts` shrinks the detection
 crop uniformly toward the centre on low confidence — which can crop the climber
-*out* when they sit near an edge, and is no longer wired into the main scan loop
+_out_ when they sit near an edge, and is no longer wired into the main scan loop
 (the climber tracker's "widen + re-select by identity" path superseded it).
 
 Remove the dead retry primitive (or repurpose it to re-centre on the partial

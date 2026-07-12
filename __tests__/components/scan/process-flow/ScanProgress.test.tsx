@@ -69,7 +69,11 @@ describe("ScanProgress", () => {
     expect(() =>
       render(
         <ScanProgress
-          orbPreview={[{ x: 0.2, y: 0.2 }, { x: 0.8, y: 0.5 }, { x: 0.5, y: 0.9 }]}
+          orbPreview={[
+            { x: 0.2, y: 0.2 },
+            { x: 0.8, y: 0.5 },
+            { x: 0.5, y: 0.9 },
+          ]}
           currentPose={pose}
           videoAspect={{ w: 1080, h: 1920 }}
           progressPct={75}

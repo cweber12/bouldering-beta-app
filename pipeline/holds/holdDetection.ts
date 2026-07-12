@@ -145,9 +145,9 @@ interface LimbSpec {
 }
 
 const LIMBS: LimbSpec[] = [
-  { kind: "hand", side: "left",  contact: ["left_index", "left_pinky"],   fallback: "left_wrist" },
+  { kind: "hand", side: "left", contact: ["left_index", "left_pinky"], fallback: "left_wrist" },
   { kind: "hand", side: "right", contact: ["right_index", "right_pinky"], fallback: "right_wrist" },
-  { kind: "foot", side: "left",  contact: ["left_foot_index"],  fallback: "left_ankle" },
+  { kind: "foot", side: "left", contact: ["left_foot_index"], fallback: "left_ankle" },
   { kind: "foot", side: "right", contact: ["right_foot_index"], fallback: "right_ankle" },
 ];
 
@@ -161,8 +161,10 @@ function dist(a: Point, b: Point): number {
 
 /** Interior angle (degrees) at `b` between b→a and b→c. NaN if any leg is zero. */
 function angleAt(a: Point, b: Point, c: Point): number {
-  const v1x = a.x - b.x, v1y = a.y - b.y;
-  const v2x = c.x - b.x, v2y = c.y - b.y;
+  const v1x = a.x - b.x,
+    v1y = a.y - b.y;
+  const v2x = c.x - b.x,
+    v2y = c.y - b.y;
   const n1 = Math.hypot(v1x, v1y);
   const n2 = Math.hypot(v2x, v2y);
   if (n1 === 0 || n2 === 0) return NaN;
@@ -178,8 +180,13 @@ function nameMap(frame: PoseFrame): Map<string, Keypoint> {
 
 /** Normalized contact point + representative score for a limb at one frame: the
  *  mean of whichever primary landmarks are present, else the proximal fallback. */
-function contactOf(map: Map<string, Keypoint>, spec: LimbSpec): { pt: Point; score: number } | null {
-  const present = spec.contact.map((n) => map.get(n)).filter((kp): kp is Keypoint => kp !== undefined);
+function contactOf(
+  map: Map<string, Keypoint>,
+  spec: LimbSpec,
+): { pt: Point; score: number } | null {
+  const present = spec.contact
+    .map((n) => map.get(n))
+    .filter((kp): kp is Keypoint => kp !== undefined);
   if (present.length > 0) {
     const n = present.length;
     return {
@@ -223,10 +230,10 @@ interface LimbSample {
   contact: Point | null;
   score: number;
   // Auxiliary projected joints for the load-bearing gates (null when absent).
-  wrist: Point | null;            // hand gate
-  hip: Point | null;              // foot gate
-  knee: Point | null;             // foot gate
-  ankle: Point | null;            // foot gate
+  wrist: Point | null; // hand gate
+  hip: Point | null; // foot gate
+  knee: Point | null; // foot gate
+  ankle: Point | null; // foot gate
 }
 
 function projectMaybe(
@@ -247,10 +254,20 @@ function buildSamples(frames: PoseFrame[], spec: LimbSpec, project: HoldProjecto
       t: frame.timestamp,
       contact: c ? project(c.pt, frame.timestamp) : null,
       score: c ? c.score : 0,
-      wrist: spec.kind === "hand" ? projectMaybe(map, spec.fallback, project, frame.timestamp) : null,
-      hip:   spec.kind === "foot" ? projectMaybe(map, `${spec.side}_hip`, project, frame.timestamp) : null,
-      knee:  spec.kind === "foot" ? projectMaybe(map, `${spec.side}_knee`, project, frame.timestamp) : null,
-      ankle: spec.kind === "foot" ? projectMaybe(map, `${spec.side}_ankle`, project, frame.timestamp) : null,
+      wrist:
+        spec.kind === "hand" ? projectMaybe(map, spec.fallback, project, frame.timestamp) : null,
+      hip:
+        spec.kind === "foot"
+          ? projectMaybe(map, `${spec.side}_hip`, project, frame.timestamp)
+          : null,
+      knee:
+        spec.kind === "foot"
+          ? projectMaybe(map, `${spec.side}_knee`, project, frame.timestamp)
+          : null,
+      ankle:
+        spec.kind === "foot"
+          ? projectMaybe(map, `${spec.side}_ankle`, project, frame.timestamp)
+          : null,
     };
   });
 }
@@ -334,7 +351,8 @@ function footLoadBearing(run: LimbSample[], opts: ResolvedOptions): boolean {
     .map((s) => angleAt(s.hip!, s.knee!, s.ankle!))
     .filter((a) => Number.isFinite(a));
   const footBelowKnee =
-    mean(withLeg.map((s) => s.ankle!.y)) >= mean(withLeg.map((s) => s.knee!.y)) + opts.footBelowKneeMargin;
+    mean(withLeg.map((s) => s.ankle!.y)) >=
+    mean(withLeg.map((s) => s.knee!.y)) + opts.footBelowKneeMargin;
   if (kneeAngles.length > 0 && mean(kneeAngles) < opts.bracedKneeMaxDeg && footBelowKnee) {
     return true;
   }
@@ -412,7 +430,10 @@ function scanDwells(samples: LimbSample[], spec: LimbSpec, opts: ResolvedOptions
       let look = scan + 1;
       let back = -1;
       while (look < samples.length && samples[look].t - samples[j].t <= opts.excursionGapSec) {
-        if (samples[look].contact && dist(samples[look].contact!, anchor) <= opts.stationaryRadius) {
+        if (
+          samples[look].contact &&
+          dist(samples[look].contact!, anchor) <= opts.stationaryRadius
+        ) {
           back = look;
           break;
         }
@@ -527,7 +548,11 @@ export function detectHolds(
   const dwells: Dwell[] = [];
   const handNearMiss: Record<"left" | "right", Dwell[]> = { left: [], right: [] };
   for (const spec of LIMBS) {
-    const { accepted, handNearMiss: nm } = scanDwells(buildSamples(sorted, spec, project), spec, resolved);
+    const { accepted, handNearMiss: nm } = scanDwells(
+      buildSamples(sorted, spec, project),
+      spec,
+      resolved,
+    );
     dwells.push(...accepted);
     if (spec.kind === "hand") handNearMiss[spec.side].push(...nm);
   }
@@ -537,7 +562,8 @@ export function detectHolds(
   // neither hand has an accepted Hold there, the Climber must be hanging from one —
   // recover the stronger so a real hang is not erased. A lone near-miss (the other
   // hand absent) asserts nothing and stays rejected.
-  const overlaps = (a: Dwell, b: Dwell) => a.firstUseTime <= b.endTime && b.firstUseTime <= a.endTime;
+  const overlaps = (a: Dwell, b: Dwell) =>
+    a.firstUseTime <= b.endTime && b.firstUseTime <= a.endTime;
   for (const l of handNearMiss.left) {
     for (const r of handNearMiss.right) {
       if (!overlaps(l, r)) continue;

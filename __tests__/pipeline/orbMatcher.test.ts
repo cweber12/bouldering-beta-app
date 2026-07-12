@@ -41,9 +41,7 @@ class FakeOrbWorker {
               { queryIdx: 2, trainIdx: 0, distance: 45 },
             ]
           : [];
-      queueMicrotask(() =>
-        this._emit({ type: "matchResult", id: msg.id, matches }),
-      );
+      queueMicrotask(() => this._emit({ type: "matchResult", id: msg.id, matches }));
     }
   }
 
@@ -187,8 +185,6 @@ describe("matchFeatures — error handling", () => {
     };
 
     const ref = makeOrbResult(4);
-    await expect(matchFeatures(ref, makeOrbResult(4))).rejects.toThrow(
-      "BFMatcher WASM error",
-    );
+    await expect(matchFeatures(ref, makeOrbResult(4))).rejects.toThrow("BFMatcher WASM error");
   });
 });

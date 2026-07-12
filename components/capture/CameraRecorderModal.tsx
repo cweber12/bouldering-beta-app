@@ -34,15 +34,18 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
     let active = true;
     navigator.mediaDevices
       .getUserMedia({ video: { facingMode: "environment" }, audio: audioConstraint })
-      .then(stream => {
-        if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+      .then((stream) => {
+        if (!active) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
         setReady(true);
       })
-      .catch(err => {
+      .catch((err) => {
         if (!active) return;
         const name = err instanceof Error ? err.name : "";
         setError(
@@ -58,9 +61,9 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
       if (recorderRef.current && recorderRef.current.state !== "inactive") {
         recorderRef.current.stop();
       }
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function startRecording() {
@@ -71,13 +74,12 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
       : MediaRecorder.isTypeSupported("video/webm")
         ? "video/webm"
         : "";
-    const mr = new MediaRecorder(
-      streamRef.current,
-      mimeType ? { mimeType } : undefined,
-    );
-    mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    const mr = new MediaRecorder(streamRef.current, mimeType ? { mimeType } : undefined);
+    mr.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
     mr.onstop = () => {
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       // Only emit a capture when the user explicitly chose to save. A recording
       // ended by closing the modal is discarded.
       if (!saveIntentRef.current) {
@@ -110,12 +112,16 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
-      onCapture(file);
-    }, "image/jpeg", 0.92);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" });
+        onCapture(file);
+      },
+      "image/jpeg",
+      0.92,
+    );
   }
 
   const ariaLabel = mode === "photo" ? "Take a photo" : "Record a video";
@@ -129,67 +135,61 @@ export default function CameraRecorderModal({ mode = "video", onCapture, onClose
       containerClassName="sm:items-center"
       panelClassName="w-full max-w-lg overflow-hidden rounded-t-2xl bg-card shadow-2xl sm:rounded-2xl"
     >
-        {/* Camera preview */}
-        <div className="relative aspect-video w-full bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="h-full w-full object-cover"
-          />
-          {recording && (
-            <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-              Recording
-            </div>
-          )}
-          {!ready && !error && (
-            <div className="absolute inset-0 flex items-center justify-center text-sm text-white/60">
-              Starting camera&hellip;
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <div className="border-t border-red-800/40 bg-red-950/40 px-5 py-3">
-            <p className="text-sm text-red-400">{error}</p>
+      {/* Camera preview */}
+      <div className="relative aspect-video w-full bg-black">
+        <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+        {recording && (
+          <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+            Recording
           </div>
         )}
+        {!ready && !error && (
+          <div className="absolute inset-0 flex items-center justify-center text-sm text-white/60">
+            Starting camera&hellip;
+          </div>
+        )}
+      </div>
 
-        <div className="flex gap-3 p-4">
-          {error ? null : mode === "photo" ? (
-            <button
-              onClick={takePhoto}
-              disabled={!ready}
-              className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
-            >
-              Take photo
-            </button>
-          ) : !recording ? (
-            <button
-              onClick={startRecording}
-              disabled={!ready}
-              className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
-            >
-              Start recording
-            </button>
-          ) : (
-            <button
-              onClick={stopRecording}
-              className="flex-1 animate-pulse rounded-xl bg-red-600 py-3 text-sm font-semibold text-white transition hover:bg-red-500"
-            >
-              Stop &amp; save
-            </button>
-          )}
-          <button
-            ref={closeButtonRef}
-            onClick={onClose}
-            className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
-          >
-            Cancel
-          </button>
+      {error && (
+        <div className="border-t border-red-800/40 bg-red-950/40 px-5 py-3">
+          <p className="text-sm text-red-400">{error}</p>
         </div>
+      )}
+
+      <div className="flex gap-3 p-4">
+        {error ? null : mode === "photo" ? (
+          <button
+            onClick={takePhoto}
+            disabled={!ready}
+            className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
+          >
+            Take photo
+          </button>
+        ) : !recording ? (
+          <button
+            onClick={startRecording}
+            disabled={!ready}
+            className="flex-1 rounded-xl bg-accent py-3 text-sm font-semibold text-fg transition hover:bg-accent-hover disabled:opacity-40"
+          >
+            Start recording
+          </button>
+        ) : (
+          <button
+            onClick={stopRecording}
+            className="flex-1 animate-pulse rounded-xl bg-red-600 py-3 text-sm font-semibold text-white transition hover:bg-red-500"
+          >
+            Stop &amp; save
+          </button>
+        )}
+        <button
+          ref={closeButtonRef}
+          onClick={onClose}
+          className="rounded-xl border border-edge px-5 py-3 text-sm font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
+        >
+          Cancel
+        </button>
+      </div>
     </Modal>
   );
 }

@@ -28,15 +28,13 @@ export default function DocsPage() {
         {/* ---------------------------------------------------------------- */}
         {/* Title                                                            */}
         {/* ---------------------------------------------------------------- */}
-        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">
-          Documentation
-        </h1>
-          <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-          Route Scanner turns a single climbing video into an annotated route map. It estimates
-          the climber&apos;s skeleton frame-by-frame, infers which holds the hands and feet used,
-          and reprojects both onto a photo of the route using computer-vision feature matching.
-          Every stage runs locally in your browser; processed runs can be saved to Amazon S3 for
-          access across devices, or exported as local JSON files.
+        <h1 className="text-xl font-bold tracking-tight text-fg sm:text-2xl">Documentation</h1>
+        <p className="mt-3 text-base text-fg-secondary leading-relaxed">
+          Route Scanner turns a single climbing video into an annotated route map. It estimates the
+          climber&apos;s skeleton frame-by-frame, infers which holds the hands and feet used, and
+          reprojects both onto a photo of the route using computer-vision feature matching. Every
+          stage runs locally in your browser; processed runs can be saved to Amazon S3 for access
+          across devices, or exported as local JSON files.
         </p>
 
         {/* ---------------------------------------------------------------- */}
@@ -45,14 +43,14 @@ export default function DocsPage() {
         <section className="mt-10">
           <h2 className="text-lg font-semibold text-fg">How it works</h2>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            The pipeline runs entirely client-side and transforms raw footage into a
-            route-aligned overlay in five stages.
+            The pipeline runs entirely client-side and transforms raw footage into a route-aligned
+            overlay in five stages.
           </p>
 
           <ol className="mt-6 flex flex-col gap-8 pl-5 list-decimal leading-relaxed text-fg-secondary marker:font-semibold marker:text-fg">
             <li>
-              <strong className="text-fg">Pose estimation.</strong> The app samples a frame
-              roughly every 100&nbsp;ms and runs{" "}
+              <strong className="text-fg">Pose estimation.</strong> The app samples a frame roughly
+              every 100&nbsp;ms and runs{" "}
               <span className="font-mono text-fg">MediaPipe Pose Landmarker</span> to locate 33
               BlazePose keypoints per frame. A crop window locks onto the climber you tapped and
               follows them frame-to-frame, so a small-in-frame subject still resolves cleanly, and
@@ -78,10 +76,10 @@ export default function DocsPage() {
             </li>
             <li>
               <strong className="text-fg">Feature extraction.</strong> ORB (Oriented FAST and
-              Rotated BRIEF) descriptors are sampled from the wall inside the Route box. These encode
-              the rock&apos;s texture as a fingerprint that can be recognised in a separate photo. When
-              the camera pans during the climb, features are gathered across several keyframes so the
-              whole wall stays represented.
+              Rotated BRIEF) descriptors are sampled from the wall inside the Route box. These
+              encode the rock&apos;s texture as a fingerprint that can be recognised in a separate
+              photo. When the camera pans during the climb, features are gathered across several
+              keyframes so the whole wall stays represented.
               <Figure
                 src="/docs/orb-features.jpg"
                 alt="Video frame overlaid with red ORB feature points densely covering the boulder's textured face"
@@ -135,14 +133,14 @@ export default function DocsPage() {
                   <td className="px-4 py-3 font-mono text-fg">
                     MediaPipe Pose Landmarker (Lite / Full / Heavy)
                   </td>
-                  <td className="px-4 py-3">33 BlazePose keypoints inc. hands &amp; feet, GPU delegate</td>
+                  <td className="px-4 py-3">
+                    33 BlazePose keypoints inc. hands &amp; feet, GPU delegate
+                  </td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Computer vision</td>
                   <td className="px-4 py-3 font-mono text-fg">OpenCV.js 4.12 (WASM)</td>
-                  <td className="px-4 py-3">
-                    ORB detection, BFMatcher, findHomography (RANSAC)
-                  </td>
+                  <td className="px-4 py-3">ORB detection, BFMatcher, findHomography (RANSAC)</td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3">Video encoding</td>
@@ -157,9 +155,7 @@ export default function DocsPage() {
                 <tr>
                   <td className="px-4 py-3">Cloud storage</td>
                   <td className="px-4 py-3 font-mono text-fg">Amazon S3 (AWS SDK v3)</td>
-                  <td className="px-4 py-3">
-                    Runs saved under RouteData/state/area/route/
-                  </td>
+                  <td className="px-4 py-3">Runs saved under RouteData/state/area/route/</td>
                 </tr>
               </tbody>
             </table>
@@ -176,9 +172,9 @@ export default function DocsPage() {
             <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">1. Prepare your footage</p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                Film your climbing run in portrait or landscape — either works. The camera
-                should be stationary and include the entire wall section. For distant or
-                small-in-frame climbers, zoom in as much as possible to improve pose accuracy.
+                Film your climbing run in portrait or landscape — either works. The camera should be
+                stationary and include the entire wall section. For distant or small-in-frame
+                climbers, zoom in as much as possible to improve pose accuracy.
               </p>
             </div>
 
@@ -189,30 +185,30 @@ export default function DocsPage() {
                 <Link href="/scan" className="text-fg hover:underline">
                   Scan page
                 </Link>
-                , choose a video file or record one on the spot with your camera. The video stays
-                on your device — nothing is uploaded yet.
+                , choose a video file or record one on the spot with your camera. The video stays on
+                your device — nothing is uploaded yet.
               </p>
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
               <p className="text-sm font-semibold text-fg">3. Mark the climber and scan</p>
               <p className="mt-1.5 text-base text-fg-secondary leading-relaxed">
-                Tap the climber on the first frame to lock tracking onto them, then drag the
-                white <strong className="text-fg">Climber</strong> and amber{" "}
+                Tap the climber on the first frame to lock tracking onto them, then drag the white{" "}
+                <strong className="text-fg">Climber</strong> and amber{" "}
                 <strong className="text-fg">Route</strong> boxes to frame the shot. Click{" "}
-                <strong className="text-fg">Scan video</strong> to begin — a progress view shows
-                the current frame, and processing finishes with the traced climb ready to review.
+                <strong className="text-fg">Scan video</strong> to begin — a progress view shows the
+                current frame, and processing finishes with the traced climb ready to review.
               </p>
               <p className="mt-2 text-base text-fg-secondary">
-                Open the <strong className="text-fg">Settings</strong> popover (gear icon) to
-                choose a <strong className="text-fg">detection quality</strong> tier — Fast,
-                Balanced, or Accurate (see{" "}
+                Open the <strong className="text-fg">Settings</strong> popover (gear icon) to choose
+                a <strong className="text-fg">detection quality</strong> tier — Fast, Balanced, or
+                Accurate (see{" "}
                 <a href="#quality" className="text-fg hover:underline">
                   Detection quality
                 </a>{" "}
                 below). The same popover exposes the pose model, detection frequency, and the{" "}
-                <strong className="text-fg">Moving camera</strong> toggle for panning, handheld,
-                or shaky shots where the camera moves during the climb.
+                <strong className="text-fg">Moving camera</strong> toggle for panning, handheld, or
+                shaky shots where the camera moves during the climb.
               </p>
               <p className="mt-2 text-base text-fg-secondary">
                 Lighting is handled automatically — there are no manual exposure controls to set
@@ -232,8 +228,8 @@ export default function DocsPage() {
                 Watch the traced climb on the review step. A{" "}
                 <strong className="text-fg">Skeleton style</strong> panel lets you change limb and
                 joint colours with the colour pickers and adjust line width and joint radius with
-                the sliders. Changes take effect on the next render. From here you can save the
-                raw scan or continue to the route photo.
+                the sliders. Changes take effect on the next render. From here you can save the raw
+                scan or continue to the route photo.
               </p>
             </div>
 
@@ -261,9 +257,9 @@ export default function DocsPage() {
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             Lighting is handled automatically — there are no manual exposure or contrast controls.
             When the scan starts, the app analyses the reference frame (measuring exposure,
-            contrast, and sharpness inside the Climber and Route boxes) and adapts its
-            preprocessing to what it finds, so overexposed, backlit, and low-contrast footage all
-            work without any setup.
+            contrast, and sharpness inside the Climber and Route boxes) and adapts its preprocessing
+            to what it finds, so overexposed, backlit, and low-contrast footage all work without any
+            setup.
           </p>
 
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
@@ -316,9 +312,9 @@ export default function DocsPage() {
           <h2 className="text-lg font-semibold text-fg">Detection quality</h2>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             A single <strong className="text-fg">quality tier</strong> — chosen in the Settings
-            popover on the Scan detection step — bundles the low-level detection knobs into one
-            Fast / Balanced / Accurate choice. Every tier crops and tracks the climber the same
-            way; the tier trades scan speed against pose fidelity.
+            popover on the Scan detection step — bundles the low-level detection knobs into one Fast
+            / Balanced / Accurate choice. Every tier crops and tracks the climber the same way; the
+            tier trades scan speed against pose fidelity.
           </p>
 
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -331,7 +327,9 @@ export default function DocsPage() {
             </div>
 
             <div className="border-l-2 border-edge/40 px-4 py-2">
-              <p className="text-sm font-semibold text-fg">Balanced <span className="font-normal text-fg-muted">(default)</span></p>
+              <p className="text-sm font-semibold text-fg">
+                Balanced <span className="font-normal text-fg-muted">(default)</span>
+              </p>
               <ul className="mt-2 flex flex-col gap-1.5 pl-4 list-disc text-sm text-fg-secondary">
                 <li>Full model, moderate sampling (every 10th frame).</li>
                 <li>Densifies clearly fast segments to catch quick moves.</li>
@@ -348,19 +346,19 @@ export default function DocsPage() {
           </div>
 
           <p className="mt-4 text-base text-fg-secondary leading-relaxed">
-            <strong className="text-fg">Detection frequency (frame step)</strong> — how often
-            full pose detection runs, overridable in the same popover (1–30). A step of 1 runs pose
-            on every sampled frame (most accurate, slowest); a step of 10 runs it every 10th frame
-            and fills the rest by interpolation. Between detected anchors the pipeline
-            automatically re-samples segments where the climber moves quickly, so fast moves stay
-            sharp even at a coarse step.
+            <strong className="text-fg">Detection frequency (frame step)</strong> — how often full
+            pose detection runs, overridable in the same popover (1–30). A step of 1 runs pose on
+            every sampled frame (most accurate, slowest); a step of 10 runs it every 10th frame and
+            fills the rest by interpolation. Between detected anchors the pipeline automatically
+            re-samples segments where the climber moves quickly, so fast moves stay sharp even at a
+            coarse step.
           </p>
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
-            <strong className="text-fg">Smoothing</strong> — after interpolation a One-Euro
-            adaptive filter is applied over every keypoint track. Brief dropouts (frames where a
-            joint was not detected) are filled in first. The filter smooths harder when a joint is
-            nearly still and eases off during fast motion, cutting skeletal jitter in the final
-            overlay without adding noticeable lag.
+            <strong className="text-fg">Smoothing</strong> — after interpolation a One-Euro adaptive
+            filter is applied over every keypoint track. Brief dropouts (frames where a joint was
+            not detected) are filled in first. The filter smooths harder when a joint is nearly
+            still and eases off during fast motion, cutting skeletal jitter in the final overlay
+            without adding noticeable lag.
           </p>
         </section>
 
@@ -372,16 +370,13 @@ export default function DocsPage() {
           <p className="mt-3 text-base text-fg-secondary leading-relaxed">
             All processing — video decoding, pose inference, ORB feature extraction, homography
             computation, and video rendering — happens locally in your browser.{" "}
-            <strong className="text-fg">
-              No video frames or images are sent to any server.
-            </strong>
+            <strong className="text-fg">No video frames or images are sent to any server.</strong>
           </p>
           <p className="mt-2 text-base text-fg-secondary leading-relaxed">
-            When you click <strong className="text-fg">Save to cloud</strong>, only the
-            processed JSON data (pose keypoints, ORB descriptors, and metadata) is uploaded to
-            Amazon S3. The original video and route photo are never uploaded. You can also
-            save runs to your local device as <code className="text-fg">.json</code>{" "}
-            files using the File System Access API.
+            When you click <strong className="text-fg">Save to cloud</strong>, only the processed
+            JSON data (pose keypoints, ORB descriptors, and metadata) is uploaded to Amazon S3. The
+            original video and route photo are never uploaded. You can also save runs to your local
+            device as <code className="text-fg">.json</code> files using the File System Access API.
           </p>
         </section>
 
@@ -394,41 +389,76 @@ export default function DocsPage() {
             <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 The pose overlay looks wrong / skeleton is in the wrong place
-                <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                <svg
+                  className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                  />
+                </svg>
               </summary>
               <div className="px-5 pb-4 pt-1 text-sm text-fg-secondary leading-relaxed">
-                This usually means too few ORB matches (under 10). Ensure the route photo covers
-                the same section of wall visible in the video frame and is shot from a similar
-                angle. Photos taken perpendicular to the wall work best. Avoid blurry or very
-                dark images.
+                This usually means too few ORB matches (under 10). Ensure the route photo covers the
+                same section of wall visible in the video frame and is shot from a similar angle.
+                Photos taken perpendicular to the wall work best. Avoid blurry or very dark images.
               </div>
             </details>
 
             <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 Processing is very slow
-                <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                <svg
+                  className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                  />
+                </svg>
               </summary>
               <div className="px-5 pb-4 pt-1 text-sm text-fg-secondary leading-relaxed">
-                MediaPipe requires a browser with WebGL / GPU support. Make
-                sure hardware acceleration is enabled in your browser settings. Very long videos
-                (over 5 minutes) can take several minutes to process. You can trim to just the
-                crux section before uploading, pick the <strong className="text-fg">Fast</strong>{" "}
-                quality tier, or increase the detection frequency (frame step) in Settings to skip
-                frames between pose detections.
+                MediaPipe requires a browser with WebGL / GPU support. Make sure hardware
+                acceleration is enabled in your browser settings. Very long videos (over 5 minutes)
+                can take several minutes to process. You can trim to just the crux section before
+                uploading, pick the <strong className="text-fg">Fast</strong> quality tier, or
+                increase the detection frequency (frame step) in Settings to skip frames between
+                pose detections.
               </div>
             </details>
 
             <details className="group rounded-md border border-edge/50 bg-surface/35">
               <summary className="flex cursor-pointer items-center justify-between px-5 py-3 text-sm font-medium text-fg select-none hover:text-fg transition">
                 The page is stuck on &ldquo;Loading OpenCV&rdquo; or &ldquo;Loading model&rdquo;
-                <svg className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+                <svg
+                  className="h-4 w-4 text-fg-muted transition-transform group-open:rotate-180"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                  />
+                </svg>
               </summary>
               <div className="px-5 pb-4 pt-1 text-sm text-fg-secondary leading-relaxed">
                 OpenCV (~8 MB WASM) and the pose model are loaded fresh each session. A slow
-                connection will cause a longer initial wait. Reload the page and wait a few
-                seconds. If it persists, check the browser console for network errors — the
-                assets may be blocked by a browser extension or firewall.
+                connection will cause a longer initial wait. Reload the page and wait a few seconds.
+                If it persists, check the browser console for network errors — the assets may be
+                blocked by a browser extension or firewall.
               </div>
             </details>
           </div>

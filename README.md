@@ -34,11 +34,11 @@ tier as the primary detection control (`utils/poseTiers.ts`). Each tier resolves
 to a config bundle that drives the **MediaPipe Pose Landmarker** (33 BlazePose
 keypoints including hands and feet):
 
-| Tier | Model variant | maxPoses | frameStep | Gap-recovery frames | Filter tolerance |
-| --- | --- | --- | --- | --- | --- |
-| Fast | Lite | 2 | 15 | 15 | 4 |
-| Balanced (default) | Full | 3 | 10 | 30 | 3 |
-| Accurate | Heavy | 4 | 5 | 45 | 2 |
+| Tier               | Model variant | maxPoses | frameStep | Gap-recovery frames | Filter tolerance |
+| ------------------ | ------------- | -------- | --------- | ------------------- | ---------------- |
+| Fast               | Lite          | 2        | 15        | 15                  | 4                |
+| Balanced (default) | Full          | 3        | 10        | 30                  | 3                |
+| Accurate           | Heavy         | 4        | 5         | 45                  | 2                |
 
 An **Advanced** panel still overrides the individual model variant and frame
 step (detection stride) for power users; the tier remains the source of truth
@@ -130,7 +130,7 @@ filmstrip and stepper for jumping through sampled frames and flagged stretches.
 
 A **Boost contrast** control in the Climber panel keeps the overlay legible
 against the wall it is drawn on. It is **opt-in and off by default**: the backdrop
-is always sampled (so poor contrast can be *detected*), but adaptation is only
+is always sampled (so poor contrast can be _detected_), but adaptation is only
 applied once the user turns the boost on. When the wall is detected to give the
 palette poor contrast (`paletteContrastIsPoor`), the panel surfaces a one-click
 "Low contrast on this wall — boost it" prompt; otherwise it shows a plain toggle.
@@ -145,7 +145,7 @@ Skeleton keeps its limb identities — saturation is only ever raised (to rescue
 hue a lightness push would wash out), and the result is clamped away from pure
 black/white so a nudge stays a nudge rather than a blackout. The target is
 deliberately gentler than WCAG's 3:1 graphical-object bar: on a bright wall a
-bright overlay cannot get *brighter* than the wall, so a hard 3:1 would force it
+bright overlay cannot get _brighter_ than the wall, so a hard 3:1 would force it
 to near-black. The review step samples the wall crop; the route-photo overlay and
 the exported/baked WebM sample the route photo. Turning the boost off renders the
 authored palette exactly — the feature is purely additive, and nothing is
@@ -161,15 +161,15 @@ white joint is a neutral anchor and is exempt from adaptation.
 
 ## Pages
 
-| Route | Purpose | Auth required |
-|---|---|---|
-| `/` | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary | No |
-| `/login` | Sign in / sign up with email & password | No |
-| `/scan` | Scan a climbing video, preview landmarks, optionally overlay on a route photo | Yes |
-| `/compare` | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment | Yes |
-| `/profile` | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes |
-| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal | Yes |
-| `/docs` | Usage guide | No |
+| Route               | Purpose                                                                                                                                                              | Auth required |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `/`                 | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary              | No            |
+| `/login`            | Sign in / sign up with email & password                                                                                                                              | No            |
+| `/scan`             | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                        | Yes           |
+| `/compare`          | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment                 | Yes           |
+| `/profile`          | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes           |
+| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal                              | Yes           |
+| `/docs`             | Usage guide                                                                                                                                                          | No            |
 
 ## Interactive crop boxes
 
@@ -184,10 +184,10 @@ adjustable at the same time — the inner **Climber** box and the outer **Route*
 box around it (drag a box's interior to move it, a handle to resize). Re-tap to
 pick a different climber.
 
-| Target | Purpose |
-|---|---|
-| Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically. |
-| Route (outer) | Feature-matching region on the first video frame. Starts framed around the climber — inset from the frame edges with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to trim it down to just the rock face and line the climb up with the route photo. |
+| Target          | Purpose                                                                                                                                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically.                                                        |
+| Route (outer)   | Feature-matching region on the first video frame. Starts framed around the climber — inset from the frame edges with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to trim it down to just the rock face and line the climb up with the route photo. |
 
 The two boxes are independent — resize each freely. The Route is not tied to the
 Climber, so you can shrink it to just the target face even when the climber is
@@ -204,24 +204,24 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
 **Developer view** is enabled.
 
 1. **Choose clip** — upload a clip or record with camera (both equal-weight),
-  with a one-line note on what makes a good video.
+   with a one-line note on what makes a good video.
 2. **Mark detection** — tap the climber to lock tracking onto them (a coaching
-  pill on the media shows where to tap), then frame the route. Pressing
-  Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
-  blocking. Quality tier, pose model, sampling stride, the **Moving camera**
-  toggle, and the **Developer view** switch live in a single
-  **Settings** popover.
+   pill on the media shows where to tap), then frame the route. Pressing
+   Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
+   blocking. Quality tier, pose model, sampling stride, the **Moving camera**
+   toggle, and the **Developer view** switch live in a single
+   **Settings** popover.
 3. **Review climb** — watch the traced climb (clean by default; feature points
-  appear only in Developer view). The promoted primary action, **Place on
-  route**, opens the route-photo overlay; **Save scan** (raw scan) is the
-  secondary action.
+   appear only in Developer view). The promoted primary action, **Place on
+   route**, opens the route-photo overlay; **Save scan** (raw scan) is the
+   secondary action.
 4. **Place on route** — add a route photo (**Take photo** on the spot or
-  **Choose from library**). A preliminary match runs automatically and
-  auto-frames the climb by projecting the saved climber crop into the photo, so
-  the crop box lands over the route ready to confirm; adjust it if needed, then
-  **Place on route**. If the preliminary match is too weak to auto-frame, a hint
-  asks you to drag the box over the route area yourself. **Export video**
-  downloads the annotated clip; match statistics are Developer-view only.
+   **Choose from library**). A preliminary match runs automatically and
+   auto-frames the climb by projecting the saved climber crop into the photo, so
+   the crop box lands over the route ready to confirm; adjust it if needed, then
+   **Place on route**. If the preliminary match is too weak to auto-frame, a hint
+   asks you to drag the box over the route area yourself. **Export video**
+   downloads the annotated clip; match statistics are Developer-view only.
 
 Metadata entry is essentials-first (location + run type, with location required
 for cloud upload — the Upload button stays disabled until it is filled), and
@@ -327,22 +327,22 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 
 ### Environment variables
 
-| Variable | Purpose | Example |
-|---|---|---|
-| `NEXT_PUBLIC_FIREBASE_API_KEY` | Firebase web API key | — |
-| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Firebase auth domain | `project.firebaseapp.com` |
-| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Firebase project ID | `route-scanner-xxxxx` |
-| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | Firebase storage bucket | `project.firebasestorage.app` |
-| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID | — |
-| `NEXT_PUBLIC_FIREBASE_APP_ID` | Firebase app ID | — |
-| `FIREBASE_PROJECT_ID` | Firebase project ID (Admin SDK, server-side) | — |
-| `FIREBASE_CLIENT_EMAIL` | Service account client email (server-side) | — |
-| `FIREBASE_PRIVATE_KEY` | Service account private key (server-side) | — |
-| `AWS_REGION` | S3 bucket region | `us-east-2` |
-| `AWS_ACCESS_KEY_ID` | IAM access key | — |
-| `AWS_SECRET_ACCESS_KEY` | IAM secret key | — |
-| `S3_BUCKET_NAME` | Bucket name | `route-renderer-bucket` |
-| `S3_KEY_PREFIX` | Key prefix (default `RouteData`) | `RouteData` |
+| Variable                                   | Purpose                                      | Example                       |
+| ------------------------------------------ | -------------------------------------------- | ----------------------------- |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`             | Firebase web API key                         | —                             |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`         | Firebase auth domain                         | `project.firebaseapp.com`     |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`          | Firebase project ID                          | `route-scanner-xxxxx`         |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | Firebase storage bucket                      | `project.firebasestorage.app` |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID                 | —                             |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`              | Firebase app ID                              | —                             |
+| `FIREBASE_PROJECT_ID`                      | Firebase project ID (Admin SDK, server-side) | —                             |
+| `FIREBASE_CLIENT_EMAIL`                    | Service account client email (server-side)   | —                             |
+| `FIREBASE_PRIVATE_KEY`                     | Service account private key (server-side)    | —                             |
+| `AWS_REGION`                               | S3 bucket region                             | `us-east-2`                   |
+| `AWS_ACCESS_KEY_ID`                        | IAM access key                               | —                             |
+| `AWS_SECRET_ACCESS_KEY`                    | IAM secret key                               | —                             |
+| `S3_BUCKET_NAME`                           | Bucket name                                  | `route-renderer-bucket`       |
+| `S3_KEY_PREFIX`                            | Key prefix (default `RouteData`)             | `RouteData`                   |
 
 Create a `.env.local` file with these values. **Never commit credentials.**
 
@@ -351,37 +351,37 @@ The Firebase Admin private key can be downloaded from the Firebase console:
 
 ### API routes
 
-| Route | Method | Purpose |
-|---|---|---|
-| `/api/s3/put` | POST | Upload run JSON |
-| `/api/s3/get` | GET | Download run JSON by key |
-| `/api/s3/list` | GET | List objects/prefixes (pagination, delimiter) |
-| `/api/s3/delete` | DELETE | Remove a run |
-| `/api/auth/session` | POST/DELETE | Create/destroy Firebase session cookie |
-| `/api/profile` | GET/PUT | Read/update own profile |
-| `/api/profile/[userId]` | GET | Read any user's public profile |
-| `/api/profile/[userId]/climbs` | GET | List any user's climbs (raw S3 keys) |
-| `/api/profile/[userId]/climbs/page` | GET | Paginated climb summaries with thumbnails, filters |
-| `/api/profile/[userId]/climbs/detail` | GET | Single climb detail by S3 key |
-| `/api/profile/[userId]/pins` | GET | GPS pins for a user's climbs (map view) |
-| `/api/profile/follow` | GET/POST/DELETE | List/add/remove followed users |
-| `/api/profile/search` | GET | Search users by name or email |
+| Route                                 | Method          | Purpose                                            |
+| ------------------------------------- | --------------- | -------------------------------------------------- |
+| `/api/s3/put`                         | POST            | Upload run JSON                                    |
+| `/api/s3/get`                         | GET             | Download run JSON by key                           |
+| `/api/s3/list`                        | GET             | List objects/prefixes (pagination, delimiter)      |
+| `/api/s3/delete`                      | DELETE          | Remove a run                                       |
+| `/api/auth/session`                   | POST/DELETE     | Create/destroy Firebase session cookie             |
+| `/api/profile`                        | GET/PUT         | Read/update own profile                            |
+| `/api/profile/[userId]`               | GET             | Read any user's public profile                     |
+| `/api/profile/[userId]/climbs`        | GET             | List any user's climbs (raw S3 keys)               |
+| `/api/profile/[userId]/climbs/page`   | GET             | Paginated climb summaries with thumbnails, filters |
+| `/api/profile/[userId]/climbs/detail` | GET             | Single climb detail by S3 key                      |
+| `/api/profile/[userId]/pins`          | GET             | GPS pins for a user's climbs (map view)            |
+| `/api/profile/follow`                 | GET/POST/DELETE | List/add/remove followed users                     |
+| `/api/profile/search`                 | GET             | Search users by name or email                      |
 
 ## Stack
 
-| Concern | Library |
-|---|---|
-| Framework | Next.js 16 App Router |
-| Language | TypeScript (strict) |
-| Styling | Tailwind CSS v4 |
-| Authentication | Firebase Auth (email/password, session cookies) |
-| Pose detection | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate) |
-| Computer vision | OpenCV.js 4.12 (WASM, main thread) |
-| Video encoding | MediaRecorder API (WebM) |
-| Maps | Leaflet + react-leaflet, OpenTopoMap tiles, leaflet.markercluster |
-| Geocoding | Nominatim (OpenStreetMap, no API key required) |
-| Photo cropping | react-image-crop (circular crop, canvas output) |
-| Testing | Vitest + jsdom + Testing Library |
+| Concern         | Library                                                           |
+| --------------- | ----------------------------------------------------------------- |
+| Framework       | Next.js 16 App Router                                             |
+| Language        | TypeScript (strict)                                               |
+| Styling         | Tailwind CSS v4                                                   |
+| Authentication  | Firebase Auth (email/password, session cookies)                   |
+| Pose detection  | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate)     |
+| Computer vision | OpenCV.js 4.12 (WASM, main thread)                                |
+| Video encoding  | MediaRecorder API (WebM)                                          |
+| Maps            | Leaflet + react-leaflet, OpenTopoMap tiles, leaflet.markercluster |
+| Geocoding       | Nominatim (OpenStreetMap, no API key required)                    |
+| Photo cropping  | react-image-crop (circular crop, canvas output)                   |
+| Testing         | Vitest + jsdom + Testing Library                                  |
 
 ## Development
 
@@ -465,5 +465,3 @@ S3_BUCKET_NAME
 `.github/workflows/ci.yml` runs type-check (`tsc --noEmit`), Vitest, and
 ESLint on every push and pull request. Vercel deploys in parallel — if CI
 fails, the deploy should be cancelled via the Vercel dashboard.
-
-

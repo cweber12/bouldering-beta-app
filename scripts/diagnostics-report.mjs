@@ -112,7 +112,11 @@ function table(headers, rows) {
     Math.max(h.label.length, ...rows.map((r) => String(r[h.key] ?? "").length)),
   );
   const fmtRow = (cells) =>
-    "  " + cells.map((c, i) => String(c ?? "").padEnd(widths[i])).join("  ").trimEnd();
+    "  " +
+    cells
+      .map((c, i) => String(c ?? "").padEnd(widths[i]))
+      .join("  ")
+      .trimEnd();
   const lines = [
     fmtRow(headers.map((h) => h.label)),
     fmtRow(widths.map((w) => "-".repeat(w))),
@@ -145,9 +149,13 @@ function reportScans(records) {
   const withBad = records.filter((r) => r.result.badStretches.length > 0).length;
 
   console.log(`  unique videos:    ${uniqueVideos}`);
-  console.log(`  detection rate:   avg ${pct(rate.avg)}  (min ${pct(rate.min)}, max ${pct(rate.max)})`);
+  console.log(
+    `  detection rate:   avg ${pct(rate.avg)}  (min ${pct(rate.min)}, max ${pct(rate.max)})`,
+  );
   console.log(`  confidence avg:   ${num(conf.avg)}  (min ${num(conf.min)}, max ${num(conf.max)})`);
-  console.log(`  ref ORB keypts:   avg ${num(refKp.avg, 0)}  (min ${num(refKp.min, 0)}, max ${num(refKp.max, 0)})`);
+  console.log(
+    `  ref ORB keypts:   avg ${num(refKp.avg, 0)}  (min ${num(refKp.min, 0)}, max ${num(refKp.max, 0)})`,
+  );
   console.log(`  with bad stretch: ${withBad} / ${records.length}`);
 
   // By capture mode.
@@ -222,8 +230,12 @@ function reportMatches(records) {
   const queryKp = stat(records.map((r) => r.input.query.queryKeypointCount));
 
   console.log(`  homography found: ${found} / ${records.length}  (${pct(found / records.length)})`);
-  console.log(`  inlier ratio:     avg ${pct(ratio.avg)}  (min ${pct(ratio.min)}, max ${pct(ratio.max)})`);
-  console.log(`  query keypoints:  avg ${num(queryKp.avg, 0)}  (min ${num(queryKp.min, 0)}, max ${num(queryKp.max, 0)})`);
+  console.log(
+    `  inlier ratio:     avg ${pct(ratio.avg)}  (min ${pct(ratio.min)}, max ${pct(ratio.max)})`,
+  );
+  console.log(
+    `  query keypoints:  avg ${num(queryKp.avg, 0)}  (min ${num(queryKp.min, 0)}, max ${num(queryKp.max, 0)})`,
+  );
 
   // Failure-reason distribution.
   console.log("\n  By failure reason:");
@@ -323,7 +335,11 @@ function toCsv(columns, records) {
 const ratioParts = (r) =>
   typeof r.result.inlierRatio === "number"
     ? { avg: r.result.inlierRatio, min: "", max: "" }
-    : { avg: r.result.inlierRatio.avg, min: r.result.inlierRatio.min, max: r.result.inlierRatio.max };
+    : {
+        avg: r.result.inlierRatio.avg,
+        min: r.result.inlierRatio.min,
+        max: r.result.inlierRatio.max,
+      };
 
 const SCAN_COLUMNS = [
   { header: "scanId", value: (r) => r.scanId },
@@ -434,7 +450,9 @@ function main() {
   console.log(`Diagnostics report — ${opts.dir}${opts.app ? `  (appVersion=${opts.app})` : ""}`);
 
   const scans = opts.matchesOnly ? null : load("scans.jsonl", (r) => r.scanId);
-  const matches = opts.scansOnly ? null : load("matches.jsonl", (r) => `${r.scanId}|${r.imageHash}`);
+  const matches = opts.scansOnly
+    ? null
+    : load("matches.jsonl", (r) => `${r.scanId}|${r.imageHash}`);
 
   if (opts.csv) {
     console.log("Writing CSV (one flat row per record):");

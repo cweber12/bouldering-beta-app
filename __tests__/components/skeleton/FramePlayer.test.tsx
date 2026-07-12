@@ -56,14 +56,13 @@ describe("FramePlayer", () => {
     const bitmap = { width: 320, height: 180, close } as unknown as ImageBitmap;
     const imageFile = new File(["x"], "frame.png", { type: "image/png" });
 
-    vi.stubGlobal("createImageBitmap", vi.fn(async () => bitmap));
+    vi.stubGlobal(
+      "createImageBitmap",
+      vi.fn(async () => bitmap),
+    );
 
     const { unmount } = render(
-      <FramePlayer
-        imageFile={imageFile}
-        layers={[{ frames: [] }]}
-        duration={1}
-      />,
+      <FramePlayer imageFile={imageFile} layers={[{ frames: [] }]} duration={1} />,
     );
 
     await waitFor(() => {

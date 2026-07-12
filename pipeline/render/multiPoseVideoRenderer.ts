@@ -102,9 +102,7 @@ export async function renderMultiPoseVideo({
   );
 
   // Derive unified timeline: earliest first-ts across all layers to latest last-ts.
-  const allFirstTs = sortedLayerFrames.map((sf) =>
-    sf.length > 0 ? sf[0].timestamp : Infinity,
-  );
+  const allFirstTs = sortedLayerFrames.map((sf) => (sf.length > 0 ? sf[0].timestamp : Infinity));
   const allLastTs = sortedLayerFrames.map((sf) =>
     sf.length > 0 ? sf[sf.length - 1].timestamp : -Infinity,
   );
@@ -132,9 +130,15 @@ export async function renderMultiPoseVideo({
   const layerStyles: SkeletonStyle[] = layers.map((layer, li) => {
     const stable = computeStableBodyScale(
       sortedLayerFrames[li].map((f) => ({
-        keypoints: f.keypoints.length > 0
-          ? buildTransformedKeypoints(f, homographies[li], layer.videoMeta.width, layer.videoMeta.height)
-          : {},
+        keypoints:
+          f.keypoints.length > 0
+            ? buildTransformedKeypoints(
+                f,
+                homographies[li],
+                layer.videoMeta.width,
+                layer.videoMeta.height,
+              )
+            : {},
       })),
       canvas.width,
       canvas.height,
@@ -145,11 +149,9 @@ export async function renderMultiPoseVideo({
   // Per-layer floor cursors and keypoint caches, carried across drawFrame calls
   // for O(n) interpolated lookup.
   const cursors = Array.from({ length: layers.length }, () => 0);
-  const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] =
-    layers.map(() => null);
+  const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] = layers.map(() => null);
   const cachedFloorAt: number[] = layers.map(() => -1);
-  const cachedCeilKp: (Record<string, { x: number; y: number }> | null)[] =
-    layers.map(() => null);
+  const cachedCeilKp: (Record<string, { x: number; y: number }> | null)[] = layers.map(() => null);
   const cachedCeilAt: number[] = layers.map(() => -1);
 
   return recordOverlayVideo({
@@ -169,10 +171,7 @@ export async function renderMultiPoseVideo({
         if (sf.length === 0) continue;
 
         // Advance floor cursor to last frame with timestamp ≤ t.
-        while (
-          cursors[li] < sf.length - 1 &&
-          sf[cursors[li] + 1].timestamp <= t
-        ) {
+        while (cursors[li] < sf.length - 1 && sf[cursors[li] + 1].timestamp <= t) {
           cursors[li]++;
         }
 
@@ -180,9 +179,15 @@ export async function renderMultiPoseVideo({
 
         // Compute / reuse transformed keypoints for floor frame.
         if (cachedFloorAt[li] !== fi) {
-          cachedFloorKp[li] = sf[fi].keypoints.length > 0
-            ? buildTransformedKeypoints(sf[fi], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-            : null;
+          cachedFloorKp[li] =
+            sf[fi].keypoints.length > 0
+              ? buildTransformedKeypoints(
+                  sf[fi],
+                  homographies[li],
+                  layers[li].videoMeta.width,
+                  layers[li].videoMeta.height,
+                )
+              : null;
           cachedFloorAt[li] = fi;
         }
 
@@ -191,16 +196,26 @@ export async function renderMultiPoseVideo({
         const ci = Math.min(fi + 1, sf.length - 1);
 
         if (cachedCeilAt[li] !== ci) {
-          cachedCeilKp[li] = ci !== fi && sf[ci].keypoints.length > 0
-            ? buildTransformedKeypoints(sf[ci], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-            : null;
+          cachedCeilKp[li] =
+            ci !== fi && sf[ci].keypoints.length > 0
+              ? buildTransformedKeypoints(
+                  sf[ci],
+                  homographies[li],
+                  layers[li].videoMeta.width,
+                  layers[li].videoMeta.height,
+                )
+              : null;
           cachedCeilAt[li] = ci;
         }
 
         if (cachedCeilKp[li] && ci !== fi) {
           const dt = sf[ci].timestamp - sf[fi].timestamp;
           const alpha = dt > 0 ? (t - sf[fi].timestamp) / dt : 0;
-          drawSkeleton(ctx, lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha), layerStyles[li]);
+          drawSkeleton(
+            ctx,
+            lerpKeypoints(cachedFloorKp[li]!, cachedCeilKp[li]!, alpha),
+            layerStyles[li],
+          );
         } else {
           drawSkeleton(ctx, cachedFloorKp[li]!, layerStyles[li]);
         }

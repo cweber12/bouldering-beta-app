@@ -67,20 +67,20 @@ export function estimateRouteCrop(
   if (!h) return null;
 
   const corners = [
-    { x: box.x,             y: box.y              },
-    { x: box.x + box.width, y: box.y              },
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
     { x: box.x + box.width, y: box.y + box.height },
-    { x: box.x,             y: box.y + box.height },
-  ].map(pt => applyHomographyMatrix(h, pt.x, pt.y));
+    { x: box.x, y: box.y + box.height },
+  ].map((pt) => applyHomographyMatrix(h, pt.x, pt.y));
 
-  const xs = corners.map(c => c.x);
-  const ys = corners.map(c => c.y);
+  const xs = corners.map((c) => c.x);
+  const ys = corners.map((c) => c.y);
   if (![...xs, ...ys].every(Number.isFinite)) return null;
 
   // Clamp the projected bounding box to the photo bounds.
-  const left   = Math.max(0, Math.min(...xs));
-  const top    = Math.max(0, Math.min(...ys));
-  const right  = Math.min(photoWidth,  Math.max(...xs));
+  const left = Math.max(0, Math.min(...xs));
+  const top = Math.max(0, Math.min(...ys));
+  const right = Math.min(photoWidth, Math.max(...xs));
   const bottom = Math.min(photoHeight, Math.max(...ys));
 
   let w = (right - left) / photoWidth;

@@ -25,10 +25,13 @@ function CompareRedirect() {
     const csv = sp.get("keys");
     const single = sp.get("key");
     const keys = csv
-      ? csv.split(",").map((k) => k.trim()).filter(Boolean)
+      ? csv
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean)
       : single
-      ? [single]
-      : [];
+        ? [single]
+        : [];
 
     // Recover owner + route context from the first key when the query omits them.
     const segs = keys[0]?.split("/");

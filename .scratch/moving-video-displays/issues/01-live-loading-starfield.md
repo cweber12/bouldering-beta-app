@@ -19,7 +19,7 @@ frame and frozen for the whole run.
   on the periodic cadence (`ctx.getImageData` at line 666, gated by
   `POSE_REANALYSIS_INTERVAL`) plus the current `chosen.keypoints` for climber masking,
   and call the existing `extractWallFeaturePoints(cv, currentFrameData, chosen.keypoints,
-  currentAnalysis, cropOptions, wallCropPx, …)` → `setOrbPreview(...)`. Throttle to a
+currentAnalysis, cropOptions, wallCropPx, …)` → `setOrbPreview(...)`. Throttle to a
   display cadence (~1–2 Hz of processed time), not every detection frame.
 - Perf reuse: in Panning Capture the wall-crop ORB is already extracted per Keyframe in
   `captureKeyframe`; feed those points to the starfield instead of a second extraction

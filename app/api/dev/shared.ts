@@ -40,13 +40,7 @@ const SEGMENT_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /** True when `seg` is a single, traversal-free path segment. */
 export function isSafeSegment(seg: string): boolean {
-  return (
-    seg.length > 0 &&
-    seg.length <= 255 &&
-    seg !== "." &&
-    seg !== ".." &&
-    SEGMENT_RE.test(seg)
-  );
+  return seg.length > 0 && seg.length <= 255 && seg !== "." && seg !== ".." && SEGMENT_RE.test(seg);
 }
 
 /**
@@ -185,8 +179,6 @@ export async function listCorpus(): Promise<CorpusItem[]> {
     }
   }
 
-  items.sort(
-    (a, b) => Number(a.hasSetup) - Number(b.hasSetup) || a.key.localeCompare(b.key),
-  );
+  items.sort((a, b) => Number(a.hasSetup) - Number(b.hasSetup) || a.key.localeCompare(b.key));
   return items;
 }

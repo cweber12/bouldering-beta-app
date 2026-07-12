@@ -32,8 +32,11 @@ function luma(css: string): number {
 
 function hsl(css: string): [number, number, number] {
   let [r, g, b] = parseRgb(css);
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
   const l = (max + min) / 2;
   if (max === min) return [0, 0, l];
   const d = max - min;
@@ -46,7 +49,8 @@ function hsl(css: string): [number, number, number] {
 }
 
 function contrastRatio(a: number, b: number): number {
-  const hi = Math.max(a, b), lo = Math.min(a, b);
+  const hi = Math.max(a, b),
+    lo = Math.min(a, b);
   return (hi + 0.05) / (lo + 0.05);
 }
 
@@ -54,7 +58,10 @@ function contrastRatio(a: number, b: number): number {
 function solidImage(r: number, g: number, b: number, n = 4): ImageData {
   const data = new Uint8ClampedArray(n * 4);
   for (let i = 0; i < n; i++) {
-    data[i * 4] = r; data[i * 4 + 1] = g; data[i * 4 + 2] = b; data[i * 4 + 3] = 255;
+    data[i * 4] = r;
+    data[i * 4 + 1] = g;
+    data[i * 4 + 2] = b;
+    data[i * 4 + 3] = 255;
   }
   return { data, width: n, height: 1, colorSpace: "srgb" } as ImageData;
 }
@@ -75,9 +82,14 @@ describe("computeLumaStats", () => {
   it("computes mean and stdDev on a black/white checkerboard", () => {
     // Two black + two white pixels → mean 0.5, stdDev 0.5.
     const data = new Uint8ClampedArray(16);
-    for (let i = 0; i < 2; i++) { data[i * 4 + 3] = 255; } // black, opaque
+    for (let i = 0; i < 2; i++) {
+      data[i * 4 + 3] = 255;
+    } // black, opaque
     for (let i = 2; i < 4; i++) {
-      data[i * 4] = 255; data[i * 4 + 1] = 255; data[i * 4 + 2] = 255; data[i * 4 + 3] = 255;
+      data[i * 4] = 255;
+      data[i * 4 + 1] = 255;
+      data[i * 4 + 2] = 255;
+      data[i * 4 + 3] = 255;
     }
     const stats = computeLumaStats({ data, width: 4, height: 1, colorSpace: "srgb" } as ImageData);
     expect(stats.meanLuma).toBeCloseTo(0.5, 6);
@@ -85,7 +97,12 @@ describe("computeLumaStats", () => {
   });
 
   it("returns zeroes for an empty image", () => {
-    const stats = computeLumaStats({ data: new Uint8ClampedArray(0), width: 0, height: 0, colorSpace: "srgb" } as ImageData);
+    const stats = computeLumaStats({
+      data: new Uint8ClampedArray(0),
+      width: 0,
+      height: 0,
+      colorSpace: "srgb",
+    } as ImageData);
     expect(stats).toEqual({ meanLuma: 0, stdLuma: 0 });
   });
 });
@@ -160,11 +177,15 @@ describe("adaptColor", () => {
 describe("paletteContrastIsPoor", () => {
   it("flags a wall whose luma sits in the middle of the palette", () => {
     // A mid-luma, busy wall blends with the lime/cyan/orange palette.
-    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.55, stdLuma: 0.15 }))).toBe(true);
+    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.55, stdLuma: 0.15 }))).toBe(
+      true,
+    );
   });
 
   it("does not flag a very dark, flat wall the bright palette clears easily", () => {
-    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.03, stdLuma: 0.01 }))).toBe(false);
+    expect(paletteContrastIsPoor(computeContrastAdjust({ meanLuma: 0.03, stdLuma: 0.01 }))).toBe(
+      false,
+    );
   });
 });
 

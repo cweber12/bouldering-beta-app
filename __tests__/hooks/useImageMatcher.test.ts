@@ -132,7 +132,9 @@ function stubLoadImageSuccess(width = 100, height = 80) {
   let lastPut: ImageData | null = null;
   HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
     drawImage: vi.fn(),
-    putImageData: vi.fn((d: ImageData) => { lastPut = d; }),
+    putImageData: vi.fn((d: ImageData) => {
+      lastPut = d;
+    }),
     getImageData: vi.fn(() => lastPut ?? fakeImageData),
   });
 
@@ -174,9 +176,7 @@ beforeEach(() => {
   );
   // resetAllMocks wipes the factory impl; restore the crop passthrough so the
   // re-anchor path (and the symmetric preprocessing pass) get a real ImageData.
-  (cropImageData as ReturnType<typeof vi.fn>).mockImplementation(
-    (src: ImageData) => src,
-  );
+  (cropImageData as ReturnType<typeof vi.fn>).mockImplementation((src: ImageData) => src);
   // Fixed Capture now computes a gated render homography; default it to a valid
   // identity so happy-path cases reach "done". Degenerate-match cases override
   // this to null to exercise the alignment-failed path.
@@ -253,8 +253,16 @@ describe("useImageMatcher — happy path", () => {
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
 
     // Simulate a real downscale: a smaller ImageData and scale 0.5.
-    const scaledImageData = { data: new Uint8ClampedArray(4), width: 50, height: 40, colorSpace: "srgb" } as ImageData;
-    (downscaleImageData as ReturnType<typeof vi.fn>).mockReturnValue({ imageData: scaledImageData, scale: 0.5 });
+    const scaledImageData = {
+      data: new Uint8ClampedArray(4),
+      width: 50,
+      height: 40,
+      colorSpace: "srgb",
+    } as ImageData;
+    (downscaleImageData as ReturnType<typeof vi.fn>).mockReturnValue({
+      imageData: scaledImageData,
+      scale: 0.5,
+    });
 
     const detectedOnScaled = orbResult(4);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(detectedOnScaled);
@@ -391,7 +399,11 @@ describe("useImageMatcher — repeated calls", () => {
 
 describe("useImageMatcher — reanchorApplied", () => {
   it("is false when initial matches are sufficient (≥ 10)", async () => {
-    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 10,
+    }));
     const attempt = fakeAttempt(15);
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
@@ -407,7 +419,11 @@ describe("useImageMatcher — reanchorApplied", () => {
   });
 
   it("is false when re-anchor improves nothing (fewer or equal matches)", async () => {
-    const fewMatches = Array.from({ length: 5 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const fewMatches = Array.from({ length: 5 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 10,
+    }));
     const cropBox = { x: 100, y: 50, width: 300, height: 400, srcWidth: 640, srcHeight: 480 };
     const attempt = { ...fakeAttempt(15), orbFeatures: { ...orbResult(15), cropBox } };
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
@@ -435,8 +451,16 @@ describe("useImageMatcher — reanchorApplied", () => {
   });
 
   it("is true and uses re-anchor result when re-anchor finds more matches", async () => {
-    const fewMatches = Array.from({ length: 5 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
-    const moreMatches = Array.from({ length: 12 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 8 }));
+    const fewMatches = Array.from({ length: 5 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 10,
+    }));
+    const moreMatches = Array.from({ length: 12 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 8,
+    }));
     const cropBox = { x: 100, y: 50, width: 300, height: 400, srcWidth: 640, srcHeight: 480 };
     const attempt = { ...fakeAttempt(15), orbFeatures: { ...orbResult(15), cropBox } };
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
@@ -489,7 +513,11 @@ describe("useImageMatcher — reanchorApplied", () => {
   });
 
   it("errors with a viewpoint-mismatch message when the render homography is gate-rejected", async () => {
-    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 10,
+    }));
     const attempt = fakeAttempt(15);
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
@@ -516,7 +544,11 @@ describe("useImageMatcher — reanchorApplied", () => {
   });
 
   it("errors with a not-enough-detail message when too few matches to align", async () => {
-    const tenMatches = Array.from({ length: 10 }, (_, i) => ({ queryIdx: i, trainIdx: i, distance: 10 }));
+    const tenMatches = Array.from({ length: 10 }, (_, i) => ({
+      queryIdx: i,
+      trainIdx: i,
+      distance: 10,
+    }));
     const attempt = fakeAttempt(15);
     (getAttempt as ReturnType<typeof vi.fn>).mockReturnValue(attempt);
     (extractFeatures as ReturnType<typeof vi.fn>).mockReturnValue(orbResult(15));
@@ -560,14 +592,19 @@ describe("useImageMatcher — userCrop", () => {
       });
     });
 
-    expect(extractFeaturesFromCrop).toHaveBeenCalledWith(mockCv, fakeImageData, {
-      x: Math.round(0.1 * 200),
-      y: Math.round(0.2 * 150),
-      width: Math.round(0.6 * 200),
-      height: Math.round(0.5 * 150),
-      srcWidth: 200,
-      srcHeight: 150,
-    }, false);
+    expect(extractFeaturesFromCrop).toHaveBeenCalledWith(
+      mockCv,
+      fakeImageData,
+      {
+        x: Math.round(0.1 * 200),
+        y: Math.round(0.2 * 150),
+        width: Math.round(0.6 * 200),
+        height: Math.round(0.5 * 150),
+        srcWidth: 200,
+        srcHeight: 150,
+      },
+      false,
+    );
     // extractFeatures should NOT be called when userCrop is set.
     expect(extractFeatures).not.toHaveBeenCalled();
     expect(result.current.status).toBe("done");

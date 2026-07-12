@@ -41,6 +41,7 @@ npx eslint .
 ```
 
 Summarise the results:
+
 - **TypeScript**: number of errors (target: 0)
 - **Tests**: pass/fail counts
 - **Coverage**: list every file in `pipeline/`, `hooks/`, `storage/`, `utils/`,
@@ -72,6 +73,7 @@ Do not flag type-only imports that are re-exported.
 ## Step 4 — Rule compliance
 
 Check every `pipeline/` file:
+
 - No React import present.
 - Every function that creates an OpenCV object has a `finally` block that
   frees it.
@@ -79,10 +81,12 @@ Check every `pipeline/` file:
 - No `async` keyword.
 
 Check every `hooks/` file:
+
 - No direct OpenCV Mat allocation (only calls to `pipeline/` functions).
 - `cv` received as a function argument, never read from `window` or `globalThis`.
 
 Check for forbidden patterns:
+
 - `any` used outside `type CV = any` or `type PoseDetector = any`.
 - `@ts-ignore` or `@ts-expect-error` directives.
 - `console.log` (only `console.info` / `console.warn` / `console.error` allowed).
@@ -103,15 +107,19 @@ Check for forbidden patterns:
 Produce a single Markdown report with four sections:
 
 ### 🔴 Blocking (must fix before commit)
+
 TypeScript errors, failing tests, lint errors.
 
 ### 🟡 Coverage gaps
+
 Files with < 80 % coverage or no test file at all.
 
 ### 🟠 Code quality
+
 Unused imports/variables, rule violations, forbidden patterns.
 
 ### 🟢 Passed
+
 Everything that was checked and found clean.
 
 For each finding include the file path (as a link), line number if known,

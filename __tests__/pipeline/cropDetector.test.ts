@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  extractHipCenter,
-  mapKeypointsToFullFrame,
-} from "@/pipeline/tracking/cropDetector";
+import { extractHipCenter, mapKeypointsToFullFrame } from "@/pipeline/tracking/cropDetector";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -51,12 +48,7 @@ describe("mapKeypointsToFullFrame", () => {
     // Keypoint at center of the crop: kp.x = 0.5, kp.y = 0.5
     // Expected full-frame: x = (0.5*400 + 200) / 1000 = 400/1000 = 0.4
     //                      y = (0.5*400 + 100) / 800  = 300/800  = 0.375
-    const result = mapKeypointsToFullFrame(
-      [kp("left_hip", 0.5, 0.5)],
-      crop,
-      1000,
-      800,
-    );
+    const result = mapKeypointsToFullFrame([kp("left_hip", 0.5, 0.5)], crop, 1000, 800);
     expect(result[0].x).toBeCloseTo(0.4);
     expect(result[0].y).toBeCloseTo(0.375);
   });

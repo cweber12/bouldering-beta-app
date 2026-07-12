@@ -9,7 +9,7 @@ When the Skeleton and Holds overlays are drawn over a route, their colours can b
 
 ## Solution
 
-Automatically nudge overlay colours for legibility against the surface they are drawn on, without changing what any colour *means*. The overlay samples the backdrop's brightness and, for each palette colour that would fail a contrast target against that backdrop, shifts only its lightness (with saturation used to keep the hue recognisable) just far enough to become legible. Hue never moves, so cyan still means Hand Hold, orange still means Foot Hold (ADR 0012), and the anatomical Skeleton palette keeps its identity. A single **Auto-contrast** toggle (default on) in the overlay panel gates the whole behaviour; turning it off renders exactly today's colours, so the feature is purely additive and can never regress the current look.
+Automatically nudge overlay colours for legibility against the surface they are drawn on, without changing what any colour _means_. The overlay samples the backdrop's brightness and, for each palette colour that would fail a contrast target against that backdrop, shifts only its lightness (with saturation used to keep the hue recognisable) just far enough to become legible. Hue never moves, so cyan still means Hand Hold, orange still means Foot Hold (ADR 0012), and the anatomical Skeleton palette keeps its identity. A single **Auto-contrast** toggle (default on) in the overlay panel gates the whole behaviour; turning it off renders exactly today's colours, so the feature is purely additive and can never regress the current look.
 
 ## User Stories
 
@@ -41,22 +41,25 @@ Automatically nudge overlay colours for legibility against the surface they are 
 ## Implementation Decisions
 
 **New pure module — `contrastAdapter` (in `pipeline/overlay/`).** Framework-agnostic, no React, no OpenCV. Exposes:
+
 - A `ContrastAdjust` value derived from backdrop luminance stats `{ meanLuma, stdLuma }` plus the tuning constants.
-- `adaptColor(css, adjust)` → css string: for a source colour, if its Rec. 709 relative-luminance contrast against the backdrop band fails the target ratio, shift **lightness only** the minimum amount to reach the target (biasing the direction that keeps the hue recognisable); otherwise return the colour unchanged. Saturation is used for *vividness rescue* — raised when a lightness push toward an extreme would wash the hue out — and is **never reduced** below the authored value. Hue is never changed.
+- `adaptColor(css, adjust)` → css string: for a source colour, if its Rec. 709 relative-luminance contrast against the backdrop band fails the target ratio, shift **lightness only** the minimum amount to reach the target (biasing the direction that keeps the hue recognisable); otherwise return the colour unchanged. Saturation is used for _vividness rescue_ — raised when a lightness push toward an extreme would wash the hue out — and is **never reduced** below the authored value. Hue is never changed.
 
 **Contrast model.** Global per surface, per-colour-identity. Target contrast ratio and band multiplier are named constants at the top of the module: **target = 3:1** (WCAG graphical-object bar), **k = 1.0**. A colour must clear the target against the near edge of the backdrop band `mean ± k·stdDev` (light or dark side, whichever it must beat). Low-variance walls → gentle nudge; high-variance walls → firmer shift.
 
 **Backdrop luminance sampling (hook layer).** Split into a pure pixel-math function (`ImageData → { meanLuma, stdLuma }`, Rec. 709 `0.2126R + 0.7152G + 0.0722B`) and a thin DOM wrapper that draws the backdrop (or the wall-crop rect) to a small offscreen canvas (~64px long edge) and reads it back. No OpenCV — the overlay colour path must not depend on WASM readiness (`FramePlayer` is cv-free today). The same Rec. 709 formula is used for both backdrop and overlay-colour luminance so the scales match.
 
 **Per-surface backdrop:**
+
 - Post-scan preview (Skeleton over video) → sample the **wall crop**.
 - Route-photo overlay, saved WebM, and Compare → sample the **route photo**.
 
 **Threading (architecture choice: adapter output flows down, palettes stay in the draw modules).** `SkeletonStyle` gains an optional `contrastAdjust`; `HoldStyle` gains an optional `contrastAdjust`. `drawSkeleton` and `drawHolds` wrap **every colour emission** in `adaptColor(...)`. Two ordering rules:
-- Apply `adaptColor` to the **base** colour *before* the Silhouette derives its relative depth shades (dark rim / light core), so the shading stays relative to the nudged base.
+
+- Apply `adaptColor` to the **base** colour _before_ the Silhouette derives its relative depth shades (dark rim / light core), so the shading stays relative to the nudged base.
 - Adapt anatomical gradient **endpoints together** (treat each arm/leg ramp as one identity) so ramps don't compress or invert.
 
-**UI — Auto-contrast toggle.** A single toggle added to `SkeletonStylePanel`, default **on**, placed above the Silhouette row. It gates both the Skeleton and Holds adaptation with one switch. When on, adaptation applies to whatever colours are active (default palette *or* manual picks). When off, the panel emits no `contrastAdjust` and the overlay renders exactly today's output. The Holds section already has no colour picker (visibility only), consistent with ADR 0012 — that stays.
+**UI — Auto-contrast toggle.** A single toggle added to `SkeletonStylePanel`, default **on**, placed above the Silhouette row. It gates both the Skeleton and Holds adaptation with one switch. When on, adaptation applies to whatever colours are active (default palette _or_ manual picks). When off, the panel emits no `contrastAdjust` and the overlay renders exactly today's output. The Holds section already has no colour picker (visibility only), consistent with ADR 0012 — that stays.
 
 **Timing / memoisation (hook layer).** Compute the backdrop stat once per backdrop, memoised by `imageFile` identity (plus the crop rect for the wall-crop preview). Recompute only when the photo/crop changes or the Auto-contrast toggle flips. Never per-frame (per-frame would shimmer and is wasteful; the model is static-per-surface).
 

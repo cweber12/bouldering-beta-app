@@ -10,7 +10,7 @@ external sink for a downloaded **Test Video** corpus.
 
 ## Context
 
-ADR 0006 answers "what drives detection quality?" from the developer's *own*
+ADR 0006 answers "what drives detection quality?" from the developer's _own_
 scans, written as local JSONL. That corpus is small, unlabelled, and reflects
 only whatever the developer happened to record. To steer tuning we want a
 **labelled** corpus we can re-run whenever detection logic changes and watch the
@@ -37,7 +37,7 @@ Three forces shape the design:
   **Bystanders**, so an auto-seed can silently follow the wrong person. Those
   inputs must be captured once and replayed deterministically, or a re-run's
   quality change is unattributable.
-- **There is no Route Photo in a bundle.** The ORB path is a *matching*
+- **There is no Route Photo in a bundle.** The ORB path is a _matching_
   pipeline; a bundle only has `final_frame.png` (same camera). Per the ORB match
   diagnosis, cross-viewpoint mismatches do not respond to ORB tuning while
   same-viewpoint preprocessing changes do — so capture-time matching adds noise,

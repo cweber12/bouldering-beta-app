@@ -89,7 +89,10 @@ export default function DetectionFrameStepper({
   className,
 }: DetectionFrameStepperProps) {
   const stretches = useMemo(() => buildStretches(frames), [frames]);
-  const nextStretch = useMemo(() => findNextStretch(stretches, currentIndex), [stretches, currentIndex]);
+  const nextStretch = useMemo(
+    () => findNextStretch(stretches, currentIndex),
+    [stretches, currentIndex],
+  );
   const stepPx = 13;
   const trackWidth = frames.length > 0 ? frames.length * stepPx - 4 : 0;
 

@@ -25,7 +25,7 @@ undetected never re-enter detection and are clipped for the rest of the climb.
 ADR 0013 named limb-aware sizing as out of scope until coverage data showed the
 symmetric pad was insufficient. It is — fully-extended reaches off a tucked or
 mis-detected limb are exactly the clip case the vertical bias does not cover when
-the limb is *absent* rather than merely close to an edge.
+the limb is _absent_ rather than merely close to an edge.
 
 ## Decision
 
@@ -46,7 +46,7 @@ caller signature change.
    common missing-arm case is an overhead reach.
 3. **Radius from the mirror limb, torso fallback.** The radius is the
    contralateral limb's **segment sum** (upper + lower) when that limb is detected
-   (so a *bent* mirror limb still yields full reach); otherwise
+   (so a _bent_ mirror limb still yields full reach); otherwise
    torso (shoulder↔hip) length × an anthropometric ratio (`ARM_REACH_TORSO_RATIO`
    1.4, `LEG_REACH_TORSO_RATIO` 1.6).
 4. **Per-edge max composition.** Each edge takes the furthest-out of the normal
@@ -87,7 +87,7 @@ constants above can be tuned against real Runs.
 - **A missing limb now enlarges the crop**, lowering effective input resolution on
   that side until the limb is recovered — bounded by the relative cap and tracked
   by `limbExpandedFrames` for tuning.
-- **The radius leans on the mirror limb.** A pose missing *both* sides of a limb
+- **The radius leans on the mirror limb.** A pose missing _both_ sides of a limb
   type falls back to the coarser torso ratio; both-sides-missing poses therefore
   size less precisely (and more often hit the cap).
 - **The constants are starting values**, to be verified against

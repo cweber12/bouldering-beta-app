@@ -141,7 +141,8 @@ export function isValidProfileKey(key: string, userId: string): boolean {
 export function isValidRoutePrefix(prefix: string, targetUserId: string): boolean {
   return (
     !prefix.includes("..") &&
-    (prefix === `${S3_PREFIX}/${targetUserId}` || prefix.startsWith(`${S3_PREFIX}/${targetUserId}/`))
+    (prefix === `${S3_PREFIX}/${targetUserId}` ||
+      prefix.startsWith(`${S3_PREFIX}/${targetUserId}/`))
   );
 }
 
@@ -172,8 +173,9 @@ export async function readProfileStorage<T>(key: string): Promise<T | null> {
     const text = Buffer.concat(chunks).toString("utf-8");
     return JSON.parse(text) as T;
   } catch (err) {
-    const name = err instanceof Error ? (err as Error & { name?: string; Code?: string }).name ?? "" : "";
-    const code = err instanceof Error ? (err as Error & { Code?: string }).Code ?? "" : "";
+    const name =
+      err instanceof Error ? ((err as Error & { name?: string; Code?: string }).name ?? "") : "";
+    const code = err instanceof Error ? ((err as Error & { Code?: string }).Code ?? "") : "";
     if (name === "NoSuchKey" || code === "NoSuchKey") return null;
     throw err;
   }

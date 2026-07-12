@@ -102,10 +102,9 @@ function handleDetectAndCompute(data) {
 
     // Transfer descCopy.buffer so the main thread receives it with zero copy.
     // eslint-disable-next-line no-undef
-    self.postMessage(
-      { type: "result", id, keypoints: kpArray, descriptors: descCopy },
-      [descCopy.buffer],
-    );
+    self.postMessage({ type: "result", id, keypoints: kpArray, descriptors: descCopy }, [
+      descCopy.buffer,
+    ]);
   } catch (err) {
     // eslint-disable-next-line no-undef
     self.postMessage({ type: "error", id, message: err?.message ?? String(err) });

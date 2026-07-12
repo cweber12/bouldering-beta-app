@@ -50,13 +50,30 @@ export default function RoutePhotoChooser({ open, onClose, onPhoto }: Props) {
             onClick={() => setShowCamera(true)}
             className="ui-control flex items-center gap-3 rounded-xl px-4 py-3 text-left"
           >
-            <svg className="h-5 w-5 shrink-0 text-accent" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+            <svg
+              className="h-5 w-5 shrink-0 text-accent"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+              />
             </svg>
             <span className="flex flex-1 flex-col">
               <span className="text-sm font-semibold text-fg">Take photo</span>
-              <span className="text-xs text-fg-muted">Snap the route now — try a different angle</span>
+              <span className="text-xs text-fg-muted">
+                Snap the route now — try a different angle
+              </span>
             </span>
           </button>
 
@@ -65,8 +82,19 @@ export default function RoutePhotoChooser({ open, onClose, onPhoto }: Props) {
             onClick={() => inputRef.current?.click()}
             className="ui-control flex items-center gap-3 rounded-xl px-4 py-3 text-left"
           >
-            <svg className="h-5 w-5 shrink-0 text-fg-secondary" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            <svg
+              className="h-5 w-5 shrink-0 text-fg-secondary"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
+              />
             </svg>
             <span className="flex flex-1 flex-col">
               <span className="text-sm font-semibold text-fg">Choose from library</span>
@@ -94,7 +122,10 @@ export default function RoutePhotoChooser({ open, onClose, onPhoto }: Props) {
       {open && showCamera && (
         <CameraRecorderModal
           mode="photo"
-          onCapture={(file) => { setShowCamera(false); onPhoto(file); }}
+          onCapture={(file) => {
+            setShowCamera(false);
+            onPhoto(file);
+          }}
           onClose={() => setShowCamera(false)}
         />
       )}

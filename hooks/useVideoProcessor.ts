@@ -3,16 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type PoseFrame } from "@/pipeline/pose/poseDetection";
 import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
-import { extractFeatures, extractFeaturesExcludingClimber, type NormalizedPoint, type OrbCropBox, type OrbFeatures, type KeyframeFeatures } from "@/pipeline/matching/orbDetector";
+import {
+  extractFeatures,
+  extractFeaturesExcludingClimber,
+  type NormalizedPoint,
+  type OrbCropBox,
+  type OrbFeatures,
+  type KeyframeFeatures,
+} from "@/pipeline/matching/orbDetector";
 import { cropImageData } from "@/utils/cvHelpers";
 import { neutralizeColorCast } from "@/utils/colorBalance";
 import { generateOrbThumbnail } from "@/pipeline/matching/orbThumbnail";
 import { analyzeFrame, type FrameAnalysis } from "@/pipeline/analysis/frameAnalyzer";
 import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
-import {
-  mapKeypointsToFullFrame,
-  type CropBox,
-} from "@/pipeline/tracking/cropDetector";
+import { mapKeypointsToFullFrame, type CropBox } from "@/pipeline/tracking/cropDetector";
 import {
   deriveClimberCrop,
   findMissingLimbs,
@@ -37,7 +41,13 @@ import {
   isLandmarkFlip,
   DEFAULT_TELEPORT_THRESHOLD,
 } from "@/pipeline/pose/flipDetection";
-import { saveAttempt, type VideoMeta, type FrameCapture, type RunType, type StoredHold } from "@/storage/sessionStore";
+import {
+  saveAttempt,
+  type VideoMeta,
+  type FrameCapture,
+  type RunType,
+  type StoredHold,
+} from "@/storage/sessionStore";
 import { detectHoldsVideoSpace } from "@/pipeline/holds/holdDetection";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
@@ -87,7 +97,7 @@ export const ORB_PREVIEW_UPDATE_INTERVAL_SEC = 0.75;
 
 /** Gate ORB preview refreshes to a bounded display cadence. */
 export function shouldEmitOrbPreview(currentTimeSec: number, lastEmitTimeSec: number): boolean {
-  return lastEmitTimeSec < 0 || (currentTimeSec - lastEmitTimeSec) >= ORB_PREVIEW_UPDATE_INTERVAL_SEC;
+  return lastEmitTimeSec < 0 || currentTimeSec - lastEmitTimeSec >= ORB_PREVIEW_UPDATE_INTERVAL_SEC;
 }
 
 /**
@@ -119,7 +129,7 @@ function deriveWallRegion(
   const halfH = (climberCrop.h / 2) * (1 + padFactor);
   const x = Math.max(0, Math.round((cx - halfW) * frameW));
   const y = Math.max(0, Math.round((cy - halfH) * frameH));
-  const width  = Math.min(frameW - x, Math.round(halfW * 2 * frameW));
+  const width = Math.min(frameW - x, Math.round(halfW * 2 * frameW));
   const height = Math.min(frameH - y, Math.round(halfH * 2 * frameH));
   return { x, y, width, height, srcWidth: frameW, srcHeight: frameH };
 }
@@ -156,31 +166,34 @@ function extractWallFeaturePoints(
   }
 
   const poseLandmarks: NormalizedPoint[] = firstPoseKeypoints
-    ? firstPoseKeypoints.map(kp => ({ x: kp.x, y: kp.y }))
+    ? firstPoseKeypoints.map((kp) => ({ x: kp.x, y: kp.y }))
     : [];
 
   if (cropOptions.climberCrop || wallCropPx) {
-    const wallBox = wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
+    const wallBox =
+      wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
     const croppedData = cropImageData(processed, wallBox);
     const remapped: NormalizedPoint[] = poseLandmarks
-      .map(lm => ({
-        x: (lm.x * videoWidth  - wallBox.x) / wallBox.width,
+      .map((lm) => ({
+        x: (lm.x * videoWidth - wallBox.x) / wallBox.width,
         y: (lm.y * videoHeight - wallBox.y) / wallBox.height,
       }))
-      .filter(lm => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
-    const feats = remapped.length >= 3
-      ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
-      : extractFeatures(cv, croppedData, false);
-    return feats.keypoints.map(kp => ({
+      .filter((lm) => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
+    const feats =
+      remapped.length >= 3
+        ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
+        : extractFeatures(cv, croppedData, false);
+    return feats.keypoints.map((kp) => ({
       x: (kp.pt.x + wallBox.x) / videoWidth,
       y: (kp.pt.y + wallBox.y) / videoHeight,
     }));
   }
 
-  const feats = poseLandmarks.length >= 3
-    ? extractFeaturesExcludingClimber(cv, processed, poseLandmarks, false)
-    : extractFeatures(cv, processed, false);
-  return feats.keypoints.map(kp => ({
+  const feats =
+    poseLandmarks.length >= 3
+      ? extractFeaturesExcludingClimber(cv, processed, poseLandmarks, false)
+      : extractFeatures(cv, processed, false);
+  return feats.keypoints.map((kp) => ({
     x: kp.pt.x / videoWidth,
     y: kp.pt.y / videoHeight,
   }));
@@ -213,8 +226,20 @@ export interface VideoProcessorResult {
     detector: PoseDetector,
     cv: CV,
     frameStep?: number,
-    meta?: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string },
-    cropOptions?: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean },
+    meta?: {
+      state: string;
+      area: string;
+      route: string;
+      runType?: RunType;
+      rating?: string;
+      notes?: string;
+    },
+    cropOptions?: {
+      climberCrop?: CropFraction;
+      wallCrop?: CropFraction;
+      climberPoint?: Point;
+      panning?: boolean;
+    },
     startTime?: number,
     backend?: PoseBackend,
     detection?: {
@@ -245,9 +270,9 @@ export interface VideoProcessorResult {
   attemptId: string | null;
   /**
    * The pristine first video frame as a PNG File, captured during the seek loop
-    * as a Detection Preview fallback poster while the source video is preparing.
-    * Available shortly after processing starts; null before. Reusing the already-
-    * decoded frame avoids a fragile second video decode on the review step.
+   * as a Detection Preview fallback poster while the source video is preparing.
+   * Available shortly after processing starts; null before. Reusing the already-
+   * decoded frame avoids a fragile second video decode on the review step.
    */
   firstFrameFile: File | null;
   errorMessage: string | null;
@@ -258,9 +283,9 @@ export interface VideoProcessorResult {
   scanDiagnostics: ScanDiagnostics | null;
   /**
    * The wall ORB feature field from the reference frame, as full-frame
-    * normalised points with the climber masked out. Emitted on a throttled
-    * cadence while the seek loop runs so the loading "starfield" stays coherent
-    * with camera motion. Null before the first emission.
+   * normalised points with the climber masked out. Emitted on a throttled
+   * cadence while the seek loop runs so the loading "starfield" stays coherent
+   * with camera motion. Null before the first emission.
    */
   orbPreview: NormalizedPoint[] | null;
   /**
@@ -319,7 +344,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [orbPreview, setOrbPreview] = useState<NormalizedPoint[] | null>(null);
   const [currentPose, setCurrentPose] = useState<PoseFrame | null>(null);
   const [cropTrace, setCropTrace] = useState<CropTrace | null>(null);
-  const [detectionFrames, setDetectionFrames] = useState<{ timestamp: number; status: DetectionFrameStatus }[] | null>(null);
+  const [detectionFrames, setDetectionFrames] = useState<
+    { timestamp: number; status: DetectionFrameStatus }[] | null
+  >(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -331,8 +358,20 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       detector: PoseDetector,
       cv: CV,
       frameStep: number = DEFAULT_FRAME_STEP,
-      meta: { state: string; area: string; route: string; runType?: RunType; rating?: string; notes?: string } = { state: "", area: "", route: "" },
-      cropOptions: { climberCrop?: CropFraction; wallCrop?: CropFraction; climberPoint?: Point; panning?: boolean } = {},
+      meta: {
+        state: string;
+        area: string;
+        route: string;
+        runType?: RunType;
+        rating?: string;
+        notes?: string;
+      } = { state: "", area: "", route: "" },
+      cropOptions: {
+        climberCrop?: CropFraction;
+        wallCrop?: CropFraction;
+        climberPoint?: Point;
+        panning?: boolean;
+      } = {},
       startTime: number = 0,
       backend: PoseBackend = "mediapipe",
       detection: {
@@ -404,32 +443,43 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const id = `run-${Date.now()}`;
 
         // Pre-compute pixel-space crop boxes used by analyzeFrame
-        const climberCropPx = cropOptions.climberCrop ? {
-          x: Math.round(cropOptions.climberCrop.x * videoWidth),
-          y: Math.round(cropOptions.climberCrop.y * videoHeight),
-          width: Math.round(cropOptions.climberCrop.w * videoWidth),
-          height: Math.round(cropOptions.climberCrop.h * videoHeight),
-        } : undefined;
+        const climberCropPx = cropOptions.climberCrop
+          ? {
+              x: Math.round(cropOptions.climberCrop.x * videoWidth),
+              y: Math.round(cropOptions.climberCrop.y * videoHeight),
+              width: Math.round(cropOptions.climberCrop.w * videoWidth),
+              height: Math.round(cropOptions.climberCrop.h * videoHeight),
+            }
+          : undefined;
 
         // Wall analysis region: prefer explicit user wall crop; otherwise
         // derive from climber crop with 35% padding.
-        const wallCropPx = cropOptions.wallCrop ? {
-          x: Math.round(cropOptions.wallCrop.x * videoWidth),
-          y: Math.round(cropOptions.wallCrop.y * videoHeight),
-          width: Math.round(cropOptions.wallCrop.w * videoWidth),
-          height: Math.round(cropOptions.wallCrop.h * videoHeight),
-          srcWidth: videoWidth,
-          srcHeight: videoHeight,
-        } : (cropOptions.climberCrop
-          ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
-          : undefined);
+        const wallCropPx = cropOptions.wallCrop
+          ? {
+              x: Math.round(cropOptions.wallCrop.x * videoWidth),
+              y: Math.round(cropOptions.wallCrop.y * videoHeight),
+              width: Math.round(cropOptions.wallCrop.w * videoWidth),
+              height: Math.round(cropOptions.wallCrop.h * videoHeight),
+              srcWidth: videoWidth,
+              srcHeight: videoHeight,
+            }
+          : cropOptions.climberCrop
+            ? deriveWallRegion(cropOptions.climberCrop, videoWidth, videoHeight)
+            : undefined;
 
         // Panning Capture: sample Wall Crop ORB at fixed keyframe intervals so
         // each pan section anchors to the Route Photo independently. Zero-cost
         // for Fixed Capture (panning false → keyframeWallBox null, no captures).
         const panning = cropOptions.panning ?? false;
         const keyframeWallBox: OrbCropBox | null = panning
-          ? (wallCropPx ?? { x: 0, y: 0, width: videoWidth, height: videoHeight, srcWidth: videoWidth, srcHeight: videoHeight })
+          ? (wallCropPx ?? {
+              x: 0,
+              y: 0,
+              width: videoWidth,
+              height: videoHeight,
+              srcWidth: videoWidth,
+              srcHeight: videoHeight,
+            })
           : null;
         const keyframes: KeyframeFeatures[] = [];
         let nextKeyframeTime = -Infinity; // first qualifying frame becomes keyframe 0
@@ -453,11 +503,11 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
         // Diagnostics accumulators (dev-local detection diagnostics).
         let referenceFrameAnalysis: FrameAnalysis | null = null; // frame-0 conditions
-        const sampledStatus: SampledFrameStatus[] = [];          // one row per pose-detection frame
-        const coverageSamples: number[] = [];                    // climber bbox area ÷ frame area
-        let recoveryFramesUsed = 0;                              // frames accepted in Adaptive Refinement
-        let gapsRefined = 0;                                     // gaps the refinement pass re-probed
-        let limbExpandedFrames = 0;                              // detection frames where a missing-limb reach disk was applied (ADR 0014)
+        const sampledStatus: SampledFrameStatus[] = []; // one row per pose-detection frame
+        const coverageSamples: number[] = []; // climber bbox area ÷ frame area
+        let recoveryFramesUsed = 0; // frames accepted in Adaptive Refinement
+        let gapsRefined = 0; // gaps the refinement pass re-probed
+        let limbExpandedFrames = 0; // detection frames where a missing-limb reach disk was applied (ADR 0014)
         // Dev-only per-frame crop trace for the harness Detection Preview. Only
         // filled under DIAGNOSTICS_ENABLED; exposed via setCropTrace, never on
         // the attempt (so it never reaches S3). See utils/cropTrace.ts.
@@ -468,7 +518,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         const allTimestamps: number[] = [];
         const frameCaptures: FrameCapture[] = [];
         // Climber-identity tracking state.
-        const history: Point[] = [];               // climber centroid trajectory (normalised, full frame)
+        const history: Point[] = []; // climber centroid trajectory (normalised, full frame)
         let lastClimberBox: CropBox | null = null; // adaptive crop derived from the last accepted pose
         const tappedPoint = cropOptions.climberPoint ?? null;
 
@@ -520,7 +570,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           if (posesLocal.length === 0) return null;
 
-          const posesFull: PoseFrame[] = posesLocal.map(p => ({
+          const posesFull: PoseFrame[] = posesLocal.map((p) => ({
             timestamp: p.timestamp,
             keypoints: mapKeypointsToFullFrame(p.keypoints, reg, videoWidth, videoHeight),
           }));
@@ -556,7 +606,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           const feats = extractFeatures(cv, cropped, !currentAnalysis);
           const adjusted: OrbFeatures = {
             ...feats,
-            keypoints: feats.keypoints.map(kp => ({
+            keypoints: feats.keypoints.map((kp) => ({
               ...kp,
               pt: { x: kp.pt.x + keyframeWallBox.x, y: kp.pt.y + keyframeWallBox.y },
             })),
@@ -667,9 +717,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               chosen.timestamp = video.currentTime;
               detected.push(chosen);
               keypointCount = chosen.keypoints.length;
-              avgConfidence = keypointCount > 0
-                ? chosen.keypoints.reduce((s, kp) => s + kp.score, 0) / keypointCount
-                : 0;
+              avgConfidence =
+                keypointCount > 0
+                  ? chosen.keypoints.reduce((s, kp) => s + kp.score, 0) / keypointCount
+                  : 0;
               const c = poseCentroid(chosen.keypoints);
               if (c) history.push(c);
               const box = deriveClimberCrop(chosen.keypoints, videoWidth, videoHeight);
@@ -736,7 +787,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                       })),
                     );
                   } else {
-                    const previewFrameData: ImageData = latestPreviewFrameData ?? ctx.getImageData(0, 0, videoWidth, videoHeight);
+                    const previewFrameData: ImageData =
+                      latestPreviewFrameData ?? ctx.getImageData(0, 0, videoWidth, videoHeight);
                     latestPreviewFrameData = previewFrameData;
                     setOrbPreview(
                       extractWallFeaturePoints(
@@ -823,14 +875,16 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // Trigger 2: a flip was discarded inside this gap.
             let hasFlip = false;
             for (const fi of flippedIdx) {
-              if (fi > prevIdx && fi < currIdx) { hasFlip = true; break; }
+              if (fi > prevIdx && fi < currIdx) {
+                hasFlip = true;
+                break;
+              }
             }
             // Trigger 3: fast motion between the two anchors (centroid jump).
             const pc = poseCentroid(prevFrame.keypoints);
             const cc = poseCentroid(currFrame.keypoints);
-            const fastMotion = pc && cc
-              ? Math.hypot(cc.x - pc.x, cc.y - pc.y) > MOTION_THRESHOLD
-              : false;
+            const fastMotion =
+              pc && cc ? Math.hypot(cc.x - pc.x, cc.y - pc.y) > MOTION_THRESHOLD : false;
 
             if (largeGap || hasFlip || fastMotion) {
               gaps.push({ gapStart: prevIdx + 1, gapEnd: currIdx - 1, leftFrame: prevFrame });
@@ -844,16 +898,25 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             let prevCentroid: Point | null = poseCentroid(gap.leftFrame.keypoints);
             let budget = MAX_RECOVERY_FRAMES;
 
-            for (let tsIdx = gap.gapStart; tsIdx <= gap.gapEnd && budget > 0; tsIdx += REFINE_STRIDE) {
+            for (
+              let tsIdx = gap.gapStart;
+              tsIdx <= gap.gapEnd && budget > 0;
+              tsIdx += REFINE_STRIDE
+            ) {
               if (abortRef.current) break;
               if (tsIdx >= allTimestamps.length) break;
               const seekTime = allTimestamps[tsIdx];
 
               try {
-                await seekVideo(video, Math.min(seekTime, duration), { signal: seekController.signal });
+                await seekVideo(video, Math.min(seekTime, duration), {
+                  signal: seekController.signal,
+                });
               } catch (seekErr) {
                 // User cancel → stop refinement entirely.
-                if (seekErr instanceof SeekAbortedError) { abortRef.current = true; break; }
+                if (seekErr instanceof SeekAbortedError) {
+                  abortRef.current = true;
+                  break;
+                }
                 // Decoder stall → skip this candidate, try the next.
                 if (seekErr instanceof SeekTimeoutError) {
                   console.warn(`[useVideoProcessor] refinement ${seekErr.message} — skipping`);
@@ -877,7 +940,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               kept.push(candidate);
               recoveryFramesUsed++;
               const c = poseCentroid(candidate.keypoints);
-              if (c) { history.push(c); prevCentroid = c; }
+              if (c) {
+                history.push(c);
+                prevCentroid = c;
+              }
               prevAccepted = candidate;
               budget--;
 
@@ -935,12 +1001,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // earlier x/y passes move each joint independently of its parent, which
         // makes rotating limbs stretch/snap and occluded joints bend the wrong
         // way (see ADR 0015).
-        const goodFrames   = filterLandmarks(kept, 0.3, detection.filterTolerance);
+        const goodFrames = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
-        const estimated    = estimateMissingLandmarks(interpolated, 10, 5, backend);
-        const filled       = fillPersistentGaps(estimated, backend);
-        const smoothed     = smoothPoseFrames(filled);
-        const frames       = constrainSkeleton(smoothed, goodFrames, backend);
+        const estimated = estimateMissingLandmarks(interpolated, 10, 5, backend);
+        const filled = fillPersistentGaps(estimated, backend);
+        const smoothed = smoothPoseFrames(filled);
+        const frames = constrainSkeleton(smoothed, goodFrames, backend);
 
         // Author Holds at scan time in the Run's own video space (Fixed Capture
         // only). The result is persisted with the Run and editable on the
@@ -976,7 +1042,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             (panning ? ` keyframes=${keyframes.length}` : ""),
         );
 
-        await new Promise<void>(r => setTimeout(r, 0));
+        await new Promise<void>((r) => setTimeout(r, 0));
 
         // ORB extraction — apply ORB-specific preprocessing to the reference
         // frame before descriptor extraction so features are stable across
@@ -989,7 +1055,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // then receives a locally-normalised grayscale image and skips
             // its own equaliseHist pass (normalizePixels=false).
             const orbCanvas = document.createElement("canvas");
-            orbCanvas.width  = videoWidth;
+            orbCanvas.width = videoWidth;
             orbCanvas.height = videoHeight;
             const orbCtx = orbCanvas.getContext("2d");
 
@@ -1002,41 +1068,44 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             const firstPose = detected.length > 0 ? detected[0] : null;
             const poseLandmarks: NormalizedPoint[] = firstPose
-              ? firstPose.keypoints.map(kp => ({ x: kp.x, y: kp.y }))
+              ? firstPose.keypoints.map((kp) => ({ x: kp.x, y: kp.y }))
               : [];
 
             let orbFeatures;
             if (cropOptions.climberCrop || wallCropPx) {
               // Prefer user-specified wall crop; fallback to derived wall box.
               // Exclude climber body via pose landmarks remapped to crop-local space.
-              const wallBox = wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
+              const wallBox =
+                wallCropPx ?? deriveWallRegion(cropOptions.climberCrop!, videoWidth, videoHeight);
               const croppedData = cropImageData(processedOrbImageData, wallBox);
 
               // Remap full-frame normalised landmarks into the crop-local space.
               const remapped: NormalizedPoint[] = poseLandmarks
-                .map(lm => ({
-                  x: (lm.x * videoWidth  - wallBox.x) / wallBox.width,
+                .map((lm) => ({
+                  x: (lm.x * videoWidth - wallBox.x) / wallBox.width,
                   y: (lm.y * videoHeight - wallBox.y) / wallBox.height,
                 }))
-                .filter(lm => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
+                .filter((lm) => lm.x >= 0 && lm.x <= 1 && lm.y >= 0 && lm.y <= 1);
 
-              const croppedFeatures = remapped.length >= 3
-                ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
-                : extractFeatures(cv, croppedData, false);
+              const croppedFeatures =
+                remapped.length >= 3
+                  ? extractFeaturesExcludingClimber(cv, croppedData, remapped, false)
+                  : extractFeatures(cv, croppedData, false);
 
               // Offset keypoints back to full-frame pixel coordinates.
               orbFeatures = {
                 ...croppedFeatures,
-                keypoints: croppedFeatures.keypoints.map(kp => ({
+                keypoints: croppedFeatures.keypoints.map((kp) => ({
                   ...kp,
                   pt: { x: kp.pt.x + wallBox.x, y: kp.pt.y + wallBox.y },
                 })),
                 cropBox: wallBox,
               };
             } else {
-              orbFeatures = poseLandmarks.length >= 3
-                ? extractFeaturesExcludingClimber(cv, processedOrbImageData, poseLandmarks, false)
-                : extractFeatures(cv, processedOrbImageData, false);
+              orbFeatures =
+                poseLandmarks.length >= 3
+                  ? extractFeaturesExcludingClimber(cv, processedOrbImageData, poseLandmarks, false)
+                  : extractFeatures(cv, processedOrbImageData, false);
             }
 
             const thumbSource = middleFrameImageData ?? referenceImageData;
@@ -1098,7 +1167,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // dev-only sink and surfaced to the DiagnosticsPanel.
             if (DIAGNOSTICS_ENABLED && referenceFrameAnalysis && videoHash) {
               try {
-                const detectedRows = sampledStatus.filter(r => r.detected);
+                const detectedRows = sampledStatus.filter((r) => r.detected);
                 // Average centroid displacement between consecutive detected
                 // anchors (normalised units, like MOTION_THRESHOLD).
                 let motionSum = 0;
@@ -1145,21 +1214,26 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                   pose: {
                     sampledFrames: sampledStatus.length,
                     detectedFrames: detected.length,
-                    detectionRate: sampledStatus.length > 0 ? detected.length / sampledStatus.length : 0,
+                    detectionRate:
+                      sampledStatus.length > 0 ? detected.length / sampledStatus.length : 0,
                     flippedFrames: flipScan.flippedTimestamps.length,
                     keptFrames: kept.length,
                     goodFrames: goodFrames.length,
-                    confidence: summarizeMinAvgMax(detectedRows.map(r => r.avgConfidence)),
-                    avgKeypointCount: detectedRows.length > 0
-                      ? detectedRows.reduce((s, r) => s + r.keypointCount, 0) / detectedRows.length
-                      : 0,
+                    confidence: summarizeMinAvgMax(detectedRows.map((r) => r.avgConfidence)),
+                    avgKeypointCount:
+                      detectedRows.length > 0
+                        ? detectedRows.reduce((s, r) => s + r.keypointCount, 0) /
+                          detectedRows.length
+                        : 0,
                     limbExpandedFrames,
                     refinement: { gapsRefined, recoveryFramesUsed },
                   },
                   orb: {
                     refKeypointCount: orbFeatures.keypoints.length,
                     keyframeCount: keyframes.length,
-                    keyframeKeypoints: summarizeMinAvgMax(keyframes.map(kf => kf.features.keypoints.length)),
+                    keyframeKeypoints: summarizeMinAvgMax(
+                      keyframes.map((kf) => kf.features.keypoints.length),
+                    ),
                   },
                   badStretches: detectBadStretches(sampledStatus, GAP_RECOVERY_THRESHOLD),
                 });
@@ -1222,5 +1296,20 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose, cropTrace, detectionFrames };
+  return {
+    process,
+    reset,
+    status,
+    orbStatus,
+    currentFrame,
+    totalFrames,
+    attemptId,
+    firstFrameFile,
+    errorMessage,
+    scanDiagnostics,
+    orbPreview,
+    currentPose,
+    cropTrace,
+    detectionFrames,
+  };
 }

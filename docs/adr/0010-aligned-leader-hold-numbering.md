@@ -11,18 +11,18 @@
 > gates, and progressive reveal are all unchanged. See
 > `pipeline/holdsOverlay.ts`.
 
-Supersedes the *label placement* of [ADR 0007](0007-hold-detection-overlay.md) — the
+Supersedes the _label placement_ of [ADR 0007](0007-hold-detection-overlay.md) — the
 greedy, outward-pushed, ring-search placement with angled leader lines — and moots the
 "label layout can be cached" consequence of [ADR 0009](0009-authored-persisted-holds.md).
 The **Hold** inference algorithm, the selectivity gates, the borderless per-side glyph
 marker, the black-on-white number label, persistence, and the high-water reveal are all
-unchanged — only *how each number label is positioned* changes.
+unchanged — only _how each number label is positioned_ changes.
 
 ADR 0007's greedy placement threw each number toward the route's outer edge along
 whatever angle first avoided a collision, tethered back by a sloped leader. The result
 was a scatter of chips at varied distances and angles that read as visual noise, broke
 cohesion, and made it harder to trace a number back to its Hold. Putting the number
-*on* the glyph instead was tried (the digit centred on the glyph with an auto-contrast
+_on_ the glyph instead was tried (the digit centred on the glyph with an auto-contrast
 halo) and rejected as distracting — it cluttered the glyph and fought the wall hold for
 the same pixels, which is exactly the spot the overlay exists to keep visible.
 
@@ -31,7 +31,7 @@ the same pixels, which is exactly the spot the overlay exists to keep visible.
 Keep the number in an off-to-the-side black-on-white label, but place it
 **deterministically** with a straight **horizontal** leader from the glyph centre.
 Glyphs are split into a left and right group by the **mean x** of all in-bounds Holds.
-For each side, every label is offset from its glyph by the *same* horizontal distance
+For each side, every label is offset from its glyph by the _same_ horizontal distance
 
 ```text
 D = (sideMaxX − sideMinX) + glyphWidth
@@ -57,7 +57,7 @@ arrangement as the glyphs they name.
 3. **Deterministic per-side offset instead of greedy collision search.** The constant
    D gives equal-length parallel leaders and a label group that mirrors the glyph
    layout — orderly and predictable — rather than the varied angles/distances of the
-   old ring search. Group geometry (mean and per-side min/max) is taken from *all*
+   old ring search. Group geometry (mean and per-side min/max) is taken from _all_
    in-bounds Holds, not just the revealed ones, so a label's position is fixed from the
    start and does not shift as later Holds reveal.
 

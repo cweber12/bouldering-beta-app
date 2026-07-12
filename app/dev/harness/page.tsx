@@ -84,7 +84,10 @@ function buildFirstFrameSkeleton(attempt: RouteAttempt | null): FirstFrameSkelet
     .map((f) => ({
       timestamp: f.timestamp - firstTs,
       keypoints: Object.fromEntries(
-        f.keypoints.map((kp) => [kp.name, { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height }]),
+        f.keypoints.map((kp) => [
+          kp.name,
+          { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height },
+        ]),
       ),
     }));
   return { frames: rendered, duration, fps: videoMeta.fps ?? 30, startOffsetSec: firstTs };
@@ -141,7 +144,9 @@ export default function HarnessPage() {
   if (!IS_DEV) {
     return (
       <main className="flex flex-1 items-center justify-center p-8">
-        <p className="text-fg-muted">The detection eval harness is only available in development.</p>
+        <p className="text-fg-muted">
+          The detection eval harness is only available in development.
+        </p>
       </main>
     );
   }
@@ -214,9 +219,13 @@ export default function HarnessPage() {
                   <td className="max-w-xs py-2 pr-3 text-fg-muted">{it.title ?? "—"}</td>
                   <td className="py-2 pr-3">
                     {it.hasSetup ? (
-                      <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">calibrated</span>
+                      <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
+                        calibrated
+                      </span>
                     ) : (
-                      <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">pending</span>
+                      <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
+                        pending
+                      </span>
                     )}
                   </td>
                   <td className="py-2 pr-3 tabular-nums text-fg">{it.runCount}</td>
@@ -277,7 +286,9 @@ function Calibrator({
   const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
 
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
-  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
+  const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(
+    getTierConfig(DEFAULT_TIER).variant,
+  );
   const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
@@ -396,7 +407,8 @@ function Calibrator({
           setWallCrop(setup.wallCrop ?? DEFAULT_CROP);
           setClimberPoint(setup.climberPoint ?? null);
           setPanning(!!setup.panning);
-          if (typeof setup.qualityTier === "string") handleTierChange(setup.qualityTier as QualityTier);
+          if (typeof setup.qualityTier === "string")
+            handleTierChange(setup.qualityTier as QualityTier);
           wallTouchedRef.current = true; // preserve the saved wall crop across a re-tap
         }
       } catch (err) {
@@ -507,7 +519,7 @@ function Calibrator({
       return;
     }
 
-    const attempt = attemptId ? getAttempt(attemptId) ?? null : null;
+    const attempt = attemptId ? (getAttempt(attemptId) ?? null) : null;
     const { pose, orb } = buildHarnessPayloads({
       diagnostics: scanDiagnostics,
       frames: attempt?.frames ?? [],
@@ -571,7 +583,11 @@ function Calibrator({
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-3 p-8">
         <p className="text-sm text-danger">{loadError}</p>
-        <button type="button" onClick={onBack} className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg">
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
+        >
           Back to corpus
         </button>
       </main>
@@ -627,7 +643,9 @@ function Calibrator({
           </div>
           <div className="flex items-center gap-2">
             {relayStatus && (
-              <span className={`max-w-xs truncate text-xs ${relayStatus.ok ? "text-send" : "text-danger"}`}>
+              <span
+                className={`max-w-xs truncate text-xs ${relayStatus.ok ? "text-send" : "text-danger"}`}
+              >
                 {relayStatus.message}
               </span>
             )}
@@ -667,28 +685,28 @@ function Calibrator({
             className="shrink-0"
           />
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
-          {firstFrameFile && skel ? (
-            <FramePlayer
-              ref={previewPlayerRef}
-              imageFile={firstFrameFile}
-              videoSrc={videoUrl}
-              videoTimeOffset={skel.startOffsetSec}
-              layers={[{ frames: skel.frames, style: topoStyle }]}
-              duration={skel.duration}
-              autoPlay
-              hidePlayButton
-              orbKeypoints={orbKeypoints}
-              cropTrace={showCrops ? cropTrace : undefined}
-              fit="contain"
-              bare
-              className="min-h-0 flex-1 rounded-none"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
-              No climber detected — the Detection Preview has nothing to show. See the
-              diagnostics for why.
-            </div>
-          )}
+            {firstFrameFile && skel ? (
+              <FramePlayer
+                ref={previewPlayerRef}
+                imageFile={firstFrameFile}
+                videoSrc={videoUrl}
+                videoTimeOffset={skel.startOffsetSec}
+                layers={[{ frames: skel.frames, style: topoStyle }]}
+                duration={skel.duration}
+                autoPlay
+                hidePlayButton
+                orbKeypoints={orbKeypoints}
+                cropTrace={showCrops ? cropTrace : undefined}
+                fit="contain"
+                bare
+                className="min-h-0 flex-1 rounded-none"
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
+                No climber detected — the Detection Preview has nothing to show. See the diagnostics
+                for why.
+              </div>
+            )}
             <DiagnosticsPanel record={previewDiag} defaultOpen />
           </div>
         </div>

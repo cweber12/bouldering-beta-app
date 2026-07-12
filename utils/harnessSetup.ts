@@ -106,7 +106,11 @@ export function parseScanSetupInput(body: unknown): ScanSetupInput | null {
   if (!isCrop(b.climberCrop) || !isCrop(b.wallCrop)) return null;
   if (b.climberPoint != null && !isPoint(b.climberPoint)) return null;
   if (typeof b.panning !== "boolean") return null;
-  if (typeof b.qualityTier !== "string" || b.qualityTier.length === 0 || b.qualityTier.length > 40) {
+  if (
+    typeof b.qualityTier !== "string" ||
+    b.qualityTier.length === 0 ||
+    b.qualityTier.length > 40
+  ) {
     return null;
   }
 

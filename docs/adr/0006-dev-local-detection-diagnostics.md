@@ -33,7 +33,7 @@ CONTEXT.md.
 
 - One diagnostic field deliberately lives in **S3, not locally**: **Reference
   Frame Metadata** rides on the Run artifact alongside its ORB features, because
-  a Run is matched to *many* images over time and each later **Match Diagnostics**
+  a Run is matched to _many_ images over time and each later **Match Diagnostics**
   record (written locally at match time) must recover the reference frame's
   conditions to correlate them against the matched image. Everything else is
   local.

@@ -19,9 +19,9 @@ already handles any camera motion — this is a label + copy change only.
   Update the help text to note it covers any camera motion and "Leave off for a fixed
   (tripod) shot."
 - `app/docs/page.tsx:214` — update the matching description.
-- `CONTEXT.md` — add a one-line clarification to the *Panning Capture* glossary entry that
+- `CONTEXT.md` — add a one-line clarification to the _Panning Capture_ glossary entry that
   it covers any moving/handheld camera, not only vertical pans (keep "Panning Capture" as
-  the canonical domain term; only the UI label broadens). Also refresh *Detection Preview*
+  the canonical domain term; only the UI label broadens). Also refresh _Detection Preview_
   to note it now plays the source video, and note the loading starfield is now live.
 
 Keep the internal `panning` boolean and the `CaptureMode = "fixed" | "panning"`

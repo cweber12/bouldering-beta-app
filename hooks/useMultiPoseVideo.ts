@@ -37,9 +37,7 @@ export interface MultiPoseVideoResult {
  * auto-trigger re-rendering; styles are read via a ref at render time.
  */
 function inputsKey(inputs: MultiPoseInput[]): string {
-  return inputs
-    .map((inp) => `${inp.attempt.id}:${inp.matchResult.matches.length}`)
-    .join("|");
+  return inputs.map((inp) => `${inp.attempt.id}:${inp.matchResult.matches.length}`).join("|");
 }
 
 /**

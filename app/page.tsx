@@ -64,7 +64,12 @@ const FEATURES = [
   },
 ] as const;
 
-const PIPELINE_TAGS = ["MediaPipe Pose", "OpenCV ORB", "RANSAC homography", "100% client-side"] as const;
+const PIPELINE_TAGS = [
+  "MediaPipe Pose",
+  "OpenCV ORB",
+  "RANSAC homography",
+  "100% client-side",
+] as const;
 
 export default function Home() {
   const { user, loading } = useAuth();
@@ -87,9 +92,9 @@ export default function Home() {
               Turn a climbing video into a route-locked movement overlay.
             </h1>
             <p className="max-w-md text-base leading-relaxed text-fg-secondary sm:text-lg">
-              Beta Scanner tracks your body through every frame, matches the wall
-              from a single photo, and locks your skeleton onto the route — so you
-              can study the beta move by move. All in your browser.
+              Beta Scanner tracks your body through every frame, matches the wall from a single
+              photo, and locks your skeleton onto the route — so you can study the beta move by
+              move. All in your browser.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -114,8 +119,12 @@ export default function Home() {
             <ul className="flex flex-wrap items-center gap-x-2 gap-y-1.5 pt-2">
               {PIPELINE_TAGS.map((tag, i) => (
                 <li key={tag} className="flex items-center gap-2">
-                  {i > 0 && <span className="h-1 w-1 rounded-full bg-fg-placeholder" aria-hidden="true" />}
-                  <span className="font-mono text-label uppercase tracking-label text-fg-muted">{tag}</span>
+                  {i > 0 && (
+                    <span className="h-1 w-1 rounded-full bg-fg-placeholder" aria-hidden="true" />
+                  )}
+                  <span className="font-mono text-label uppercase tracking-label text-fg-muted">
+                    {tag}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -173,18 +182,26 @@ export default function Home() {
                 Your movement, mapped onto the real route.
               </h2>
               <p className="max-w-md text-body-sm leading-relaxed text-fg-secondary sm:text-base">
-                The skeleton is projected through the homography so it sits on the
-                actual wall. Detected holds are ringed by kind — cyan for hands,
-                orange for feet — so you can read hand-foot sequence and body
-                position against the holds you&apos;ll be pulling on.
+                The skeleton is projected through the homography so it sits on the actual wall.
+                Detected holds are ringed by kind — cyan for hands, orange for feet — so you can
+                read hand-foot sequence and body position against the holds you&apos;ll be pulling
+                on.
               </p>
               <ul className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">
                 <li className="flex items-center gap-2 text-body-sm text-fg-secondary">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-hand-hold)" }} aria-hidden="true" />
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-hand-hold)" }}
+                    aria-hidden="true"
+                  />
                   Hand holds
                 </li>
                 <li className="flex items-center gap-2 text-body-sm text-fg-secondary">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "var(--color-foot-hold)" }} aria-hidden="true" />
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: "var(--color-foot-hold)" }}
+                    aria-hidden="true"
+                  />
                   Foot holds
                 </li>
                 <li className="flex items-center gap-2 text-body-sm text-fg-secondary">
@@ -244,8 +261,8 @@ export default function Home() {
             Ready to scan your project?
           </h2>
           <p className="max-w-md text-body-sm leading-relaxed text-fg-secondary sm:text-base">
-            Bring a phone clip and a photo of the route. Everything runs in the
-            browser — no upload, no wait.
+            Bring a phone clip and a photo of the route. Everything runs in the browser — no upload,
+            no wait.
           </p>
           {!loading && (
             <Link
@@ -277,19 +294,31 @@ export default function Home() {
           <nav className="flex flex-wrap items-center gap-x-5 gap-y-2" aria-label="Footer">
             {user && (
               <>
-                <Link href="/scan" className="text-body-sm text-fg-secondary transition-colors hover:text-fg">
+                <Link
+                  href="/scan"
+                  className="text-body-sm text-fg-secondary transition-colors hover:text-fg"
+                >
                   Scan
                 </Link>
-                <Link href="/routes" className="text-body-sm text-fg-secondary transition-colors hover:text-fg">
+                <Link
+                  href="/routes"
+                  className="text-body-sm text-fg-secondary transition-colors hover:text-fg"
+                >
                   Routes
                 </Link>
               </>
             )}
-            <Link href="/docs" className="text-body-sm text-fg-secondary transition-colors hover:text-fg">
+            <Link
+              href="/docs"
+              className="text-body-sm text-fg-secondary transition-colors hover:text-fg"
+            >
               Docs
             </Link>
             {!loading && !user && (
-              <Link href="/login" className="text-body-sm text-fg-secondary transition-colors hover:text-fg">
+              <Link
+                href="/login"
+                className="text-body-sm text-fg-secondary transition-colors hover:text-fg"
+              >
                 Sign in
               </Link>
             )}

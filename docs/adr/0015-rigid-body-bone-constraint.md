@@ -17,7 +17,7 @@ That independence produces two recurring overlay artefacts — limbs that briefl
 stretch/snap, and joints that bend the wrong way for a few frames:
 
 - **Chord foreshortening + spline overshoot ("stretch/snap").** Between two
-  sparse anchors a rotating joint is carried along the *chord* of its arc,
+  sparse anchors a rotating joint is carried along the _chord_ of its arc,
   independent of its parent, so the bone foreshortens and then snaps back at the
   next anchor. A rigid-arm ground-truth harness measured **~26 %** forearm-length
   distortion introduced by `interpolatePoseFrames` alone, with **no occlusion and
@@ -27,7 +27,7 @@ stretch/snap, and joints that bend the wrong way for a few frames:
 - **Stale bone-vector estimation ("bend the wrong way").** When a joint is
   occluded while its limb rotates, `estimateMissingLandmarks` and
   `fillPersistentGaps` place it as `neighbour + (refJoint − refNeighbour)` — a
-  bone vector copied verbatim from *one* bracketing frame, with no interpolation
+  bone vector copied verbatim from _one_ bracketing frame, with no interpolation
   of the bone's rotation. The harness measured **~34°** of forearm-angle error
   across a rotate-through-occlusion span.
 
@@ -54,7 +54,7 @@ interpolation — not the dense estimated frames:
 - **Angle** follows the shortest arc between the bracketing detections, so a
   rotating limb sweeps its true arc and an occluded joint's orientation is
   interpolated rather than copied stale.
-- **Length** is the linearly-interpolated *projected* bone length between the two
+- **Length** is the linearly-interpolated _projected_ bone length between the two
   bracketing detections. Because the references are the true detections, genuine
   foreshortening (a limb pointing toward the camera) is preserved at each anchor
   and merely interpolated between them — this deliberately does **not** pin the
@@ -92,7 +92,7 @@ omitted.
 ## Consequences
 
 - **The pass order is load-bearing.** `constrainSkeleton` must run last, on the
-  smoothed frames, using the *pre-interpolation* anchor detections as its
+  smoothed frames, using the _pre-interpolation_ anchor detections as its
   reference set — that is what lets it honour real projected lengths while
   removing the between-anchor distortion.
 - **Adaptive Refinement now compounds.** Extra anchors added for fast motion

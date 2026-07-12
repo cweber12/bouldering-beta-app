@@ -23,7 +23,12 @@ const JOINT_COLOR = "rgba(255,255,255,0.9)";
  * adaptation can only slide lightness and can never blur two climbers together.
  */
 function overlayStyle(slotColor: string, contrastAdjust?: ContrastAdjust): SkeletonStyle {
-  return { silhouetteVisible: false, lineColor: slotColor, jointColor: JOINT_COLOR, contrastAdjust };
+  return {
+    silhouetteVisible: false,
+    lineColor: slotColor,
+    jointColor: JOINT_COLOR,
+    contrastAdjust,
+  };
 }
 
 // ---------------------------------------------------------------------------

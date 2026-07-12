@@ -20,11 +20,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   let key: string;
   let body: string;
   try {
-    const payload = await request.json() as { key?: unknown; body?: unknown };
+    const payload = (await request.json()) as { key?: unknown; body?: unknown };
     if (typeof payload.key !== "string" || typeof payload.body !== "string") {
-      return NextResponse.json({ error: "Request must include string fields 'key' and 'body'." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Request must include string fields 'key' and 'body'." },
+        { status: 400 },
+      );
     }
-    key  = payload.key;
+    key = payload.key;
     body = payload.body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });

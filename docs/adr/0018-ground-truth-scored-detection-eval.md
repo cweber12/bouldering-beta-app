@@ -13,10 +13,10 @@ separate headless pass.
 ## Context
 
 ADR 0017 gave us a labelled corpus and a self-contained **Scan Diagnostics**
-record per run. But its signal is *aggregate*: `detectionRate: 0.82`,
+record per run. But its signal is _aggregate_: `detectionRate: 0.82`,
 `flippedFrames: 6`. It cannot say **which** frames failed, **how far** the pose
 was off, or **why** — and the human labels it carries (`shadows`,
-`climber_contrast`, …) are *video-level*, one value for the whole clip. To steer
+`climber_contrast`, …) are _video-level_, one value for the whole clip. To steer
 tuning we need per-frame truth: "frames 40–70 drifted, the joints were off by
 0.4 body-lengths, and those frames were low-contrast + motion-blurred."
 
@@ -57,15 +57,15 @@ manual inputs, and the bundle is the corpus of record.
    Verified frames are the true reference; unverified frames are a weaker signal.
 
 3. **Flow splits into calibrate vs score.** Calibration mode authors Ground Truth
-   + crops + metadata and posts nothing. A separate **headless scoring pass** (the
-   ADR 0017 batch runner, or a "Score now" action) runs detection with the frozen
-   **Scan Setup**, scores in-browser against the bundle's Ground Truth, and folds
-   the per-frame errors + per-run rollup into the run's `pose` payload posted
-   through the existing `POST /api/detections` — one append-only, self-attributing
-   record per run. Each score is stamped with a **`groundTruthHash`** alongside
-   `appVersion` + `setupHash`, so a score is always tied to the exact Ground Truth
-   version it was measured against. The scoring pass skips any video without a
-   `ground-truth.json`. `ScanDiagnostics` still rides along, GT-free.
+   - crops + metadata and posts nothing. A separate **headless scoring pass** (the
+     ADR 0017 batch runner, or a "Score now" action) runs detection with the frozen
+     **Scan Setup**, scores in-browser against the bundle's Ground Truth, and folds
+     the per-frame errors + per-run rollup into the run's `pose` payload posted
+     through the existing `POST /api/detections` — one append-only, self-attributing
+     record per run. Each score is stamped with a **`groundTruthHash`** alongside
+     `appVersion` + `setupHash`, so a score is always tied to the exact Ground Truth
+     version it was measured against. The scoring pass skips any video without a
+     `ground-truth.json`. `ScanDiagnostics` still rides along, GT-free.
 
 4. **Video metadata is edited in place.** The `analysis_inputs` block (the
    video-level condition labels — `shadows`, `climber_contrast`, `wall_contrast`,
@@ -96,7 +96,7 @@ manual inputs, and the bundle is the corpus of record.
    precision nothing scores on; the core body joints carry the signal.
 4. **Score during calibration for instant feedback** — rejected: scoring the
    scaffold-seeded run against Ground Truth derived from that same run is circular
-   and flatters the numbers. A live *edit* readout (drag distance) is authoring
+   and flatters the numbers. A live _edit_ readout (drag distance) is authoring
    feedback, not a score.
 5. **Write metadata edits to a harness-owned override file** — rejected: keeps
    `metadata.json` pristine but forks the source of truth, so the downloader's own

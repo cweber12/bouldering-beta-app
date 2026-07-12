@@ -64,7 +64,9 @@ export function useReplayDriver(
 
   // Keep the latest callback without re-subscribing the interval each render.
   const onLoopCompleteRef = useRef(onLoopComplete);
-  useEffect(() => { onLoopCompleteRef.current = onLoopComplete; }, [onLoopComplete]);
+  useEffect(() => {
+    onLoopCompleteRef.current = onLoopComplete;
+  }, [onLoopComplete]);
 
   const orbPreview = useMemo<NormalizedPoint[] | null>(
     () => (replayData ? replayData.starfield.map((p) => ({ x: p.x, y: p.y })) : null),

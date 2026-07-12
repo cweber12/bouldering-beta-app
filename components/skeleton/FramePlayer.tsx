@@ -1,7 +1,11 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import {
+  drawSkeleton,
+  computeStableBodyScale,
+  type SkeletonStyle,
+} from "@/pipeline/overlay/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import { drawHolds, type HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import type { Hold } from "@/pipeline/holds/holdDetection";
@@ -104,10 +108,7 @@ interface FramePlayerProps {
 // ---------------------------------------------------------------------------
 
 /** Binary-search the sorted frames array for the nearest timestamp. */
-function findNearest(
-  frames: RenderedSkeletonFrame[],
-  t: number,
-): RenderedSkeletonFrame | null {
+function findNearest(frames: RenderedSkeletonFrame[], t: number): RenderedSkeletonFrame | null {
   const len = frames.length;
   if (len === 0) return null;
   let lo = 0;
@@ -117,10 +118,7 @@ function findNearest(
     if (frames[mid].timestamp < t) lo = mid + 1;
     else hi = mid;
   }
-  if (
-    lo > 0 &&
-    Math.abs(frames[lo - 1].timestamp - t) < Math.abs(frames[lo].timestamp - t)
-  ) {
+  if (lo > 0 && Math.abs(frames[lo - 1].timestamp - t) < Math.abs(frames[lo].timestamp - t)) {
     return frames[lo - 1];
   }
   return frames[lo];
@@ -235,25 +233,28 @@ function formatTime(s: number): string {
  * The canvas draws at the image's native resolution and is CSS-scaled to
  * fill the container width, preserving aspect ratio.
  */
-const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer({
-  imageFile,
-  videoSrc,
-  videoTimeOffset = 0,
-  layers,
-  duration,
-  loop = true,
-  hidePlayButton = false,
-  autoPlay = false,
-  startOffset = 0,
-  orbKeypoints,
-  holds,
-  holdStyle,
-  holdsTimeOffset = 0,
-  cropTrace,
-  fit = "width",
-  bare = false,
-  className,
-}, ref) {
+const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer(
+  {
+    imageFile,
+    videoSrc,
+    videoTimeOffset = 0,
+    layers,
+    duration,
+    loop = true,
+    hidePlayButton = false,
+    autoPlay = false,
+    startOffset = 0,
+    orbKeypoints,
+    holds,
+    holdStyle,
+    holdsTimeOffset = 0,
+    cropTrace,
+    fit = "width",
+    bare = false,
+    className,
+  },
+  ref,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -384,88 +385,99 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   }, [videoSrc]);
 
   // Draw a single frame at the given time (seconds).
-  const drawFrame = useCallback((t: number) => {
-    const canvas = canvasRef.current;
-    const bmp = bitmapRef.current;
-    const video = videoRef.current;
-    const useVideo = !!videoSrc && !!video && videoReady;
-    if (!canvas || (!bmp && !useVideo)) return;
+  const drawFrame = useCallback(
+    (t: number) => {
+      const canvas = canvasRef.current;
+      const bmp = bitmapRef.current;
+      const video = videoRef.current;
+      const useVideo = !!videoSrc && !!video && videoReady;
+      if (!canvas || (!bmp && !useVideo)) return;
 
-    const sourceW = useVideo ? (video.videoWidth || canvas.width) : (bmp?.width ?? canvas.width);
-    const sourceH = useVideo ? (video.videoHeight || canvas.height) : (bmp?.height ?? canvas.height);
+      const sourceW = useVideo ? video.videoWidth || canvas.width : (bmp?.width ?? canvas.width);
+      const sourceH = useVideo
+        ? video.videoHeight || canvas.height
+        : (bmp?.height ?? canvas.height);
 
-    if (sourceW > 0 && sourceH > 0 && (canvas.width !== sourceW || canvas.height !== sourceH)) {
-      canvas.width = sourceW;
-      canvas.height = sourceH;
-    }
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    if (useVideo && video.videoWidth > 0 && video.videoHeight > 0) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    } else if (bmp) {
-      ctx.drawImage(bmp, 0, 0);
-    } else {
-      return;
-    }
-
-    // Draw ORB reference keypoints as bright-red background dots. Sized as a
-    // small fraction of the canvas so they stay visible at any photo resolution.
-    const orb = orbKeypointsRef.current;
-    if (orb.length > 0) {
-      const orbRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.004);
-      ctx.save();
-      ctx.fillStyle = "#ff2020";
-      for (const pt of orb) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, orbRadius, 0, Math.PI * 2);
-        ctx.fill();
+      if (sourceW > 0 && sourceH > 0 && (canvas.width !== sourceW || canvas.height !== sourceH)) {
+        canvas.width = sourceW;
+        canvas.height = sourceH;
       }
-      ctx.restore();
-    }
 
-    // Holds pass — drawn beneath the skeleton layers so the pose lines stay
-    // legible on top of the markers. Gated by the high-water mark (the furthest
-    // time reached since Reset), not the instantaneous time, so revealed Holds
-    // persist across loops and backward seeks (ADR 0009).
-    const holdsList = holdsRef.current;
-    if (holdsList.length > 0) {
-      const baseFrames = layersRef.current[0]?.frames;
-      let holdScale: number | undefined = baseFrames && scaleCacheRef.current.get(baseFrames);
-      if (holdScale === undefined) {
-        holdScale = baseFrames
-          ? computeStableBodyScale(baseFrames, canvas.width, canvas.height)
-          : Math.min(canvas.width, canvas.height) * 0.15;
-        if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      if (useVideo && video.videoWidth > 0 && video.videoHeight > 0) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      } else if (bmp) {
+        ctx.drawImage(bmp, 0, 0);
+      } else {
+        return;
       }
-      if (t > holdsHighWaterRef.current) holdsHighWaterRef.current = t;
-      drawHolds(ctx, holdsList, holdsHighWaterRef.current + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
-    }
 
-    for (const layer of layersRef.current) {
-      const nearest = findNearest(layer.frames, t + (layer.timeOffset ?? 0));
-      if (nearest && Object.keys(nearest.keypoints).length > 0) {
-        // Resolve (and cache) this layer's stable body scale so limb widths do
-        // not pulse as the climber moves.
-        let scale = scaleCacheRef.current.get(layer.frames);
-        if (scale === undefined) {
-          scale = computeStableBodyScale(layer.frames, canvas.width, canvas.height);
-          scaleCacheRef.current.set(layer.frames, scale);
+      // Draw ORB reference keypoints as bright-red background dots. Sized as a
+      // small fraction of the canvas so they stay visible at any photo resolution.
+      const orb = orbKeypointsRef.current;
+      if (orb.length > 0) {
+        const orbRadius = Math.max(1, Math.min(canvas.width, canvas.height) * 0.004);
+        ctx.save();
+        ctx.fillStyle = "#ff2020";
+        for (const pt of orb) {
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, orbRadius, 0, Math.PI * 2);
+          ctx.fill();
         }
-        drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
+        ctx.restore();
       }
-    }
 
-    // Dev harness crop overlay — topmost, so the boxes/flags stay visible over
-    // the skeleton. Held (step) to the entry active at the current real video
-    // time: logical t plus the video offset the backdrop is playing at.
-    const trace = cropTraceRef.current;
-    if (trace && trace.length > 0) {
-      const active = findActiveCrop(trace, t + videoOffsetRef.current);
-      if (active) drawCropEntry(ctx, active, canvas.width, canvas.height);
-    }
-  }, [videoSrc, videoReady]);
+      // Holds pass — drawn beneath the skeleton layers so the pose lines stay
+      // legible on top of the markers. Gated by the high-water mark (the furthest
+      // time reached since Reset), not the instantaneous time, so revealed Holds
+      // persist across loops and backward seeks (ADR 0009).
+      const holdsList = holdsRef.current;
+      if (holdsList.length > 0) {
+        const baseFrames = layersRef.current[0]?.frames;
+        let holdScale: number | undefined = baseFrames && scaleCacheRef.current.get(baseFrames);
+        if (holdScale === undefined) {
+          holdScale = baseFrames
+            ? computeStableBodyScale(baseFrames, canvas.width, canvas.height)
+            : Math.min(canvas.width, canvas.height) * 0.15;
+          if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
+        }
+        if (t > holdsHighWaterRef.current) holdsHighWaterRef.current = t;
+        drawHolds(
+          ctx,
+          holdsList,
+          holdsHighWaterRef.current + holdsTimeOffsetRef.current,
+          holdStyleRef.current,
+          holdScale,
+        );
+      }
+
+      for (const layer of layersRef.current) {
+        const nearest = findNearest(layer.frames, t + (layer.timeOffset ?? 0));
+        if (nearest && Object.keys(nearest.keypoints).length > 0) {
+          // Resolve (and cache) this layer's stable body scale so limb widths do
+          // not pulse as the climber moves.
+          let scale = scaleCacheRef.current.get(layer.frames);
+          if (scale === undefined) {
+            scale = computeStableBodyScale(layer.frames, canvas.width, canvas.height);
+            scaleCacheRef.current.set(layer.frames, scale);
+          }
+          drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
+        }
+      }
+
+      // Dev harness crop overlay — topmost, so the boxes/flags stay visible over
+      // the skeleton. Held (step) to the entry active at the current real video
+      // time: logical t plus the video offset the backdrop is playing at.
+      const trace = cropTraceRef.current;
+      if (trace && trace.length > 0) {
+        const active = findActiveCrop(trace, t + videoOffsetRef.current);
+        if (active) drawCropEntry(ctx, active, canvas.width, canvas.height);
+      }
+    },
+    [videoSrc, videoReady],
+  );
 
   // rAF loop — runs at display refresh rate with no React re-renders per frame.
   // Stored in a ref to avoid self-reference issues with useCallback.
@@ -623,21 +635,28 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   }, [layers, holds, holdStyle, cropTrace, ready, playing, drawFrame, videoReady]);
 
   // Expose imperative controls to parent via ref.
-  useImperativeHandle(ref, () => ({
-    play: () => setPlaying(true),
-    pause: () => setPlaying(false),
-    seek: (t: number) => {
-      timeRef.current = t;
-      setDisplayTime(t);
-      const video = videoRef.current;
-      if (useVideoBackdrop && videoReady && video) {
-        const target = Math.max(0, Math.min((video.duration || Infinity), t + videoOffsetRef.current));
-        video.currentTime = target;
-      }
-      drawFrame(t);
-    },
-    getCurrentTime: () => timeRef.current,
-  }), [drawFrame, useVideoBackdrop, videoReady]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      play: () => setPlaying(true),
+      pause: () => setPlaying(false),
+      seek: (t: number) => {
+        timeRef.current = t;
+        setDisplayTime(t);
+        const video = videoRef.current;
+        if (useVideoBackdrop && videoReady && video) {
+          const target = Math.max(
+            0,
+            Math.min(video.duration || Infinity, t + videoOffsetRef.current),
+          );
+          video.currentTime = target;
+        }
+        drawFrame(t);
+      },
+      getCurrentTime: () => timeRef.current,
+    }),
+    [drawFrame, useVideoBackdrop, videoReady],
+  );
 
   function togglePlay() {
     setPlaying((p) => !p);
@@ -663,7 +682,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     setDisplayTime(t);
     const video = videoRef.current;
     if (useVideoBackdrop && videoReady && video) {
-      const target = Math.max(0, Math.min((video.duration || Infinity), t + videoOffsetRef.current));
+      const target = Math.max(0, Math.min(video.duration || Infinity, t + videoOffsetRef.current));
       video.currentTime = target;
     }
     drawFrame(t);
@@ -693,7 +712,12 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     >
       {fit === "contain" ? (
         // Centered, viewport-fit canvas: shrinks to fit the bounded parent.
-        <div className={cn("flex min-h-0 flex-1 items-center justify-center overflow-hidden", !bare && "bg-surface-alt/30")}>
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 items-center justify-center overflow-hidden",
+            !bare && "bg-surface-alt/30",
+          )}
+        >
           <canvas ref={canvasRef} className="block max-h-full max-w-full object-contain" />
         </div>
       ) : (
@@ -726,8 +750,19 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
             aria-label="Replay holds"
             title="Replay the holds reveal"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992V4.356M3.985 19.644v-4.992h4.992M19.5 9.348a8.25 8.25 0 00-15.357-2.34M4.5 14.652a8.25 8.25 0 0015.357 2.34" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.023 9.348h4.992V4.356M3.985 19.644v-4.992h4.992M19.5 9.348a8.25 8.25 0 00-15.357-2.34M4.5 14.652a8.25 8.25 0 0015.357 2.34"
+              />
             </svg>
           </button>
         )}

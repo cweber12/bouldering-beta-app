@@ -40,10 +40,10 @@ describe("matDelete", () => {
 function makeImageData(w: number, h: number, fillValue = 0xff): ImageData {
   const data = new Uint8ClampedArray(w * h * 4);
   for (let i = 0; i < data.length; i += 4) {
-    data[i]     = fillValue; // R
+    data[i] = fillValue; // R
     data[i + 1] = fillValue; // G
     data[i + 2] = fillValue; // B
-    data[i + 3] = 255;       // A
+    data[i + 3] = 255; // A
   }
   return { data, width: w, height: h, colorSpace: "srgb" } as unknown as ImageData;
 }
@@ -58,12 +58,17 @@ describe("cropImageData", () => {
 
   it("copies pixel values from the correct source region", () => {
     // Build a 4×4 source where each pixel's R channel equals row index.
-    const src = { width: 4, height: 4, colorSpace: "srgb", data: new Uint8ClampedArray(4 * 4 * 4) } as unknown as ImageData;
+    const src = {
+      width: 4,
+      height: 4,
+      colorSpace: "srgb",
+      data: new Uint8ClampedArray(4 * 4 * 4),
+    } as unknown as ImageData;
     for (let row = 0; row < 4; row++) {
       for (let col = 0; col < 4; col++) {
         const idx = (row * 4 + col) * 4;
-        src.data[idx]     = row;   // R = row index
-        src.data[idx + 1] = col;   // G = col index
+        src.data[idx] = row; // R = row index
+        src.data[idx + 1] = col; // G = col index
         src.data[idx + 2] = 0;
         src.data[idx + 3] = 255;
       }

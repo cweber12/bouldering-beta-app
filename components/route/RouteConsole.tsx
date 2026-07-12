@@ -86,11 +86,11 @@ export default function RouteConsole({
   // loaded data. Slot index drives the identity color, and a climb keeps its
   // slot — and colour — for the session; removing one frees its slot without
   // reshuffling the others.
-  const [slotKeys, setSlotKeys] = useState<(string | null)[]>(
-    () => Array.from({ length: MAX_SLOTS }, () => null),
+  const [slotKeys, setSlotKeys] = useState<(string | null)[]>(() =>
+    Array.from({ length: MAX_SLOTS }, () => null),
   );
-  const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(
-    () => Array.from({ length: MAX_SLOTS }, () => null),
+  const [attempts, setAttempts] = useState<(RouteAttempt | null)[]>(() =>
+    Array.from({ length: MAX_SLOTS }, () => null),
   );
 
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -114,23 +114,23 @@ export default function RouteConsole({
   const [consoleMode, setConsoleModeState] = useState<ConsoleMode>(() =>
     initialMode === "single" || initialMode === "multiple"
       ? initialMode
-      : initialKeys.length >= 2 ? "multiple" : "single",
+      : initialKeys.length >= 2
+        ? "multiple"
+        : "single",
   );
-  const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(
-    () => Array.from({ length: MAX_SLOTS }, () => null),
+  const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(() =>
+    Array.from({ length: MAX_SLOTS }, () => null),
   );
 
   // One hex limb color per slot; pre-populated from defaults so each slot
   // starts with a distinct color and duplicates are avoided by default.
-  const [slotColors, setSlotColors] = useState<string[]>(
-    () => [...DEFAULT_LIMB_COLORS],
-  );
+  const [slotColors, setSlotColors] = useState<string[]>(() => [...DEFAULT_LIMB_COLORS]);
 
   // Per-slot start anchor (seconds). The frame the user flags as each climb's
   // sequence start; master play runs every climb from its own anchor, and the
   // overlay composite respects the same offsets.
-  const [slotOffsets, setSlotOffsets] = useState<number[]>(
-    () => Array.from({ length: MAX_SLOTS }, () => 0),
+  const [slotOffsets, setSlotOffsets] = useState<number[]>(() =>
+    Array.from({ length: MAX_SLOTS }, () => 0),
   );
 
   // Crop box for ORB detection on the shared route photo.
@@ -180,13 +180,22 @@ export default function RouteConsole({
   // ── Slot loading + URL sync ──────────────────────────────────────────────
 
   /** Loads an S3 climb into a specific slot. */
-  const loadIntoSlot = useCallback(async (slot: number, key: string) => {
-    try {
-      const a = await downloadAttempt(key);
-      saveAttempt(a);
-      setAttempts(prev => { const n = [...prev]; n[slot] = a; return n; });
-    } catch { /* leave the slot empty — the rail still shows the climb as available */ }
-  }, [downloadAttempt]);
+  const loadIntoSlot = useCallback(
+    async (slot: number, key: string) => {
+      try {
+        const a = await downloadAttempt(key);
+        saveAttempt(a);
+        setAttempts((prev) => {
+          const n = [...prev];
+          n[slot] = a;
+          return n;
+        });
+      } catch {
+        /* leave the slot empty — the rail still shows the climb as available */
+      }
+    },
+    [downloadAttempt],
+  );
 
   // URL sync is a side effect of state, never a render-time action.
   const didMountSyncRef = useRef(false);
@@ -209,15 +218,18 @@ export default function RouteConsole({
   }, []);
 
   /** Adds a climb to the first free slot (no-op when full or already present). */
-  const addClimb = useCallback((key: string) => {
-    if (slotKeys.includes(key)) return;
-    const slot = slotKeys.findIndex((k) => k === null);
-    if (slot === -1) return; // at max
-    const next = [...slotKeys];
-    next[slot] = key;
-    setSlotKeys(next);
-    void loadIntoSlot(slot, key);
-  }, [slotKeys, loadIntoSlot]);
+  const addClimb = useCallback(
+    (key: string) => {
+      if (slotKeys.includes(key)) return;
+      const slot = slotKeys.findIndex((k) => k === null);
+      if (slot === -1) return; // at max
+      const next = [...slotKeys];
+      next[slot] = key;
+      setSlotKeys(next);
+      void loadIntoSlot(slot, key);
+    },
+    [slotKeys, loadIntoSlot],
+  );
 
   /**
    * Single-mode selection: collapse to exactly one shown climb. Reuses the
@@ -227,39 +239,59 @@ export default function RouteConsole({
    * multiple→single→multiple toggle without tapping the rail still preserves the
    * set, because that path never calls this.)
    */
-  const swapSingle = useCallback((key: string) => {
-    const fromSlot = slotKeys.indexOf(key);
-    if (fromSlot === 0 && activeKeysOf(slotKeys).length === 1) return; // already the sole climb
-    const existing = fromSlot !== -1 ? attempts[fromSlot] : null;
-    const nextKeys = Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? key : null));
-    setSlotKeys(nextKeys);
-    setAttempts(Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? existing : null)));
-    setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
-    setSlotOffsets(Array.from({ length: MAX_SLOTS }, () => 0));
-    if (!existing) void loadIntoSlot(0, key);
-  }, [slotKeys, attempts, loadIntoSlot]);
+  const swapSingle = useCallback(
+    (key: string) => {
+      const fromSlot = slotKeys.indexOf(key);
+      if (fromSlot === 0 && activeKeysOf(slotKeys).length === 1) return; // already the sole climb
+      const existing = fromSlot !== -1 ? attempts[fromSlot] : null;
+      const nextKeys = Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? key : null));
+      setSlotKeys(nextKeys);
+      setAttempts(Array.from({ length: MAX_SLOTS }, (_, i) => (i === 0 ? existing : null)));
+      setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+      setSlotOffsets(Array.from({ length: MAX_SLOTS }, () => 0));
+      if (!existing) void loadIntoSlot(0, key);
+    },
+    [slotKeys, attempts, loadIntoSlot],
+  );
 
   /** Removes a climb, freeing its slot without reshuffling the others. */
-  const removeClimb = useCallback((key: string) => {
-    const slot = slotKeys.findIndex((k) => k === key);
-    if (slot === -1) return;
-    setSlotKeys((prev) => {
-      const n = [...prev];
-      n[slot] = null;
-      return n;
-    });
-    setAttempts((a) => { const n = [...a]; n[slot] = null; return n; });
-    setMatchResults((m) => { const n = [...m]; n[slot] = null; return n; });
-    setSlotOffsets((o) => { const n = [...o]; n[slot] = 0; return n; });
-  }, [slotKeys]);
+  const removeClimb = useCallback(
+    (key: string) => {
+      const slot = slotKeys.findIndex((k) => k === key);
+      if (slot === -1) return;
+      setSlotKeys((prev) => {
+        const n = [...prev];
+        n[slot] = null;
+        return n;
+      });
+      setAttempts((a) => {
+        const n = [...a];
+        n[slot] = null;
+        return n;
+      });
+      setMatchResults((m) => {
+        const n = [...m];
+        n[slot] = null;
+        return n;
+      });
+      setSlotOffsets((o) => {
+        const n = [...o];
+        n[slot] = 0;
+        return n;
+      });
+    },
+    [slotKeys],
+  );
 
   // Pre-load climbs from the path/query into slots (once, on mount).
   useEffect(() => {
     const initial = Array.from({ length: MAX_SLOTS }, (_, i) => initialKeys[i] ?? null);
     setSlotKeys(initial);
-    initial.forEach((key, i) => { if (key) void loadIntoSlot(i, key); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);  // intentionally run once on mount
+    initial.forEach((key, i) => {
+      if (key) void loadIntoSlot(i, key);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
 
   // Detect whether this route has a saved Route Photo — a metadata-only list
   // probe, NOT a download. We never auto-apply it: the chooser surfaces "Use
@@ -279,9 +311,13 @@ export default function RouteConsole({
         const data = (await res.json()) as { objects?: { Key?: string }[] };
         const exists = (data.objects ?? []).some((o) => o.Key === photoKey);
         if (!cancelled) setSavedPhotoKey(exists ? photoKey : null);
-      } catch { /* no saved-photo option — the user can still take/upload */ }
+      } catch {
+        /* no saved-photo option — the user can still take/upload */
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, state, area, route]);
 
   const anyLoaded = attempts.some(Boolean);
@@ -306,7 +342,9 @@ export default function RouteConsole({
         setAutoFramed(true);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imageFile, routeMatchTriggered, cv, attempts, estimateCrop]);
 
   // Auto re-match when the crop changes (debounced). Once an initial match has
@@ -320,8 +358,10 @@ export default function RouteConsole({
     prevCropRef.current = imageCrop;
     if (!cv || !imageFile || !anyLoaded || matchTrigger === 0) return;
     if (cropTimerRef.current) clearTimeout(cropTimerRef.current);
-    cropTimerRef.current = setTimeout(() => setMatchTrigger(t => t + 1), 400);
-    return () => { if (cropTimerRef.current) clearTimeout(cropTimerRef.current); };
+    cropTimerRef.current = setTimeout(() => setMatchTrigger((t) => t + 1), 400);
+    return () => {
+      if (cropTimerRef.current) clearTimeout(cropTimerRef.current);
+    };
   }, [imageCrop, cv, imageFile, anyLoaded, matchTrigger]);
 
   // Close update menu on outside click.
@@ -346,7 +386,9 @@ export default function RouteConsole({
       }
     };
     img.src = imagePreviewUrl;
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imagePreviewUrl]);
 
   /** Sets imageFile and synchronously creates (or revokes) the associated object URL. */
@@ -366,7 +408,7 @@ export default function RouteConsole({
   }
 
   const handleMatchResult = useCallback((idx: number, result: ImageMatchResult | null) => {
-    setMatchResults(prev => {
+    setMatchResults((prev) => {
       const next = [...prev];
       next[idx] = result;
       return next;
@@ -384,11 +426,19 @@ export default function RouteConsole({
   // Flag the slot player's current scrub position as that climb's start.
   const handleSetStart = useCallback((idx: number) => {
     const t = playerRefs.current[idx]?.getCurrentTime() ?? 0;
-    setSlotOffsets((prev) => { const n = [...prev]; n[idx] = t; return n; });
+    setSlotOffsets((prev) => {
+      const n = [...prev];
+      n[idx] = t;
+      return n;
+    });
   }, []);
 
   const handleClearStart = useCallback((idx: number) => {
-    setSlotOffsets((prev) => { const n = [...prev]; n[idx] = 0; return n; });
+    setSlotOffsets((prev) => {
+      const n = [...prev];
+      n[idx] = 0;
+      return n;
+    });
   }, []);
 
   /** Applies a chosen photo through the shared selection path: re-arms the
@@ -430,8 +480,11 @@ export default function RouteConsole({
       if (!data.dataUrl) return;
       applyPhoto(await dataUrlToFile(data.dataUrl, "route-image.jpg"));
       setShowUpdateMenu(false);
-    } catch { /* leave the chooser up — the user can take/upload instead */ }
-    finally { setLoadingSaved(false); }
+    } catch {
+      /* leave the chooser up — the user can take/upload instead */
+    } finally {
+      setLoadingSaved(false);
+    }
   }
 
   /** Confirms the crop and runs the first match across all loaded slots — the
@@ -439,13 +492,13 @@ export default function RouteConsole({
   function handlePlaceOnRoute() {
     if (!anyLoaded) return;
     setRouteMatchTriggered(true);
-    setMatchTrigger(t => t + 1);
+    setMatchTrigger((t) => t + 1);
   }
 
   /** Re-runs matching across all slots (after a crop or photo change). */
   function handleReMatch() {
     if (cropTimerRef.current) clearTimeout(cropTimerRef.current);
-    setMatchTrigger(t => t + 1);
+    setMatchTrigger((t) => t + 1);
     setRefineOpen(false); // collapse so the updated comparison is visible
   }
 
@@ -479,37 +532,43 @@ export default function RouteConsole({
   const stageRows = activeKeys.length > 2 ? 2 : 1;
   const perRowH = stageH > 0 ? (stageH - (stageRows - 1) * 16) / stageRows : 0;
   const colMaxW = perRowH > SLOT_CHROME_PX ? (perRowH - SLOT_CHROME_PX) * mediaAspect : undefined;
-  const colorForKey = useCallback((key: string): string | null => {
-    const slot = slotKeys.indexOf(key);
-    return slot === -1 ? null : slotColors[slot];
-  }, [slotKeys, slotColors]);
+  const colorForKey = useCallback(
+    (key: string): string | null => {
+      const slot = slotKeys.indexOf(key);
+      return slot === -1 ? null : slotColors[slot];
+    },
+    [slotKeys, slotColors],
+  );
 
   // Stage controls live in the header (in line with the route info) so the
   // overlay previews get the full height below. Shown once the climb has been
   // placed on the route — the pre-place crop-confirm view has its own controls.
-  const headerActions = hasPhoto && routeMatchTriggered ? (
-    <CompareToolbar
-      consoleMode={consoleMode}
-      viewMode={viewMode}
-      onViewMode={setViewMode}
-      masterPlaying={masterPlaying}
-      onTogglePlayAll={() => {
-        const next = !masterPlaying;
-        setMasterPlaying(next);
-        for (let i = 0; i < MAX_SLOTS; i++) {
-          const ref = playerRefs.current[i];
-          if (!ref) continue;
-          if (next) { ref.seek(slotOffsets[i]); ref.play(); }
-          else ref.pause();
-        }
-      }}
-      refineOpen={refineOpen}
-      onToggleRefine={() => setRefineOpen(v => !v)}
-      contrastAvailable={contrastAvailable}
-      contrastEnabled={contrastEnabled}
-      onContrastToggle={setContrastEnabled}
-    />
-  ) : undefined;
+  const headerActions =
+    hasPhoto && routeMatchTriggered ? (
+      <CompareToolbar
+        consoleMode={consoleMode}
+        viewMode={viewMode}
+        onViewMode={setViewMode}
+        masterPlaying={masterPlaying}
+        onTogglePlayAll={() => {
+          const next = !masterPlaying;
+          setMasterPlaying(next);
+          for (let i = 0; i < MAX_SLOTS; i++) {
+            const ref = playerRefs.current[i];
+            if (!ref) continue;
+            if (next) {
+              ref.seek(slotOffsets[i]);
+              ref.play();
+            } else ref.pause();
+          }
+        }}
+        refineOpen={refineOpen}
+        onToggleRefine={() => setRefineOpen((v) => !v)}
+        contrastAvailable={contrastAvailable}
+        contrastEnabled={contrastEnabled}
+        onContrastToggle={setContrastEnabled}
+      />
+    ) : undefined;
 
   // Corner "Update photo" dropdown — shared by the pre-place crop view and the
   // post-place Refine panel (only one is mounted at a time, so the single
@@ -517,30 +576,70 @@ export default function RouteConsole({
   const updatePhotoDropdown = (
     <div ref={updateMenuRef} className="absolute top-2 right-2">
       <button
-        onClick={() => setShowUpdateMenu(v => !v)}
+        onClick={() => setShowUpdateMenu((v) => !v)}
         className="ui-control flex items-center gap-1.5 bg-surface/80 px-3 py-1.5 text-xs font-medium text-fg"
       >
-        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" />
+        <svg
+          className="h-3.5 w-3.5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182"
+          />
         </svg>
         Update photo
       </button>
       {showUpdateMenu && (
         <div className="ui-popover animate-fade-in absolute right-0 z-10 mt-1 w-44 overflow-hidden">
           <label className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg">
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5"
+              />
             </svg>
             Select file
             <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
           </label>
           <button
-            onClick={() => { setShowUpdateMenu(false); setShowCamera(true); }}
+            onClick={() => {
+              setShowUpdateMenu(false);
+              setShowCamera(true);
+            }}
             className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg"
           >
-            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+            <svg
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+              />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+              />
             </svg>
             Take a photo
           </button>
@@ -550,8 +649,19 @@ export default function RouteConsole({
               disabled={loadingSaved}
               className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg disabled:cursor-wait disabled:opacity-60"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5"
+                />
               </svg>
               {loadingSaved ? "Loading…" : "Use saved photo"}
             </button>
@@ -578,7 +688,9 @@ export default function RouteConsole({
             onToggleMode={() => setConsoleMode(consoleMode === "single" ? "multiple" : "single")}
             activeKeys={
               consoleMode === "single"
-                ? (singleIdx !== -1 ? [slotKeys[singleIdx] as string] : [])
+                ? singleIdx !== -1
+                  ? [slotKeys[singleIdx] as string]
+                  : []
                 : activeKeys
             }
             colorForKey={colorForKey}
@@ -590,135 +702,141 @@ export default function RouteConsole({
         )}
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* No route photo yet — the comparison needs a frame to overlay onto. */}
+          {!hasPhoto && (
+            <div className="flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
+                <p className="mb-3 text-sm text-fg-secondary">
+                  Take a photo of the wall to overlay {anyLoaded ? "the loaded climbs" : "climbs"}{" "}
+                  on it
+                  {savedPhotoKey ? ", or reuse this route's saved photo" : ""}.
+                </p>
 
-      {/* No route photo yet — the comparison needs a frame to overlay onto. */}
-      {!hasPhoto && (
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
-            <p className="mb-3 text-sm text-fg-secondary">
-              Take a photo of the wall to overlay {anyLoaded ? "the loaded climbs" : "climbs"} on it
-              {savedPhotoKey ? ", or reuse this route's saved photo" : ""}.
-            </p>
-
-            {/* Primary: take a photo — the priority case (you're at the wall). */}
-            <button
-              type="button"
-              onClick={() => setShowCamera(true)}
-              className={cn(
-                "mb-3 flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
-                "border-accent/50 bg-accent/10 text-fg hover:border-accent hover:bg-accent/15",
-              )}
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" />
-              </svg>
-              <span className="font-medium">Take a photo</span>
-            </button>
-
-            {/* Secondary: upload a file, or reuse the saved route photo if one exists. */}
-            <div className="flex gap-3">
-              <label
-                className={cn(
-                  "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150",
-                  "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
-                )}
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
-                </svg>
-                <span className="font-medium text-fg">Upload a photo</span>
-                <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
-              </label>
-
-              {savedPhotoKey && (
+                {/* Primary: take a photo — the priority case (you're at the wall). */}
                 <button
                   type="button"
-                  onClick={handleUseSavedPhoto}
-                  disabled={loadingSaved}
+                  onClick={() => setShowCamera(true)}
                   className={cn(
-                    "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150 disabled:cursor-wait disabled:opacity-60",
-                    "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                    "mb-3 flex w-full cursor-pointer items-center justify-center gap-3 rounded-lg border px-4 py-5 text-sm transition-colors duration-150",
+                    "border-accent/50 bg-accent/10 text-fg hover:border-accent hover:bg-accent/15",
                   )}
                 >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5" />
+                  <svg
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"
+                    />
                   </svg>
-                  <span className="font-medium text-fg">{loadingSaved ? "Loading…" : "Use saved photo"}</span>
-                  <span className="text-xs text-fg-muted">{"This route's photo"}</span>
+                  <span className="font-medium">Take a photo</span>
                 </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Crop-confirm — photo uploaded but not yet placed. Auto-frame positions
+                {/* Secondary: upload a file, or reuse the saved route photo if one exists. */}
+                <div className="flex gap-3">
+                  <label
+                    className={cn(
+                      "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150",
+                      "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                    )}
+                  >
+                    <svg
+                      className="h-5 w-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      viewBox="0 0 24 24"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5"
+                      />
+                    </svg>
+                    <span className="font-medium text-fg">Upload a photo</span>
+                    <span className="text-xs text-fg-muted">JPG, PNG, WebP</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                  </label>
+
+                  {savedPhotoKey && (
+                    <button
+                      type="button"
+                      onClick={handleUseSavedPhoto}
+                      disabled={loadingSaved}
+                      className={cn(
+                        "flex flex-1 cursor-pointer flex-col items-center gap-2 rounded-lg border px-4 py-4 text-sm transition-colors duration-150 disabled:cursor-wait disabled:opacity-60",
+                        "bg-card/50 border-accent/25 text-fg-secondary hover:border-accent/50 hover:bg-card/80 hover:text-fg",
+                      )}
+                    >
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5"
+                        />
+                      </svg>
+                      <span className="font-medium text-fg">
+                        {loadingSaved ? "Loading…" : "Use saved photo"}
+                      </span>
+                      <span className="text-xs text-fg-muted">{"This route's photo"}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Crop-confirm — photo uploaded but not yet placed. Auto-frame positions
           the crop over the projected climb; the user adjusts it (or draws their
           own when auto-framing fails), then places the climb on the route. This
           mirrors the scan pipeline's Place on route step. */}
-      {hasPhoto && !routeMatchTriggered && (
-        <div className="flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-4 py-5 sm:px-6">
-            <p className="text-center text-sm text-fg-secondary">
-              {autoFrameStatus === "estimating"
-                ? "Finding your route…"
-                : autoFramed
-                  ? "We framed the route — adjust if needed, then place your climb."
-                  : "Frame the route area, then place your climb on it."}
-            </p>
+          {hasPhoto && !routeMatchTriggered && (
+            <div className="flex-1 overflow-y-auto">
+              <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 px-4 py-5 sm:px-6">
+                <p className="text-center text-sm text-fg-secondary">
+                  {autoFrameStatus === "estimating"
+                    ? "Finding your route…"
+                    : autoFramed
+                      ? "We framed the route — adjust if needed, then place your climb."
+                      : "Frame the route area, then place your climb on it."}
+                </p>
 
-            {/* Auto-frame failed: prompt the user to draw the route area. */}
-            {autoFrameStatus === "failed" && !autoFramed && (
-              <p className="feedback-banner feedback-banner-caution w-full text-center">
-                Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route area yourself.
-              </p>
-            )}
+                {/* Auto-frame failed: prompt the user to draw the route area. */}
+                {autoFrameStatus === "failed" && !autoFramed && (
+                  <p className="feedback-banner feedback-banner-caution w-full text-center">
+                    Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route
+                    area yourself.
+                  </p>
+                )}
 
-            <div className="relative w-full" style={mediaContainerStyle(imageSize.w, imageSize.h, "13rem")}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={imagePreviewUrl!}
-                alt="Route photo"
-                className="absolute inset-0 h-full w-full rounded-lg border border-edge/50 bg-surface-alt/40 object-fill"
-                onLoad={(e) => {
-                  const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
-                  if (w && h) setImageSize({ w, h });
-                }}
-              />
-              <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
-              {updatePhotoDropdown}
-            </div>
-
-            <button
-              onClick={handlePlaceOnRoute}
-              disabled={!anyLoaded}
-              className="ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Place on route
-            </button>
-            {!anyLoaded && (
-              <p className="text-center text-xs text-fg-muted">
-                Add a climb from the list to place it on the route.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Comparison view — shown once the climb has been placed on the route. */}
-      {hasPhoto && routeMatchTriggered && (
-        <>
-          {/* Refine panel — route photo + crop, collapsed by default. */}
-          {refineOpen && (
-            <div className="shrink-0 border-b border-edge/30 px-4 py-3">
-              <div className="mx-auto flex w-full max-w-md flex-col gap-3">
-                <div className="relative" style={mediaContainerStyle(imageSize.w, imageSize.h, "12rem")}>
+                <div
+                  className="relative w-full"
+                  style={mediaContainerStyle(imageSize.w, imageSize.h, "13rem")}
+                >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={imagePreviewUrl!}
@@ -730,185 +848,249 @@ export default function RouteConsole({
                     }}
                   />
                   <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
-
-                  {/* Update route photo — corner dropdown */}
                   {updatePhotoDropdown}
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-fg-secondary">
-                    Adjust the crop to focus matching on the relevant wall area —
-                    changes apply automatically.
-                  </p>
-                  <button
-                    onClick={handleReMatch}
-                    disabled={!anyLoaded}
-                    className="ui-control-primary shrink-0 rounded-lg px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                <button
+                  onClick={handlePlaceOnRoute}
+                  disabled={!anyLoaded}
+                  className="ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg
+                    className="h-4 w-4 shrink-0"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
                   >
-                    Done
-                  </button>
-                </div>
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                  </svg>
+                  Place on route
+                </button>
+                {!anyLoaded && (
+                  <p className="text-center text-xs text-fg-muted">
+                    Add a climb from the list to place it on the route.
+                  </p>
+                )}
               </div>
             </div>
           )}
 
-          {/* Stage — fills remaining height; never grows past the viewport. */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
-            {!anyLoaded && (
-              <p className="py-12 text-center text-sm text-fg-muted">
-                No climbs loaded yet.
-              </p>
-            )}
+          {/* Comparison view — shown once the climb has been placed on the route. */}
+          {hasPhoto && routeMatchTriggered && (
+            <>
+              {/* Refine panel — route photo + crop, collapsed by default. */}
+              {refineOpen && (
+                <div className="shrink-0 border-b border-edge/30 px-4 py-3">
+                  <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+                    <div
+                      className="relative"
+                      style={mediaContainerStyle(imageSize.w, imageSize.h, "12rem")}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imagePreviewUrl!}
+                        alt="Route photo"
+                        className="absolute inset-0 h-full w-full rounded-lg border border-edge/50 bg-surface-alt/40 object-fill"
+                        onLoad={(e) => {
+                          const { naturalWidth: w, naturalHeight: h } = e.currentTarget;
+                          if (w && h) setImageSize({ w, h });
+                        }}
+                      />
+                      <CropBoxOverlay box={imageCrop} onChange={setImageCrop} />
 
-            {/* Single mode — focused one-climb viewer. One CompareSlot, centered
+                      {/* Update route photo — corner dropdown */}
+                      {updatePhotoDropdown}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-fg-secondary">
+                        Adjust the crop to focus matching on the relevant wall area — changes apply
+                        automatically.
+                      </p>
+                      <button
+                        onClick={handleReMatch}
+                        disabled={!anyLoaded}
+                        className="ui-control-primary shrink-0 rounded-lg px-4 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Stage — fills remaining height; never grows past the viewport. */}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+                {!anyLoaded && (
+                  <p className="py-12 text-center text-sm text-fg-muted">No climbs loaded yet.</p>
+                )}
+
+                {/* Single mode — focused one-climb viewer. One CompareSlot, centered
                 and capped to the media width, with its own play button; no colour
                 swatch or start anchors (those only matter when aligning climbs). */}
-            {consoleMode === "single" && anyLoaded && singleIdx !== -1 && attempts[singleIdx] && (
-              <div
-                ref={stageRef}
-                className="flex h-full min-h-0 items-stretch justify-center rounded-xl border border-edge/40 bg-card/20 p-3"
-              >
-                <div
-                  className="flex h-full min-h-0 w-full"
-                  style={colMaxW ? { maxWidth: colMaxW } : undefined}
-                >
-                  <CompareSlot
-                    slotIndex={singleIdx}
-                    attempt={attempts[singleIdx]}
-                    imageFile={imageFile}
-                    imageCrop={imageCrop}
-                    matchTrigger={matchTrigger}
-                    cv={cv}
-                    limbColor={slotColors[singleIdx]}
-                    contrastAdjust={activeContrast}
-                    onMatchResult={handleMatchResult}
-                    fillHeight
-                    playerRef={(el) => { playerRefs.current[singleIdx] = el; }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Side-by-side — all climbs grouped under one shared surface, each
-                column capped to the media width so the overlays sit close. */}
-            {consoleMode === "multiple" && viewMode === "sidebyside" && anyLoaded && (
-              <div className="h-full min-h-0 rounded-xl border border-edge/40 bg-card/20 p-3">
-                <div
-                  ref={stageRef}
-                  className={cn(
-                    "flex h-full min-h-0 content-center items-stretch justify-center gap-4",
-                    activeKeys.length > 2 ? "flex-wrap" : "flex-nowrap",
-                  )}
-                >
-                  {Array.from({ length: MAX_SLOTS }, (_, i) =>
-                    attempts[i] ? (
+                {consoleMode === "single" &&
+                  anyLoaded &&
+                  singleIdx !== -1 &&
+                  attempts[singleIdx] && (
+                    <div
+                      ref={stageRef}
+                      className="flex h-full min-h-0 items-stretch justify-center rounded-xl border border-edge/40 bg-card/20 p-3"
+                    >
                       <div
-                        key={i}
-                        className={cn(
-                          "flex min-w-0 min-h-0 flex-1 basis-0",
-                          activeKeys.length > 2 && "basis-[calc(50%-0.5rem)] grow-0",
-                        )}
+                        className="flex h-full min-h-0 w-full"
                         style={colMaxW ? { maxWidth: colMaxW } : undefined}
                       >
                         <CompareSlot
-                          slotIndex={i}
-                          attempt={attempts[i]}
+                          slotIndex={singleIdx}
+                          attempt={attempts[singleIdx]}
                           imageFile={imageFile}
                           imageCrop={imageCrop}
                           matchTrigger={matchTrigger}
                           cv={cv}
-                          limbColor={slotColors[i]}
+                          limbColor={slotColors[singleIdx]}
                           contrastAdjust={activeContrast}
-                          startOffset={slotOffsets[i]}
                           onMatchResult={handleMatchResult}
-                          onColorChange={handleColorChange}
-                          onSetStart={handleSetStart}
-                          onClearStart={handleClearStart}
-                          hidePlayButton
                           fillHeight
-                          playerRef={(el) => { playerRefs.current[i] = el; }}
+                          playerRef={(el) => {
+                            playerRefs.current[singleIdx] = el;
+                          }}
                         />
                       </div>
-                    ) : null,
+                    </div>
                   )}
-                </div>
-              </div>
-            )}
 
-            {/* Overlay (default) — all skeletons on one frame. The matchers still
+                {/* Side-by-side — all climbs grouped under one shared surface, each
+                column capped to the media width so the overlays sit close. */}
+                {consoleMode === "multiple" && viewMode === "sidebyside" && anyLoaded && (
+                  <div className="h-full min-h-0 rounded-xl border border-edge/40 bg-card/20 p-3">
+                    <div
+                      ref={stageRef}
+                      className={cn(
+                        "flex h-full min-h-0 content-center items-stretch justify-center gap-4",
+                        activeKeys.length > 2 ? "flex-wrap" : "flex-nowrap",
+                      )}
+                    >
+                      {Array.from({ length: MAX_SLOTS }, (_, i) =>
+                        attempts[i] ? (
+                          <div
+                            key={i}
+                            className={cn(
+                              "flex min-w-0 min-h-0 flex-1 basis-0",
+                              activeKeys.length > 2 && "basis-[calc(50%-0.5rem)] grow-0",
+                            )}
+                            style={colMaxW ? { maxWidth: colMaxW } : undefined}
+                          >
+                            <CompareSlot
+                              slotIndex={i}
+                              attempt={attempts[i]}
+                              imageFile={imageFile}
+                              imageCrop={imageCrop}
+                              matchTrigger={matchTrigger}
+                              cv={cv}
+                              limbColor={slotColors[i]}
+                              contrastAdjust={activeContrast}
+                              startOffset={slotOffsets[i]}
+                              onMatchResult={handleMatchResult}
+                              onColorChange={handleColorChange}
+                              onSetStart={handleSetStart}
+                              onClearStart={handleClearStart}
+                              hidePlayButton
+                              fillHeight
+                              playerRef={(el) => {
+                                playerRefs.current[i] = el;
+                              }}
+                            />
+                          </div>
+                        ) : null,
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Overlay (default) — all skeletons on one frame. The matchers still
                 run per-slot via hidden CompareSlots so each slot's match result
                 feeds the overlay player. */}
-            {consoleMode === "multiple" && viewMode === "overlay" && anyLoaded && (
-              <div className="flex h-full min-h-0 flex-col gap-2">
-                {/* Hidden matcher slots — feed each slot's match result to the
+                {consoleMode === "multiple" && viewMode === "overlay" && anyLoaded && (
+                  <div className="flex h-full min-h-0 flex-col gap-2">
+                    {/* Hidden matcher slots — feed each slot's match result to the
                     overlay player without rendering a visible card. */}
-                <div className="hidden">
-                  {Array.from({ length: MAX_SLOTS }, (_, i) =>
-                    attempts[i] ? (
-                      <CompareSlot
-                        key={i}
-                        slotIndex={i}
-                        attempt={attempts[i]}
-                        imageFile={imageFile}
-                        imageCrop={imageCrop}
-                        matchTrigger={matchTrigger}
-                        cv={cv}
-                        limbColor={slotColors[i]}
-                        onMatchResult={handleMatchResult}
-                        hidePlayer
-                      />
-                    ) : null,
-                  )}
-                </div>
-
-                <div className="min-h-0 flex-1">
-                  <CompareOverlayPlayer
-                    imageFile={imageFile}
-                    matchResults={matchResults}
-                    attempts={attempts}
-                    cv={cv}
-                    slotColors={slotColors}
-                    slotOffsets={slotOffsets}
-                    contrastAdjust={activeContrast}
-                  />
-                </div>
-
-                {/* Legend — editable colour ↔ climb identity (date distinguishes runs). */}
-                <div className="flex shrink-0 flex-wrap items-center gap-2">
-                  {attempts.map((att, i) => {
-                    if (!att) return null;
-                    const ts = formatRunTimestamp(att.id);
-                    return (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-edge/60 bg-card/60 py-1 pl-1.5 pr-2.5 text-xs"
-                      >
-                        <label
-                          className="relative inline-flex h-4 w-4 shrink-0 cursor-pointer rounded-md ring-1 ring-edge/60 transition hover:ring-edge-hover"
-                          style={{ backgroundColor: slotColors[i] }}
-                          title="Climb colour"
-                        >
-                          <input
-                            type="color"
-                            value={slotColors[i]}
-                            onChange={(e) => handleColorChange(i, e.target.value)}
-                            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                            aria-label="Climb colour"
+                    <div className="hidden">
+                      {Array.from({ length: MAX_SLOTS }, (_, i) =>
+                        attempts[i] ? (
+                          <CompareSlot
+                            key={i}
+                            slotIndex={i}
+                            attempt={attempts[i]}
+                            imageFile={imageFile}
+                            imageCrop={imageCrop}
+                            matchTrigger={matchTrigger}
+                            cv={cv}
+                            limbColor={slotColors[i]}
+                            onMatchResult={handleMatchResult}
+                            hidePlayer
                           />
-                        </label>
-                        <span className="font-medium text-fg">{ts ? ts.date : att.route}</span>
-                        {ts && <span className="text-fg-muted">{ts.time}</span>}
-                        <RunStatusDot runType={att.runType} />
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      )}
+                        ) : null,
+                      )}
+                    </div>
 
+                    <div className="min-h-0 flex-1">
+                      <CompareOverlayPlayer
+                        imageFile={imageFile}
+                        matchResults={matchResults}
+                        attempts={attempts}
+                        cv={cv}
+                        slotColors={slotColors}
+                        slotOffsets={slotOffsets}
+                        contrastAdjust={activeContrast}
+                      />
+                    </div>
+
+                    {/* Legend — editable colour ↔ climb identity (date distinguishes runs). */}
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      {attempts.map((att, i) => {
+                        if (!att) return null;
+                        const ts = formatRunTimestamp(att.id);
+                        return (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-edge/60 bg-card/60 py-1 pl-1.5 pr-2.5 text-xs"
+                          >
+                            <label
+                              className="relative inline-flex h-4 w-4 shrink-0 cursor-pointer rounded-md ring-1 ring-edge/60 transition hover:ring-edge-hover"
+                              style={{ backgroundColor: slotColors[i] }}
+                              title="Climb colour"
+                            >
+                              <input
+                                type="color"
+                                value={slotColors[i]}
+                                onChange={(e) => handleColorChange(i, e.target.value)}
+                                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                                aria-label="Climb colour"
+                              />
+                            </label>
+                            <span className="font-medium text-fg">{ts ? ts.date : att.route}</span>
+                            {ts && <span className="text-fg-muted">{ts.time}</span>}
+                            <RunStatusDot runType={att.runType} />
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

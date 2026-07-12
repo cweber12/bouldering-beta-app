@@ -1,12 +1,17 @@
 import { describe, it, expect, vi } from "vitest";
-import { estimateFrameMediaPipe, estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
+import {
+  estimateFrameMediaPipe,
+  estimateFramesMediaPipe,
+} from "@/pipeline/pose/mediapipePoseDetection";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Build a mock PoseLandmarker whose detectForVideo() returns the supplied landmarks. */
-function mockLandmarker(landmarks: Array<{ x: number; y: number; z?: number; visibility?: number }>[]) {
+function mockLandmarker(
+  landmarks: Array<{ x: number; y: number; z?: number; visibility?: number }>[],
+) {
   return { detectForVideo: vi.fn().mockReturnValue({ landmarks }) };
 }
 
@@ -87,10 +92,12 @@ describe("estimateFrameMediaPipe — landmark conversion", () => {
 
 describe("estimateFrameMediaPipe — confidence filtering", () => {
   it("drops landmarks below the default minScore (0.3)", () => {
-    const lm = mockLandmarker([[
-      { x: 0.5, y: 0.5, visibility: 0.9 },   // kept
-      { x: 0.4, y: 0.4, visibility: 0.1 },   // dropped — index 1 = left_eye_inner
-    ]]);
+    const lm = mockLandmarker([
+      [
+        { x: 0.5, y: 0.5, visibility: 0.9 }, // kept
+        { x: 0.4, y: 0.4, visibility: 0.1 }, // dropped — index 1 = left_eye_inner
+      ],
+    ]);
     const result = estimateFrameMediaPipe(lm, makeCanvas(), 0);
     expect(result!.keypoints).toHaveLength(1);
     expect(result!.keypoints[0].name).toBe("nose");
@@ -148,6 +155,6 @@ describe("estimateFrameMediaPipe — multiple landmarks", () => {
     const lm = mockLandmarker([landmarks]);
     const result = estimateFrameMediaPipe(lm, makeCanvas(), 0);
     expect(result!.keypoints).toHaveLength(2);
-    expect(result!.keypoints.map(k => k.name)).toEqual(["left_shoulder", "right_shoulder"]);
+    expect(result!.keypoints.map((k) => k.name)).toEqual(["left_shoulder", "right_shoulder"]);
   });
 });

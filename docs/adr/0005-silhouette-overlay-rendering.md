@@ -44,8 +44,8 @@ away:
 ## Update (2026-06-08) — Silhouette is a fat skeleton, not a filled avatar
 
 The original Silhouette construction (per-limb capsules + a filled torso quad + a
-head oval + **mitten hand caps** + a single ankle→foot_index foot capsule) was
-replaced. Hands read as a featureless ball sitting *on* the wrist, the foot was a
+head oval + **mitten hand caps** + a single ankle→foot*index foot capsule) was
+replaced. Hands read as a featureless ball sitting \_on* the wrist, the foot was a
 directionless heel-less stub, and the head's ear-span sizing ballooned in profile
 and floated above where the neck stopped. The fixes drift toward one model, so we
 adopted it wholesale:
@@ -53,7 +53,7 @@ adopted it wholesale:
 **The Silhouette is the skeleton drawn fat.** Every landmark bone is stroked as a
 round-capped capsule, all unioned and flattened through the scratch canvas exactly
 as before, then composited once at the opacity slider. Only two body parts are
-*areas* rather than bones, and they stay filled primitives built from their corner
+_areas_ rather than bones, and they stay filled primitives built from their corner
 landmarks:
 
 - **Torso** — the shoulders→hips quad is filled **and** its perimeter stroked at
@@ -81,7 +81,7 @@ stroke the limbs use, just at `0.5·W`:
 
 This is deliberate even though `index`/`pinky`/`thumb`/`heel` are **not** gated by
 `filterLandmarks` (only `wrist`/`shoulder`/`hip`/`ankle`/`foot_index` are). Drawing
-*derived* hands/feet from the stable proximal joints was considered and rejected:
+_derived_ hands/feet from the stable proximal joints was considered and rejected:
 it loses real orientation, needs special-case geometry and a confidence/plausibility
 fallback gate, and is inconsistent with the limb logic. Because the Skeleton pass
 already renders these same raw landmarks as thin lines, the fat strokes only thicken
@@ -102,7 +102,7 @@ as a uniform translucent blob. This update gives it **depth shading** (darker ed
 lighter cores) and revises the head/neck proportions, **without** disturbing the two
 enduring decisions — the result is still flattened through the scratch canvas and
 composited exactly once at `silhouetteOpacity`, and every size is still a multiple of
-the sequence-stable body scale. The shading is built entirely *inside* that single
+the sequence-stable body scale. The shading is built entirely _inside_ that single
 scratch pass.
 
 ### Shading is a unified inner-rim, not per-part gradients
@@ -110,13 +110,13 @@ scratch pass.
 The literal request was four per-part gradients (each limb a cross-section linear
 gradient; the torso perimeter its own linear; torso fill and head as radials). That was
 **rejected**: clipping per-part gradients to the union mask only stops them leaking
-*outside* the body — it does not stop one limb's dark edge from overwriting an adjacent
-limb's light centre *inside* the union, so every elbow/knee/wrist still seams. Those
+_outside_ the body — it does not stop one limb's dark edge from overwriting an adjacent
+limb's light centre _inside_ the union, so every elbow/knee/wrist still seams. Those
 internal streaks are precisely the noise the effect must avoid.
 
 Instead the "dark edges, light centre" is derived from the **union's own boundary** as a
 single continuous inner rim that fades inward to a lighter interior. For a straight limb
-that rim runs down both long edges — which *is* the requested cross-section — and because
+that rim runs down both long edges — which _is_ the requested cross-section — and because
 it is a property of the whole silhouette, adjacent limbs share it and joints stay
 continuous with zero internal seams. Only the torso fill and the head are literal
 (radial) gradients, layered on top inside the mask.
@@ -133,7 +133,7 @@ there is no boundary path to stroke inward from. The rim is therefore produced b
    dark→light transition into a smooth gradient. `source-atop` keeps the light strictly
    within the mask, so the outer edge stays crisp from pass 1.
 3. **Torso radial fill** on top: a narrow vertical oval highlight (light centre) fading
-   to a darker torso-edge shade — lighter than the rim dark, but *darker* than the limb
+   to a darker torso-edge shade — lighter than the rim dark, but _darker_ than the limb
    light-centres, per the brief.
 4. **Head radial** on top, drawn **last** (topmost): light centre → dark edges.
 5. Composite the scratch canvas onto the target once at `silhouetteOpacity`, as before.
@@ -156,7 +156,7 @@ keep the panel surface unchanged.
 ### Depth order: torso and head strictly on top
 
 The torso radial and head radial are painted **after** all limbs (head last). A limb
-crossing in front of the torso therefore has its *fill* occluded by the torso — the arm
+crossing in front of the torso therefore has its _fill_ occluded by the torso — the arm
 is conveyed by its thin **Skeleton**-pass line + joints, which always draw on top of the
 composited Silhouette and stay crisp. A "subtle overlap rim" and a "limb fill over torso"
 variant were both considered; the strict single-union occlusion was chosen for the

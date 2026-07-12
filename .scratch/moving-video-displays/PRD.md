@@ -6,7 +6,7 @@ Status: ready-for-agent
 
 Detection and route-photo matching already work well on moving videos — a full-route
 Route Overlay lines the skeleton up on the wall correctly. The failure is purely in the
-two *intermediate* display surfaces shown during and immediately after a scan, which do
+two _intermediate_ display surfaces shown during and immediately after a scan, which do
 not reflect camera motion and therefore look broken even though the underlying data is
 sound:
 
