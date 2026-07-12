@@ -41,6 +41,7 @@ import { saveAttempt, type VideoMeta, type FrameCapture, type RunType, type Stor
 import { detectHoldsVideoSpace } from "@/pipeline/holds/holdDetection";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
+import type { CropTrace, CropTraceEntry } from "@/utils/cropTrace";
 import type { PoseBackend } from "@/utils/poseConstants";
 import {
   buildScanDiagnostics,
@@ -267,6 +268,13 @@ export interface VideoProcessorResult {
    * before the first pose is detected.
    */
   currentPose: PoseFrame | null;
+  /**
+   * Dev-only per-frame crop trace for the detection eval harness: the Adaptive
+   * Crop search region, the tight landmark box, and re-acquire / refinement
+   * flags for each crop event. Populated only under {@link DIAGNOSTICS_ENABLED};
+   * null otherwise. Never written to the attempt, so it never reaches S3.
+   */
+  cropTrace: CropTrace | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -304,6 +312,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [scanDiagnostics, setScanDiagnostics] = useState<ScanDiagnostics | null>(null);
   const [orbPreview, setOrbPreview] = useState<NormalizedPoint[] | null>(null);
   const [currentPose, setCurrentPose] = useState<PoseFrame | null>(null);
+  const [cropTrace, setCropTrace] = useState<CropTrace | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -340,6 +349,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setScanDiagnostics(null);
       setOrbPreview(null);
       setCurrentPose(null);
+      setCropTrace(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -440,6 +450,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let recoveryFramesUsed = 0;                              // frames accepted in Adaptive Refinement
         let gapsRefined = 0;                                     // gaps the refinement pass re-probed
         let limbExpandedFrames = 0;                              // detection frames where a missing-limb reach disk was applied (ADR 0014)
+        // Dev-only per-frame crop trace for the harness Detection Preview. Only
+        // filled under DIAGNOSTICS_ENABLED; exposed via setCropTrace, never on
+        // the attempt (so it never reaches S3). See utils/cropTrace.ts.
+        const cropTraceEntries: CropTraceEntry[] = [];
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -632,12 +646,15 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             // Lost inside a crop → widen to the full frame and re-acquire by
             // identity rather than locking onto a bystander.
+            let reacquired = false;
             if (!chosen && region) {
               chosen = detectClimber(null, predicted, REACQUIRE_GATE);
+              reacquired = true;
             }
 
             let avgConfidence = 0;
             let keypointCount = 0;
+            let landmarkBox: CropBox | null = null; // deriveClimberCrop, for the dev crop trace
             if (chosen) {
               chosen.timestamp = video.currentTime;
               detected.push(chosen);
@@ -648,6 +665,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               const c = poseCentroid(chosen.keypoints);
               if (c) history.push(c);
               const box = deriveClimberCrop(chosen.keypoints, videoWidth, videoHeight);
+              landmarkBox = box;
               if (box) {
                 lastClimberBox = box;
                 coverageSamples.push((box.width * box.height) / (videoWidth * videoHeight));
@@ -669,6 +687,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             });
 
             frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: region });
+
+            // Dev crop trace: the Adaptive Crop search region fed to the detector,
+            // the tight landmark box it found, and the re-acquire flag. Drawn on
+            // the harness Detection Preview; never persisted to the attempt/S3.
+            if (DIAGNOSTICS_ENABLED) {
+              cropTraceEntries.push({
+                timestamp: video.currentTime,
+                frameIndex: i,
+                detected: !!chosen,
+                reacquired,
+                refinement: false,
+                searchRegion: region,
+                landmarkBox,
+              });
+            }
 
             // Periodically re-analyse lighting to adapt to scene changes.
             detectionFrameCount++;
@@ -839,10 +872,32 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               if (c) { history.push(c); prevCentroid = c; }
               prevAccepted = candidate;
               budget--;
+
+              // Dev crop trace: Refinement always re-detects on the full frame,
+              // so there is no search region to draw — record it as a flag and
+              // keep the landmark box it produced.
+              if (DIAGNOSTICS_ENABLED) {
+                cropTraceEntries.push({
+                  timestamp: candidate.timestamp,
+                  frameIndex: tsIdx,
+                  detected: true,
+                  reacquired: false,
+                  refinement: true,
+                  searchRegion: null,
+                  landmarkBox: deriveClimberCrop(candidate.keypoints, videoWidth, videoHeight),
+                });
+              }
             }
           }
 
           kept.sort((a, b) => a.timestamp - b.timestamp);
+        }
+
+        // Publish the dev crop trace (main-loop rows + any Refinement rows),
+        // sorted by video time so the preview can hold/step to the active crop.
+        if (DIAGNOSTICS_ENABLED) {
+          cropTraceEntries.sort((a, b) => a.timestamp - b.timestamp);
+          if (mountedRef.current) setCropTrace(cropTraceEntries);
         }
 
         // Pipeline: filter → interpolate → estimate → fill persistent gaps →
@@ -1130,6 +1185,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setScanDiagnostics(null);
       setOrbPreview(null);
       setCurrentPose(null);
+      setCropTrace(null);
     }
   }, []);
 
@@ -1142,5 +1198,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose, cropTrace };
 }

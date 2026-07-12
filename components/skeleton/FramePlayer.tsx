@@ -5,6 +5,8 @@ import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipe
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import { drawHolds, type HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import type { Hold } from "@/pipeline/holds/holdDetection";
+import type { CropTrace, CropTraceEntry } from "@/utils/cropTrace";
+import { dark } from "@/utils/theme";
 import { cn } from "@/utils/cn";
 
 /** A single layer of pre-computed skeleton data with optional visual style. */
@@ -81,6 +83,14 @@ interface FramePlayerProps {
   /** Style for the Holds pass (colours, visibility). */
   holdStyle?: HoldStyle;
   /**
+   * Dev detection-eval-harness only: the per-frame crop trace, drawn on top of
+   * the skeleton as the Adaptive Crop search region + tight landmark box, with
+   * on-canvas flags for misses / re-acquire / refinement. Timestamps are in real
+   * video time; the active entry is held (step, no interpolation) for the current
+   * playback frame. Omit / undefined to draw nothing (the toggle-off state).
+   */
+  cropTrace?: CropTrace | null;
+  /**
    * Seconds added to the global playback time when gating Holds, matching the
    * `timeOffset` of the layer the Holds belong to (aligned-start Compare slots).
    * Default 0.
@@ -114,6 +124,89 @@ function findNearest(
     return frames[lo - 1];
   }
   return frames[lo];
+}
+
+/**
+ * Pick the crop-trace entry active at real video time `t`: the last row whose
+ * timestamp is ≤ t (held/step, no interpolation). Falls back to the first row
+ * when `t` precedes every entry. Assumes `trace` is sorted ascending.
+ */
+export function findActiveCrop(trace: CropTrace, t: number): CropTraceEntry | null {
+  const len = trace.length;
+  if (len === 0) return null;
+  if (t < trace[0].timestamp) return trace[0];
+  let lo = 0;
+  let hi = len - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (trace[mid].timestamp <= t) lo = mid;
+    else hi = mid - 1;
+  }
+  return trace[lo];
+}
+
+/**
+ * Draw one crop-trace entry over the current frame (canvas = video-pixel space):
+ * the Adaptive Crop search region, the tight landmark box, and stacked text
+ * flags. Colours come from utils/theme.ts (theme-independent, drawn over video).
+ */
+function drawCropEntry(
+  ctx: CanvasRenderingContext2D,
+  entry: CropTraceEntry,
+  canvasW: number,
+  canvasH: number,
+): void {
+  const unit = Math.min(canvasW, canvasH);
+  const lineWidth = Math.max(2, unit * 0.004);
+  const dash = Math.max(6, unit * 0.012);
+
+  ctx.save();
+  ctx.lineWidth = lineWidth;
+
+  // Search region — solid; danger colour + "no pose" when the frame missed.
+  if (entry.searchRegion) {
+    const r = entry.searchRegion;
+    ctx.setLineDash([]);
+    ctx.strokeStyle = entry.detected ? dark.cropRegion : dark.cropMiss;
+    ctx.strokeRect(r.x, r.y, r.width, r.height);
+  }
+
+  // Landmark box — dashed, drawn inside the region.
+  if (entry.landmarkBox) {
+    const b = entry.landmarkBox;
+    ctx.setLineDash([dash, dash]);
+    ctx.strokeStyle = dark.cropLandmark;
+    ctx.strokeRect(b.x, b.y, b.width, b.height);
+    ctx.setLineDash([]);
+  }
+
+  // On-canvas flags, stacked at the top-left corner of the region (or frame).
+  const flags: { text: string; color: string }[] = [];
+  if (!entry.detected) flags.push({ text: "no pose", color: dark.cropMiss });
+  if (entry.reacquired) flags.push({ text: "full-frame re-acquire", color: dark.caution });
+  if (entry.refinement) flags.push({ text: "refinement", color: dark.fgLight });
+
+  if (flags.length > 0) {
+    const fontPx = Math.max(12, Math.round(unit * 0.022));
+    ctx.font = `600 ${fontPx}px system-ui, sans-serif`;
+    ctx.textBaseline = "top";
+    ctx.lineJoin = "round";
+    const anchor = entry.searchRegion ?? { x: 0, y: 0 };
+    const pad = fontPx * 0.4;
+    let ty = anchor.y + pad;
+    const tx = anchor.x + pad;
+    for (const f of flags) {
+      // Dark outline behind the label so it stays legible over any frame.
+      ctx.lineWidth = Math.max(2, fontPx * 0.16);
+      ctx.strokeStyle = "rgba(0,0,0,0.75)";
+      ctx.strokeText(f.text, tx, ty);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, tx, ty);
+      ty += fontPx * 1.2;
+    }
+  }
+
+  ctx.restore();
 }
 
 /** Format seconds as M:SS. */
@@ -156,6 +249,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   holds,
   holdStyle,
   holdsTimeOffset = 0,
+  cropTrace,
   fit = "width",
   bare = false,
   className,
@@ -168,6 +262,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   const holdsRef = useRef<Hold[]>([]);
   const holdStyleRef = useRef<HoldStyle | undefined>(undefined);
   const holdsTimeOffsetRef = useRef(holdsTimeOffset);
+  const cropTraceRef = useRef<CropTrace | null>(null);
   const timeRef = useRef(0);
   // High-water mark for the Holds reveal: the furthest playback time reached
   // since the last Reset. A Hold shows once time has *ever* reached its
@@ -212,6 +307,9 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   useEffect(() => {
     holdsTimeOffsetRef.current = holdsTimeOffset;
   }, [holdsTimeOffset]);
+  useEffect(() => {
+    cropTraceRef.current = cropTrace ?? null;
+  }, [cropTrace]);
 
   // Keep the start-offset ref current; redraw if it moves while paused.
   useEffect(() => {
@@ -357,6 +455,15 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         }
         drawSkeleton(ctx, nearest.keypoints, { ...layer.style, bodyScale: scale });
       }
+    }
+
+    // Dev harness crop overlay — topmost, so the boxes/flags stay visible over
+    // the skeleton. Held (step) to the entry active at the current real video
+    // time: logical t plus the video offset the backdrop is playing at.
+    const trace = cropTraceRef.current;
+    if (trace && trace.length > 0) {
+      const active = findActiveCrop(trace, t + videoOffsetRef.current);
+      if (active) drawCropEntry(ctx, active, canvas.width, canvas.height);
     }
   }, [videoSrc, videoReady]);
 
@@ -513,7 +620,7 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   // visibility toggles) while paused.
   useEffect(() => {
     if (ready && !playing) drawFrame(timeRef.current);
-  }, [layers, holds, holdStyle, ready, playing, drawFrame, videoReady]);
+  }, [layers, holds, holdStyle, cropTrace, ready, playing, drawFrame, videoReady]);
 
   // Expose imperative controls to parent via ref.
   useImperativeHandle(ref, () => ({

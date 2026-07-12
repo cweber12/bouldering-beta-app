@@ -288,7 +288,11 @@ function Calibrator({
     totalFrames,
     orbPreview,
     currentPose,
+    cropTrace,
   } = useVideoProcessor(100);
+
+  // Detection Preview: show the per-frame Adaptive Crop overlay (default on).
+  const [showCrops, setShowCrops] = useState(true);
 
   function handleTierChange(t: QualityTier) {
     setTier(t);
@@ -567,6 +571,15 @@ function Calibrator({
                 {relayStatus.message}
               </span>
             )}
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
+              <input
+                type="checkbox"
+                checked={showCrops}
+                onChange={(e) => setShowCrops(e.target.checked)}
+                className="accent-accent"
+              />
+              Crops
+            </label>
             <button
               type="button"
               onClick={handleRescan}
@@ -594,6 +607,7 @@ function Calibrator({
               duration={skel.duration}
               autoPlay
               orbKeypoints={orbKeypoints}
+              cropTrace={showCrops ? cropTrace : undefined}
               fit="contain"
               bare
               className="min-h-0 flex-1 rounded-none"
