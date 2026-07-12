@@ -33,14 +33,16 @@ const DEFAULT_TS = [0, 0.2, 0.4, 0.6, 0.8];
 const FOOT_TS = [0, 0.25, 0.5, 0.75, 1.0];
 
 /** A stationary left-hand grip: index/pinky above the wrist, all detected. */
-function handFrames(opts: {
-  x?: number;
-  handY?: number;
-  wristY?: number;
-  score?: number;
-  ts?: number[];
-  side?: "left" | "right";
-} = {}): PoseFrame[] {
+function handFrames(
+  opts: {
+    x?: number;
+    handY?: number;
+    wristY?: number;
+    score?: number;
+    ts?: number[];
+    side?: "left" | "right";
+  } = {},
+): PoseFrame[] {
   const { x = 0.5, handY = 0.45, wristY = 0.5, score = 0.8, ts = DEFAULT_TS, side = "left" } = opts;
   return ts.map((t) => ({
     timestamp: t,
@@ -55,7 +57,12 @@ function handFrames(opts: {
 /** A left-leg foot sample with the foot fixed and the leg posed as given. */
 function footFrame(
   t: number,
-  leg: { foot: [number, number]; ankle: [number, number]; knee: [number, number]; hip: [number, number] },
+  leg: {
+    foot: [number, number];
+    ankle: [number, number];
+    knee: [number, number];
+    hip: [number, number];
+  },
   score = 0.8,
 ): PoseFrame {
   return {
@@ -188,7 +195,12 @@ describe("detectHolds", () => {
     const tapTs = [0, 0.2, 0.4, 0.6];
     const tapX = [0.8, 0.81, 0.8, 0.81];
     const taps = tapTs.map((t, i) =>
-      footFrame(t, { foot: [tapX[i], 0.56], ankle: [tapX[i] - 0.02, 0.55], knee: [0.65, 0.5], hip }),
+      footFrame(t, {
+        foot: [tapX[i], 0.56],
+        ankle: [tapX[i] - 0.02, 0.55],
+        knee: [0.65, 0.5],
+        hip,
+      }),
     );
     const settleTs = [0.8, 1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.2, 2.4];
     const settle = settleTs.map((t) =>
@@ -284,7 +296,9 @@ describe("detectHolds", () => {
     const ankle: [number, number] = [0.2, 0.85];
     const foot: [number, number] = [0.2, 0.92];
     const kneeXs = [0.35, 0.32, 0.28, 0.24, 0.21];
-    const footF = kneeXs.map((kx, i) => footFrame(footTs[i], { foot, ankle, knee: [kx, 0.675], hip }));
+    const footF = kneeXs.map((kx, i) =>
+      footFrame(footTs[i], { foot, ankle, knee: [kx, 0.675], hip }),
+    );
 
     const holds = detectHolds([...hand, ...footF], project, BODY_SCALE);
     expect(holds).toHaveLength(2);

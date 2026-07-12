@@ -134,9 +134,10 @@ export async function sendOrbRequest<T>(payload: Record<string, unknown>): Promi
  * Do not call this from a server component — it creates a Web Worker.
  */
 export async function detectAndCompute(imageData: ImageData): Promise<OrbResult> {
-  const resp = await sendOrbRequest<{ keypoints: OrbKeypoint[]; descriptors: Uint8Array }>(
-    { type: "detectAndCompute", imageData },
-  );
+  const resp = await sendOrbRequest<{ keypoints: OrbKeypoint[]; descriptors: Uint8Array }>({
+    type: "detectAndCompute",
+    imageData,
+  });
   return { keypoints: resp.keypoints, descriptors: resp.descriptors };
 }
 

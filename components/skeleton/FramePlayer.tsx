@@ -1,7 +1,11 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { drawSkeleton, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import {
+  drawSkeleton,
+  computeStableBodyScale,
+  type SkeletonStyle,
+} from "@/pipeline/overlay/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import { drawHolds, type HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import type { Hold } from "@/pipeline/holds/holdDetection";
@@ -90,10 +94,7 @@ interface FramePlayerProps {
 // ---------------------------------------------------------------------------
 
 /** Binary-search the sorted frames array for the nearest timestamp. */
-function findNearest(
-  frames: RenderedSkeletonFrame[],
-  t: number,
-): RenderedSkeletonFrame | null {
+function findNearest(frames: RenderedSkeletonFrame[], t: number): RenderedSkeletonFrame | null {
   const len = frames.length;
   if (len === 0) return null;
   let lo = 0;
@@ -103,10 +104,7 @@ function findNearest(
     if (frames[mid].timestamp < t) lo = mid + 1;
     else hi = mid;
   }
-  if (
-    lo > 0 &&
-    Math.abs(frames[lo - 1].timestamp - t) < Math.abs(frames[lo].timestamp - t)
-  ) {
+  if (lo > 0 && Math.abs(frames[lo - 1].timestamp - t) < Math.abs(frames[lo].timestamp - t)) {
     return frames[lo - 1];
   }
   return frames[lo];
@@ -138,22 +136,25 @@ function formatTime(s: number): string {
  * The canvas draws at the image's native resolution and is CSS-scaled to
  * fill the container width, preserving aspect ratio.
  */
-const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer({
-  imageFile,
-  layers,
-  duration,
-  loop = true,
-  hidePlayButton = false,
-  autoPlay = false,
-  startOffset = 0,
-  orbKeypoints,
-  holds,
-  holdStyle,
-  holdsTimeOffset = 0,
-  fit = "width",
-  bare = false,
-  className,
-}, ref) {
+const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function FramePlayer(
+  {
+    imageFile,
+    layers,
+    duration,
+    loop = true,
+    hidePlayButton = false,
+    autoPlay = false,
+    startOffset = 0,
+    orbKeypoints,
+    holds,
+    holdStyle,
+    holdsTimeOffset = 0,
+    fit = "width",
+    bare = false,
+    className,
+  },
+  ref,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bitmapRef = useRef<ImageBitmap | null>(null);
   const layersRef = useRef(layers);
@@ -273,7 +274,13 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
         if (baseFrames) scaleCacheRef.current.set(baseFrames, holdScale);
       }
       if (t > holdsHighWaterRef.current) holdsHighWaterRef.current = t;
-      drawHolds(ctx, holdsList, holdsHighWaterRef.current + holdsTimeOffsetRef.current, holdStyleRef.current, holdScale);
+      drawHolds(
+        ctx,
+        holdsList,
+        holdsHighWaterRef.current + holdsTimeOffsetRef.current,
+        holdStyleRef.current,
+        holdScale,
+      );
     }
 
     for (const layer of layersRef.current) {
@@ -365,16 +372,20 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
   }, [layers, holds, holdStyle, ready, playing, drawFrame]);
 
   // Expose imperative controls to parent via ref.
-  useImperativeHandle(ref, () => ({
-    play: () => setPlaying(true),
-    pause: () => setPlaying(false),
-    seek: (t: number) => {
-      timeRef.current = t;
-      setDisplayTime(t);
-      drawFrame(t);
-    },
-    getCurrentTime: () => timeRef.current,
-  }), [drawFrame]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      play: () => setPlaying(true),
+      pause: () => setPlaying(false),
+      seek: (t: number) => {
+        timeRef.current = t;
+        setDisplayTime(t);
+        drawFrame(t);
+      },
+      getCurrentTime: () => timeRef.current,
+    }),
+    [drawFrame],
+  );
 
   function togglePlay() {
     setPlaying((p) => !p);
@@ -420,7 +431,12 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     >
       {fit === "contain" ? (
         // Centered, viewport-fit canvas: shrinks to fit the bounded parent.
-        <div className={cn("flex min-h-0 flex-1 items-center justify-center overflow-hidden", !bare && "bg-surface-alt/30")}>
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 items-center justify-center overflow-hidden",
+            !bare && "bg-surface-alt/30",
+          )}
+        >
           <canvas ref={canvasRef} className="block max-h-full max-w-full object-contain" />
         </div>
       ) : (
@@ -453,8 +469,19 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
             aria-label="Replay holds"
             title="Replay the holds reveal"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992V4.356M3.985 19.644v-4.992h4.992M19.5 9.348a8.25 8.25 0 00-15.357-2.34M4.5 14.652a8.25 8.25 0 0015.357 2.34" />
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16.023 9.348h4.992V4.356M3.985 19.644v-4.992h4.992M19.5 9.348a8.25 8.25 0 00-15.357-2.34M4.5 14.652a8.25 8.25 0 0015.357 2.34"
+              />
             </svg>
           </button>
         )}

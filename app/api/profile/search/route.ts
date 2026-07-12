@@ -25,7 +25,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
   if (q.length < 2) {
-    return NextResponse.json({ error: "Search query must be at least 2 characters." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Search query must be at least 2 characters." },
+      { status: 400 },
+    );
   }
   if (q.length > 200) {
     return NextResponse.json({ error: "Search query too long." }, { status: 400 });

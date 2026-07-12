@@ -185,7 +185,7 @@ export function extractFeaturesFromCrop(
 ): OrbFeatures {
   const cropped = cropImageData(imageData, cropBox);
   const features = extractFeatures(cv, cropped, normalizePixels);
-  const adjustedKp = features.keypoints.map(kp => ({
+  const adjustedKp = features.keypoints.map((kp) => ({
     ...kp,
     pt: { x: kp.pt.x + cropBox.x, y: kp.pt.y + cropBox.y },
   }));
@@ -274,7 +274,7 @@ export function rescaleFeaturesToNative(features: OrbFeatures, scale: number): O
   const inv = 1 / scale;
   const out: OrbFeatures = {
     ...features,
-    keypoints: features.keypoints.map(kp => ({
+    keypoints: features.keypoints.map((kp) => ({
       ...kp,
       pt: { x: kp.pt.x * inv, y: kp.pt.y * inv },
     })),
@@ -350,10 +350,7 @@ export function buildClimberExclusionMask(
     // Convert normalised landmarks to pixel coordinates.
     const pixelCoords: number[] = [];
     for (const lm of landmarks) {
-      pixelCoords.push(
-        Math.round(lm.x * width),
-        Math.round(lm.y * height),
-      );
+      pixelCoords.push(Math.round(lm.x * width), Math.round(lm.y * height));
     }
 
     points = cv.matFromArray(landmarks.length, 1, cv.CV_32SC2, pixelCoords);
@@ -538,11 +535,7 @@ export function createQueryMatcher(cv: CV, query: OrbFeatures): QueryMatcher | n
  * reference sets against the same query, prefer {@link createQueryMatcher} so
  * the query Mat is built once rather than per call.
  */
-export function matchOrbFeatures(
-  cv: CV,
-  ref: OrbFeatures,
-  query: OrbFeatures,
-): OrbMatch[] {
+export function matchOrbFeatures(cv: CV, ref: OrbFeatures, query: OrbFeatures): OrbMatch[] {
   // Guard before allocating the matcher so a 0-keypoint reference does no work.
   if (ref.descriptors.length / ORB_DESCRIPTOR_BYTES === 0) return [];
 

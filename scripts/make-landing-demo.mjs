@@ -109,8 +109,8 @@ for (const path of ranked) {
 if (!chosenAttempt) {
   console.error(
     `Found ${ranked.length} run file(s) under ${srcDir}, but none had ORB ` +
-    `features (orbFeatures). Fixed Capture runs carry a starfield; Panning ` +
-    `captures do not. Scan a Fixed Capture climb, Save-to-device, and retry.`,
+      `features (orbFeatures). Fixed Capture runs carry a starfield; Panning ` +
+      `captures do not. Scan a Fixed Capture climb, Save-to-device, and retry.`,
   );
   process.exit(1);
 }

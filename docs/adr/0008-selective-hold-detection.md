@@ -1,7 +1,7 @@
 # Selective hold detection: gap-tolerant dwells, weighted-foot gate, split-disc co-render
 
 > **Context:** the detection gates below are unchanged by
-> [ADR 0009](0009-authored-persisted-holds.md); 0009 only moves *where* detection
+> [ADR 0009](0009-authored-persisted-holds.md); 0009 only moves _where_ detection
 > runs (video-frame space at scan time, Fixed Capture) and makes the result
 > editable and persisted. The same-place merge and split-disc render still apply.
 
@@ -20,9 +20,9 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
    Dwells; if the limb returned even slightly off the original spot it cleared the
    same-kind merge radius and became a second Hold. A Dwell now **survives a brief
    excursion**: the contact point may leave the stationary radius for up to a short
-   gap (~0.4 s) and is re-admitted if it returns within the radius of the *same
-   anchor*. Excursion frames are excluded from the averaged Hold position, but their
-   elapsed time still counts toward the Dwell duration, so a *long* lift-off naturally
+   gap (~0.4 s) and is re-admitted if it returns within the radius of the _same
+   anchor_. Excursion frames are excluded from the averaged Hold position, but their
+   elapsed time still counts toward the Dwell duration, so a _long_ lift-off naturally
    fails the confidence guard rather than being silently bridged. Relying only on a
    wider merge radius was rejected: it cannot tell a genuine re-grip from a distinct
    adjacent hold, and a too-wide radius swallows real neighbours. The same-kind merge
@@ -31,18 +31,18 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
 
 2. **Weighted-foot gate split by geometry: side support vs underneath.** ADR 0007
    option 4 gated a Foot Hold on knee-straighten **OR** "braced" (knee bent past a
-   straight dangle, **OR** ankle offset from the hip plumb). The braced *bent-knee*
+   straight dangle, **OR** ankle offset from the hip plumb). The braced _bent-knee_
    clause leaked: a leg **tucked up** under the body also has a bent knee, so it
    registered a false Foot Hold. The gate is now three independent signals that
    mirror how a foot actually bears load:
    - **(A) Side support** — the ankle is offset from the hip plumb line. A leg shot
-     out from under the torso and held still is resting on a hold *even when the knee
-     barely bends*, so horizontal offset qualifies on its own. (An earlier revision
+     out from under the torso and held still is resting on a hold _even when the knee
+     barely bends_, so horizontal offset qualifies on its own. (An earlier revision
      of this ADR required a vertical hip→knee→ankle stack; that was wrong — it
      rejected exactly this side-extended foot, whose leg is roughly horizontal.)
    - **(B) Stand-up underneath** — the interior hip–knee–ankle angle increases across
      the dwell (the Climber pushes up on a foot under the body).
-   - **(C) Braced underneath** — a bent knee *with the foot planted below the knee*.
+   - **(C) Braced underneath** — a bent knee _with the foot planted below the knee_.
      The below-knee test (ankle clearly lower than the knee) is what separates a
      braced foothold from a tucked, dangling leg whose foot is drawn up level with or
      above the knee — closing the leak without touching the side-support and stand-up
@@ -66,7 +66,7 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
    a noisy hang.
 
 4. **A hand+foot on one spot is co-rendered as a split disc — render-only, still two
-   Holds in data.** This is the direct reversal of how ADR 0007 option 5 *presented*
+   Holds in data.** This is the direct reversal of how ADR 0007 option 5 _presented_
    the case (it kept them two discs), but **not** of the data model: a Hand Hold and a
    Foot Hold on the same spot are still two Holds, each with its own kind, `order`, and
    `firstUseTime` (CONTEXT.md's **Hold** definition stays literally true). When their
@@ -88,7 +88,7 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
 
 6. **A longer dwell for feet than for hands.** A repositioning or swinging foot
    briefly satisfies the same load-bearing geometry a settled placement does — a
-   side-swing pause clears side-support, and a *tap-around* before settling forms a
+   side-swing pause clears side-support, and a _tap-around_ before settling forms a
    short stationary run that, anchored on its first contact, becomes its own
    (earlier-numbered) Hold at a transient spot. Climbers keep feet on footholds
    longer than hands and the right placement out-dwells the taps, so the foot
@@ -103,7 +103,7 @@ persisting anything new (still derived on the fly per ADR 0007 option 2).
 - **No schema or glossary change.** Detection stays a pure `detectHolds(frames)` derived
   on the fly (ADR 0007 option 2). The **Hold**, **Hand Hold**, **Foot Hold**, and
   **Dwell** definitions in CONTEXT.md are unchanged — gap tolerance and the stack gate
-  are implementation of *how* a Dwell is detected, not what the words mean.
+  are implementation of _how_ a Dwell is detected, not what the words mean.
 - **More tunables, same Balanced philosophy.** New constants (excursion gap seconds,
   the downward-stack margins) join the existing block at the top of
   `pipeline/holdDetection.ts`; the render combine factor lives in `pipeline/holdsOverlay.ts`

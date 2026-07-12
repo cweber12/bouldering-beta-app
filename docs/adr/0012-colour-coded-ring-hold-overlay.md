@@ -1,9 +1,9 @@
 # Colour-coded ring hold overlay
 
-Supersedes the *marker look* of [ADR 0011](0011-clustered-ring-hold-overlay.md)
+Supersedes the _marker look_ of [ADR 0011](0011-clustered-ring-hold-overlay.md)
 (which superseded 0010, which superseded 0007). The **Hold** inference algorithm,
 the selectivity gates, persistence, the cluster-by-proximity idea, and the
-progressive reveal are all unchanged — this ADR only changes how Holds are *drawn*
+progressive reveal are all unchanged — this ADR only changes how Holds are _drawn_
 in `pipeline/holdsOverlay.ts` and how kind is shown in the legend and editor.
 
 ## Context
@@ -15,12 +15,12 @@ structural, not parameters left untuned:
 
 - A literal silhouette has no flat region for a digit, forcing per-kind
   `SOLID_WIDTH_FRAC`, per-side `GLYPH_CENTROID`, auto-shrink and a halo just to keep
-  the *most important* element — the number — legible.
+  the _most important_ element — the number — legible.
 - The hand (512-viewBox anatomical) and foot (32-viewBox footprint with toe-beans)
   share no visual language and turn to mush at the ~45 px the overlay draws on
   textured rock.
 - Side-by-mirroring is imperceptible at that size — a paid-for bit conveying nothing.
-- ADR 0010 had already *rejected* on-glyph numbers as "distracting… fought the wall
+- ADR 0010 had already _rejected_ on-glyph numbers as "distracting… fought the wall
   hold for the same pixels"; ADR 0011 reintroduced them. That tension was never
   actually resolved.
 
@@ -45,13 +45,13 @@ and carry it on the channel that reads fastest while keeping the rock visible:
    painted. The number is gone entirely — its job (sequence) is served by the reveal
    timing and the Skeleton.
 
-3. **Cluster by proximity *and kind*; concentric for both kinds.** Coincident
+3. **Cluster by proximity _and kind_; concentric for both kinds.** Coincident
    same-kind Holds (two hands matching, a re-grip) collapse to one ring of that
    colour. A spot used by both a hand and a foot draws **two concentric rings**
    (blue + orange) centred on the spot — no badge fan, no radial nudge.
 
 4. **Progressive reveal kept.** A ring still appears at its earliest member's
-   `firstUseTime`, and **Reset** replays it. With numbers gone, *appearance timing* is
+   `firstUseTime`, and **Reset** replays it. With numbers gone, _appearance timing_ is
    the sequence cue: a ring shows as the limb lands.
 
 5. **Colour = kind everywhere.** The legend and the Holds editor switch to
@@ -74,8 +74,8 @@ and carry it on the channel that reads fastest while keeping the rock visible:
 3. **Reintroduce colour, reversing ADR 0011's shape-only choice — accepted
    deliberately.** 0011 went single-colour-shape to avoid a colour legend and keep one
    look; but shape does not read at overlay scale, and colour is the fastest
-   preattentive channel for a binary. A clear-interior *colour* ring keeps the rock
-   visible *and* says kind instantly — better on both axes than a shape that is
+   preattentive channel for a binary. A clear-interior _colour_ ring keeps the rock
+   visible _and_ says kind instantly — better on both axes than a shape that is
    illegible.
 
 4. **Drop side from the wall — accepted.** Mirroring conveyed nothing at size;

@@ -98,9 +98,7 @@ export function toReplayData(attempt, opts = {}) {
 
   /** @type {Array<{ keypoints?: ReplayKeypoint[] }>} */
   const allFrames = attempt?.frames ?? [];
-  const detected = allFrames.filter(
-    (f) => Array.isArray(f?.keypoints) && f.keypoints.length > 0,
-  );
+  const detected = allFrames.filter((f) => Array.isArray(f?.keypoints) && f.keypoints.length > 0);
   /** @type {ReplayPose[]} */
   const poses = subsamplePoses(detected, maxPoses).map((f) => ({
     keypoints: (f.keypoints ?? []).map((kp) => ({

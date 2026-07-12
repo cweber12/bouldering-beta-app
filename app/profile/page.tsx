@@ -157,7 +157,9 @@ export default function ProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, user]);
 
   // ------ Load climbs (paginated) -----------------------------------------
@@ -194,8 +196,20 @@ export default function ProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [authLoading, user, climbPage, filterState, filterArea, filterRoute, filterRunType, sortOrder, debouncedSearch]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    user,
+    climbPage,
+    filterState,
+    filterArea,
+    filterRoute,
+    filterRunType,
+    sortOrder,
+    debouncedSearch,
+  ]);
 
   // ------ Load pins when map mode is active --------------------------------
 
@@ -213,7 +227,18 @@ export default function ProfilePage() {
       try {
         const res = await fetch(`/api/profile/${user.uid}/pins`);
         if (!res.ok) return;
-        const data = (await res.json()) as { pins?: Array<{ key: string; lat: number; lng: number; route: string; area: string; state: string; runType: string; timestamp?: string }> };
+        const data = (await res.json()) as {
+          pins?: Array<{
+            key: string;
+            lat: number;
+            lng: number;
+            route: string;
+            area: string;
+            state: string;
+            runType: string;
+            timestamp?: string;
+          }>;
+        };
         if (!cancelled && Array.isArray(data.pins)) {
           const mapped = data.pins.map((p) => ({
             key: p.key,
@@ -226,11 +251,16 @@ export default function ProfilePage() {
           pinsCacheRef.current = mapped;
           setPins(mapped);
         }
-      } catch { /* ignore */ }
-      finally { if (!cancelled) setLoadingPins(false); }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoadingPins(false);
+      }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [viewMode, authLoading, user]);
 
   // ------ Load following list on mount ------------------------------------
@@ -252,7 +282,9 @@ export default function ProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, user]);
 
   // ------ Load following profiles -----------------------------------------
@@ -273,20 +305,26 @@ export default function ProfilePage() {
             if (!res.ok) return;
             const data = (await res.json()) as SearchResult;
             map.set(uid, data);
-          } catch { /* skip */ }
+          } catch {
+            /* skip */
+          }
         }),
       );
       if (!cancelled) setFollowingProfiles(map);
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [following]);
 
   // ------ Load state suggestions from S3 prefix list ----------------------
 
   useEffect(() => {
     if (!userPrefix) return;
-    listPrefixes(`${userPrefix}/`).then(setStateSuggestions).catch(() => {});
+    listPrefixes(`${userPrefix}/`)
+      .then(setStateSuggestions)
+      .catch(() => {});
   }, [userPrefix, listPrefixes]);
 
   // ------ Save profile ----------------------------------------------------
@@ -326,29 +364,32 @@ export default function ProfilePage() {
     setSelectedClimb(climb);
   }, []);
 
-  const handlePinClick = useCallback(async (climbKey: string) => {
-    if (!user) return;
-    // Check if we already have this climb in the grid data.
-    const found = climbs.find((c) => c.key === climbKey);
-    if (found) {
-      setSelectedClimb(found);
-      return;
-    }
-    // Otherwise fetch the detail from the API.
-    setLoadingDetail(true);
-    try {
-      const res = await fetch(
-        `/api/profile/${user.uid}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
-      );
-      if (!res.ok) return;
-      const data = (await res.json()) as ClimbDetailData;
-      setSelectedClimb(data);
-    } catch (err) {
-      console.error("[profile] detail fetch error:", err);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, [user, climbs]);
+  const handlePinClick = useCallback(
+    async (climbKey: string) => {
+      if (!user) return;
+      // Check if we already have this climb in the grid data.
+      const found = climbs.find((c) => c.key === climbKey);
+      if (found) {
+        setSelectedClimb(found);
+        return;
+      }
+      // Otherwise fetch the detail from the API.
+      setLoadingDetail(true);
+      try {
+        const res = await fetch(
+          `/api/profile/${user.uid}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as ClimbDetailData;
+        setSelectedClimb(data);
+      } catch (err) {
+        console.error("[profile] detail fetch error:", err);
+      } finally {
+        setLoadingDetail(false);
+      }
+    },
+    [user, climbs],
+  );
 
   // ------ GPS for location ------------------------------------------------
 
@@ -381,7 +422,10 @@ export default function ProfilePage() {
       setSearching(true);
       try {
         const res = await fetch(`/api/profile/search?q=${encodeURIComponent(q.trim())}`);
-        if (!res.ok) { setSearchResults([]); return; }
+        if (!res.ok) {
+          setSearchResults([]);
+          return;
+        }
         const data = (await res.json()) as { results?: SearchResult[] };
         setSearchResults(data.results ?? []);
       } catch {
@@ -426,27 +470,37 @@ export default function ProfilePage() {
 
   // ------ Filter helpers --------------------------------------------------
 
-  const handleFilterStateChange = useCallback((val: string) => {
-    setFilterState(val);
-    setFilterArea("");
-    setFilterRoute("");
-    setAreaSuggestions([]);
-    setRouteSuggestions([]);
-    setClimbPage(1);
-    if (val.trim() && userPrefix) {
-      listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`).then(setAreaSuggestions).catch(() => {});
-    }
-  }, [listPrefixes, userPrefix]);
+  const handleFilterStateChange = useCallback(
+    (val: string) => {
+      setFilterState(val);
+      setFilterArea("");
+      setFilterRoute("");
+      setAreaSuggestions([]);
+      setRouteSuggestions([]);
+      setClimbPage(1);
+      if (val.trim() && userPrefix) {
+        listPrefixes(`${userPrefix}/${sanitizeDirName(val)}/`)
+          .then(setAreaSuggestions)
+          .catch(() => {});
+      }
+    },
+    [listPrefixes, userPrefix],
+  );
 
-  const handleFilterAreaChange = useCallback((val: string) => {
-    setFilterArea(val);
-    setFilterRoute("");
-    setRouteSuggestions([]);
-    setClimbPage(1);
-    if (filterState.trim() && val.trim() && userPrefix) {
-      listPrefixes(`${userPrefix}/${sanitizeDirName(filterState)}/${sanitizeDirName(val)}/`).then(setRouteSuggestions).catch(() => {});
-    }
-  }, [listPrefixes, userPrefix, filterState]);
+  const handleFilterAreaChange = useCallback(
+    (val: string) => {
+      setFilterArea(val);
+      setFilterRoute("");
+      setRouteSuggestions([]);
+      setClimbPage(1);
+      if (filterState.trim() && val.trim() && userPrefix) {
+        listPrefixes(`${userPrefix}/${sanitizeDirName(filterState)}/${sanitizeDirName(val)}/`)
+          .then(setRouteSuggestions)
+          .catch(() => {});
+      }
+    },
+    [listPrefixes, userPrefix, filterState],
+  );
 
   const handleFilterRouteChange = useCallback((val: string) => {
     setFilterRoute(val);
@@ -469,7 +523,8 @@ export default function ProfilePage() {
 
   // ------ Render ----------------------------------------------------------
 
-  if (authLoading || loadingProfile) {    return (
+  if (authLoading || loadingProfile) {
+    return (
       <main className="mx-auto w-full max-w-4xl px-6 py-10">
         <div className="flex flex-col items-center gap-4 py-20">
           <LoadingSpinner className="h-10 w-10" />
@@ -548,9 +603,7 @@ export default function ProfilePage() {
         {/* ---- Profile fields ---- */}
         <section className="mb-8 flex flex-col gap-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-fg-secondary">
-              Display name
-            </label>
+            <label className="mb-1 block text-xs font-medium text-fg-secondary">Display name</label>
             <input
               type="text"
               maxLength={TEXT_LIMIT}
@@ -562,9 +615,7 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-fg-secondary">
-              Location
-            </label>
+            <label className="mb-1 block text-xs font-medium text-fg-secondary">Location</label>
             <div className="flex gap-2">
               <div className="flex-1 min-w-0">
                 <LocationAutocomplete
@@ -583,9 +634,16 @@ export default function ProfilePage() {
                 {geoLoading ? (
                   <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-edge border-t-accent" />
                 ) : (
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="3" />
+                    <path strokeLinecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3" />
                   </svg>
                 )}
               </button>
@@ -593,9 +651,7 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-fg-secondary">
-              Bio
-            </label>
+            <label className="mb-1 block text-xs font-medium text-fg-secondary">Bio</label>
             <textarea
               maxLength={TEXT_LIMIT}
               rows={3}
@@ -619,7 +675,10 @@ export default function ProfilePage() {
             </button>
             {saveMsg && (
               <span
-                className={cn("text-xs", saveMsg === "Profile saved." ? "text-success" : "text-danger")}
+                className={cn(
+                  "text-xs",
+                  saveMsg === "Profile saved." ? "text-success" : "text-danger",
+                )}
               >
                 {saveMsg}
               </span>
@@ -640,9 +699,7 @@ export default function ProfilePage() {
             className="ui-input mb-3 px-3 py-2 text-sm"
           />
 
-          {searching && (
-            <p className="text-xs text-fg-muted">Searching\u2026</p>
-          )}
+          {searching && <p className="text-xs text-fg-muted">Searching\u2026</p>}
 
           {searchResults.length > 0 && (
             <ul className="flex flex-col gap-2">
@@ -658,9 +715,7 @@ export default function ProfilePage() {
                     <span className="text-sm font-medium text-fg">
                       {r.displayName || r.email || r.userId}
                     </span>
-                    {r.location && (
-                      <span className="text-xs text-fg-muted">{r.location}</span>
-                    )}
+                    {r.location && <span className="text-xs text-fg-muted">{r.location}</span>}
                   </Link>
                   {following.includes(r.userId) ? (
                     <button
@@ -690,11 +745,14 @@ export default function ProfilePage() {
         {/* ---- Following list ---- */}
         <section>
           <h2 className="mb-3 text-sm font-semibold text-fg">
-            Following {following.length > 0 && <span className="text-fg-muted">({following.length})</span>}
+            Following{" "}
+            {following.length > 0 && <span className="text-fg-muted">({following.length})</span>}
           </h2>
 
           {following.length === 0 ? (
-            <p className="text-xs text-fg-muted">You&apos;re not following anyone yet. Use the search above to find climbers.</p>
+            <p className="text-xs text-fg-muted">
+              You&apos;re not following anyone yet. Use the search above to find climbers.
+            </p>
           ) : (
             <ul className="flex flex-col gap-2">
               {following.map((uid) => {
@@ -711,9 +769,7 @@ export default function ProfilePage() {
                       <span className="text-sm font-medium text-fg">
                         {fp?.displayName || fp?.email || uid}
                       </span>
-                      {fp?.location && (
-                        <span className="text-xs text-fg-muted">{fp.location}</span>
-                      )}
+                      {fp?.location && <span className="text-xs text-fg-muted">{fp.location}</span>}
                     </Link>
                     <button
                       onClick={() => handleUnfollow(uid)}
@@ -738,7 +794,13 @@ export default function ProfilePage() {
   // Client-side text filter applied on top of server-side paginated results.
   const displayedClimbs = climbs;
 
-  const hasActiveFilters = !!(filterState || filterArea || filterRoute || filterRunType || debouncedSearch);
+  const hasActiveFilters = !!(
+    filterState ||
+    filterArea ||
+    filterRoute ||
+    filterRunType ||
+    debouncedSearch
+  );
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
@@ -767,9 +829,7 @@ export default function ProfilePage() {
           {profile.displayName && user?.email && (
             <p className="truncate text-sm text-fg-secondary">{user.email}</p>
           )}
-          {profile.location && (
-            <p className="truncate text-sm text-fg-muted">{profile.location}</p>
-          )}
+          {profile.location && <p className="truncate text-sm text-fg-muted">{profile.location}</p>}
           {profile.bio && (
             <p className="mt-0.5 line-clamp-2 text-xs text-fg-secondary">{profile.bio}</p>
           )}
@@ -797,7 +857,11 @@ export default function ProfilePage() {
             viewBox="0 0 24 24"
             aria-hidden="true"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z"
+            />
           </svg>
           <input
             type="text"
@@ -825,14 +889,25 @@ export default function ProfilePage() {
             filterOpen
               ? "text-accent"
               : hasActiveFilters
-              ? "text-accent"
-              : "text-fg-secondary hover:text-fg",
+                ? "text-accent"
+                : "text-fg-secondary hover:text-fg",
           )}
           title="Toggle filters"
           aria-label="Toggle filters"
         >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12" />
+          <svg
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 4.5h14.25M3 9h9.75M3 13.5h5.25m5.25-.75L17.25 9m0 0L21 12.75M17.25 9v12"
+            />
           </svg>
           <span className="hidden sm:inline">Filter</span>
           {hasActiveFilters && (
@@ -868,15 +943,18 @@ export default function ProfilePage() {
             <button
               key={rt || "all"}
               type="button"
-              onClick={() => { setFilterRunType(rt); setClimbPage(1); }}
+              onClick={() => {
+                setFilterRunType(rt);
+                setClimbPage(1);
+              }}
               className={cn(
                 "ui-chip-toggle px-3 py-1 text-xs font-medium",
                 filterRunType === rt
                   ? rt === "send"
                     ? "bg-send-surface text-send"
                     : rt === "attempt"
-                    ? "bg-attempt-surface text-attempt"
-                    : "bg-primary text-fg"
+                      ? "bg-attempt-surface text-attempt"
+                      : "bg-primary text-fg"
                   : "text-fg-secondary",
               )}
               aria-pressed={filterRunType === rt}
@@ -887,7 +965,10 @@ export default function ProfilePage() {
         </div>
         <select
           value={sortOrder}
-          onChange={(e) => { setSortOrder(e.target.value as "newest" | "oldest" | "route"); setClimbPage(1); }}
+          onChange={(e) => {
+            setSortOrder(e.target.value as "newest" | "oldest" | "route");
+            setClimbPage(1);
+          }}
           className="ui-input w-auto rounded-md px-2 py-1 text-xs"
         >
           <option value="newest">Newest first</option>
@@ -981,8 +1062,8 @@ export default function ProfilePage() {
               {climbTotal === 0
                 ? "No climbs recorded yet."
                 : searchText.trim()
-                ? "No climbs match your search."
-                : "No climbs match the current filters."}
+                  ? "No climbs match your search."
+                  : "No climbs match the current filters."}
             </p>
           ) : (
             <>
@@ -1008,10 +1089,23 @@ export default function ProfilePage() {
                         />
                       ) : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-fg-muted/30">
-                          <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                          <svg
+                            className="h-10 w-10"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                            />
                           </svg>
-                          <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">{c.route}</span>
+                          <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">
+                            {c.route}
+                          </span>
                         </div>
                       )}
                       {/* Subtle hover tint — communicates clickability without implying video playback */}
@@ -1084,10 +1178,7 @@ export default function ProfilePage() {
 
       {/* ---- Climb detail modal ---- */}
       {selectedClimb && (
-        <ClimbDetailModal
-          climb={selectedClimb}
-          onClose={() => setSelectedClimb(null)}
-        />
+        <ClimbDetailModal climb={selectedClimb} onClose={() => setSelectedClimb(null)} />
       )}
 
       {/* ---- Loading detail spinner ---- */}
@@ -1096,7 +1187,6 @@ export default function ProfilePage() {
           <LoadingSpinner className="h-10 w-10" />
         </div>
       )}
-
     </main>
   );
 }

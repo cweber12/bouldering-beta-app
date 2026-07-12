@@ -50,7 +50,12 @@ describe("generateOrbThumbnail", () => {
   });
 
   it("draws bounding box for cropBox and returns a data URL", () => {
-    const imageData = { data: new Uint8ClampedArray(4), width: 640, height: 480, colorSpace: "srgb" } as ImageData;
+    const imageData = {
+      data: new Uint8ClampedArray(4),
+      width: 640,
+      height: 480,
+      colorSpace: "srgb",
+    } as ImageData;
     const features: OrbFeatures = {
       keypoints: [],
       descriptors: new Uint8Array(0),
@@ -87,13 +92,23 @@ describe("generateOrbThumbnail", () => {
       return origCreateElement(tag);
     });
 
-    const imageData = { data: new Uint8ClampedArray(4), width: 640, height: 480, colorSpace: "srgb" } as ImageData;
+    const imageData = {
+      data: new Uint8ClampedArray(4),
+      width: 640,
+      height: 480,
+      colorSpace: "srgb",
+    } as ImageData;
     const features: OrbFeatures = { keypoints: [], descriptors: new Uint8Array(0) };
     expect(generateOrbThumbnail(imageData, features)).toBe("");
   });
 
   it("skips strokeRect when no cropBox provided", () => {
-    const imageData = { data: new Uint8ClampedArray(4), width: 640, height: 480, colorSpace: "srgb" } as ImageData;
+    const imageData = {
+      data: new Uint8ClampedArray(4),
+      width: 640,
+      height: 480,
+      colorSpace: "srgb",
+    } as ImageData;
     const features: OrbFeatures = { keypoints: [], descriptors: new Uint8Array(0) };
     const result = generateOrbThumbnail(imageData, features);
     expect(result).toBe("data:image/png;base64,ABCD");

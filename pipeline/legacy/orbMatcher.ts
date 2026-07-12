@@ -34,10 +34,7 @@ const ORB_DESCRIPTOR_BYTES = 32;
  * Descriptors are NOT transferred — the reference OrbResult may be reused
  * across many subsequent frames.
  */
-export async function matchFeatures(
-  ref: OrbResult,
-  query: OrbResult,
-): Promise<OrbMatch[]> {
+export async function matchFeatures(ref: OrbResult, query: OrbResult): Promise<OrbMatch[]> {
   const refRows = ref.descriptors.length / ORB_DESCRIPTOR_BYTES;
   const frameRows = query.descriptors.length / ORB_DESCRIPTOR_BYTES;
 

@@ -1,15 +1,15 @@
 # Authored, persisted Holds detected at scan time (Fixed Capture)
 
-Supersedes the *persistence* and *space* choices of [ADR 0007](0007-hold-detection-overlay.md)
+Supersedes the _persistence_ and _space_ choices of [ADR 0007](0007-hold-detection-overlay.md)
 (options 1 and 2, and the "Holds cannot appear in the Detection Preview" consequence)
 for **Fixed Capture** Runs. The inference algorithm and the selectivity gates of
 [ADR 0007](0007-hold-detection-overlay.md) / [ADR 0008](0008-selective-hold-detection.md)
-are unchanged — only *where* detection runs, *what space* its output lives in, and
-*whether the result is editable and saved* change.
+are unchanged — only _where_ detection runs, _what space_ its output lives in, and
+_whether the result is editable and saved_ change.
 
 ADR 0007 deliberately derived Holds on the fly in Route Photo space and never
-persisted them, naming its own revisit trigger: *"revisit only if we add
-user-editable Holds."* That trigger has fired. We now want the **User** to review,
+persisted them, naming its own revisit trigger: _"revisit only if we add
+user-editable Holds."_ That trigger has fired. We now want the **User** to review,
 add, and remove Holds, and we want that work to survive a reload — which requires
 somewhere to store the overrides. Separately, the on-the-fly path is **not** the
 cause of the rendering slowdown that motivated this change (detection runs once,
@@ -24,7 +24,7 @@ persisting static Holds lets that layout be computed once and cached.
    But for **Fixed Capture** the camera is static, so a gripped hand is motionless
    in video pixels too (ADR 0007 concedes this), and all the gates are fractions of
    a body scale, so they hold equally in video-pixel space. Running detection on the
-   **Detection Preview**'s own frames — *before* any **Route Photo** exists — is
+   **Detection Preview**'s own frames — _before_ any **Route Photo** exists — is
    therefore valid for Fixed Capture and is the only way Holds can be authored on a
    single frame that shows the whole **Route**. Panning Capture has no such frame,
    so it keeps the on-the-fly wall-space path. Authoring Holds on the Route Photo
@@ -45,7 +45,7 @@ persisting static Holds lets that layout be computed once and cached.
 3. **Numbering is always re-derived from first-use order; there is no stored
    number.** A Hold is added by scrubbing the Detection Preview to the frame where
    the limb is on the hold and snapping to that limb — so the add-frame timestamp
-   *is* the Hold's first-use/reveal time, which slots it into the sequence. The
+   _is_ the Hold's first-use/reveal time, which slots it into the sequence. The
    printed number is then just the chronological rank, recomputed on every add and
    remove. An earlier plan had the User type a number on add (with the rest
    shifting); it was rejected because the add-frame timestamp already fixes the
@@ -59,7 +59,7 @@ persisting static Holds lets that layout be computed once and cached.
    the pipeline reasons about.
 
 5. **High-water-mark reveal everywhere, with a Reset.** A Hold shows once playback
-   time has *ever* reached its first-use time since the last Reset, so the first
+   time has _ever_ reached its first-use time since the last Reset, so the first
    pass reveals Holds in order and they then stay shown across loops; Reset re-arms
    the sequential reveal. This replaces ADR 0007's strict `firstUseTime ≤ t` reveal
    (which re-hid every loop) on **all** surfaces — Detection Preview, saved Route
@@ -84,8 +84,8 @@ persisting static Holds lets that layout be computed once and cached.
 - **The label layout can be cached.** Because saved Holds are static, the greedy
   per-frame label placement in `drawHolds` can be computed once per (holds, canvas)
   and reused — the actual fix for the rendering slowdown that prompted this work.
-  *(Moot since [ADR 0010](0010-aligned-leader-hold-numbering.md): the greedy label layout
+  _(Moot since [ADR 0010](0010-aligned-leader-hold-numbering.md): the greedy label layout
   was removed in favour of on-glyph numbers, so there is nothing left to cache. The
-  persistence decision in this ADR is unaffected.)*
+  persistence decision in this ADR is unaffected.)_
 - **Panning Capture is unchanged.** It keeps wall-space on-the-fly detection and
   gains no scan-stage editing in v1.

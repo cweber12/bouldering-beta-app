@@ -35,9 +35,10 @@ export default function ComboInput({
   // dirty = user has typed since last focus; controls filter vs show-all
   const [dirty, setDirty] = useState(false);
 
-  const visible = dirty && value
-    ? suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()))
-    : suggestions;
+  const visible =
+    dirty && value
+      ? suggestions.filter((s) => s.toLowerCase().includes(value.toLowerCase()))
+      : suggestions;
 
   function handleFocus() {
     setDirty(false);
@@ -118,10 +119,10 @@ export default function ComboInput({
       </div>
       {open && visible.length > 0 && (
         <ul
-          onMouseDown={e => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
           className="ui-popover absolute left-0 right-0 top-full z-50 mt-1.5 max-h-48 overflow-y-auto py-1"
         >
-          {visible.map(s => (
+          {visible.map((s) => (
             <li key={s}>
               <button
                 type="button"

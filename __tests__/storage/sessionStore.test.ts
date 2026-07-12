@@ -116,7 +116,10 @@ describe("sessionStore — matchesPerFrame", () => {
     const matchesPerFrame = [
       [], // frame 0 — reference
       [{ queryIdx: 0, trainIdx: 1, distance: 30 }],
-      [{ queryIdx: 1, trainIdx: 0, distance: 20 }, { queryIdx: 2, trainIdx: 3, distance: 55 }],
+      [
+        { queryIdx: 1, trainIdx: 0, distance: 20 },
+        { queryIdx: 2, trainIdx: 3, distance: 55 },
+      ],
     ];
     const a: RouteAttempt = { ...makeAttempt("mpf-full", 3), matchesPerFrame };
     saveAttempt(a);
@@ -125,7 +128,11 @@ describe("sessionStore — matchesPerFrame", () => {
     expect(retrieved.matchesPerFrame).toHaveLength(3);
     expect(retrieved.matchesPerFrame![0]).toEqual([]);
     expect(retrieved.matchesPerFrame![1]).toHaveLength(1);
-    expect(retrieved.matchesPerFrame![1][0]).toMatchObject({ queryIdx: 0, trainIdx: 1, distance: 30 });
+    expect(retrieved.matchesPerFrame![1][0]).toMatchObject({
+      queryIdx: 0,
+      trainIdx: 1,
+      distance: 30,
+    });
     expect(retrieved.matchesPerFrame![2]).toHaveLength(2);
   });
 
@@ -155,9 +162,7 @@ describe("sessionStore — orbFeatures", () => {
     const a: RouteAttempt = {
       ...makeAttempt("orb-full"),
       orbFeatures: {
-        keypoints: [
-          { pt: { x: 10, y: 20 }, size: 3, angle: 90, response: 0.8, octave: 0 },
-        ],
+        keypoints: [{ pt: { x: 10, y: 20 }, size: 3, angle: 90, response: 0.8, octave: 0 }],
         descriptors,
       },
     };

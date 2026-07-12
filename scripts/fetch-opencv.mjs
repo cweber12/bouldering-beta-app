@@ -58,4 +58,3 @@ main().catch((err) => {
   console.error("[setup:opencv] Error:", err.message);
   process.exit(1);
 });
-

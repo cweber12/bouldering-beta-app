@@ -55,8 +55,8 @@ export default function SaveDropdown({
           open
             ? "border-accent/60 bg-accent/10 text-accent"
             : s3Saved
-            ? "border-send/30 bg-send-surface text-send"
-            : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
+              ? "border-send/30 bg-send-surface text-send"
+              : "border-edge bg-card text-fg-secondary hover:border-edge-hover hover:text-fg-secondary",
         )}
       >
         <svg
@@ -94,7 +94,10 @@ export default function SaveDropdown({
           )}
         >
           <button
-            onClick={() => { setOpen(false); onUpload(); }}
+            onClick={() => {
+              setOpen(false);
+              onUpload();
+            }}
             disabled={s3Loading}
             className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg disabled:opacity-50"
           >
@@ -115,7 +118,10 @@ export default function SaveDropdown({
             {s3Saved ? "Uploaded" : "Upload"}
           </button>
           <button
-            onClick={() => { setOpen(false); onSaveToDevice(); }}
+            onClick={() => {
+              setOpen(false);
+              onSaveToDevice();
+            }}
             className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-fg-secondary transition hover:bg-card hover:text-fg"
           >
             <svg
@@ -136,7 +142,10 @@ export default function SaveDropdown({
           </button>
           {savedRouteDirHandle && (
             <button
-              onClick={() => { setOpen(false); onDeleteFromDevice(); }}
+              onClick={() => {
+                setOpen(false);
+                onDeleteFromDevice();
+              }}
               className="flex w-full items-center gap-2 rounded-(--radius-control) px-3 py-2 text-xs font-medium text-danger transition hover:bg-danger-surface"
             >
               <svg

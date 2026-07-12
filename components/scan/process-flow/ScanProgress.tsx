@@ -85,12 +85,23 @@ export default function ScanProgress({
             title="Cancel scan"
             className="ui-control -ml-1 flex h-8 w-8 shrink-0 items-center justify-center p-0 text-fg-muted"
           >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
 
-          <div className="flex flex-1 items-center justify-center gap-2" role="status" aria-live="polite">
+          <div
+            className="flex flex-1 items-center justify-center gap-2"
+            role="status"
+            aria-live="polite"
+          >
             {finishing ? (
               <span className="text-sm font-medium text-fg-secondary">Finishing up&#8230;</span>
             ) : (

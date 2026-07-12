@@ -19,7 +19,7 @@ class FakeVideo {
   }
   emit(type: string) {
     // Copy to array — handlers remove themselves during iteration.
-    [...(this.listeners[type] ?? [])].forEach(cb => cb(new Event(type)));
+    [...(this.listeners[type] ?? [])].forEach((cb) => cb(new Event(type)));
   }
   /** Total live listeners across all event types. */
   listenerCount() {

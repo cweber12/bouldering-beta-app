@@ -1,12 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import ReactCrop, {
-  centerCrop,
-  makeAspectCrop,
-  type Crop,
-  type PixelCrop,
-} from "react-image-crop";
+import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from "react-image-crop";
 import "react-image-crop/dist/ReactCrop.css";
 
 export interface ImageCropperProps {
@@ -32,11 +27,7 @@ function centerAspectCrop(mediaWidth: number, mediaHeight: number): Crop {
  * 2. Shows the crop UI (1:1 circle-masked) once an image is selected.
  * 3. Calls `onCrop` with a compressed JPEG data URL on confirm.
  */
-export default function ImageCropper({
-  onCrop,
-  onCancel,
-  maxOutputSize = 256,
-}: ImageCropperProps) {
+export default function ImageCropper({ onCrop, onCancel, maxOutputSize = 256 }: ImageCropperProps) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
@@ -100,12 +91,7 @@ export default function ImageCropper({
         <div className="flex flex-col items-center gap-3 py-4">
           <label className="cursor-pointer rounded-lg border border-edge bg-inset px-4 py-2 text-sm text-fg transition hover:border-accent hover:text-accent">
             Choose photo
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFileChange}
-            />
+            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           </label>
           <button
             type="button"

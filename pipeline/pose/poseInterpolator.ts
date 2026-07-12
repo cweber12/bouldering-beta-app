@@ -11,11 +11,7 @@
  */
 
 import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
-import {
-  MP_KP_NAMES,
-  MP_SKELETON_EDGES,
-  type PoseBackend,
-} from "@/utils/poseConstants";
+import { MP_KP_NAMES, MP_SKELETON_EDGES, type PoseBackend } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
 // Landmark estimation hook (pluggable — not yet implemented)
@@ -124,9 +120,7 @@ function buildAdjacency(
 }
 
 /** Build a set of all keypoint names for a given keypoint name record. */
-function buildAllNames(
-  names: Record<number, string>,
-): ReadonlySet<string> {
+function buildAllNames(names: Record<number, string>): ReadonlySet<string> {
   return new Set(Object.values(names) as string[]);
 }
 
@@ -212,8 +206,8 @@ export function filterLandmarks(
   minScore = 0.3,
   tolerance = DEFAULT_FILTER_TOLERANCE,
 ): PoseFrame[] {
-  return frames.filter(f => {
-    const present = new Map(f.keypoints.map(kp => [kp.name, kp]));
+  return frames.filter((f) => {
+    const present = new Map(f.keypoints.map((kp) => [kp.name, kp]));
     let badWeight = 0;
     for (const [name, weight] of Object.entries(CLIMBING_KEYPOINT_WEIGHTS)) {
       const kp = present.get(name);
@@ -244,11 +238,12 @@ function lerp(a: number, b: number, t: number): number {
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t;
   const t3 = t2 * t;
-  return 0.5 * (
-    (2 * p1) +
-    (-p0 + p2) * t +
-    (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-    (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+  return (
+    0.5 *
+    (2 * p1 +
+      (-p0 + p2) * t +
+      (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+      (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
   );
 }
 
@@ -293,7 +288,10 @@ function buildKeypointTimelines(processedFrames: PoseFrame[]): Map<string, Keypo
   processedFrames.forEach((frame, anchorIdx) => {
     for (const kp of frame.keypoints) {
       let series = timelines.get(kp.name);
-      if (!series) { series = []; timelines.set(kp.name, series); }
+      if (!series) {
+        series = [];
+        timelines.set(kp.name, series);
+      }
       series.push({ anchorIdx, t: frame.timestamp, x: kp.x, y: kp.y, score: kp.score });
     }
   });
@@ -302,7 +300,8 @@ function buildKeypointTimelines(processedFrames: PoseFrame[]): Map<string, Keypo
 
 /** Binary search: index of the first sample with timestamp >= target. */
 function lowerBoundSample(samples: KeypointSample[], target: number): number {
-  let lo = 0, hi = samples.length;
+  let lo = 0,
+    hi = samples.length;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     if (samples[mid].t < target) lo = mid + 1;
@@ -405,12 +404,12 @@ export function interpolatePoseFrames(
   maxBridgeGap = DEFAULT_MAX_BRIDGE_GAP,
 ): PoseFrame[] {
   if (processedFrames.length === 0) {
-    return allTimestamps.map(timestamp => ({ timestamp, keypoints: [] }));
+    return allTimestamps.map((timestamp) => ({ timestamp, keypoints: [] }));
   }
 
   const timelines = buildKeypointTimelines(processedFrames);
 
-  return allTimestamps.map(timestamp => {
+  return allTimestamps.map((timestamp) => {
     const keypoints: Keypoint[] = [];
     for (const [name, samples] of timelines) {
       const kp = sampleKeypoint(name, samples, timestamp, maxBridgeGap);
@@ -457,7 +456,7 @@ export function estimateMissingLandmarks(
   const allNames = getAllKpNames(backend);
 
   return frames.map((frame, i) => {
-    const existing = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+    const existing = new Map(frame.keypoints.map((kp) => [kp.name, kp]));
     const missing: string[] = [];
     for (const name of allNames) {
       if (!existing.has(name)) missing.push(name);
@@ -471,15 +470,23 @@ export function estimateMissingLandmarks(
       let prevKp: Keypoint | null = null;
       let prevDist = 0;
       for (let j = i - 1; j >= Math.max(0, i - maxTemporalGap); j--) {
-        const kp = frames[j].keypoints.find(k => k.name === name);
-        if (kp) { prevKp = kp; prevDist = i - j; break; }
+        const kp = frames[j].keypoints.find((k) => k.name === name);
+        if (kp) {
+          prevKp = kp;
+          prevDist = i - j;
+          break;
+        }
       }
 
       let nextKp: Keypoint | null = null;
       let nextDist = 0;
       for (let j = i + 1; j <= Math.min(frames.length - 1, i + maxTemporalGap); j++) {
-        const kp = frames[j].keypoints.find(k => k.name === name);
-        if (kp) { nextKp = kp; nextDist = j - i; break; }
+        const kp = frames[j].keypoints.find((k) => k.name === name);
+        if (kp) {
+          nextKp = kp;
+          nextDist = j - i;
+          break;
+        }
       }
 
       if (prevKp && nextKp) {
@@ -500,10 +507,14 @@ export function estimateMissingLandmarks(
         for (const neighborName of neighbors) {
           const currentNeighbor = existing.get(neighborName);
           if (!currentNeighbor) continue;
-          for (let j = Math.max(0, i - maxTemporalGap); j <= Math.min(frames.length - 1, i + maxTemporalGap); j++) {
+          for (
+            let j = Math.max(0, i - maxTemporalGap);
+            j <= Math.min(frames.length - 1, i + maxTemporalGap);
+            j++
+          ) {
             if (j === i) continue;
-            const refTarget = frames[j].keypoints.find(k => k.name === name);
-            const refNeighbor = frames[j].keypoints.find(k => k.name === neighborName);
+            const refTarget = frames[j].keypoints.find((k) => k.name === name);
+            const refNeighbor = frames[j].keypoints.find((k) => k.name === neighborName);
             if (refTarget && refNeighbor) {
               estimated.push({
                 name,
@@ -562,22 +573,30 @@ export const DEFAULT_PERSISTENT_FILL_MAX_GAP = 2.5;
 
 /** Largest sample index strictly less than `i` in an ascending index array. */
 function bracketBefore(idxs: number[], i: number): number | null {
-  let lo = 0, hi = idxs.length, ans: number | null = null;
+  let lo = 0,
+    hi = idxs.length,
+    ans: number | null = null;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (idxs[mid] < i) { ans = idxs[mid]; lo = mid + 1; }
-    else hi = mid;
+    if (idxs[mid] < i) {
+      ans = idxs[mid];
+      lo = mid + 1;
+    } else hi = mid;
   }
   return ans;
 }
 
 /** Smallest sample index strictly greater than `i` in an ascending index array. */
 function bracketAfter(idxs: number[], i: number): number | null {
-  let lo = 0, hi = idxs.length, ans: number | null = null;
+  let lo = 0,
+    hi = idxs.length,
+    ans: number | null = null;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
-    if (idxs[mid] > i) { ans = idxs[mid]; hi = mid; }
-    else lo = mid + 1;
+    if (idxs[mid] > i) {
+      ans = idxs[mid];
+      hi = mid;
+    } else lo = mid + 1;
   }
   return ans;
 }
@@ -637,7 +656,7 @@ export function fillPersistentGaps(
 
   return frames.map((frame, i) => {
     // Resolve every missing-but-bracketed joint for this frame up front.
-    const present = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+    const present = new Map(frame.keypoints.map((kp) => [kp.name, kp]));
     const gaps: { name: string; prevI: number; nextI: number }[] = [];
     for (const name of allNames) {
       if (present.has(name)) continue;
@@ -655,7 +674,7 @@ export function fillPersistentGaps(
     if (gaps.length === 0) return frame;
 
     const findKp = (idx: number, name: string): Keypoint | undefined =>
-      frames[idx].keypoints.find(k => k.name === name);
+      frames[idx].keypoints.find((k) => k.name === name);
 
     const added: Keypoint[] = [];
     for (const { name, prevI, nextI } of gaps) {
@@ -728,11 +747,25 @@ function oneEuroPass(
   const stateX = new Map<string, OneEuroState>();
   const stateY = new Map<string, OneEuroState>();
 
-  return frames.map(frame => {
+  return frames.map((frame) => {
     const t = timeOf(frame);
-    const smoothed: Keypoint[] = frame.keypoints.map(kp => {
-      const rx = oneEuroStep(kp.x, t, stateX.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
-      const ry = oneEuroStep(kp.y, t, stateY.get(kp.name) ?? null, minCutoff, beta, ONE_EURO_D_CUTOFF);
+    const smoothed: Keypoint[] = frame.keypoints.map((kp) => {
+      const rx = oneEuroStep(
+        kp.x,
+        t,
+        stateX.get(kp.name) ?? null,
+        minCutoff,
+        beta,
+        ONE_EURO_D_CUTOFF,
+      );
+      const ry = oneEuroStep(
+        kp.y,
+        t,
+        stateY.get(kp.name) ?? null,
+        minCutoff,
+        beta,
+        ONE_EURO_D_CUTOFF,
+      );
       stateX.set(kp.name, rx.state);
       stateY.set(kp.name, ry.state);
       return { ...kp, x: rx.value, y: ry.value };
@@ -771,11 +804,11 @@ export function smoothPoseFrames(
   if (frames.length === 0) return frames;
 
   // Forward pass (causal): smooths but lags.
-  const forward = oneEuroPass(frames, minCutoff, beta, f => f.timestamp);
+  const forward = oneEuroPass(frames, minCutoff, beta, (f) => f.timestamp);
 
   // Backward pass over the forward result cancels the forward lag (zero phase).
   // Negate the timestamp so time still increases as we walk the reversed array.
-  const back = oneEuroPass([...forward].reverse(), minCutoff, beta, f => -f.timestamp);
+  const back = oneEuroPass([...forward].reverse(), minCutoff, beta, (f) => -f.timestamp);
   back.reverse();
   return back;
 }
@@ -857,7 +890,8 @@ function sampleBone(samples: BoneSample[], t: number): { angle: number; len: num
   if (t >= samples[n - 1].t) return { angle: samples[n - 1].angle, len: samples[n - 1].len };
 
   // Binary search for the first sample with t' >= t.
-  let lo = 0, hi = n;
+  let lo = 0,
+    hi = n;
   while (lo < hi) {
     const mid = (lo + hi) >>> 1;
     if (samples[mid].t < t) lo = mid + 1;
@@ -924,8 +958,8 @@ export function constrainSkeleton(
   const boneSamples: BoneSample[][] = BONE_TREE.map(([parent, child]) => {
     const samples: BoneSample[] = [];
     for (const rf of referenceFrames) {
-      const p = rf.keypoints.find(k => k.name === parent);
-      const c = rf.keypoints.find(k => k.name === child);
+      const p = rf.keypoints.find((k) => k.name === parent);
+      const c = rf.keypoints.find((k) => k.name === child);
       if (!p || !c) continue;
       const dx = c.x - p.x;
       const dy = c.y - p.y;
@@ -935,9 +969,9 @@ export function constrainSkeleton(
     return samples;
   });
 
-  return frames.map(frame => {
+  return frames.map((frame) => {
     // Mutable working map so tree propagation sees corrected parents downstream.
-    const kp = new Map(frame.keypoints.map(k => [k.name, { ...k }]));
+    const kp = new Map(frame.keypoints.map((k) => [k.name, { ...k }]));
 
     for (let bi = 0; bi < BONE_TREE.length; bi++) {
       const [parentName, childName] = BONE_TREE[bi];

@@ -44,12 +44,7 @@ export interface NormBox {
  * stable, roughly-central anchor that survives limb occlusion far better than
  * an all-keypoint average (which drifts toward whichever limbs are visible).
  */
-const CENTROID_KEYPOINTS = new Set([
-  "left_hip",
-  "right_hip",
-  "left_shoulder",
-  "right_shoulder",
-]);
+const CENTROID_KEYPOINTS = new Set(["left_hip", "right_hip", "left_shoulder", "right_shoulder"]);
 
 /**
  * Maximum normalised distance a candidate's centroid may be from the predicted
@@ -87,7 +82,7 @@ export const ABS_MIN_CROP_FRAC = 0.06;
 export const MOTION_MARGIN_K = 1.0;
 
 /** Residual symmetric slack folded into the detection region (× box extent). */
-export const REGION_BASE_SLACK = 0.10;
+export const REGION_BASE_SLACK = 0.1;
 
 /**
  * Reach-disk sizing for a **missing limb** (its endpoint keypoint absent from the

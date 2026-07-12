@@ -70,7 +70,10 @@ function Flags({ flags }: { flags: ConditionFlags }) {
         <span className="text-fg-muted">none</span>
       ) : (
         active.map((f) => (
-          <span key={f} className="rounded bg-caution-surface px-1.5 py-0.5 text-[10px] text-caution">
+          <span
+            key={f}
+            className="rounded bg-caution-surface px-1.5 py-0.5 text-[10px] text-caution"
+          >
             {f}
           </span>
         ))
@@ -106,7 +109,12 @@ export default function DiagnosticsPanel({ record }: DiagnosticsPanelProps) {
   const title = record.recordType === "scan" ? "Scan Diagnostics" : "Match Diagnostics";
 
   return (
-    <div className={cn("fixed bottom-3 right-3 z-50 text-xs", open ? "w-72 max-w-[calc(100vw-1.5rem)]" : "w-auto")}>
+    <div
+      className={cn(
+        "fixed bottom-3 right-3 z-50 text-xs",
+        open ? "w-72 max-w-[calc(100vw-1.5rem)]" : "w-auto",
+      )}
+    >
       {/* Collapsed: a compact chart icon so it never covers the flow's actions.
           Expanded: the labelled header that toggles back to the icon. */}
       {open ? (
@@ -129,8 +137,19 @@ export default function DiagnosticsPanel({ record }: DiagnosticsPanelProps) {
           title={title}
           className="flex h-9 w-9 items-center justify-center rounded-md border border-edge bg-surface-alt text-fg-secondary shadow-md"
         >
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+          <svg
+            className="h-4 w-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+            />
           </svg>
         </button>
       )}
@@ -193,23 +212,39 @@ function ScanBody({ record }: { record: ScanDiagnostics }) {
         </div>
       </Section>
       <Section title="Pose">
-        <Stat label="detect rate" value={`${pct(result.pose.detectionRate)} (${result.pose.detectedFrames}/${result.pose.sampledFrames})`} />
+        <Stat
+          label="detect rate"
+          value={`${pct(result.pose.detectionRate)} (${result.pose.detectedFrames}/${result.pose.sampledFrames})`}
+        />
         <Stat label="kept / good" value={`${result.pose.keptFrames} / ${result.pose.goodFrames}`} />
         <Stat label="flipped" value={String(result.pose.flippedFrames)} />
-        <Stat label="confidence" value={`${fmt(conf.min)}–${fmt(conf.max)} (avg ${fmt(conf.avg)})`} />
-        <Stat label="refinement" value={`${result.pose.refinement.gapsRefined} gaps · ${result.pose.refinement.recoveryFramesUsed} frames`} />
+        <Stat
+          label="confidence"
+          value={`${fmt(conf.min)}–${fmt(conf.max)} (avg ${fmt(conf.avg)})`}
+        />
+        <Stat
+          label="refinement"
+          value={`${result.pose.refinement.gapsRefined} gaps · ${result.pose.refinement.recoveryFramesUsed} frames`}
+        />
         <Stat label="limb-expanded" value={String(result.pose.limbExpandedFrames)} />
       </Section>
       <Section title="ORB">
         <Stat label="ref keypoints" value={String(result.orb.refKeypointCount)} />
         {result.orb.keyframeCount > 0 && (
-          <Stat label="keyframes" value={`${result.orb.keyframeCount} (kp avg ${fmt(result.orb.keyframeKeypoints.avg)})`} />
+          <Stat
+            label="keyframes"
+            value={`${result.orb.keyframeCount} (kp avg ${fmt(result.orb.keyframeKeypoints.avg)})`}
+          />
         )}
       </Section>
       {result.badStretches.length > 0 && (
         <Section title={`Bad stretches (${result.badStretches.length})`}>
           {result.badStretches.map((s, i) => (
-            <Stat key={i} label={`${fmt(s.startTs)}s–${fmt(s.endTs)}s`} value={`${s.frames.length} frames`} />
+            <Stat
+              key={i}
+              label={`${fmt(s.startTs)}s–${fmt(s.endTs)}s`}
+              value={`${s.frames.length} frames`}
+            />
           ))}
         </Section>
       )}
@@ -227,7 +262,10 @@ function MatchBody({ record }: { record: MatchDiagnostics }) {
     <div className="space-y-2">
       <Section title="Result">
         <Stat label="capture mode" value={result.captureMode} />
-        <Stat label="homography" value={result.homographyFound ? "found" : `none · ${result.failureReason}`} />
+        <Stat
+          label="homography"
+          value={result.homographyFound ? "found" : `none · ${result.failureReason}`}
+        />
         <Stat label="matches / inliers" value={`${result.matchCount} / ${result.inlierCount}`} />
         <Stat label="inlier ratio" value={ratio} />
         {result.keyframesMatched != null && (
@@ -264,7 +302,9 @@ function MatchBody({ record }: { record: MatchDiagnostics }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-secondary">{title}</p>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-fg-secondary">
+        {title}
+      </p>
       <div className="space-y-0.5">{children}</div>
     </div>
   );

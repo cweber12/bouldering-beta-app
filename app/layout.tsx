@@ -35,7 +35,12 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(inter.variable, spaceGrotesk.variable, geistMono.variable, "h-full antialiased")}
+      className={cn(
+        inter.variable,
+        spaceGrotesk.variable,
+        geistMono.variable,
+        "h-full antialiased",
+      )}
       suppressHydrationWarning
     >
       <head>
@@ -57,4 +62,3 @@ export default function RootLayout({
     </html>
   );
 }
-

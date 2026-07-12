@@ -1,7 +1,7 @@
 # Roadmap
 
 Deferred engineering work, captured during pipeline audits. Items here are
-intentionally *not* yet implemented — each entry records the idea, the trade-off,
+intentionally _not_ yet implemented — each entry records the idea, the trade-off,
 and why it was deferred.
 
 ---
@@ -10,15 +10,16 @@ and why it was deferred.
 
 **Status:** deferred (considered during the save-payload split, 2026-05-31).
 
-**Idea.** `matchesPerFrame` and the dense interpolated `frames` are *derived*
+**Idea.** `matchesPerFrame` and the dense interpolated `frames` are _derived_
 artifacts — they can be regenerated from the sparse pose frames + `orbFeatures`
-+ the route photo. Instead of persisting them at all, store only the sparse
-inputs and recompute the downstream artifacts when a climb is viewed or compared.
+
+- the route photo. Instead of persisting them at all, store only the sparse
+  inputs and recompute the downstream artifacts when a climb is viewed or compared.
 
 **Upside.** Smallest possible stored object; no duplicated derived state; storage
 cost grows only with the genuinely-irreducible inputs.
 
-**Why deferred.** Recomputation couples the *view* to the exact pipeline version
+**Why deferred.** Recomputation couples the _view_ to the exact pipeline version
 that produced the data. A change to `poseInterpolator` or the ORB matcher would
 silently alter how a previously-saved climb renders — a reproducibility footgun
 for saved history. We chose instead to persist derived data (split into a

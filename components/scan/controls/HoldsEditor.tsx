@@ -53,7 +53,10 @@ export default function HoldsEditor({ open, onClose, entries, onAdd, onRemove }:
               onClick={() => onAdd(kind, side)}
               className="flex items-center justify-center gap-1.5 rounded-(--radius-control) border border-edge/60 bg-inset px-2 py-1.5 text-xs font-medium text-fg-secondary transition hover:border-edge-hover hover:text-fg"
             >
-              <span className={cn("h-4 w-4 shrink-0 rounded-full border-2", KIND_RING[kind])} aria-hidden="true" />
+              <span
+                className={cn("h-4 w-4 shrink-0 rounded-full border-2", KIND_RING[kind])}
+                aria-hidden="true"
+              />
               {label}
             </button>
           ))}
@@ -77,7 +80,10 @@ export default function HoldsEditor({ open, onClose, entries, onAdd, onRemove }:
                   {entry.order}
                 </span>
                 <span
-                  className={cn("h-4 w-4 shrink-0 rounded-full border-2", KIND_RING[entry.hold.kind])}
+                  className={cn(
+                    "h-4 w-4 shrink-0 rounded-full border-2",
+                    KIND_RING[entry.hold.kind],
+                  )}
                   aria-hidden="true"
                 />
                 <span className="flex-1 capitalize">
@@ -94,7 +100,14 @@ export default function HoldsEditor({ open, onClose, entries, onAdd, onRemove }:
                   aria-label={`Remove hold ${entry.order}`}
                   title="Remove"
                 >
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>

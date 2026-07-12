@@ -10,7 +10,7 @@ The route console lives at `/route/{userId}/{state}/{area}/{route}` — the
 `{userId}` in the path reads as though any user's route could be opened and
 compared (e.g. from another climber's profile or a map pin). In practice the
 console loads every **Run** and the **Route Photo** through `/api/s3/get`, which
-`isValidKey` scopes to the *authenticated* user. So opening another user's route
+`isValidKey` scopes to the _authenticated_ user. So opening another user's route
 would fail every climb load with "Invalid key."
 
 ## Decision

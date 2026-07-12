@@ -100,15 +100,24 @@ function getHandleKnobStyle(id: HandleId, color: string): React.CSSProperties {
   };
   const thick = `${SEG_W}px solid ${color}`;
   switch (id) {
-    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
-    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
-    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
-    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
-    case "n":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "s":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "e":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    case "w":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    default: return base;
+    case "nw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
+    case "ne":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
+    case "sw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
+    case "se":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
+    case "n":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "s":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "e":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    case "w":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    default:
+      return base;
   }
 }
 
@@ -149,8 +158,7 @@ export default function CropBoxOverlay({
   // Tracks a potential tap on empty overlay area (no handle/border involved).
   const tapStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const clamp = (v: number, lo: number, hi: number) =>
-    Math.max(lo, Math.min(hi, v));
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
   const startDrag = useCallback(
     (e: React.PointerEvent, handle: HandleId) => {
@@ -367,7 +375,8 @@ export default function CropBoxOverlay({
       {/* Resize handles — large invisible hit area with visible L-bracket / bar knob.
           No individual shadows: the border's boxShadow provides the necessary contrast.
           Hidden when locked: the Climber box is landmark-derived, not resized. */}
-      {!disabled && !locked &&
+      {!disabled &&
+        !locked &&
         handles.map(([id, lx, ly]) => (
           <div
             key={id}

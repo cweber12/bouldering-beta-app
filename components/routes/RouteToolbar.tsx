@@ -52,7 +52,11 @@ export default function RouteToolbar({
           viewBox="0 0 24 24"
           aria-hidden="true"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 104.5 4.5a7.5 7.5 0 0012.15 12.15z"
+          />
         </svg>
         <input
           type="text"
@@ -93,7 +97,14 @@ export default function RouteToolbar({
               : "border-edge/60 text-fg-secondary hover:border-edge-hover hover:text-fg",
           )}
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
             <path strokeLinecap="round" strokeLinejoin="round" d="M3 4.5h18M6 12h12M10 19.5h4" />
           </svg>
           {hasFilters && (
@@ -105,7 +116,9 @@ export default function RouteToolbar({
           <div className="ui-popover animate-fade-in absolute right-0 z-60 mt-2 w-56 p-3">
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State / Region</label>
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  State / Region
+                </label>
                 <input
                   type="text"
                   value={state}
@@ -115,7 +128,9 @@ export default function RouteToolbar({
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  Area
+                </label>
                 <input
                   type="text"
                   value={area}

@@ -64,7 +64,12 @@ function toOverlay(pose: PoseFrame, w: number, h: number): Record<string, Overla
 }
 
 /** Paint the faint ORB starfield onto a context. */
-function drawStarfield(ctx: CanvasRenderingContext2D, pts: NormalizedPoint[], w: number, h: number): void {
+function drawStarfield(
+  ctx: CanvasRenderingContext2D,
+  pts: NormalizedPoint[],
+  w: number,
+  h: number,
+): void {
   ctx.save();
   ctx.fillStyle = ORB_COLOR;
   const r = Math.max(1, Math.min(w, h) * 0.0024);
@@ -135,26 +140,34 @@ export default function XrayStage({
   const trailRef = useRef<HTMLCanvasElement | null>(null);
   const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
   const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
-  const animRef = useRef<{ from: Record<string, OverlayPoint>; to: Record<string, OverlayPoint>; start: number } | null>(null);
+  const animRef = useRef<{
+    from: Record<string, OverlayPoint>;
+    to: Record<string, OverlayPoint>;
+    start: number;
+  } | null>(null);
   const rafRef = useRef<number | null>(null);
 
   // Composite the ORB starfield + trail + the current live skeleton on top.
-  const render = useCallback((live: Record<string, OverlayPoint> | null) => {
-    const display = displayRef.current;
-    const dctx = display?.getContext("2d");
-    if (!display || !dctx) return;
-    dctx.clearRect(0, 0, cw, ch);
-    if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
-    if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
-    if (live) drawLive(dctx, live);
-  }, [cw, ch]);
+  const render = useCallback(
+    (live: Record<string, OverlayPoint> | null) => {
+      const display = displayRef.current;
+      const dctx = display?.getContext("2d");
+      if (!display || !dctx) return;
+      dctx.clearRect(0, 0, cw, ch);
+      if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
+      if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
+      if (live) drawLive(dctx, live);
+    },
+    [cw, ch],
+  );
 
   // (Re)initialise the trail layer whenever the render size changes, or when the
   // parent bumps resetSignal (e.g. a replay loop wrap) — a fresh scan; reset the
   // pose accumulation.
   useEffect(() => {
     const trail = document.createElement("canvas");
-    trail.width = cw; trail.height = ch;
+    trail.width = cw;
+    trail.height = ch;
     trailRef.current = trail;
     prevTargetRef.current = null;
     lastLiveRef.current = null;
@@ -167,9 +180,14 @@ export default function XrayStage({
   // re-init of the trail layer. Idempotent: no "drawn once" flag to fall out of
   // sync with the canvas it guards.
   useEffect(() => {
-    if (!orbPreview) { orbRef.current = null; render(lastLiveRef.current); return; }
+    if (!orbPreview) {
+      orbRef.current = null;
+      render(lastLiveRef.current);
+      return;
+    }
     const orb = document.createElement("canvas");
-    orb.width = cw; orb.height = ch;
+    orb.width = cw;
+    orb.height = ch;
     const octx = orb.getContext("2d");
     if (!octx) return;
     drawStarfield(octx, orbPreview, cw, ch);
@@ -212,17 +230,14 @@ export default function XrayStage({
     rafRef.current = requestAnimationFrame(step);
 
     return () => {
-      if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [currentPose, cw, ch, render]);
 
   return (
-    <canvas
-      ref={displayRef}
-      width={cw}
-      height={ch}
-      className={className}
-      aria-hidden="true"
-    />
+    <canvas ref={displayRef} width={cw} height={ch} className={className} aria-hidden="true" />
   );
 }

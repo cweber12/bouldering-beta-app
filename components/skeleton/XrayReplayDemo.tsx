@@ -60,7 +60,9 @@ export default function XrayReplayDemo({ maxHeight }: XrayReplayDemoProps = {}) 
   // is tolerated: reads clamp via `activeReplay` below and the modulo here keeps
   // it in range from the next wrap on, so no reset effect is needed.
   const replaysRef = useRef<ReplayData[]>(replays);
-  useEffect(() => { replaysRef.current = replays; }, [replays]);
+  useEffect(() => {
+    replaysRef.current = replays;
+  }, [replays]);
 
   const handleLoopComplete = useCallback(() => {
     setActiveIndex((i) => {
@@ -74,9 +76,15 @@ export default function XrayReplayDemo({ maxHeight }: XrayReplayDemoProps = {}) 
     let mounted = true;
     fetch(DEFAULT_ASSET)
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: ReplayData | null) => { if (mounted && data) setDefaultReplay(data); })
-      .catch(() => { /* no default asset — leave the stage blank */ });
-    return () => { mounted = false; };
+      .then((data: ReplayData | null) => {
+        if (mounted && data) setDefaultReplay(data);
+      })
+      .catch(() => {
+        /* no default asset — leave the stage blank */
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // 2. Swap-on-arrival: signed-in users cycle their newest starfield-bearing runs.
@@ -97,9 +105,13 @@ export default function XrayReplayDemo({ maxHeight }: XrayReplayDemoProps = {}) 
           if (collected.length >= MAX_RUNS) break;
         }
         if (mounted && collected.length > 0) setUserReplays(collected);
-      } catch { /* keep the default */ }
+      } catch {
+        /* keep the default */
+      }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [user, userPrefix, listAttempts, downloadAttempt]);
 
   // Pause the loop when offscreen or the tab is hidden.
@@ -114,11 +126,18 @@ export default function XrayReplayDemo({ maxHeight }: XrayReplayDemoProps = {}) 
     });
     io.observe(el);
     document.addEventListener("visibilitychange", sync);
-    return () => { io.disconnect(); document.removeEventListener("visibilitychange", sync); };
+    return () => {
+      io.disconnect();
+      document.removeEventListener("visibilitychange", sync);
+    };
   }, []);
 
   const activeReplay = replays[activeIndex] ?? replays[0] ?? null;
-  const { orbPreview, currentPose, resetSignal } = useReplayDriver(activeReplay, active, handleLoopComplete);
+  const { orbPreview, currentPose, resetSignal } = useReplayDriver(
+    activeReplay,
+    active,
+    handleLoopComplete,
+  );
 
   // Match the scan-flow frame sizing: fill the width but cap the height to the
   // viewport so a portrait clip never overflows vertically on first paint. When

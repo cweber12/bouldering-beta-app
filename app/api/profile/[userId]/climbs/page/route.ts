@@ -33,7 +33,9 @@ export interface ClimbSummary {
 // ---------------------------------------------------------------------------
 
 /** Parse state/area/route/filename from S3 key. */
-function parseKey(key: string): { state: string; area: string; route: string; filename: string } | null {
+function parseKey(
+  key: string,
+): { state: string; area: string; route: string; filename: string } | null {
   const parts = key.split("/");
   if (parts.length < 6) return null;
   return { state: parts[2], area: parts[3], route: parts[4], filename: parts[parts.length - 1] };
@@ -76,7 +78,10 @@ export async function GET(
   }
 
   const page = Math.max(1, parseInt(request.nextUrl.searchParams.get("page") ?? "1", 10) || 1);
-  const pageSize = Math.min(16, Math.max(1, parseInt(request.nextUrl.searchParams.get("pageSize") ?? "16", 10) || 16));
+  const pageSize = Math.min(
+    16,
+    Math.max(1, parseInt(request.nextUrl.searchParams.get("pageSize") ?? "16", 10) || 16),
+  );
   const filterState = request.nextUrl.searchParams.get("state")?.toLowerCase() ?? "";
   const filterArea = request.nextUrl.searchParams.get("area")?.toLowerCase() ?? "";
   const filterRoute = request.nextUrl.searchParams.get("route")?.toLowerCase() ?? "";
@@ -104,7 +109,11 @@ export async function GET(
       });
       const res = await s3.send(cmd);
       for (const obj of res.Contents ?? []) {
-        if (obj.Key && !obj.Key.endsWith(".data.json") && (obj.Key.match(/run-\d+.*\.json$/) || obj.Key.match(/attempt-\d+\.json$/))) {
+        if (
+          obj.Key &&
+          !obj.Key.endsWith(".data.json") &&
+          (obj.Key.match(/run-\d+.*\.json$/) || obj.Key.match(/attempt-\d+\.json$/))
+        ) {
           allKeys.push(obj.Key);
         }
       }
@@ -112,7 +121,13 @@ export async function GET(
     } while (token);
 
     // 2. Parse keys and apply location filters (from key structure, no JSON fetch).
-    interface ParsedKey { key: string; state: string; area: string; route: string; filename: string }
+    interface ParsedKey {
+      key: string;
+      state: string;
+      area: string;
+      route: string;
+      filename: string;
+    }
     let parsed: ParsedKey[] = allKeys
       .map((key) => {
         const p = parseKey(key);
@@ -175,9 +190,9 @@ export async function GET(
     const start = (page - 1) * pageSize;
     const pageKeys = parsed.slice(start, start + pageSize);
 
-    const items = (
-      await Promise.all(pageKeys.map((p) => fetchSummary(bucket, p.key, p)))
-    ).filter((s): s is ClimbSummary => s !== null);
+    const items = (await Promise.all(pageKeys.map((p) => fetchSummary(bucket, p.key, p)))).filter(
+      (s): s is ClimbSummary => s !== null,
+    );
 
     return NextResponse.json({ items, total, page, pageSize });
   } catch (err) {
@@ -218,9 +233,10 @@ async function fetchSummary(
       rating: typeof obj.rating === "string" ? obj.rating : undefined,
       notes: typeof obj.notes === "string" ? obj.notes : undefined,
       thumbnail: typeof obj.thumbnail === "string" ? obj.thumbnail : undefined,
-      coordinates: coords && typeof coords.lat === "number" && typeof coords.lng === "number"
-        ? { lat: coords.lat, lng: coords.lng }
-        : undefined,
+      coordinates:
+        coords && typeof coords.lat === "number" && typeof coords.lng === "number"
+          ? { lat: coords.lat, lng: coords.lng }
+          : undefined,
     };
   } catch {
     return null;

@@ -76,33 +76,25 @@ beforeEach(() => {
 
 describe("useSkeletonFrames", () => {
   it("stays idle when cv is null", () => {
-    const { result } = renderHook(() =>
-      useSkeletonFrames(null, "a1", fakeMatchResult()),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(null, "a1", fakeMatchResult()));
     expect(result.current.status).toBe("idle");
     expect(result.current.data).toBeNull();
   });
 
   it("stays idle when attemptId is null", () => {
-    const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, null, fakeMatchResult()),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(mockCv, null, fakeMatchResult()));
     expect(result.current.status).toBe("idle");
     expect(result.current.data).toBeNull();
   });
 
   it("stays idle when matchResult is null", () => {
-    const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", null),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(mockCv, "a1", null));
     expect(result.current.status).toBe("idle");
     expect(result.current.data).toBeNull();
   });
 
   it("returns ready with skeleton data on valid inputs", () => {
-    const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", fakeMatchResult()),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(mockCv, "a1", fakeMatchResult()));
     expect(result.current.status).toBe("ready");
     expect(result.current.data).toBe(FAKE_RESULT);
     expect(result.current.errorMessage).toBeNull();
@@ -110,9 +102,7 @@ describe("useSkeletonFrames", () => {
 
   it("returns error when the match result has no homography", () => {
     const noHomography = { ...fakeMatchResult(), homography: undefined };
-    const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", noHomography),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(mockCv, "a1", noHomography));
     expect(result.current.status).toBe("error");
     expect(result.current.errorMessage).toMatch(/align/i);
   });
@@ -121,19 +111,16 @@ describe("useSkeletonFrames", () => {
     vi.mocked(buildSkeletonFrames).mockImplementation(() => {
       throw new Error("homography failed");
     });
-    const { result } = renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", fakeMatchResult()),
-    );
+    const { result } = renderHook(() => useSkeletonFrames(mockCv, "a1", fakeMatchResult()));
     expect(result.current.status).toBe("error");
     expect(result.current.errorMessage).toBe("homography failed");
   });
 
   it("resets to idle when matchResult becomes null", () => {
     const mr = fakeMatchResult();
-    const { result, rerender } = renderHook(
-      ({ match }) => useSkeletonFrames(mockCv, "a1", match),
-      { initialProps: { match: mr as ReturnType<typeof fakeMatchResult> | null } },
-    );
+    const { result, rerender } = renderHook(({ match }) => useSkeletonFrames(mockCv, "a1", match), {
+      initialProps: { match: mr as ReturnType<typeof fakeMatchResult> | null },
+    });
     expect(result.current.status).toBe("ready");
 
     rerender({ match: null });
@@ -142,11 +129,7 @@ describe("useSkeletonFrames", () => {
   });
 
   it("calls buildSkeletonFrames with the supplied targetFps", () => {
-    renderHook(() =>
-      useSkeletonFrames(mockCv, "a1", fakeMatchResult(), 15),
-    );
-    expect(buildSkeletonFrames).toHaveBeenCalledWith(
-      expect.objectContaining({ targetFps: 15 }),
-    );
+    renderHook(() => useSkeletonFrames(mockCv, "a1", fakeMatchResult(), 15));
+    expect(buildSkeletonFrames).toHaveBeenCalledWith(expect.objectContaining({ targetFps: 15 }));
   });
 });

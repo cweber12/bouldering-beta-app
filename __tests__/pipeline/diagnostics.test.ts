@@ -176,7 +176,14 @@ function scanInput(overrides: Partial<ScanDiagnosticsInput> = {}): ScanDiagnosti
     scanId: "run-1",
     videoHash: "abc",
     appVersion: "deadbee",
-    video: { width: 1920, height: 1080, durationSec: 4, frameCount: 40, fileType: "video/mp4", source: "uploaded" },
+    video: {
+      width: 1920,
+      height: 1080,
+      durationSec: 4,
+      frameCount: 40,
+      fileType: "video/mp4",
+      source: "uploaded",
+    },
     captureMode: "fixed",
     referenceAnalysis: makeAnalysis(),
     climberFrameCoverage: { min: 0.1, avg: 0.2 },
@@ -221,7 +228,9 @@ describe("buildScanDiagnostics", () => {
   });
 
   it("defaults overlayQuality to null and respects a provided tag", () => {
-    expect(buildScanDiagnostics(scanInput({ overlayQuality: "drift" })).result.overlayQuality).toBe("drift");
+    expect(buildScanDiagnostics(scanInput({ overlayQuality: "drift" })).result.overlayQuality).toBe(
+      "drift",
+    );
   });
 
   it("uses a provided createdAt", () => {
@@ -249,7 +258,13 @@ const queryBlock = {
   height: 4000,
   queryKeypointCount: 800,
   overall: region(120),
-  flags: { isOverexposed: false, isUnderexposed: false, isBacklit: false, isLowContrast: false, isBlurry: false },
+  flags: {
+    isOverexposed: false,
+    isUnderexposed: false,
+    isBacklit: false,
+    isLowContrast: false,
+    isBlurry: false,
+  },
   downscaleApplied: 0.4,
 };
 
@@ -280,7 +295,15 @@ describe("buildMatchDiagnostics", () => {
       appVersion: "deadbee",
       reference: null,
       query: queryBlock,
-      match: { mode: "fixed", stats: stats({ inlierCount: 0, inlierRatio: 0, homographyFound: false, failureReason: "gate_rejected" }) },
+      match: {
+        mode: "fixed",
+        stats: stats({
+          inlierCount: 0,
+          inlierRatio: 0,
+          homographyFound: false,
+          failureReason: "gate_rejected",
+        }),
+      },
     });
     expect(rec.result.homographyFound).toBe(false);
     expect(rec.result.failureReason).toBe("gate_rejected");
@@ -299,7 +322,13 @@ describe("buildMatchDiagnostics", () => {
         perKeyframe: [
           stats({ matchCount: 20, inlierCount: 10, inlierRatio: 0.5 }),
           stats({ matchCount: 30, inlierCount: 21, inlierRatio: 0.7 }),
-          stats({ matchCount: 5, inlierCount: 0, inlierRatio: 0, homographyFound: false, failureReason: "too_few_matches" }),
+          stats({
+            matchCount: 5,
+            inlierCount: 0,
+            inlierRatio: 0,
+            homographyFound: false,
+            failureReason: "too_few_matches",
+          }),
         ],
       },
     });

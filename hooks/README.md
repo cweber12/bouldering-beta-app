@@ -39,14 +39,14 @@ const { process, status, orbStatus, currentFrame, totalFrames, attemptId, errorM
 process(file, model, cv, mode?, frameStep?);
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `status` | `"idle" \| "processing" \| "done" \| "error"` | Overall pipeline status. |
-| `orbStatus` | `"idle" \| "extracting" \| "ready" \| "failed"` | ORB extraction status (set after `status` reaches `"done"`). |
-| `currentFrame` | `number` | Frame index currently being processed (for progress UI). |
-| `totalFrames` | `number` | Total frames to process. |
-| `attemptId` | `string \| null` | ID of the stored `RouteAttempt` once done. |
-| `errorMessage` | `string \| null` | Human-readable error when `status === "error"`. |
+| Field          | Type                                            | Description                                                  |
+| -------------- | ----------------------------------------------- | ------------------------------------------------------------ |
+| `status`       | `"idle" \| "processing" \| "done" \| "error"`   | Overall pipeline status.                                     |
+| `orbStatus`    | `"idle" \| "extracting" \| "ready" \| "failed"` | ORB extraction status (set after `status` reaches `"done"`). |
+| `currentFrame` | `number`                                        | Frame index currently being processed (for progress UI).     |
+| `totalFrames`  | `number`                                        | Total frames to process.                                     |
+| `attemptId`    | `string \| null`                                | ID of the stored `RouteAttempt` once done.                   |
+| `errorMessage` | `string \| null`                                | Human-readable error when `status === "error"`.              |
 
 `mode` defaults to `"indoor"`; `frameStep` (outdoor only) defaults to `5`.
 
@@ -67,8 +67,12 @@ await matchImage(file, attemptId, cv);
 Automatically renders an annotated pose-skeleton WebM video whenever `matchResult` becomes non-null.
 
 ```ts
-const { videoUrl, status, errorMessage, clearVideo } =
-  usePoseVideo(cv, imageFile, attemptId, matchResult);
+const { videoUrl, status, errorMessage, clearVideo } = usePoseVideo(
+  cv,
+  imageFile,
+  attemptId,
+  matchResult,
+);
 ```
 
 `videoUrl` is a `blob:` object URL for a `<video>` element. Revoke it by calling `clearVideo()` or the hook cleans up on unmount.

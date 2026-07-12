@@ -115,8 +115,11 @@ function parseRgb(css: string): { r: number; g: number; b: number } {
 }
 
 function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255; g /= 255; b /= 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  r /= 255;
+  g /= 255;
+  b /= 255;
+  const max = Math.max(r, g, b),
+    min = Math.min(r, g, b);
   const l = (max + min) / 2;
   if (max === min) return [0, 0, l];
   const d = max - min;
@@ -152,7 +155,8 @@ function hslToCss(h: number, s: number, l: number): string {
 
 /** WCAG-style contrast ratio between two relative luminances. */
 function contrastRatio(a: number, b: number): number {
-  const hi = Math.max(a, b), lo = Math.min(a, b);
+  const hi = Math.max(a, b),
+    lo = Math.min(a, b);
   return (hi + CONTRAST_OFFSET) / (lo + CONTRAST_OFFSET);
 }
 
@@ -215,13 +219,7 @@ interface Adjustment {
  * `targetLuma`. Relative luminance is monotonic in L for a fixed hue/saturation,
  * so a plain binary search converges.
  */
-function solveLForLuma(
-  h: number,
-  s: number,
-  targetLuma: number,
-  loL: number,
-  hiL: number,
-): number {
+function solveLForLuma(h: number, s: number, targetLuma: number, loL: number, hiL: number): number {
   const want = clamp01(targetLuma);
   let lo = loL;
   let hi = hiL;
@@ -372,8 +370,5 @@ export function adaptRamp(
   // Shift both endpoints by the single larger delta so the ramp slides as one
   // identity and can never compress or invert; saturation rescue stays per-end.
   const dl = Math.abs(a.dl) >= Math.abs(b.dl) ? a.dl : b.dl;
-  return [
-    applyAdjustment(startCss, dl, a.s),
-    applyAdjustment(endCss, dl, b.s),
-  ];
+  return [applyAdjustment(startCss, dl, a.s), applyAdjustment(endCss, dl, b.s)];
 }

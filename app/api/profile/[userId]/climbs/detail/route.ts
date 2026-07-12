@@ -33,7 +33,9 @@ export interface ClimbDetail {
 // ---------------------------------------------------------------------------
 
 /** Parse state/area/route/filename from S3 key. */
-function parseKey(key: string): { state: string; area: string; route: string; filename: string } | null {
+function parseKey(
+  key: string,
+): { state: string; area: string; route: string; filename: string } | null {
   const parts = key.split("/");
   if (parts.length < 6) return null;
   return { state: parts[2], area: parts[3], route: parts[4], filename: parts[parts.length - 1] };

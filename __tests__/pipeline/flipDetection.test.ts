@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  detectFlips,
-  isLandmarkFlip,
-} from "@/pipeline/pose/flipDetection";
+import { detectFlips, isLandmarkFlip } from "@/pipeline/pose/flipDetection";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -21,10 +18,7 @@ function frame(timestamp: number, kps: Array<[string, number, number, number?]>)
  * x of the left/right shoulder; `lh`/`rh` the hips. y values are arbitrary but
  * fixed so vertical motion is zero.
  */
-function torso(
-  timestamp: number,
-  ls: number, rs: number, lh: number, rh: number,
-): PoseFrame {
+function torso(timestamp: number, ls: number, rs: number, lh: number, rh: number): PoseFrame {
   return frame(timestamp, [
     ["left_shoulder", ls, 0.25],
     ["right_shoulder", rs, 0.25],
@@ -105,8 +99,14 @@ describe("isLandmarkFlip", () => {
   });
 
   it("detects a flip from shoulders alone when hips are absent", () => {
-    const prev = frame(0, [["left_shoulder", 0.35, 0.25], ["right_shoulder", 0.65, 0.25]]);
-    const flipped = frame(1, [["left_shoulder", 0.65, 0.25], ["right_shoulder", 0.35, 0.25]]);
+    const prev = frame(0, [
+      ["left_shoulder", 0.35, 0.25],
+      ["right_shoulder", 0.65, 0.25],
+    ]);
+    const flipped = frame(1, [
+      ["left_shoulder", 0.65, 0.25],
+      ["right_shoulder", 0.35, 0.25],
+    ]);
     expect(isLandmarkFlip(prev, flipped)).toBe(true);
   });
 
@@ -149,9 +149,7 @@ describe("isLandmarkFlip", () => {
   it("does NOT flag an upside-down pose under a permissive orientation cosine", () => {
     // orientationFlipCos = -1 only fires on an exact 180° reversal; a clean
     // inversion sits at cos ≈ -1 but the guard lets callers loosen it.
-    expect(
-      isLandmarkFlip(UPRIGHT(0), INVERTED(1), { orientationFlipCos: -1.5 }),
-    ).toBe(false);
+    expect(isLandmarkFlip(UPRIGHT(0), INVERTED(1), { orientationFlipCos: -1.5 })).toBe(false);
   });
 
   it("flags a SMALL/distant climber's inversion an absolute gate would miss", () => {
@@ -160,12 +158,16 @@ describe("isLandmarkFlip", () => {
     // frame-fraction teleport gate — but that is ~1.5 torso lengths, so the
     // torso-relative gate catches it. Numbers taken from midnight_lightning_3.
     const upright = frame(0, [
-      ["left_shoulder", 0.47, 0.47], ["right_shoulder", 0.45, 0.45],
-      ["left_hip", 0.49, 0.55], ["right_hip", 0.47, 0.54],
+      ["left_shoulder", 0.47, 0.47],
+      ["right_shoulder", 0.45, 0.45],
+      ["left_hip", 0.49, 0.55],
+      ["right_hip", 0.47, 0.54],
     ]);
     const inverted = frame(1, [
-      ["left_shoulder", 0.49, 0.57], ["right_shoulder", 0.47, 0.55],
-      ["left_hip", 0.45, 0.49], ["right_hip", 0.47, 0.50],
+      ["left_shoulder", 0.49, 0.57],
+      ["right_shoulder", 0.47, 0.55],
+      ["left_hip", 0.45, 0.49],
+      ["right_hip", 0.47, 0.5],
     ]);
     // Default teleportThreshold is 0.35 of the frame; the centroids move far less,
     // so only a body-relative test can flag this.
@@ -191,14 +193,14 @@ describe("detectFlips — vertical inversion", () => {
     const frames = [UPRIGHT(0), INVERTED(1), UPRIGHT(2)];
     const result = detectFlips(frames);
     expect(result.flippedTimestamps).toEqual([1]);
-    expect(result.kept.map(f => f.timestamp)).toEqual([0, 2]);
+    expect(result.kept.map((f) => f.timestamp)).toEqual([0, 2]);
   });
 
   it("discards a sustained inversion run against the last accepted upright frame", () => {
     const frames = [UPRIGHT(0), INVERTED(1), INVERTED(2), UPRIGHT(3)];
     const result = detectFlips(frames);
     expect(result.flippedTimestamps).toEqual([1, 2]);
-    expect(result.kept.map(f => f.timestamp)).toEqual([0, 3]);
+    expect(result.kept.map((f) => f.timestamp)).toEqual([0, 3]);
   });
 });
 
@@ -232,7 +234,7 @@ describe("detectFlips", () => {
     ];
     const result = detectFlips(frames);
     expect(result.flippedTimestamps).toEqual([1]);
-    expect(result.kept.map(f => f.timestamp)).toEqual([0, 2]);
+    expect(result.kept.map((f) => f.timestamp)).toEqual([0, 2]);
   });
 
   it("discards a sustained mislabel run by comparing to the last ACCEPTED frame", () => {
@@ -246,6 +248,6 @@ describe("detectFlips", () => {
     ];
     const result = detectFlips(frames);
     expect(result.flippedTimestamps).toEqual([1, 2]);
-    expect(result.kept.map(f => f.timestamp)).toEqual([0, 3]);
+    expect(result.kept.map((f) => f.timestamp)).toEqual([0, 3]);
   });
 });

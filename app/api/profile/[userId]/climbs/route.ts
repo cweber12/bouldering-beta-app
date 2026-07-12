@@ -1,6 +1,13 @@
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
-import { s3, S3_PREFIX, getBucket, getAuthUserId, isValidRoutePrefix, awsErrorMessage } from "../../../s3/shared";
+import {
+  s3,
+  S3_PREFIX,
+  getBucket,
+  getAuthUserId,
+  isValidRoutePrefix,
+  awsErrorMessage,
+} from "../../../s3/shared";
 
 // ---------------------------------------------------------------------------
 // GET — list another user's climbs (public view)

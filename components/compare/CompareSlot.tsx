@@ -85,8 +85,12 @@ export default function CompareSlot({
   onSetStart,
   onClearStart,
 }: CompareSlotProps) {
-  const { matchImage, status: matchStatus, result: matchResult, errorMessage: matchError } =
-    useImageMatcher();
+  const {
+    matchImage,
+    status: matchStatus,
+    result: matchResult,
+    errorMessage: matchError,
+  } = useImageMatcher();
 
   const { data: skeletonData, status: skeletonStatus } = useSkeletonFrames(
     cv,
@@ -106,7 +110,7 @@ export default function CompareSlot({
   useEffect(() => {
     if (!attempt || !imageFile || !cv || matchTrigger === 0) return;
     matchImage(imageFile, attempt.id, cv, imageCrop);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchTrigger, attempt?.id, imageFile, cv]);
 
   // On-demand video export for download.
@@ -116,11 +120,14 @@ export default function CompareSlot({
   // This climb's styled overlay — identity-coloured Silhouette + Skeleton, with
   // white joints for contrast. Derived once and reused for both the live player
   // layer and the download/export render path.
-  const skeletonStyle = useMemo<SkeletonStyle>(() => ({
-    silhouetteColor: limbColor,
-    lineColor: limbColor,
-    jointColor: JOINT_COLOR,
-  }), [limbColor]);
+  const skeletonStyle = useMemo<SkeletonStyle>(
+    () => ({
+      silhouetteColor: limbColor,
+      lineColor: limbColor,
+      jointColor: JOINT_COLOR,
+    }),
+    [limbColor],
+  );
 
   async function handleDownload() {
     if (!cv || !imageFile || !attempt || !matchResult) return;
@@ -159,17 +166,10 @@ export default function CompareSlot({
   const isError = skeletonStatus === "error" || matchStatus === "error";
 
   // Single styled layer for this climb — identity-coloured Silhouette + Skeleton.
-  const playerLayers = skeletonData
-    ? [{ frames: skeletonData.frames, style: skeletonStyle }]
-    : [];
+  const playerLayers = skeletonData ? [{ frames: skeletonData.frames, style: skeletonStyle }] : [];
 
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-2",
-        fillHeight && "h-full min-h-0 w-full",
-      )}
-    >
+    <div className={cn("flex flex-col gap-2", fillHeight && "h-full min-h-0 w-full")}>
       {attempt && (
         <div className="flex w-full shrink-0 items-center gap-2">
           {/* Identity colour swatch — clean rounded swatch, editable inline. */}
@@ -210,9 +210,7 @@ export default function CompareSlot({
         </div>
       )}
 
-      {!attempt && (
-        <p className="text-xs text-fg-muted italic">No climb loaded</p>
-      )}
+      {!attempt && <p className="text-xs text-fg-muted italic">No climb loaded</p>}
 
       {attempt && matchStatus === "matching" && (
         <p className="text-xs text-fg-secondary animate-pulse">Matching&#8230;</p>
@@ -249,8 +247,19 @@ export default function CompareSlot({
                 )}
                 title="Set this frame as the climb's start"
               >
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18M3 4h13l-2 4 2 4H3" />
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 3v18M3 4h13l-2 4 2 4H3"
+                  />
                 </svg>
                 {startOffset > 0 ? `Start ${fmtClock(startOffset)}` : "Set start"}
               </button>
@@ -281,9 +290,7 @@ export default function CompareSlot({
         </div>
       )}
 
-      {isError && (
-        <p className="text-xs text-danger">{matchError ?? "Render failed."}</p>
-      )}
+      {isError && <p className="text-xs text-danger">{matchError ?? "Render failed."}</p>}
     </div>
   );
 }

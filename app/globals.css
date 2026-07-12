@@ -2,30 +2,30 @@
 
 @theme inline {
   /* ─── Surfaces (deep charcoal / scanner dark) ──────── */
-  --color-surface:     #161a1e;
+  --color-surface: #161a1e;
   --color-surface-alt: #111417;
-  --color-card:        #1b2130;   /* subtle teal-grey tint — scanner identity */
-  --color-card-hover:  #222c3d;
-  --color-inset:       #0f1318;
+  --color-card: #1b2130; /* subtle teal-grey tint — scanner identity */
+  --color-card-hover: #222c3d;
+  --color-inset: #0f1318;
   /* Scan loading stage — an always-dark "instrument display" backdrop for the
      ORB starfield + pose skeletons. Intentionally not overridden in
      .theme-light: it stays near-black in both themes for contrast. */
-  --color-scan-stage:  #080a0d;
+  --color-scan-stage: #080a0d;
 
   /* ─── Foreground / text ─────────────────────────────── */
-  --color-fg:             #e8e4de;   /* warm stone-100, bright and legible */
-  --color-fg-secondary:   #99a2ac;   /* stone-blue — clear hierarchy */
-  --color-fg-muted:       #717d8a;   /* improved contrast from #636b75 */
-  --color-fg-light:       #b0bac5;   /* lighter fill text */
+  --color-fg: #e8e4de; /* warm stone-100, bright and legible */
+  --color-fg-secondary: #99a2ac; /* stone-blue — clear hierarchy */
+  --color-fg-muted: #717d8a; /* improved contrast from #636b75 */
+  --color-fg-light: #b0bac5; /* lighter fill text */
   --color-fg-placeholder: #434e5e;
-  --color-fg-inverse:     #f9fafb;   /* text on colored surfaces */
+  --color-fg-inverse: #f9fafb; /* text on colored surfaces */
 
   /* ─── Borders (slate) ──────────────────────────────── */
-  --color-edge:       #252e3a;   /* slightly more blue-teal for depth */
+  --color-edge: #252e3a; /* slightly more blue-teal for depth */
   --color-edge-hover: #3a4557;
 
   /* ─── Accent (scanner green) ────────────────────────── */
-  --color-accent:       #22c55e;
+  --color-accent: #22c55e;
   --color-accent-hover: #16a34a;
   --color-accent-muted: #166534;
 
@@ -36,22 +36,22 @@
   --color-success: #22c55e;
 
   /* ─── Semantic: danger / error ──────────────────────── */
-  --color-danger:         #f87171;   /* text */
-  --color-danger-surface: #280d0d;   /* background */
-  --color-danger-border:  #6b1f1f;   /* border */
+  --color-danger: #f87171; /* text */
+  --color-danger-surface: #280d0d; /* background */
+  --color-danger-border: #6b1f1f; /* border */
 
   /* ─── Semantic: caution / warning ───────────────────── */
-  --color-caution:         #fbbf24;  /* text */
-  --color-caution-surface: #221200;  /* background */
-  --color-caution-border:  #6b3600;  /* border */
+  --color-caution: #fbbf24; /* text */
+  --color-caution-surface: #221200; /* background */
+  --color-caution-border: #6b3600; /* border */
 
   /* ─── Semantic: send (completed run) ────────────────── */
-  --color-send:         #34d399;     /* text + chip bg */
-  --color-send-surface: #0c3d22;     /* muted badge background */
+  --color-send: #34d399; /* text + chip bg */
+  --color-send-surface: #0c3d22; /* muted badge background */
 
   /* ─── Semantic: attempt (incomplete run) ────────────── */
-  --color-attempt:         #fbbf24;  /* text + chip bg */
-  --color-attempt-surface: #3d2200;  /* muted badge background */
+  --color-attempt: #fbbf24; /* text + chip bg */
+  --color-attempt-surface: #3d2200; /* muted badge background */
 
   /* ─── Holds overlay markers (Route Overlay only) ────── */
   /* Kind is shown by colour: cyan ring = Hand Hold, orange ring = Foot Hold.
@@ -60,7 +60,7 @@
   --color-foot-hold: #f6850c;
 
   /* ─── Scanner glow ──────────────────────────────────── */
-  --color-glow: rgba(34, 197, 94, 0.18);   /* stronger scanner identity */
+  --color-glow: rgba(34, 197, 94, 0.18); /* stronger scanner identity */
 
   /* ─── Fonts ──────────────────────────────────────────── */
   --font-sans: var(--font-inter);
@@ -77,11 +77,11 @@
      Overrides Tailwind's default radius ramp so every rounded-*
      utility resolves to a minimal, clean value. rounded-full is
      intentionally untouched (avatars, dots, pills stay circular). */
-  --radius-xs:  1px;
-  --radius-sm:  2px;
-  --radius-md:  2px;
-  --radius-lg:  3px;
-  --radius-xl:  4px;
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
   --radius-2xl: 4px;
   --radius-3xl: 6px;
 }
@@ -98,52 +98,52 @@
   color-scheme: light;
 
   /* ── Surfaces — warm stone / chalk palette ─────────── */
-  --color-surface:     #efece7;   /* warm stone base */
-  --color-surface-alt: #e5e1db;   /* slightly darker alt */
-  --color-card:        #fefcf9;   /* warm near-white card */
-  --color-card-hover:  #f4f1eb;   /* warm card hover */
-  --color-inset:       #ddd9d2;   /* warm recessed area */
+  --color-surface: #efece7; /* warm stone base */
+  --color-surface-alt: #e5e1db; /* slightly darker alt */
+  --color-card: #fefcf9; /* warm near-white card */
+  --color-card-hover: #f4f1eb; /* warm card hover */
+  --color-inset: #ddd9d2; /* warm recessed area */
 
   /* ── Foreground — warm stone tones (full contrast chain) */
-  --color-fg:             #0f0c0a;   /* near-black body text for max readability */
-  --color-fg-secondary:   #211c17;   /* dark secondary copy for light surfaces */
-  --color-fg-muted:       #332d27;   /* still muted, but clearly readable */
-  --color-fg-light:       #4d463f;   /* supporting text that remains legible */
-  --color-fg-placeholder: #6f675f;   /* darker placeholder for better visibility */
-  --color-fg-inverse:     #ffffff;
+  --color-fg: #0f0c0a; /* near-black body text for max readability */
+  --color-fg-secondary: #211c17; /* dark secondary copy for light surfaces */
+  --color-fg-muted: #332d27; /* still muted, but clearly readable */
+  --color-fg-light: #4d463f; /* supporting text that remains legible */
+  --color-fg-placeholder: #6f675f; /* darker placeholder for better visibility */
+  --color-fg-inverse: #ffffff;
 
   /* ── Borders — warm stone ────────────────────────────── */
-  --color-edge:       #c8c3bc;   /* warm stone-300 — visible but soft */
-  --color-edge-hover: #a29d96;   /* stone-400 — clear hover */
+  --color-edge: #c8c3bc; /* warm stone-300 — visible but soft */
+  --color-edge-hover: #a29d96; /* stone-400 — clear hover */
 
   /* ── Accent — richer green for legibility on light bg ── */
-  --color-accent:       #14532d;   /* green-900 — stronger contrast on light surfaces */
-  --color-accent-hover: #052e16;   /* deep green for hover/active states */
-  --color-accent-muted: #d1fae5;   /* emerald-100 tint */
+  --color-accent: #14532d; /* green-900 — stronger contrast on light surfaces */
+  --color-accent-hover: #052e16; /* deep green for hover/active states */
+  --color-accent-muted: #d1fae5; /* emerald-100 tint */
 
   /* ── Primary ────────────────────────────────────────── */
-  --color-primary: #dcfce7;   /* emerald-50 */
+  --color-primary: #dcfce7; /* emerald-50 */
 
   /* ── Semantic: success ───────────────────────────────── */
   --color-success: #14532d;
 
   /* ── Semantic: danger / error ────────────────────────── */
-  --color-danger:         #b91c1c;   /* red-700 — strong on light bg */
-  --color-danger-surface: #fef2f2;   /* red-50 */
-  --color-danger-border:  #fca5a5;   /* red-300 */
+  --color-danger: #b91c1c; /* red-700 — strong on light bg */
+  --color-danger-surface: #fef2f2; /* red-50 */
+  --color-danger-border: #fca5a5; /* red-300 */
 
   /* ── Semantic: caution / warning ─────────────────────── */
-  --color-caution:         #92400e;   /* amber-800 — readable on light bg */
-  --color-caution-surface: #fffbeb;   /* amber-50 */
-  --color-caution-border:  #fde68a;   /* amber-200 */
+  --color-caution: #92400e; /* amber-800 — readable on light bg */
+  --color-caution-surface: #fffbeb; /* amber-50 */
+  --color-caution-border: #fde68a; /* amber-200 */
 
   /* ── Semantic: send ──────────────────────────────────── */
-  --color-send:         #047857;   /* emerald-700 — strong on light */
-  --color-send-surface: #d1fae5;   /* emerald-100 */
+  --color-send: #047857; /* emerald-700 — strong on light */
+  --color-send-surface: #d1fae5; /* emerald-100 */
 
   /* ── Semantic: attempt ───────────────────────────────── */
-  --color-attempt:         #92400e;   /* amber-800 */
-  --color-attempt-surface: #fef3c7;   /* amber-100 */
+  --color-attempt: #92400e; /* amber-800 */
+  --color-attempt-surface: #fef3c7; /* amber-100 */
 
   /* ── Holds overlay markers — same colours (drawn on a photo, theme-independent) ── */
   --color-hand-hold: #39b1d1;
@@ -157,8 +157,8 @@
 
 :root {
   --nav-h: 3rem; /* NavBar h-12 = 3rem; used for viewport-fit media preview max-height */
-  --radius-control: 2px;  /* inputs, buttons, chips — crisp */
-  --radius-panel: 3px;    /* popovers, surfaces — crisp */
+  --radius-control: 2px; /* inputs, buttons, chips — crisp */
+  --radius-panel: 3px; /* popovers, surfaces — crisp */
 }
 
 /* ─── Semantic utility bridge ─────────────────────────────────────────────
@@ -166,44 +166,96 @@
    Re-bind semantic classes to CSS variables so theme class switches update
    text/accent colors correctly at runtime. */
 
-.text-fg { color: var(--color-fg) !important; }
-.text-fg-secondary { color: var(--color-fg-secondary) !important; }
-.text-fg-muted { color: var(--color-fg-muted) !important; }
-.text-fg-light { color: var(--color-fg-light) !important; }
-.text-fg-placeholder { color: var(--color-fg-placeholder) !important; }
-.text-fg-inverse { color: var(--color-fg-inverse) !important; }
+.text-fg {
+  color: var(--color-fg) !important;
+}
+.text-fg-secondary {
+  color: var(--color-fg-secondary) !important;
+}
+.text-fg-muted {
+  color: var(--color-fg-muted) !important;
+}
+.text-fg-light {
+  color: var(--color-fg-light) !important;
+}
+.text-fg-placeholder {
+  color: var(--color-fg-placeholder) !important;
+}
+.text-fg-inverse {
+  color: var(--color-fg-inverse) !important;
+}
 
-.text-accent { color: var(--color-accent) !important; }
-.text-success { color: var(--color-success) !important; }
+.text-accent {
+  color: var(--color-accent) !important;
+}
+.text-success {
+  color: var(--color-success) !important;
+}
 
-.bg-accent { background-color: var(--color-accent) !important; }
-.bg-accent-hover { background-color: var(--color-accent-hover) !important; }
+.bg-accent {
+  background-color: var(--color-accent) !important;
+}
+.bg-accent-hover {
+  background-color: var(--color-accent-hover) !important;
+}
 
-.hover\:bg-accent-hover:hover { background-color: var(--color-accent-hover) !important; }
-.hover\:text-accent:hover { color: var(--color-accent) !important; }
+.hover\:bg-accent-hover:hover {
+  background-color: var(--color-accent-hover) !important;
+}
+.hover\:text-accent:hover {
+  color: var(--color-accent) !important;
+}
 
-.theme-light .text-fg { color: var(--color-fg) !important; }
-.theme-light .text-fg-secondary { color: var(--color-fg-secondary) !important; }
-.theme-light .text-fg-muted { color: var(--color-fg-muted) !important; }
-.theme-light .text-fg-light { color: var(--color-fg-light) !important; }
-.theme-light .text-fg-placeholder { color: var(--color-fg-placeholder) !important; }
-.theme-light .text-fg-inverse { color: var(--color-fg-inverse) !important; }
+.theme-light .text-fg {
+  color: var(--color-fg) !important;
+}
+.theme-light .text-fg-secondary {
+  color: var(--color-fg-secondary) !important;
+}
+.theme-light .text-fg-muted {
+  color: var(--color-fg-muted) !important;
+}
+.theme-light .text-fg-light {
+  color: var(--color-fg-light) !important;
+}
+.theme-light .text-fg-placeholder {
+  color: var(--color-fg-placeholder) !important;
+}
+.theme-light .text-fg-inverse {
+  color: var(--color-fg-inverse) !important;
+}
 
-.theme-light .text-accent { color: var(--color-accent) !important; }
-.theme-light .text-success { color: var(--color-success) !important; }
+.theme-light .text-accent {
+  color: var(--color-accent) !important;
+}
+.theme-light .text-success {
+  color: var(--color-success) !important;
+}
 
-.theme-light .bg-accent { background-color: var(--color-accent) !important; }
-.theme-light .bg-accent-hover { background-color: var(--color-accent-hover) !important; }
+.theme-light .bg-accent {
+  background-color: var(--color-accent) !important;
+}
+.theme-light .bg-accent-hover {
+  background-color: var(--color-accent-hover) !important;
+}
 
-.theme-light .hover\:bg-accent-hover:hover { background-color: var(--color-accent-hover) !important; }
-.theme-light .hover\:text-accent:hover { color: var(--color-accent) !important; }
+.theme-light .hover\:bg-accent-hover:hover {
+  background-color: var(--color-accent-hover) !important;
+}
+.theme-light .hover\:text-accent:hover {
+  color: var(--color-accent) !important;
+}
 
 /* ─── Base styles ────────────────── */
 
 body {
   background: var(--color-surface);
   color: var(--color-fg);
-  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-family:
+    var(--font-sans),
+    system-ui,
+    -apple-system,
+    sans-serif;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -229,7 +281,10 @@ h6,
   border-radius: var(--radius-control);
   background: var(--color-inset);
   color: var(--color-fg);
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
 }
 
 .ui-input::placeholder {
@@ -250,7 +305,11 @@ h6,
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--color-surface-alt) 55%, transparent);
   color: var(--color-fg-secondary);
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
 }
 
 .ui-control:hover {
@@ -287,7 +346,10 @@ h6,
   background: var(--color-accent);
   color: var(--color-fg-inverse);
   box-shadow: 0 2px 10px color-mix(in srgb, var(--color-accent) 18%, transparent);
-  transition: transform 140ms ease, background-color 140ms ease, box-shadow 160ms ease;
+  transition:
+    transform 140ms ease,
+    background-color 140ms ease,
+    box-shadow 160ms ease;
 }
 
 .ui-control-primary:hover {
@@ -304,14 +366,19 @@ h6,
   border-radius: var(--radius-control);
   background: color-mix(in srgb, var(--color-surface-alt) 70%, transparent);
   color: var(--color-fg-secondary);
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
 }
 
 .ui-control-text {
   border: 0;
   background: transparent;
   color: var(--color-fg-secondary);
-  transition: color 140ms ease, text-decoration-color 140ms ease;
+  transition:
+    color 140ms ease,
+    text-decoration-color 140ms ease;
   text-decoration: underline;
   text-decoration-color: transparent;
   text-underline-offset: 0.22em;
@@ -338,7 +405,10 @@ h6,
   border-radius: var(--radius-control);
   background: var(--color-primary);
   color: var(--color-fg);
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .ui-action-follow:hover {
@@ -351,7 +421,10 @@ h6,
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--color-fg-secondary);
-  transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background-color 140ms ease;
 }
 
 .ui-action-unfollow:hover {
@@ -371,7 +444,9 @@ h6,
   border: 0;
   background: transparent;
   color: var(--color-fg-secondary);
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .ui-segmented-button:hover {
@@ -432,8 +507,16 @@ html {
   transition: background-color 200ms ease;
 }
 body,
-nav, main, aside, header, footer, dialog {
-  transition: background-color 200ms ease, border-color 200ms ease, color 150ms ease;
+nav,
+main,
+aside,
+header,
+footer,
+dialog {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 150ms ease;
 }
 
 /* ─── Layered background — terrain depth + faint scanner glow ─── */
@@ -443,9 +526,7 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background:
-    
-  #070a0e;
+  background: #070a0e;
   pointer-events: none;
 }
 
@@ -502,7 +583,9 @@ input[type="range"]::-webkit-slider-thumb {
   margin-top: -5px;
   border: 2px solid var(--color-surface);
   box-shadow: 0 0 6px var(--color-glow);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
@@ -549,24 +632,40 @@ input[type="checkbox"] {
 /* ─── Animations ─────────────────── */
 
 @keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0.8; }
-  to   { transform: translateY(0);    opacity: 1; }
+  from {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 .animate-slide-up {
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 .animate-fade-in {
   animation: fadeIn 0.2s ease-out both;
 }
 
 @keyframes scaleIn {
-  from { transform: scale(0.96); opacity: 0; }
-  to   { transform: scale(1);    opacity: 1; }
+  from {
+    transform: scale(0.96);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 .animate-scale-in {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -575,16 +674,27 @@ input[type="checkbox"] {
 /* ─── Scanner animations ─────────── */
 
 @keyframes scanPulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--color-glow); }
-  50%      { box-shadow: 0 0 12px 3px var(--color-glow); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-glow);
+  }
+  50% {
+    box-shadow: 0 0 12px 3px var(--color-glow);
+  }
 }
 .animate-scan-pulse {
   animation: scanPulse 3s ease-in-out infinite;
 }
 
 @keyframes flowEnter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .motion-flow-enter {
@@ -596,7 +706,10 @@ input[type="checkbox"] {
 }
 
 .motion-cta {
-  transition: transform 140ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  transition:
+    transform 140ms ease,
+    box-shadow 180ms ease,
+    background-color 180ms ease;
 }
 
 .motion-cta:active {

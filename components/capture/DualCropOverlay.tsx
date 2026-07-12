@@ -51,15 +51,24 @@ function getHandleKnobStyle(id: HandleId, color: string): React.CSSProperties {
   };
   const thick = `${SEG_W}px solid ${color}`;
   switch (id) {
-    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
-    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
-    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
-    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
-    case "n":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "s":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "e":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    case "w":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    default: return base;
+    case "nw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
+    case "ne":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
+    case "sw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
+    case "se":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
+    case "n":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "s":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "e":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    case "w":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    default:
+      return base;
   }
 }
 
@@ -254,11 +263,21 @@ export default function DualCropOverlay({
       />
       <div
         className="crop-overlay-mask absolute pointer-events-none"
-        style={{ top: pct(route.y), left: 0, width: pct(route.x), bottom: pct(1 - route.y - route.h) }}
+        style={{
+          top: pct(route.y),
+          left: 0,
+          width: pct(route.x),
+          bottom: pct(1 - route.y - route.h),
+        }}
       />
       <div
         className="crop-overlay-mask absolute pointer-events-none"
-        style={{ top: pct(route.y), left: pct(route.x + route.w), right: 0, bottom: pct(1 - route.y - route.h) }}
+        style={{
+          top: pct(route.y),
+          left: pct(route.x + route.w),
+          right: 0,
+          bottom: pct(1 - route.y - route.h),
+        }}
       />
 
       {/* Route layer below, Climber layer on top so the climber wins ties. */}

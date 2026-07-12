@@ -34,16 +34,12 @@ export default function RunTypeBadge({
         ? "bg-send/80 text-fg-inverse"
         : "bg-attempt/80 text-fg-inverse"
       : normalized === "send"
-      ? "bg-send-surface text-send"
-      : "bg-attempt-surface text-attempt";
+        ? "bg-send-surface text-send"
+        : "bg-attempt-surface text-attempt";
 
   return (
     <span
-      className={cn(
-        "rounded px-1.5 py-0.5 text-xs font-medium capitalize",
-        toneClass,
-        className,
-      )}
+      className={cn("rounded px-1.5 py-0.5 text-xs font-medium capitalize", toneClass, className)}
     >
       {label ?? normalized}
     </span>

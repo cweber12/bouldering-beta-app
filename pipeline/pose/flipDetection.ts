@@ -166,7 +166,7 @@ interface TorsoAxis {
 }
 
 function torsoAxis(frame: PoseFrame): TorsoAxis | null {
-  const m = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+  const m = new Map(frame.keypoints.map((kp) => [kp.name, kp]));
   const shoulder = centroidOf(m, [LEFT_SHOULDER, RIGHT_SHOULDER]);
   const hip = centroidOf(m, [LEFT_HIP, RIGHT_HIP]);
   if (!shoulder || !hip) return null;
@@ -177,7 +177,7 @@ function torsoAxis(frame: PoseFrame): TorsoAxis | null {
 
 /** Extract the shoulder and hip left/right pairs from a frame (null if incomplete). */
 function torsoPairs(frame: PoseFrame): { shoulders: Pair | null; hips: Pair | null } {
-  const m = new Map(frame.keypoints.map(kp => [kp.name, kp]));
+  const m = new Map(frame.keypoints.map((kp) => [kp.name, kp]));
   const ls = m.get(LEFT_SHOULDER);
   const rs = m.get(RIGHT_SHOULDER);
   const lh = m.get(LEFT_HIP);

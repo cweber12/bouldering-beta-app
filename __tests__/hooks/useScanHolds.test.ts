@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { useScanHolds } from "@/hooks/useScanHolds";
-import {
-  saveAttempt,
-  getAttempt,
-  clearStore,
-  type RouteAttempt,
-} from "@/storage/sessionStore";
+import { saveAttempt, getAttempt, clearStore, type RouteAttempt } from "@/storage/sessionStore";
 
 function makeAttempt(overrides?: Partial<RouteAttempt>): RouteAttempt {
   return {
@@ -47,7 +42,12 @@ describe("useScanHolds", () => {
     saveAttempt(attempt);
     const { result } = renderHook(() => useScanHolds(attempt, true));
     expect(result.current.count).toBe(1);
-    expect(result.current.previewHolds[0]).toMatchObject({ x: 500, y: 400, order: 1, kind: "hand" });
+    expect(result.current.previewHolds[0]).toMatchObject({
+      x: 500,
+      y: 400,
+      order: 1,
+      kind: "hand",
+    });
   });
 
   it("adds a Hold snapped to the chosen limb and persists it to the Run", () => {
@@ -61,7 +61,12 @@ describe("useScanHolds", () => {
 
     expect(result.current.count).toBe(1);
     expect(result.current.entries[0]).toMatchObject({ order: 1 });
-    expect(result.current.entries[0].hold).toMatchObject({ x: 0.5, y: 0.4, kind: "hand", firstUseTime: 0 });
+    expect(result.current.entries[0].hold).toMatchObject({
+      x: 0.5,
+      y: 0.4,
+      kind: "hand",
+      firstUseTime: 0,
+    });
     // Written back to the store so it saves and shows on the Route Overlay.
     expect(getAttempt("run-1")?.holds).toHaveLength(1);
   });

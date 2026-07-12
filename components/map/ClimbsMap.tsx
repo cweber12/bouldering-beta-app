@@ -43,10 +43,7 @@ export interface ClimbsMapProps {
 }
 
 /** Build a custom SVG DivIcon for a user's climb pin. */
-function buildIcon(
-  L: typeof import("leaflet"),
-  runType: string,
-): import("leaflet").DivIcon {
+function buildIcon(L: typeof import("leaflet"), runType: string): import("leaflet").DivIcon {
   const colour = runType === "send" ? "#10b981" : "#f59e0b"; // emerald / amber
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
     <path d="M14 0C6.27 0 0 6.27 0 14c0 9.63 14 22 14 22S28 23.63 28 14C28 6.27 21.73 0 14 0z" fill="${colour}"/>
@@ -120,21 +117,20 @@ async function fetchOsmClimbing(
   const res = await fetch(`${OVERPASS_URL}?data=${encodeURIComponent(q)}`);
   if (!res.ok) return [];
   const json = (await res.json()) as { elements: OverpassElement[] };
-  return json.elements
-    .reduce<OsmFeature[]>((acc, el) => {
-      const lat = el.lat ?? el.center?.lat;
-      const lon = el.lon ?? el.center?.lon;
-      if (!lat || !lon) return acc;
-      acc.push({
-        id: el.id,
-        lat,
-        lng: lon,
-        name: el.tags?.name ?? "Climbing site",
-        featureType: osmFeatureType(el.tags ?? {}),
-        website: el.tags?.website ?? el.tags?.url,
-      });
-      return acc;
-    }, []);
+  return json.elements.reduce<OsmFeature[]>((acc, el) => {
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (!lat || !lon) return acc;
+    acc.push({
+      id: el.id,
+      lat,
+      lng: lon,
+      name: el.tags?.name ?? "Climbing site",
+      featureType: osmFeatureType(el.tags ?? {}),
+      website: el.tags?.website ?? el.tags?.url,
+    });
+    return acc;
+  }, []);
 }
 
 /**
@@ -288,8 +284,11 @@ export default function ClimbsMap({
         const popupRows = group
           .map((p) => {
             const typeLabel = p.runType === "send" ? "✓ Send" : "Attempt";
-            const ts = p.timestamp ? `<br/><span style="color:var(--color-fg-muted);font-size:11px">${p.timestamp}</span>` : "";
-            const clickable = p.key && onPinClick ? " style=\"cursor:pointer;text-decoration:underline\"" : "";
+            const ts = p.timestamp
+              ? `<br/><span style="color:var(--color-fg-muted);font-size:11px">${p.timestamp}</span>`
+              : "";
+            const clickable =
+              p.key && onPinClick ? ' style="cursor:pointer;text-decoration:underline"' : "";
             return `<div style="margin-bottom:4px"><strong${clickable} data-climb-key="${p.key ?? ""}">${p.label}</strong> — ${typeLabel}${ts}</div>`;
           })
           .join("");
@@ -363,18 +362,25 @@ export default function ClimbsMap({
       try {
         const L = (await import("leaflet")).default;
         const features = await fetchOsmClimbing(
-          b.getSouth(), b.getWest(), b.getNorth(), b.getEast(),
+          b.getSouth(),
+          b.getWest(),
+          b.getNorth(),
+          b.getEast(),
         );
         if (!mapRef.current) return; // unmounted while fetching
         osmLayer.clearLayers();
         const icon = buildOsmIcon(L);
         for (const f of features) {
           const typeLabel =
-            f.featureType === "gym" ? "🏋 Climbing gym"
-            : f.featureType === "area" ? "🏔 Climbing area"
-            : f.featureType === "crag" ? "🪨 Crag"
-            : f.featureType === "boulder" ? "🪨 Boulder"
-            : "⛰ Climbing site";
+            f.featureType === "gym"
+              ? "🏋 Climbing gym"
+              : f.featureType === "area"
+                ? "🏔 Climbing area"
+                : f.featureType === "crag"
+                  ? "🪨 Crag"
+                  : f.featureType === "boulder"
+                    ? "🪨 Boulder"
+                    : "⛰ Climbing site";
           const websiteRow = f.website
             ? `<br/><a href="${f.website}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);font-size:11px">Website ↗</a>`
             : "";
@@ -421,7 +427,11 @@ export default function ClimbsMap({
           <button
             type="button"
             onClick={() => setShowCrags((s) => !s)}
-            title={showCrags ? "Hide nearby climbing areas" : "Show nearby climbing areas from OpenStreetMap"}
+            title={
+              showCrags
+                ? "Hide nearby climbing areas"
+                : "Show nearby climbing areas from OpenStreetMap"
+            }
             className={cn(
               "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-md transition",
               "border bg-surface/90 backdrop-blur-sm",
@@ -433,7 +443,14 @@ export default function ClimbsMap({
             {loadingCrags ? (
               <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-muted border-t-accent" />
             ) : (
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <svg
+                className="h-3.5 w-3.5 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l5-9 4 6 3-4 5 7H3z" />
               </svg>
             )}

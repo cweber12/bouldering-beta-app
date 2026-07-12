@@ -7,20 +7,20 @@ per-user `/route/...` URL that subsumes `/compare`.
 
 ## Confirmed decisions
 
-| Area | Decision |
-|---|---|
-| Grid unit | **Route-grouped** default; per-run "Climbs" kept as a secondary toggle |
-| Routes layout | Desktop: rows left + map right. Mobile: `List \| Map` toggle, **default Map** |
-| Route row | thumbnail · name + rating · area · **climb count · last-climbed date** · map-pin button. No send/attempt indicator |
-| Map ↔ list | Bidirectional highlight; **row body** opens the route; pin button centers map; pin click scrolls row into view |
-| Console URL | **`/route/[userId]/{state}/{area}/{route}`** — replaces `/compare`. single = view, multi = compare |
-| Scoping | **Per-user**. Sidebar shows that user's runs on the route |
-| `/compare` | Replaced; old URLs redirect; `buildCompareUrl` → `buildRouteUrl` |
-| Climb click | **No modal** — direct nav to `/route/[userId]/.../?climb=<key>` |
-| Nav | `Scan \| Routes \| Docs` + new top-right **avatar menu** (Profile, Sign out) |
-| Own Profile | Identity + social only (no climb grid) |
-| Public profile | Identity header + the same two-pane Routes view, scoped to their uid |
-| Route filters | Search + state/area + sort (default Last climbed). Run-type chips dropped. Restyled |
+| Area           | Decision                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Grid unit      | **Route-grouped** default; per-run "Climbs" kept as a secondary toggle                                             |
+| Routes layout  | Desktop: rows left + map right. Mobile: `List \| Map` toggle, **default Map**                                      |
+| Route row      | thumbnail · name + rating · area · **climb count · last-climbed date** · map-pin button. No send/attempt indicator |
+| Map ↔ list     | Bidirectional highlight; **row body** opens the route; pin button centers map; pin click scrolls row into view     |
+| Console URL    | **`/route/[userId]/{state}/{area}/{route}`** — replaces `/compare`. single = view, multi = compare                 |
+| Scoping        | **Per-user**. Sidebar shows that user's runs on the route                                                          |
+| `/compare`     | Replaced; old URLs redirect; `buildCompareUrl` → `buildRouteUrl`                                                   |
+| Climb click    | **No modal** — direct nav to `/route/[userId]/.../?climb=<key>`                                                    |
+| Nav            | `Scan \| Routes \| Docs` + new top-right **avatar menu** (Profile, Sign out)                                       |
+| Own Profile    | Identity + social only (no climb grid)                                                                             |
+| Public profile | Identity header + the same two-pane Routes view, scoped to their uid                                               |
+| Route filters  | Search + state/area + sort (default Last climbed). Run-type chips dropped. Restyled                                |
 
 ## URL shape
 
@@ -53,7 +53,7 @@ per-user `/route/...` URL that subsumes `/compare`.
 
 - Extract `app/compare/page.tsx`'s `ComparePageInner` into
   `components/route/RouteConsole.tsx` (props: `userId, state, area, route,
-  initialClimb?, initialCompare?`). Logic is unchanged; inputs now come from
+initialClimb?, initialCompare?`). Logic is unchanged; inputs now come from
   props/path instead of `?keys/state/area/route`.
 - New route: `app/route/[userId]/[state]/[area]/[route]/page.tsx` — decodes path
   params, reads `?climb` / `?compare`, renders `<RouteConsole>`.
@@ -81,7 +81,7 @@ internal state). Verify single↔multiple still derive from `?climb`/`?compare`.
   - Reuse the list+`parseKey` logic from `climbs/page/route.ts`.
   - Fold all runs by `state/area/route`. For each route emit:
     `{ state, area, route, climbCount, lastClimbedLabel, lastClimbKey,
-       thumbnail, rating, coordinates?, hasGps }` — pulled from the **most
+thumbnail, rating, coordinates?, hasGps }` — pulled from the **most
     recent** run only (one JSON fetch per route, not per run).
   - Support `search`, `state`, `area`, and `sort` (`recent` default | `oldest`
     | `route`). Coordinates here also feed the map (drops the need for a separate
@@ -103,7 +103,7 @@ internal state). Verify single↔multiple still derive from `?climb`/`?compare`.
 - New components under `components/routes/`:
   - `RouteRow.tsx` — thumbnail · name+rating · area · count · last-climbed ·
     pin button (disabled when `!hasGps`). Row body → `buildRouteUrl(uid, route,
-    { climb: lastClimbKey })`.
+{ climb: lastClimbKey })`.
   - `RouteList.tsx` — fetches `/api/profile/{uid}/routes`; owns `selectedRoute`
     highlight state shared with the map.
   - `RouteToolbar.tsx` — restyled search + state/area filters + sort.

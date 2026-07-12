@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { detectAndCompute, terminateOrbWorker, type OrbKeypoint } from "@/pipeline/legacy/orbFeatures";
+import {
+  detectAndCompute,
+  terminateOrbWorker,
+  type OrbKeypoint,
+} from "@/pipeline/legacy/orbFeatures";
 
 // ---------------------------------------------------------------------------
 // Fake Worker that speaks the orbWorker protocol
@@ -123,9 +127,7 @@ describe("detectAndCompute — happy path", () => {
 
     const msgs = latestWorker!.getPostedMessages();
     expect(msgs).toHaveLength(1);
-    expect((msgs[0].data as { type: string; imageData: ImageData }).type).toBe(
-      "detectAndCompute",
-    );
+    expect((msgs[0].data as { type: string; imageData: ImageData }).type).toBe("detectAndCompute");
     expect((msgs[0].data as { type: string; imageData: ImageData }).imageData).toBe(imageData);
   });
 });
@@ -175,9 +177,7 @@ describe("detectAndCompute — error handling", () => {
       posted: Array<{ data: unknown }> = [];
       constructor(_url: unknown) {
         workerConstructions++;
-        queueMicrotask(() =>
-          this.onerror?.({ message: "importScripts failed" } as ErrorEvent),
-        );
+        queueMicrotask(() => this.onerror?.({ message: "importScripts failed" } as ErrorEvent));
       }
       postMessage(data: unknown) {
         this.posted.push({ data });
@@ -197,9 +197,7 @@ describe("detectAndCompute — error handling", () => {
       posted: Array<{ data: unknown }> = [];
       constructor(_url: unknown) {
         workerConstructions++;
-        queueMicrotask(() =>
-          this.onerror?.({ message: "first attempt failed" } as ErrorEvent),
-        );
+        queueMicrotask(() => this.onerror?.({ message: "first attempt failed" } as ErrorEvent));
       }
       postMessage(data: unknown) {
         this.posted.push({ data });

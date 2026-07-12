@@ -53,7 +53,9 @@ export default function RoutesView({ userId }: RoutesViewProps) {
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
   }, [search]);
 
   // Fetch route-grouped summaries.
@@ -80,7 +82,9 @@ export default function RoutesView({ userId }: RoutesViewProps) {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, debouncedSearch, filterState, filterArea, sort]);
 
   // Map pins — one per GPS-tagged route.
@@ -101,7 +105,11 @@ export default function RoutesView({ userId }: RoutesViewProps) {
 
   const openRoute = (r: RouteSummary) => {
     router.push(
-      buildRouteUrl(userId, { state: r.state, area: r.area, route: r.route }, { keys: [r.lastClimbKey] }),
+      buildRouteUrl(
+        userId,
+        { state: r.state, area: r.area, route: r.route },
+        { keys: [r.lastClimbKey] },
+      ),
     );
   };
 
@@ -225,10 +233,7 @@ export default function RoutesView({ userId }: RoutesViewProps) {
 
           {/* Map column — clean, no controls. */}
           <div
-            className={cn(
-              "min-h-0 flex-1 p-3",
-              viewMode === "list" ? "hidden sm:block" : "block",
-            )}
+            className={cn("min-h-0 flex-1 p-3", viewMode === "list" ? "hidden sm:block" : "block")}
           >
             <ClimbsMap pins={pins} fill onPinClick={onPinClick} />
           </div>

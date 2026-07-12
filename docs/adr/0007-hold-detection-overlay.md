@@ -24,7 +24,7 @@ CONTEXT.md for the language (**Hold**, **Hand Hold**, **Foot Hold**, **Dwell**).
 ## Considered options (the non-obvious choices)
 
 1. **Dwell is measured in wall/photo space, not video-pixel space.** A gripped hand
-   is only motionless *relative to the wall*. In **Fixed Capture** that is also
+   is only motionless _relative to the wall_. In **Fixed Capture** that is also
    motionless in video pixels, but in **Panning Capture** the camera moves, so a
    held hand travels across the frame. Measuring stationarity in raw video-normalised
    coordinates was rejected because it is wrong for Panning Capture (a still hand
@@ -43,7 +43,7 @@ CONTEXT.md for the language (**Hold**, **Hand Hold**, **Foot Hold**, **Dwell**).
    we add user-editable Holds (overrides would then need somewhere to live).
 
 3. **A confidence guard, because a frozen occluded limb is maximally "stationary."**
-   The pose chain deliberately *holds* an occluded joint in place
+   The pose chain deliberately _holds_ an occluded joint in place
    (`HELD_KEYPOINT_SCORE_FACTOR`, `fillPersistentGaps` below the 0.4 dim threshold)
    so the Skeleton stays whole. That frozen point looks perfectly still and would
    register as a false Hold on every occlusion. A Dwell is therefore valid only if
@@ -81,7 +81,7 @@ module for easy tuning against real Runs.
 ## Consequences
 
 - **Holds cannot appear in the Detection Preview.** That preview is raw video-pixel
-  space with no homography and exists *before* the route-photo match; Holds are
+  space with no homography and exists _before_ the route-photo match; Holds are
   wall-space and post-match, so they are a **Route Overlay**-only feature.
 - **Progressive, cumulative reveal.** Each Hold carries its `firstUseTime`; the
   `FramePlayer` draws Holds whose `firstUseTime ≤ t`, so a marker pops in when the
