@@ -14,13 +14,13 @@ Two capture modes share that pipeline:
 - **Fixed Capture** (default) — a static (tripod/propped) shot where the whole
   route stays in frame. A single homography from the **first frame** aligns the
   run to the route photo for every frame.
-- **Panning Capture** (opt-in "Long route / panning" toggle) — for a longer
-  route shot by deliberately panning the camera up the wall. The run stores ORB
-  **keyframes** (wall-crop features sampled ~every 0.75 s) and aligns each pan
-  section to the route photo independently, so the overlay tracks the wall as
-  the camera moves. The photo is the global reference, so the alignment is
-  drift-free; in-between frames decompose-interpolate the bracketing keyframe
-  homographies. Fast handheld shake is out of scope — use Fixed Capture there.
+- **Panning Capture** (opt-in "Moving camera" toggle) — for longer routes and
+  any moving-camera footage (panning, handheld drift, mild shake). The run
+  stores ORB **keyframes** (wall-crop features sampled ~every 0.75 s) and
+  aligns each moving section to the route photo independently, so the overlay
+  tracks the wall as the camera moves. The photo is the global reference, so
+  the alignment is drift-free; in-between frames decompose-interpolate the
+  bracketing keyframe homographies.
 
 Each run is classified as an **attempt** (did not top) or a **send** (topped).
 Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any run.
@@ -123,7 +123,8 @@ trivial, so geometry is computed inline without a cache. They are toggled
 independently from the Climber panel's Holds row, and edited from the **Holds**
 drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
-be toggled off).
+be toggled off). The dev harness's Detection Preview adds a detection-frame
+filmstrip and stepper for jumping through sampled frames and flagged stretches.
 
 ### Adaptive overlay contrast
 
@@ -151,6 +152,12 @@ authored palette exactly — the feature is purely additive, and nothing is
 persisted (the adjustment is recomputed deterministically from the photo, so saved
 runs need no migration). The target and band width are named constants
 (`TARGET_CONTRAST_RATIO`, `BAND_K`) at the top of `contrastAdapter.ts`.
+
+The route console (single, side-by-side, and multi-climb overlay) carries the
+same boost via a **Contrast** toggle in its stage toolbar, sampling the route
+photo. Because every climb differs by hue and hue never moves, adaptation can only
+slide lightness within each identity, so slots stay distinguishable; the shared
+white joint is a neutral anchor and is exempt from adaptation.
 
 ## Pages
 
@@ -201,8 +208,8 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
 2. **Mark detection** — tap the climber to lock tracking onto them (a coaching
    pill on the media shows where to tap), then frame the route. Pressing
    Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
-   blocking. Quality tier, pose model, sampling stride, the **Long route
-   (panning)** toggle, and the **Developer view** switch live in a single
+   blocking. Quality tier, pose model, sampling stride, the **Moving camera**
+   toggle, and the **Developer view** switch live in a single
    **Settings** popover.
 3. **Review climb** — watch the traced climb (clean by default; feature points
    appear only in Developer view). The promoted primary action, **Place on

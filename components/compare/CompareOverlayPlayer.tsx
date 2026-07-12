@@ -7,6 +7,7 @@ import { renderMultiPoseVideo } from "@/pipeline/render/multiPoseVideoRenderer";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import type { ImageMatchResult } from "@/hooks/useImageMatcher";
 import type { SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import type { ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CV = any;
@@ -16,10 +17,18 @@ const JOINT_COLOR = "rgba(255,255,255,0.9)";
 /**
  * Overlay style for one climb in the multi-climb composite. The Silhouette is
  * disabled here — several overlapping translucent bodies would muddy into one
- * another, so each climb shows as its slot-coloured Skeleton instead.
+ * another, so each climb shows as its slot-coloured Skeleton instead. When a
+ * `contrastAdjust` is supplied each line colour is nudged (hue-locked) for
+ * legibility against the route photo; slots differ by hue, which never moves, so
+ * adaptation can only slide lightness and can never blur two climbers together.
  */
-function overlayStyle(slotColor: string): SkeletonStyle {
-  return { silhouetteVisible: false, lineColor: slotColor, jointColor: JOINT_COLOR };
+function overlayStyle(slotColor: string, contrastAdjust?: ContrastAdjust): SkeletonStyle {
+  return {
+    silhouetteVisible: false,
+    lineColor: slotColor,
+    jointColor: JOINT_COLOR,
+    contrastAdjust,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -34,6 +43,12 @@ export interface CompareOverlayPlayerProps {
   slotColors: string[];
   /** Per-slot start anchor (seconds) — aligns each climb to a common start. */
   slotOffsets?: number[];
+  /**
+   * When set, every climb's overlay colour is nudged (lightness only, hue-locked)
+   * for legibility against the route photo. Threaded into the live composite and
+   * the exported WebM. Omit to render the exact slot colours.
+   */
+  contrastAdjust?: ContrastAdjust;
 }
 
 // ---------------------------------------------------------------------------
@@ -47,6 +62,7 @@ export default function CompareOverlayPlayer({
   matchResults,
   slotColors,
   slotOffsets,
+  contrastAdjust,
 }: CompareOverlayPlayerProps) {
   // Pre-compute multi-layer skeleton frames (sync, instant).
   const multiData = useMemo(() => {
@@ -82,13 +98,13 @@ export default function CompareOverlayPlayer({
         layers.push({
           frames: multiData.layers[layerIdx].frames,
           timeOffset: slotOffsets?.[i] ?? 0,
-          style: overlayStyle(slotColors[i]),
+          style: overlayStyle(slotColors[i], contrastAdjust),
         });
         layerIdx++;
       }
     }
     return layers;
-  }, [multiData, attempts, matchResults, slotColors, slotOffsets]);
+  }, [multiData, attempts, matchResults, slotColors, slotOffsets, contrastAdjust]);
 
   // On-demand video export.
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -107,7 +123,7 @@ export default function CompareOverlayPlayer({
         orbFeatures: att.orbFeatures,
         queryOrb: mr.queryOrb,
         matches: mr.matches,
-        skeletonStyle: overlayStyle(slotColors[i]),
+        skeletonStyle: overlayStyle(slotColors[i], contrastAdjust),
       });
     }
     if (layerInputs.length === 0) return;

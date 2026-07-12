@@ -74,6 +74,11 @@ export const dark = {
   attemptSurface: "#3d2200",
   handHold: "#39b1d1", // Hand Hold ring — mirror of HOLD_RING_COLOR.hand
   footHold: "#f6850c", // Foot Hold ring — mirror of HOLD_RING_COLOR.foot
+  // Dev detection-eval-harness crop overlay (canvas-only, theme-independent —
+  // drawn over the video frame like the Hold rings above).
+  cropRegion: "#38bdf8", // Adaptive Crop search region (detected)
+  cropLandmark: "#c084fc", // tight landmark box (deriveClimberCrop)
+  cropMiss: "#f87171", // search region on a miss (no pose found)
 } as const;
 
 // ─── Light theme canvas values ───────────────────────────────
@@ -100,6 +105,9 @@ export const light = {
   attemptSurface: "#fef3c7", // amber-100
   handHold: "#39b1d1", // same colours (overlay drawn on a photo, theme-independent)
   footHold: "#f6850c",
+  cropRegion: "#38bdf8", // same colours (dev harness overlay, theme-independent)
+  cropLandmark: "#c084fc",
+  cropMiss: "#f87171",
 } as const;
 
 export type Theme = typeof dark;

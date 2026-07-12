@@ -166,10 +166,8 @@ function DetectionSettings({
             <div className="border-t border-edge/60 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex flex-col">
-                  <span className="text-xs font-medium text-fg-secondary">
-                    Long route (panning)
-                  </span>
-                  <span className="text-xs text-fg-muted">Camera pans up the wall</span>
+                  <span className="text-xs font-medium text-fg-secondary">Moving camera</span>
+                  <span className="text-xs text-fg-muted">Panning, handheld, or shaky</span>
                 </span>
                 <button
                   type="button"
@@ -185,8 +183,8 @@ function DetectionSettings({
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-fg-muted">
-                Lines up each part of the pan with the route photo. Leave off for a fixed (tripod)
-                shot.
+                Lines up each moving-camera section with the route photo. Leave off for a fixed
+                (tripod) shot.
               </p>
             </div>
 

@@ -34,7 +34,7 @@ import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
-import ScanProgress from "@/components/scan/process-flow/ScanProgress";
+import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import MetadataBottomSheet, {
   type MetadataSheetLocation,
   type MetadataSheetRunDetails,
@@ -173,8 +173,6 @@ function ScanPageInner() {
     firstFrameFile,
     errorMessage,
     scanDiagnostics,
-    orbPreview,
-    currentPose,
   } = useVideoProcessor(100);
   const {
     uploadAttempt,
@@ -202,9 +200,6 @@ function ScanPageInner() {
   const [notes, setNotes] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
-  // Natural pixel dimensions of the selected video — shapes the scan loading
-  // stage so the ORB starfield + skeletons keep their true frame proportions.
-  const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved] = useState(false);
@@ -483,16 +478,6 @@ function ScanPageInner() {
     const url = URL.createObjectURL(file);
     previewUrlRef.current = url;
     setVideoPreviewUrl(url);
-    // Probe the natural dimensions for the loading-stage aspect ratio.
-    setVideoAspect(null);
-    const probe = document.createElement("video");
-    probe.preload = "metadata";
-    probe.onloadedmetadata = () => {
-      if (probe.videoWidth && probe.videoHeight) {
-        setVideoAspect({ w: probe.videoWidth, h: probe.videoHeight });
-      }
-    };
-    probe.src = url;
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
     setWallCrop(DEFAULT_CROP);
@@ -881,45 +866,64 @@ function ScanPageInner() {
         />
       )}
 
-      {step === "landmarks" && showScanLoading && (
-        <ScanProgress
-          orbPreview={orbPreview}
-          currentPose={currentPose}
-          videoAspect={videoAspect}
-          progressPct={progressPct}
-          finishing={!isProcessing || progressPct >= 100}
-          onCancel={handleCancelScan}
-        />
-      )}
+      {step === "landmarks" && (
+        <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
+          <StepViewLandmarks
+            isProcessing={isProcessing}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            orbStatus={orbStatus}
+            frameStep={frameStep}
+            processingError={status === "error" ? errorMessage : null}
+            activeAttempt={activeAttempt}
+            sourceVideoUrl={videoPreviewUrl}
+            firstFrameFile={firstFrameFile}
+            firstFrameSkeletonData={firstFrameSkeletonData}
+            topoStyle={landmarksTopoStyle}
+            onSkeletonStyleChange={setSkeletonStyle}
+            contrastEnabled={contrastEnabled}
+            onContrastToggle={setContrastEnabled}
+            contrastPoor={wallContrastPoor}
+            onEditClimb={handleEditClimb}
+            onScanAnother={handleSaveComplete}
+            orbReady={orbReady}
+            onViewOnRoutePhoto={handleViewOnRoutePhoto}
+            onUpload={handleOpenUploadSheet}
+            s3Saved={s3Saved}
+            s3Loading={s3Status === "loading"}
+            saveError={saveError}
+            onViewScans={() => router.push("/profile")}
+            scanDiagnostics={scanDiagnostics}
+          />
 
-      {step === "landmarks" && !showScanLoading && (
-        <StepViewLandmarks
-          isProcessing={isProcessing}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          progressPct={progressPct}
-          orbStatus={orbStatus}
-          frameStep={frameStep}
-          processingError={status === "error" ? errorMessage : null}
-          activeAttempt={activeAttempt}
-          firstFrameFile={firstFrameFile}
-          firstFrameSkeletonData={firstFrameSkeletonData}
-          topoStyle={landmarksTopoStyle}
-          onSkeletonStyleChange={setSkeletonStyle}
-          contrastEnabled={contrastEnabled}
-          onContrastToggle={setContrastEnabled}
-          contrastPoor={wallContrastPoor}
-          onEditClimb={handleEditClimb}
-          onScanAnother={handleSaveComplete}
-          orbReady={orbReady}
-          onViewOnRoutePhoto={handleViewOnRoutePhoto}
-          onUpload={handleOpenUploadSheet}
-          s3Saved={s3Saved}
-          s3Loading={s3Status === "loading"}
-          saveError={saveError}
-          onViewScans={() => router.push("/profile")}
-          scanDiagnostics={scanDiagnostics}
-        />
+          {showScanLoading && (
+            <div className="absolute inset-0 z-20 bg-surface/70 backdrop-blur-sm">
+              <div className="absolute inset-x-0 top-0">
+                <ScanLoadingBar
+                  progressPct={progressPct}
+                  finishing={!isProcessing || progressPct >= 100}
+                />
+              </div>
+
+              <div className="flex h-full items-center justify-center px-4">
+                <div className="rounded-(--radius-panel) border border-edge/60 bg-surface-alt/90 px-4 py-2 text-sm text-fg-secondary">
+                  {!isProcessing || progressPct >= 100
+                    ? "Finishing up..."
+                    : `Scanning ${progressPct}%`}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCancelScan}
+                aria-label="Cancel scan"
+                className="absolute right-4 top-4 rounded-md border border-edge/60 bg-surface px-3 py-1.5 text-xs font-medium text-fg hover:bg-surface-alt"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {step === "match" && routePhotoFile && routePhotoPreviewUrl && (

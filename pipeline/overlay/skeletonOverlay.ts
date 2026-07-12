@@ -401,6 +401,19 @@ function sameColor(a: string, b: string): boolean {
   return pa.r === pb.r && pa.g === pb.g && pa.b === pb.b;
 }
 
+/** Saturation at/below which a colour is an achromatic **neutral anchor**
+ *  (white / grey / black). Used only to exempt the shared white Compare joint
+ *  from contrast adaptation — a neutral has no hue to protect, so nudging it
+ *  would just slide a deliberately-neutral pin toward grey (PRD: the white joint
+ *  is a fixed anchor). Every chromatic palette identity sits far above this. */
+const NEUTRAL_SAT_FLOOR = 0.08;
+
+/** Whether a colour is a near-achromatic neutral (its HSL saturation is tiny). */
+function isNeutralColor(css: string): boolean {
+  const { r, g, b } = parseRgb(css);
+  return rgbToHsl(r, g, b)[1] <= NEUTRAL_SAT_FLOOR;
+}
+
 function mixCss(a: string, b: string, t: number): string {
   const ta = Math.max(0, Math.min(1, t));
   const ca = parseRgb(a);
@@ -996,10 +1009,14 @@ export function drawSkeleton(
   // ── Skeleton pass — joint points. ──
   if (jointsVisible) {
     const r = Math.max(0.5, jointRadius * scale);
+    // A neutral joint colour (the shared white Compare joint) is a fixed anchor —
+    // exempt it from adaptation so it never greys out against a bright wall. A
+    // chromatic joint colour still adapts like any other identity.
+    const jointAdjust = isNeutralColor(jointColor) ? undefined : adjust;
     for (const [name, pt] of Object.entries(keypoints)) {
       ctx.fillStyle = useAnatomicalPalette
         ? adaptColor(anatomicalPointColor(name), adjust)
-        : adaptColor(sideColor(jointColor, sideOf(name)), adjust);
+        : adaptColor(sideColor(jointColor, sideOf(name)), jointAdjust);
       ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);

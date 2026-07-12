@@ -13,8 +13,8 @@ import { dark } from "@/utils/theme";
 // <canvas>; the parent supplies the sized container.
 //
 // The stage carries only the scanner's own findings on a dark backdrop:
-//   • ORB starfield — the wall feature field (climber masked out), drawn once
-//     and persisting for the whole run.
+//   • ORB starfield — the wall feature field (climber masked out), refreshed
+//     during the scan so it tracks camera motion.
 //   • Pose skeletons — the live pose is accented (bright green, full
 //     silhouette) and glides between detections. Each superseded pose is
 //     demoted to a neutral "motion trail" that fades over following detections.
@@ -55,6 +55,8 @@ const TRAIL_COLOR = "rgba(148, 163, 184, 0.5)";
  * wake before they vanish.
  */
 const TRAIL_FADE = 0.2;
+/** Blend duration when ORB starfield updates. */
+const ORB_FADE_MS = 180;
 
 /** Build a canvas-space keypoint map from a normalised PoseFrame. */
 function toOverlay(pose: PoseFrame, w: number, h: number): Record<string, OverlayPoint> {
@@ -137,6 +139,8 @@ export default function XrayStage({
   // survives re-renders. The ORB layer is owned by its own effect; the trail
   // fades + stamps over time.
   const orbRef = useRef<HTMLCanvasElement | null>(null);
+  const prevOrbRef = useRef<HTMLCanvasElement | null>(null);
+  const orbFadeStartRef = useRef<number | null>(null);
   const trailRef = useRef<HTMLCanvasElement | null>(null);
   const prevTargetRef = useRef<Record<string, OverlayPoint> | null>(null);
   const lastLiveRef = useRef<Record<string, OverlayPoint> | null>(null);
@@ -146,6 +150,7 @@ export default function XrayStage({
     start: number;
   } | null>(null);
   const rafRef = useRef<number | null>(null);
+  const orbFadeRafRef = useRef<number | null>(null);
 
   // Composite the ORB starfield + trail + the current live skeleton on top.
   const render = useCallback(
@@ -154,7 +159,27 @@ export default function XrayStage({
       const dctx = display?.getContext("2d");
       if (!display || !dctx) return;
       dctx.clearRect(0, 0, cw, ch);
-      if (orbRef.current) dctx.drawImage(orbRef.current, 0, 0);
+      const fadeStart = orbFadeStartRef.current;
+      let orbAlpha = 1;
+      if (fadeStart !== null) {
+        orbAlpha = Math.min(1, (performance.now() - fadeStart) / ORB_FADE_MS);
+        if (orbAlpha >= 1) {
+          orbFadeStartRef.current = null;
+          prevOrbRef.current = null;
+        }
+      }
+      if (prevOrbRef.current && orbAlpha < 1) {
+        dctx.save();
+        dctx.globalAlpha = 1 - orbAlpha;
+        dctx.drawImage(prevOrbRef.current, 0, 0);
+        dctx.restore();
+      }
+      if (orbRef.current) {
+        dctx.save();
+        dctx.globalAlpha = orbAlpha;
+        dctx.drawImage(orbRef.current, 0, 0);
+        dctx.restore();
+      }
       if (trailRef.current) dctx.drawImage(trailRef.current, 0, 0);
       if (live) drawLive(dctx, live);
     },
@@ -181,7 +206,9 @@ export default function XrayStage({
   // sync with the canvas it guards.
   useEffect(() => {
     if (!orbPreview) {
+      prevOrbRef.current = orbRef.current;
       orbRef.current = null;
+      orbFadeStartRef.current = performance.now();
       render(lastLiveRef.current);
       return;
     }
@@ -191,9 +218,31 @@ export default function XrayStage({
     const octx = orb.getContext("2d");
     if (!octx) return;
     drawStarfield(octx, orbPreview, cw, ch);
+    prevOrbRef.current = orbRef.current;
     orbRef.current = orb;
+    orbFadeStartRef.current = performance.now();
     render(lastLiveRef.current);
   }, [orbPreview, cw, ch, render]);
+
+  // Animate the ORB cross-fade even when pose updates are sparse.
+  useEffect(() => {
+    if (orbFadeStartRef.current === null) return;
+    const step = () => {
+      if (orbFadeStartRef.current === null) {
+        orbFadeRafRef.current = null;
+        return;
+      }
+      render(lastLiveRef.current);
+      orbFadeRafRef.current = requestAnimationFrame(step);
+    };
+    orbFadeRafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (orbFadeRafRef.current !== null) {
+        cancelAnimationFrame(orbFadeRafRef.current);
+        orbFadeRafRef.current = null;
+      }
+    };
+  }, [orbPreview, render]);
 
   // Each new pose: fade the existing trail a notch and stamp the just-superseded
   // pose into it (neutral), then glide the accented skeleton from the last shown
