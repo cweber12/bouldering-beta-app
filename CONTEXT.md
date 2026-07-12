@@ -73,6 +73,17 @@ _Avoid_: mode, level, model setting.
 
 ### Detection quality
 
+**Detection Frame**:
+A single sampled video frame that pose detection was run on — every Nth frame the
+seek loop sampled, plus any **Adaptive Refinement** re-samples — whether or not a
+**Climber** pose was accepted. The unit the detection-eval harness steps through
+and annotates; a "missing skeleton" is a Detection Frame with no accepted pose, an
+equally valid thing to land on. Distinct from a raw video frame (most are never
+fed to the detector) and from a dense playback frame (a synthetic in-between
+carrying an **Interpolated Landmark**, not a detection event).
+_Avoid_: sample, video frame (ambiguous — most video frames are not Detection
+Frames).
+
 **Landmark Flip**:
 A frame in which the pose model mislabels the **Climber**'s left/right sides
 (e.g. `left_shoulder` jumps to the right side of the body) without the body
@@ -273,6 +284,32 @@ extracted. The one piece of diagnostic data that lives in S3 rather than locally
 read back at match time to build a **Match Diagnostics** record.
 _Avoid_: frame stats (too generic).
 
+**Ground Truth** (Landmarks):
+The per-video reference pose the detection-eval harness scores runs against: the
+correct **Climber** landmarks on each **Detection Frame**, authored once in the
+calibration pass by running a throwaway detection scaffold and dragging the wrong
+landmarks into place (or marking a frame as having no Climber). Frozen alongside
+the video's crops and metadata as calibration output; never re-entered. Each
+frame is **verified** (a human corrected or confirmed it) or **unverified** (left
+as the scaffold's detection); scoring treats verified frames as true reference and
+unverified ones as a weaker signal. The scaffold run that seeds it is discarded —
+only the Ground Truth persists, not a scored run.
+_Avoid_: ground-truth run (it is not a **Run** — it yields no scored result);
+labels (those are the video-level metadata, a different thing).
+
+**Detection Error**:
+A per-run, per-**Detection Frame** discrepancy between a headless run's detected
+pose and the video's **Ground Truth**, computed automatically with no human
+judgement per run. Kinds: **missing** (Ground Truth has a Climber, the run found
+none), **wrong** (the run's pose is far from Ground Truth — a **Bystander** or a
+gross mislabel), **extreme** (an anatomically implausible pose), and **drift**
+(the pose is on the Climber but landmarks are displaced, measured as distance from
+Ground Truth). Once Ground Truth exists, errors are derived, not hand-tagged, and
+_causes_ are found by correlating errors against the auto per-frame conditions and
+the video-level metadata across the corpus — not attributed by hand per frame.
+_Avoid_: fault (superseded — errors are derived, not authored); reusing **Overlay
+Quality** "drift" (scan-level, on the **Route Overlay**).
+
 ### Test corpus (detection eval harness)
 
 **Test Video**:
@@ -289,10 +326,13 @@ _Avoid_: sample, clip, Run (a Run is User-recorded and saved to S3).
 The frozen set of manual scan inputs attached to a **Test Video** so its scan can
 be replayed headlessly with no **User**: the **Climber Crop**, the **Wall Crop**,
 the Climber tap (`climberPoint`), the **Fixed**/**Panning Capture** flag, and the
-**Quality Tier**. Set once in a manual calibration pass (which also fires a first
-detection run) and reused verbatim by every later batch re-run, so a quality
-change between runs is attributable to detection-logic changes, not setup drift.
-Stored as `setup.json` in the Test Video's bundle.
+**Quality Tier**. Set once in a manual calibration pass — which now also authors
+the video's **Ground Truth** by correcting a throwaway detection scaffold, and lets
+the User edit the video-level metadata (`analysis_inputs`) — and reused verbatim by
+every later headless re-run, so a quality change between runs is attributable to
+detection-logic changes, not setup drift. The scaffold run is discarded; calibration
+saves no scored run. Stored as `setup.json` in the Test Video's bundle, beside the
+`ground-truth.json` **Ground Truth**.
 _Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
 Setup), config, calibration, fixture.
 
