@@ -61,8 +61,8 @@ describe("poseTiers", () => {
 
   it("frame step increases and filter tolerance loosens from accurate → fast", () => {
     const order: QualityTier[] = ["accurate", "balanced", "fast"];
-    const steps = order.map(t => getTierConfig(t).frameStep);
-    const tols = order.map(t => getTierConfig(t).filterTolerance);
+    const steps = order.map((t) => getTierConfig(t).frameStep);
+    const tols = order.map((t) => getTierConfig(t).filterTolerance);
     // Strictly increasing in both: denser→sparser sampling, stricter→looser filter.
     expect(steps).toEqual([...steps].sort((a, b) => a - b));
     expect(tols).toEqual([...tols].sort((a, b) => a - b));

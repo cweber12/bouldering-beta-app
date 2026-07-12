@@ -74,17 +74,17 @@ export function applyFramePreprocessing(
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  let src: CV | null        = null;
-  let gray: CV | null       = null;
-  let eqOut: CV | null      = null;
-  let blendOut: CV | null   = null;
-  let preBlur: CV | null    = null;
-  let gammaOut: CV | null   = null;
-  let blurred: CV | null    = null;
-  let sharpened: CV | null  = null;
+  let src: CV | null = null;
+  let gray: CV | null = null;
+  let eqOut: CV | null = null;
+  let blendOut: CV | null = null;
+  let preBlur: CV | null = null;
+  let gammaOut: CV | null = null;
+  let blurred: CV | null = null;
+  let sharpened: CV | null = null;
 
   try {
-    src  = cv.matFromImageData(imageData);
+    src = cv.matFromImageData(imageData);
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -125,7 +125,7 @@ export function applyFramePreprocessing(
 
     // --- Unsharp masking (dusty lens) -----------------------------------------
     if (useDusty) {
-      blurred   = new cv.Mat();
+      blurred = new cv.Mat();
       sharpened = new cv.Mat();
       cv.GaussianBlur(current, blurred, new cv.Size(0, 0), 1.5);
       cv.addWeighted(current, 1.5, blurred, -0.5, 0, sharpened);
@@ -194,17 +194,17 @@ export function applyOrbPreprocessing(
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  let src: CV | null      = null;
-  let gray: CV | null     = null;
-  let illum: CV | null    = null;
-  let lcn: CV | null      = null;
+  let src: CV | null = null;
+  let gray: CV | null = null;
+  let illum: CV | null = null;
+  let lcn: CV | null = null;
   let equalized: CV | null = null;
-  let blended: CV | null  = null;
-  let blurBuf: CV | null  = null;
+  let blended: CV | null = null;
+  let blurBuf: CV | null = null;
   let sharpened: CV | null = null;
 
   try {
-    src  = cv.matFromImageData(imageData);
+    src = cv.matFromImageData(imageData);
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -228,7 +228,7 @@ export function applyOrbPreprocessing(
 
     // Unsharp mask for blurry / dusty frames
     if (analysis.isBlurry) {
-      blurBuf   = new cv.Mat();
+      blurBuf = new cv.Mat();
       sharpened = new cv.Mat();
       cv.GaussianBlur(current, blurBuf, new cv.Size(0, 0), 1.5);
       cv.addWeighted(current, 1.6, blurBuf, -0.6, 0, sharpened);
@@ -282,16 +282,16 @@ export function applyPosePreprocessing(
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  let src: CV | null      = null;
-  let gray: CV | null     = null;
+  let src: CV | null = null;
+  let gray: CV | null = null;
   let gammaOut: CV | null = null;
-  let eqOut: CV | null    = null;
+  let eqOut: CV | null = null;
   let blendOut: CV | null = null;
-  let blurred: CV | null  = null;
+  let blurred: CV | null = null;
   let sharpened: CV | null = null;
 
   try {
-    src  = cv.matFromImageData(imageData);
+    src = cv.matFromImageData(imageData);
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
@@ -311,7 +311,7 @@ export function applyPosePreprocessing(
 
     // Adaptive histogram equalisation blend
     if (contrastAlpha > 0) {
-      eqOut    = new cv.Mat();
+      eqOut = new cv.Mat();
       blendOut = new cv.Mat();
       cv.equalizeHist(current, eqOut);
       cv.addWeighted(eqOut, contrastAlpha, current, 1 - contrastAlpha, 0, blendOut);
@@ -320,7 +320,7 @@ export function applyPosePreprocessing(
 
     // Unsharp mask for blurry / dusty frames
     if (isBlurry) {
-      blurred   = new cv.Mat();
+      blurred = new cv.Mat();
       sharpened = new cv.Mat();
       cv.GaussianBlur(current, blurred, new cv.Size(0, 0), 1.5);
       cv.addWeighted(current, 1.5, blurred, -0.5, 0, sharpened);

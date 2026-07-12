@@ -9,9 +9,9 @@ describe("buildRouteUrl", () => {
   });
 
   it("encodes path segments", () => {
-    expect(
-      buildRouteUrl("user1", { state: "CO", area: "Clear Creek", route: "Slab/Master" }),
-    ).toBe("/route/user1/CO/Clear%20Creek/Slab%2FMaster");
+    expect(buildRouteUrl("user1", { state: "CO", area: "Clear Creek", route: "Slab/Master" })).toBe(
+      "/route/user1/CO/Clear%20Creek/Slab%2FMaster",
+    );
   });
 
   it("emits a single key", () => {
@@ -21,9 +21,7 @@ describe("buildRouteUrl", () => {
   });
 
   it("joins multiple keys into one encoded csv", () => {
-    expect(buildRouteUrl("u", ctx, { keys: ["a", "b"] })).toBe(
-      "/route/u/CO/RMNP/Slab?keys=a%2Cb",
-    );
+    expect(buildRouteUrl("u", ctx, { keys: ["a", "b"] })).toBe("/route/u/CO/RMNP/Slab?keys=a%2Cb");
   });
 
   it("emits mode only when supplied", () => {

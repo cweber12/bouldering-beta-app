@@ -50,7 +50,7 @@ const KEY_PREFIX = "RouteData";
 
 function deriveS3Key(userId: string, attempt: RouteAttempt): string {
   const state = sanitizeDirName(attempt.state || "Unknown State");
-  const area  = sanitizeDirName(attempt.area  || "Unknown Area");
+  const area = sanitizeDirName(attempt.area || "Unknown Area");
   const route = sanitizeDirName(attempt.route || "Unknown Route");
   const runType = attempt.runType ?? "attempt";
   return `${KEY_PREFIX}/${userId}/${state}/${area}/${route}/${attempt.id}-${runType}.json`;
@@ -69,7 +69,7 @@ async function putObject(key: string, body: string): Promise<void> {
     body: JSON.stringify({ key, body }),
   });
   if (!res.ok) {
-    throw new Error((await res.json() as { error?: string }).error ?? "Upload failed.");
+    throw new Error(((await res.json()) as { error?: string }).error ?? "Upload failed.");
   }
 }
 
@@ -79,7 +79,7 @@ async function putObject(key: string, body: string): Promise<void> {
 
 export function useS3Storage(): S3StorageResult {
   const { user } = useAuth();
-  const [status, setStatus]           = useState<S3Status>("idle");
+  const [status, setStatus] = useState<S3Status>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   function setErr(msg: string) {
@@ -89,31 +89,34 @@ export function useS3Storage(): S3StorageResult {
 
   // ---- Upload ----------------------------------------------------------------
 
-  const uploadAttempt = useCallback(async (attempt: RouteAttempt): Promise<string> => {
-    if (!user) throw new Error("Authentication required.");
-    setStatus("loading");
-    setErrorMessage(null);
-    const key = deriveS3Key(user.uid, attempt);
+  const uploadAttempt = useCallback(
+    async (attempt: RouteAttempt): Promise<string> => {
+      if (!user) throw new Error("Authentication required.");
+      setStatus("loading");
+      setErrorMessage(null);
+      const key = deriveS3Key(user.uid, attempt);
 
-    try {
-      // Split write: small queryable metadata under `key`, heavy frames/matches/
-      // descriptors under the sibling `.data.json`. List/card/detail readers only
-      // ever fetch the metadata object, so browsing never pulls the heavy blob.
-      //
-      // Write data-first, metadata-last (fail-closed): the metadata object is the
-      // record's existence marker — list/detail views key off it. If the heavy
-      // write fails we never write the marker, so a half-saved run is invisible
-      // rather than appearing in the list with missing frames.
-      await putObject(dataKeyFor(key), JSON.stringify(serializeAttemptData(attempt)));
-      await putObject(key, JSON.stringify(serializeAttemptMetadata(attempt)));
-      setStatus("idle");
-      return key;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setErr(msg);
-      throw err;
-    }
-  }, [user]);
+      try {
+        // Split write: small queryable metadata under `key`, heavy frames/matches/
+        // descriptors under the sibling `.data.json`. List/card/detail readers only
+        // ever fetch the metadata object, so browsing never pulls the heavy blob.
+        //
+        // Write data-first, metadata-last (fail-closed): the metadata object is the
+        // record's existence marker — list/detail views key off it. If the heavy
+        // write fails we never write the marker, so a half-saved run is invisible
+        // rather than appearing in the list with missing frames.
+        await putObject(dataKeyFor(key), JSON.stringify(serializeAttemptData(attempt)));
+        await putObject(key, JSON.stringify(serializeAttemptMetadata(attempt)));
+        setStatus("idle");
+        return key;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setErr(msg);
+        throw err;
+      }
+    },
+    [user],
+  );
 
   // ---- Download --------------------------------------------------------------
 
@@ -123,11 +126,11 @@ export function useS3Storage(): S3StorageResult {
     try {
       const res = await fetch(`/api/s3/get?key=${encodeURIComponent(key)}`);
       if (!res.ok) {
-        const err = (await res.json() as { error?: string }).error ?? "Download failed.";
+        const err = ((await res.json()) as { error?: string }).error ?? "Download failed.";
         setErr(err);
         throw new Error(err);
       }
-      const raw = await res.json() as Record<string, unknown>;
+      const raw = (await res.json()) as Record<string, unknown>;
       // v2 split format: metadata carries no heavy fields — fetch the sibling
       // data object and merge. Legacy combined files have `frames` inline.
       const isSplit = raw.schemaVersion != null || raw.frames === undefined;
@@ -136,10 +139,10 @@ export function useS3Storage(): S3StorageResult {
         if (!dataRes.ok) {
           throw new Error(
             "This run's frame data could not be loaded — the heavy-data file is " +
-            "missing or unreadable. The run may not have finished saving.",
+              "missing or unreadable. The run may not have finished saving.",
           );
         }
-        const data = await dataRes.json() as Record<string, unknown>;
+        const data = (await dataRes.json()) as Record<string, unknown>;
         Object.assign(raw, data);
       }
       const attempt = loadAttemptFromJson(raw);
@@ -162,7 +165,7 @@ export function useS3Storage(): S3StorageResult {
         method: "DELETE",
       });
       if (!res.ok) {
-        const err = (await res.json() as { error?: string }).error ?? "Delete failed.";
+        const err = ((await res.json()) as { error?: string }).error ?? "Delete failed.";
         setErr(err);
         throw new Error(err);
       }
@@ -187,13 +190,15 @@ export function useS3Storage(): S3StorageResult {
     try {
       const res = await fetch(`/api/s3/list${qs}`);
       if (!res.ok) {
-        const err = (await res.json() as { error?: string }).error ?? "List failed.";
+        const err = ((await res.json()) as { error?: string }).error ?? "List failed.";
         setErr(err);
         throw new Error(err);
       }
-      const data = await res.json() as { objects: Array<{ Key?: string; LastModified?: string; Size?: number }> };
+      const data = (await res.json()) as {
+        objects: Array<{ Key?: string; LastModified?: string; Size?: number }>;
+      };
       setStatus("idle");
-      return data.objects.map(o => ({
+      return data.objects.map((o) => ({
         key: o.Key ?? "",
         lastModified: o.LastModified,
         size: o.Size,
@@ -212,15 +217,17 @@ export function useS3Storage(): S3StorageResult {
     try {
       const res = await fetch(`/api/s3/list${qs}`);
       if (!res.ok) {
-        const err = (await res.json() as { error?: string }).error ?? "List prefixes failed.";
+        const err = ((await res.json()) as { error?: string }).error ?? "List prefixes failed.";
         throw new Error(err);
       }
-      const data = await res.json() as { prefixes: string[] };
+      const data = (await res.json()) as { prefixes: string[] };
       // Strip the prefix and trailing slash to return just the folder name.
-      return data.prefixes.map(p => {
-        const relative = p.startsWith(prefix) ? p.slice(prefix.length) : p;
-        return relative.replace(/\/$/, "");
-      }).filter(Boolean);
+      return data.prefixes
+        .map((p) => {
+          const relative = p.startsWith(prefix) ? p.slice(prefix.length) : p;
+          return relative.replace(/\/$/, "");
+        })
+        .filter(Boolean);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[useS3Storage] listPrefixes error:", msg);
@@ -230,5 +237,14 @@ export function useS3Storage(): S3StorageResult {
 
   const userPrefix = user ? `${KEY_PREFIX}/${user.uid}` : null;
 
-  return { uploadAttempt, downloadAttempt, deleteAttempt, listAttempts, listPrefixes, userPrefix, status, errorMessage };
+  return {
+    uploadAttempt,
+    downloadAttempt,
+    deleteAttempt,
+    listAttempts,
+    listPrefixes,
+    userPrefix,
+    status,
+    errorMessage,
+  };
 }

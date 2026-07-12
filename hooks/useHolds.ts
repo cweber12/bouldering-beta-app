@@ -91,7 +91,11 @@ export function useHolds(
       const detected =
         attempt.holds !== undefined
           ? projectStoredHolds(attempt.holds, project)
-          : detectHolds(attempt.frames, project, computeProjectedBodyScale(attempt.frames, project));
+          : detectHolds(
+              attempt.frames,
+              project,
+              computeProjectedBodyScale(attempt.frames, project),
+            );
 
       // Rebase firstUseTime to the player clock: the rendered skeleton frames
       // start at 0 (firstTs subtracted), so Holds must too for time-gating.

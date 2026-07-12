@@ -60,9 +60,7 @@ export default function ProcessFlowShell({
     >
       {toolbar && (
         <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
-          <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
-            {toolbar}
-          </div>
+          <div className="mx-auto flex w-full max-w-5xl items-center gap-3">{toolbar}</div>
         </header>
       )}
 
@@ -91,22 +89,41 @@ export default function ProcessFlowShell({
               title="Back"
               className="ui-control -ml-1 flex h-8 w-8 shrink-0 items-center justify-center p-0 text-fg-muted"
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"
+                />
               </svg>
             </button>
           )}
 
           {/* Step indicator + dynamic instruction */}
-          <div className="flex min-w-0 flex-1 items-center gap-1.5" role="status" aria-live="polite">
+          <div
+            className="flex min-w-0 flex-1 items-center gap-1.5"
+            role="status"
+            aria-live="polite"
+          >
             <span className="shrink-0 text-label tracking-label uppercase text-fg-secondary">
               Step {step}/{totalSteps}
             </span>
-            <span className="shrink-0 text-fg-muted" aria-hidden="true">·</span>
+            <span className="shrink-0 text-fg-muted" aria-hidden="true">
+              ·
+            </span>
             <span className="shrink-0 text-sm font-medium text-fg">{stepName}</span>
             {instruction && (
               <>
-                <span className="shrink-0 text-fg-muted" aria-hidden="true">—</span>
+                <span className="shrink-0 text-fg-muted" aria-hidden="true">
+                  —
+                </span>
                 <span className="truncate text-sm text-fg-secondary">{instruction}</span>
               </>
             )}

@@ -24,4 +24,3 @@ transport endpoint schema-agnostic behavior.
 ## Blocked by
 
 None - can start immediately
-

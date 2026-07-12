@@ -100,12 +100,12 @@ export function isValidHomography(
     const w = h[6] * x + h[7] * y + h[8];
     return { x: (h[0] * x + h[1] * y + h[2]) / w, y: (h[3] * x + h[4] * y + h[5]) / w, w };
   });
-  if (corners.some(c => !Number.isFinite(c.x) || !Number.isFinite(c.y) || c.w === 0)) {
+  if (corners.some((c) => !Number.isFinite(c.x) || !Number.isFinite(c.y) || c.w === 0)) {
     return false;
   }
   // All corners must share the sign of w (none wrapped past infinity).
   const wSign = Math.sign(corners[0].w);
-  if (corners.some(c => Math.sign(c.w) !== wSign)) return false;
+  if (corners.some((c) => Math.sign(c.w) !== wSign)) return false;
 
   // Convexity + consistent winding: every consecutive edge cross-product shares
   // a sign and is non-zero.
@@ -225,7 +225,13 @@ export function computeHomography(
     // Seed the global RNG so RANSAC is deterministic for these matches (guarded
     // in case a build/mock lacks setRNGSeed).
     cv.setRNGSeed?.(RANSAC_RNG_SEED);
-    H = cv.findHomography(srcMat, dstMat, cv.RANSAC, opts.ransacReprojThreshold ?? RANSAC_BASE_THRESHOLD, mask);
+    H = cv.findHomography(
+      srcMat,
+      dstMat,
+      cv.RANSAC,
+      opts.ransacReprojThreshold ?? RANSAC_BASE_THRESHOLD,
+      mask,
+    );
 
     if (!H || H.empty()) {
       if (opts.stats) fillHomographyStats(opts.stats, matchCount, 0, false, "degenerate");
@@ -238,7 +244,8 @@ export function computeHomography(
     const out = new Float64Array(H.data64F);
 
     if (opts.gate && !isValidHomography(out, opts.gate.srcWidth, opts.gate.srcHeight, opts.gate)) {
-      if (opts.stats) fillHomographyStats(opts.stats, matchCount, inlierCount, false, "gate_rejected");
+      if (opts.stats)
+        fillHomographyStats(opts.stats, matchCount, inlierCount, false, "gate_rejected");
       return null;
     }
     if (opts.stats) fillHomographyStats(opts.stats, matchCount, inlierCount, true, "ok");
@@ -314,9 +321,14 @@ interface DecomposedHomography {
 function decomposeHomography(h: Float64Array): DecomposedHomography {
   // Normalise so the homogeneous scale h8 = 1.
   const s = h[8] !== 0 ? 1 / h[8] : 1;
-  const a = h[0] * s, b = h[1] * s, tx = h[2] * s;
-  const c = h[3] * s, d = h[4] * s, ty = h[5] * s;
-  const px = h[6] * s, py = h[7] * s;
+  const a = h[0] * s,
+    b = h[1] * s,
+    tx = h[2] * s;
+  const c = h[3] * s,
+    d = h[4] * s,
+    ty = h[5] * s;
+  const px = h[6] * s,
+    py = h[7] * s;
 
   const sx = Math.hypot(a, c);
   const theta = Math.atan2(c, a);
@@ -391,10 +403,7 @@ export function interpolateHomographies(
  *
  * @param keyframes - Non-empty, ascending by `timestamp`.
  */
-export function homographyAtTime(
-  keyframes: KeyframeHomography[],
-  t: number,
-): Float64Array {
+export function homographyAtTime(keyframes: KeyframeHomography[], t: number): Float64Array {
   const n = keyframes.length;
   if (n === 0) throw new Error("homographyAtTime: no keyframe homographies.");
   if (n === 1 || t <= keyframes[0].timestamp) return keyframes[0].h;

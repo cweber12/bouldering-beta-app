@@ -43,10 +43,7 @@ describe("useEscapeKey", () => {
   it("calls the latest callback without re-subscribing", () => {
     const first = vi.fn();
     const second = vi.fn();
-    const { rerender } = renderHook(
-      ({ cb }) => useEscapeKey(cb),
-      { initialProps: { cb: first } },
-    );
+    const { rerender } = renderHook(({ cb }) => useEscapeKey(cb), { initialProps: { cb: first } });
 
     rerender({ cb: second });
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

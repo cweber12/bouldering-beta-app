@@ -32,25 +32,19 @@ describe("interpolatePoseFrames", () => {
   it("returns an empty-keypoints frame for every timestamp when processedFrames is empty", () => {
     const result = interpolatePoseFrames([], [0, 0.1, 0.2]);
     expect(result).toHaveLength(3);
-    result.forEach(f => expect(f.keypoints).toEqual([]));
-    expect(result.map(f => f.timestamp)).toEqual([0, 0.1, 0.2]);
+    result.forEach((f) => expect(f.keypoints).toEqual([]));
+    expect(result.map((f) => f.timestamp)).toEqual([0, 0.1, 0.2]);
   });
 
   it("returns exact frames when timestamps match processed frames exactly", () => {
-    const processed = [
-      frame(0.0, [["nose", 0.5, 0.1]]),
-      frame(0.5, [["nose", 0.6, 0.2]]),
-    ];
+    const processed = [frame(0.0, [["nose", 0.5, 0.1]]), frame(0.5, [["nose", 0.6, 0.2]])];
     const result = interpolatePoseFrames(processed, [0.0, 0.5]);
     expect(result[0].keypoints[0]).toMatchObject({ x: 0.5, y: 0.1 });
     expect(result[1].keypoints[0]).toMatchObject({ x: 0.6, y: 0.2 });
   });
 
   it("linearly interpolates x and y at the midpoint", () => {
-    const processed = [
-      frame(0.0, [["left_hip", 0.4, 0.4]]),
-      frame(1.0, [["left_hip", 0.6, 0.8]]),
-    ];
+    const processed = [frame(0.0, [["left_hip", 0.4, 0.4]]), frame(1.0, [["left_hip", 0.6, 0.8]])];
     const result = interpolatePoseFrames(processed, [0.0, 0.5, 1.0]);
     const mid = result[1].keypoints[0];
     expect(mid.x).toBeCloseTo(0.5); // (0.4 + 0.6) / 2
@@ -85,17 +79,20 @@ describe("interpolatePoseFrames", () => {
 
   it("interpolates shared keypoints and holds one-anchor keypoints (attenuated)", () => {
     const processed = [
-      frame(0.0, [["left_hip", 0.4, 0.5], ["nose", 0.5, 0.1, 0.8]]),
+      frame(0.0, [
+        ["left_hip", 0.4, 0.5],
+        ["nose", 0.5, 0.1, 0.8],
+      ]),
       frame(1.0, [["left_hip", 0.6, 0.7]]), // nose is missing in second frame
     ];
     const result = interpolatePoseFrames(processed, [0.0, 0.5, 1.0]);
     const mid = result[1].keypoints;
     // left_hip is in both anchors → interpolated to the midpoint.
-    const hip = mid.find(k => k.name === "left_hip")!;
+    const hip = mid.find((k) => k.name === "left_hip")!;
     expect(hip.x).toBeCloseTo(0.5);
     // nose is in only the first anchor → HELD at its position, not dropped, with
     // an attenuated score so the renderer can dim it.
-    const nose = mid.find(k => k.name === "nose")!;
+    const nose = mid.find((k) => k.name === "nose")!;
     expect(nose).toBeDefined();
     expect(nose.x).toBeCloseTo(0.5);
     expect(nose.y).toBeCloseTo(0.1);
@@ -116,14 +113,19 @@ describe("interpolatePoseFrames", () => {
     // interpolate across its OWN detections (no freeze, no snap), not hold at
     // the t=0 position while the elbow slides away — the limb-stretch bug.
     const processed = [
-      frame(0.0, [["left_wrist", 0.2, 0.2], ["left_elbow", 0.2, 0.4]]),
+      frame(0.0, [
+        ["left_wrist", 0.2, 0.2],
+        ["left_elbow", 0.2, 0.4],
+      ]),
       frame(0.5, [["left_elbow", 0.5, 0.4]]), // wrist occluded here
-      frame(1.0, [["left_wrist", 0.8, 0.2], ["left_elbow", 0.8, 0.4]]),
+      frame(1.0, [
+        ["left_wrist", 0.8, 0.2],
+        ["left_elbow", 0.8, 0.4],
+      ]),
     ];
     const result = interpolatePoseFrames(processed, [0, 0.25, 0.5, 0.75, 1.0]);
 
-    const wristAt = (i: number) =>
-      result[i].keypoints.find(k => k.name === "left_wrist");
+    const wristAt = (i: number) => result[i].keypoints.find((k) => k.name === "left_wrist");
 
     // Wrist is present across the whole span (bridged), never dropped.
     expect(wristAt(1)).toBeDefined(); // t=0.5
@@ -147,17 +149,23 @@ describe("interpolatePoseFrames", () => {
     // With maxBridgeGap=1.0 the joint stays absent through the gap instead of
     // sliding a fake straight line; the always-visible elbow is unaffected.
     const processed = [
-      frame(0, [["left_wrist", 0.2, 0.2], ["left_elbow", 0.2, 0.4]]),
+      frame(0, [
+        ["left_wrist", 0.2, 0.2],
+        ["left_elbow", 0.2, 0.4],
+      ]),
       frame(1, [["left_elbow", 0.5, 0.4]]),
-      frame(2, [["left_wrist", 0.8, 0.2], ["left_elbow", 0.8, 0.4]]),
+      frame(2, [
+        ["left_wrist", 0.8, 0.2],
+        ["left_elbow", 0.8, 0.4],
+      ]),
     ];
     const result = interpolatePoseFrames(processed, [0, 1, 2], 1.0);
     // Mid-gap (the t=1 anchor): wrist omitted, elbow present.
-    expect(result[1].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
-    expect(result[1].keypoints.find(k => k.name === "left_elbow")).toBeDefined();
+    expect(result[1].keypoints.find((k) => k.name === "left_wrist")).toBeUndefined();
+    expect(result[1].keypoints.find((k) => k.name === "left_elbow")).toBeDefined();
     // Endpoints still carry their real detections.
-    expect(result[0].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
-    expect(result[2].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
+    expect(result[0].keypoints.find((k) => k.name === "left_wrist")).toBeDefined();
+    expect(result[2].keypoints.find((k) => k.name === "left_wrist")).toBeDefined();
   });
 });
 
@@ -173,7 +181,7 @@ describe("smoothPoseFrames", () => {
   it("preserves timestamps unchanged", () => {
     const frames = [frame(0.0, [["nose", 0.5, 0.5]]), frame(0.5, [["nose", 0.6, 0.6]])];
     const result = smoothPoseFrames(frames);
-    expect(result.map(f => f.timestamp)).toEqual([0.0, 0.5]);
+    expect(result.map((f) => f.timestamp)).toEqual([0.0, 0.5]);
   });
 
   it("does not fill missing keypoints — absent keypoints remain absent", () => {
@@ -183,9 +191,9 @@ describe("smoothPoseFrames", () => {
       frame(2, [["nose", 0.7, 0.7]]),
     ];
     const result = smoothPoseFrames(frames);
-    expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    expect(result[1].keypoints.find((k) => k.name === "nose")).toBeUndefined();
     // The filter state carries into frames where the keypoint reappears.
-    const reappeared = result[2].keypoints.find(k => k.name === "nose")!;
+    const reappeared = result[2].keypoints.find((k) => k.name === "nose")!;
     expect(reappeared).toBeDefined();
     // One-Euro smooths the reappeared value toward the prior state.
     expect(reappeared.x).toBeGreaterThan(0.5);
@@ -199,19 +207,16 @@ describe("smoothPoseFrames", () => {
       frame(2, [["nose", 0.5, 0.5]]),
     ];
     const result = smoothPoseFrames(frames);
-    expect(result[0].keypoints.find(k => k.name === "nose")).toBeUndefined();
-    expect(result[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
-    const seeded = result[2].keypoints.find(k => k.name === "nose")!;
+    expect(result[0].keypoints.find((k) => k.name === "nose")).toBeUndefined();
+    expect(result[1].keypoints.find((k) => k.name === "nose")).toBeUndefined();
+    const seeded = result[2].keypoints.find((k) => k.name === "nose")!;
     expect(seeded).toBeDefined();
     expect(seeded.x).toBeCloseTo(0.5);
     expect(seeded.y).toBeCloseTo(0.5);
   });
 
   it("with very high minCutoff leaves values nearly unchanged", () => {
-    const frames = [
-      frame(0, [["left_hip", 0.3, 0.4]]),
-      frame(1, [["left_hip", 0.7, 0.8]]),
-    ];
+    const frames = [frame(0, [["left_hip", 0.3, 0.4]]), frame(1, [["left_hip", 0.7, 0.8]])];
     // minCutoff=10000 → alpha ≈ 1 → near pass-through
     const result = smoothPoseFrames(frames, 10000, 0);
     expect(result[0].keypoints[0].x).toBeCloseTo(0.3, 2);
@@ -221,12 +226,9 @@ describe("smoothPoseFrames", () => {
   });
 
   it("with default parameters the second frame is smoothed toward the first", () => {
-    const frames = [
-      frame(0, [["nose", 0.0, 0.0]]),
-      frame(1, [["nose", 1.0, 1.0]]),
-    ];
+    const frames = [frame(0, [["nose", 0.0, 0.0]]), frame(1, [["nose", 1.0, 1.0]])];
     const result = smoothPoseFrames(frames);
-    const kp = result[1].keypoints.find(k => k.name === "nose")!;
+    const kp = result[1].keypoints.find((k) => k.name === "nose")!;
     // The One-Euro filter smooths the jump — value should be between 0 and 1.
     expect(kp.x).toBeGreaterThan(0.0);
     expect(kp.x).toBeLessThan(1.0);
@@ -234,13 +236,19 @@ describe("smoothPoseFrames", () => {
 
   it("processes multiple keypoints independently", () => {
     const frames = [
-      frame(0, [["nose", 0.0, 0.0], ["left_hip", 1.0, 1.0]]),
-      frame(1, [["nose", 1.0, 1.0], ["left_hip", 0.0, 0.0]]),
+      frame(0, [
+        ["nose", 0.0, 0.0],
+        ["left_hip", 1.0, 1.0],
+      ]),
+      frame(1, [
+        ["nose", 1.0, 1.0],
+        ["left_hip", 0.0, 0.0],
+      ]),
     ];
     // Very high minCutoff → near pass-through
     const result = smoothPoseFrames(frames, 10000, 0);
-    const nose1 = result[1].keypoints.find(k => k.name === "nose")!;
-    const hip1  = result[1].keypoints.find(k => k.name === "left_hip")!;
+    const nose1 = result[1].keypoints.find((k) => k.name === "nose")!;
+    const hip1 = result[1].keypoints.find((k) => k.name === "left_hip")!;
     expect(nose1.x).toBeCloseTo(1.0, 2);
     expect(hip1.x).toBeCloseTo(0.0, 2);
   });
@@ -256,8 +264,8 @@ describe("smoothPoseFrames", () => {
     // Same timestamps, values reversed in order (a mirror-image step).
     const rev = ts.map((t, i) => frame(t, [["nose", fwdVals[fwdVals.length - 1 - i], 0]]));
 
-    const outFwd = smoothPoseFrames(fwd).map(f => f.keypoints[0].x);
-    const outRev = smoothPoseFrames(rev).map(f => f.keypoints[0].x);
+    const outFwd = smoothPoseFrames(fwd).map((f) => f.keypoints[0].x);
+    const outRev = smoothPoseFrames(rev).map((f) => f.keypoints[0].x);
 
     // One-Euro's cutoff is speed-dependent (nonlinear), so the filter is only
     // approximately zero-phase — symmetric to ~0.5% rather than bit-exact. A
@@ -332,7 +340,7 @@ function goodFrame(ts: number): PoseFrame {
 /** Drop named keypoints from a frame (simulating absent detections). */
 function dropKeypoints(f: PoseFrame, ...names: string[]): PoseFrame {
   const drop = new Set(names);
-  return { ...f, keypoints: f.keypoints.filter(kp => !drop.has(kp.name)) };
+  return { ...f, keypoints: f.keypoints.filter((kp) => !drop.has(kp.name)) };
 }
 
 /** Set the confidence score on named keypoints. */
@@ -340,7 +348,7 @@ function setScore(f: PoseFrame, score: number, ...names: string[]): PoseFrame {
   const target = new Set(names);
   return {
     ...f,
-    keypoints: f.keypoints.map(kp => (target.has(kp.name) ? { ...kp, score } : kp)),
+    keypoints: f.keypoints.map((kp) => (target.has(kp.name) ? { ...kp, score } : kp)),
   };
 }
 
@@ -359,15 +367,24 @@ describe("filterLandmarks (climbing-weighted)", () => {
     // well within the default tolerance of 3.
     const f = dropKeypoints(
       goodFrame(0),
-      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index",
+      "left_ankle",
+      "right_ankle",
+      "left_foot_index",
+      "right_foot_index",
     );
     expect(filterLandmarks([f])).toHaveLength(1);
   });
 
   it("keeps a frame even when feet are present but low-confidence", () => {
     const f = setScore(
-      goodFrame(0), 0.05,
-      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index", "left_heel", "right_heel",
+      goodFrame(0),
+      0.05,
+      "left_ankle",
+      "right_ankle",
+      "left_foot_index",
+      "right_foot_index",
+      "left_heel",
+      "right_heel",
     );
     expect(filterLandmarks([f])).toHaveLength(1);
   });
@@ -376,7 +393,12 @@ describe("filterLandmarks (climbing-weighted)", () => {
     // All six full-weight core joints bad → weight 6 > tolerance 3.
     const f = dropKeypoints(
       goodFrame(0),
-      "left_wrist", "right_wrist", "left_shoulder", "right_shoulder", "left_hip", "right_hip",
+      "left_wrist",
+      "right_wrist",
+      "left_shoulder",
+      "right_shoulder",
+      "left_hip",
+      "right_hip",
     );
     expect(filterLandmarks([f])).toHaveLength(0);
   });
@@ -384,10 +406,19 @@ describe("filterLandmarks (climbing-weighted)", () => {
   it("ignores non-climbing keypoints (face / fingers / knees)", () => {
     // Wreck the face, fingers, and knees — none are in the climbing subset.
     const f = setScore(
-      goodFrame(0), 0.0,
-      "nose", "left_eye", "right_eye", "left_ear", "right_ear",
-      "left_pinky", "right_pinky", "left_index", "right_index",
-      "left_knee", "right_knee",
+      goodFrame(0),
+      0.0,
+      "nose",
+      "left_eye",
+      "right_eye",
+      "left_ear",
+      "right_ear",
+      "left_pinky",
+      "right_pinky",
+      "left_index",
+      "right_index",
+      "left_knee",
+      "right_knee",
     );
     expect(filterLandmarks([f])).toHaveLength(1);
   });
@@ -398,7 +429,13 @@ describe("filterLandmarks (climbing-weighted)", () => {
     const kept = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist", "left_hip");
     expect(filterLandmarks([kept])).toHaveLength(1);
 
-    const dropped = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist", "left_hip", "right_hip");
+    const dropped = dropKeypoints(
+      goodFrame(0),
+      "left_wrist",
+      "right_wrist",
+      "left_hip",
+      "right_hip",
+    );
     expect(filterLandmarks([dropped])).toHaveLength(0);
   });
 
@@ -413,9 +450,18 @@ describe("filterLandmarks (climbing-weighted)", () => {
   it("respects a custom minScore threshold", () => {
     // Lower all climbing-subset scores to 0.5.
     const f = setScore(
-      goodFrame(0), 0.5,
-      "left_wrist", "right_wrist", "left_shoulder", "right_shoulder", "left_hip", "right_hip",
-      "left_ankle", "right_ankle", "left_foot_index", "right_foot_index",
+      goodFrame(0),
+      0.5,
+      "left_wrist",
+      "right_wrist",
+      "left_shoulder",
+      "right_shoulder",
+      "left_hip",
+      "right_hip",
+      "left_ankle",
+      "right_ankle",
+      "left_foot_index",
+      "right_foot_index",
     );
     // minScore=0.6 makes every climbing keypoint bad → weight 7 > 3 → dropped.
     expect(filterLandmarks([f], 0.6)).toHaveLength(0);
@@ -461,7 +507,7 @@ describe("applyLandmarkEstimator", () => {
     const estimator = vi.fn<LandmarkEstimator>().mockReturnValue(modified);
     const result = applyLandmarkEstimator(frames, estimator);
     expect(result).toHaveLength(2);
-    result.forEach(f => expect(f.timestamp).toBe(99));
+    result.forEach((f) => expect(f.timestamp).toBe(99));
   });
 
   it("returns an empty array when given an empty array", () => {
@@ -489,11 +535,17 @@ describe("estimateMissingLandmarks", () => {
 
   it("fills a missing keypoint via temporal interpolation from prev and next", () => {
     // Frame 0 and 2 have left_wrist; frame 1 is missing it.
-    const f0 = frame(0, [["left_wrist", 0.2, 0.4, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
+    const f0 = frame(0, [
+      ["left_wrist", 0.2, 0.4, 0.9],
+      ["left_elbow", 0.3, 0.3, 0.9],
+    ]);
     const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
-    const f2 = frame(2, [["left_wrist", 0.4, 0.6, 0.9], ["left_elbow", 0.4, 0.4, 0.9]]);
+    const f2 = frame(2, [
+      ["left_wrist", 0.4, 0.6, 0.9],
+      ["left_elbow", 0.4, 0.4, 0.9],
+    ]);
     const result = estimateMissingLandmarks([f0, f1, f2], 10, 33);
-    const estimated = result[1].keypoints.find(k => k.name === "left_wrist");
+    const estimated = result[1].keypoints.find((k) => k.name === "left_wrist");
     expect(estimated).toBeDefined();
     // Temporal lerp: midpoint between (0.2, 0.4) and (0.4, 0.6).
     expect(estimated!.x).toBeCloseTo(0.3);
@@ -505,11 +557,14 @@ describe("estimateMissingLandmarks", () => {
   it("uses structural estimation when only one temporal side is available", () => {
     // Frame 0 has both left_wrist and left_elbow.
     // Frame 1 has left_elbow but not left_wrist → structural can estimate.
-    const f0 = frame(0, [["left_wrist", 0.2, 0.5, 0.9], ["left_elbow", 0.3, 0.3, 0.9]]);
+    const f0 = frame(0, [
+      ["left_wrist", 0.2, 0.5, 0.9],
+      ["left_elbow", 0.3, 0.3, 0.9],
+    ]);
     const f1 = frame(1, [["left_elbow", 0.35, 0.35, 0.9]]);
     // No frame 2 with left_wrist → no temporal lerp, so structural kicks in.
     const result = estimateMissingLandmarks([f0, f1], 10, 33);
-    const est = result[1].keypoints.find(k => k.name === "left_wrist");
+    const est = result[1].keypoints.find((k) => k.name === "left_wrist");
     expect(est).toBeDefined();
     // Bone vector from frame 0: wrist(0.2, 0.5) - elbow(0.3, 0.3) = (-0.1, 0.2)
     // Applied to current elbow (0.35, 0.35) → (0.25, 0.55)
@@ -521,7 +576,10 @@ describe("estimateMissingLandmarks", () => {
 
   it("skips estimation when too many keypoints are missing (> maxEstimatable)", () => {
     // One frame with only 2 keypoints — 15 missing > default maxEstimatable(5).
-    const f = frame(0, [["nose", 0.5, 0.5, 0.9], ["left_eye", 0.4, 0.4, 0.9]]);
+    const f = frame(0, [
+      ["nose", 0.5, 0.5, 0.9],
+      ["left_eye", 0.4, 0.4, 0.9],
+    ]);
     const result = estimateMissingLandmarks([f]);
     // Frame returned unchanged.
     expect(result[0].keypoints).toHaveLength(2);
@@ -533,7 +591,7 @@ describe("estimateMissingLandmarks", () => {
     const f0 = frame(0, [["nose", 0.5, 0.5, 0.9]]);
     const f1: PoseFrame = { timestamp: 1, keypoints: [] };
     const result = estimateMissingLandmarks([f0, f1], 10, 33);
-    const est = result[1].keypoints.find(k => k.name === "nose");
+    const est = result[1].keypoints.find((k) => k.name === "nose");
     expect(est).toBeDefined();
     expect(est!.x).toBeCloseTo(0.5);
     expect(est!.score).toBeCloseTo(0.45); // 0.9 * 0.5
@@ -544,22 +602,38 @@ describe("estimateMissingLandmarks", () => {
     // so that the missing count (1) is within maxEstimatable.
     // Build frames with most MediaPipe keypoints, leaving left_elbow missing in f1.
     const mpKps: Array<[string, number, number, number?]> = [
-      ["nose", 0.5, 0.1], ["left_eye_inner", 0.48, 0.09],
-      ["left_eye", 0.46, 0.09], ["left_eye_outer", 0.44, 0.09],
-      ["right_eye_inner", 0.52, 0.09], ["right_eye", 0.54, 0.09],
-      ["right_eye_outer", 0.56, 0.09], ["left_ear", 0.4, 0.1],
-      ["right_ear", 0.6, 0.1], ["mouth_left", 0.48, 0.12],
-      ["mouth_right", 0.52, 0.12], ["left_shoulder", 0.35, 0.25],
-      ["right_shoulder", 0.65, 0.25], ["left_elbow", 0.3, 0.4],
-      ["right_elbow", 0.7, 0.4], ["left_wrist", 0.28, 0.55],
-      ["right_wrist", 0.72, 0.55], ["left_pinky", 0.27, 0.57],
-      ["right_pinky", 0.73, 0.57], ["left_index", 0.28, 0.58],
-      ["right_index", 0.72, 0.58], ["left_thumb", 0.29, 0.56],
-      ["right_thumb", 0.71, 0.56], ["left_hip", 0.4, 0.6],
-      ["right_hip", 0.6, 0.6], ["left_knee", 0.38, 0.75],
-      ["right_knee", 0.62, 0.75], ["left_ankle", 0.37, 0.9],
-      ["right_ankle", 0.63, 0.9], ["left_heel", 0.36, 0.92],
-      ["right_heel", 0.64, 0.92], ["left_foot_index", 0.38, 0.93],
+      ["nose", 0.5, 0.1],
+      ["left_eye_inner", 0.48, 0.09],
+      ["left_eye", 0.46, 0.09],
+      ["left_eye_outer", 0.44, 0.09],
+      ["right_eye_inner", 0.52, 0.09],
+      ["right_eye", 0.54, 0.09],
+      ["right_eye_outer", 0.56, 0.09],
+      ["left_ear", 0.4, 0.1],
+      ["right_ear", 0.6, 0.1],
+      ["mouth_left", 0.48, 0.12],
+      ["mouth_right", 0.52, 0.12],
+      ["left_shoulder", 0.35, 0.25],
+      ["right_shoulder", 0.65, 0.25],
+      ["left_elbow", 0.3, 0.4],
+      ["right_elbow", 0.7, 0.4],
+      ["left_wrist", 0.28, 0.55],
+      ["right_wrist", 0.72, 0.55],
+      ["left_pinky", 0.27, 0.57],
+      ["right_pinky", 0.73, 0.57],
+      ["left_index", 0.28, 0.58],
+      ["right_index", 0.72, 0.58],
+      ["left_thumb", 0.29, 0.56],
+      ["right_thumb", 0.71, 0.56],
+      ["left_hip", 0.4, 0.6],
+      ["right_hip", 0.6, 0.6],
+      ["left_knee", 0.38, 0.75],
+      ["right_knee", 0.62, 0.75],
+      ["left_ankle", 0.37, 0.9],
+      ["right_ankle", 0.63, 0.9],
+      ["left_heel", 0.36, 0.92],
+      ["right_heel", 0.64, 0.92],
+      ["left_foot_index", 0.38, 0.93],
       ["right_foot_index", 0.62, 0.93],
     ];
     const f0 = frame(0, mpKps);
@@ -567,7 +641,7 @@ describe("estimateMissingLandmarks", () => {
     const f1Kps = mpKps.filter(([name]) => name !== "left_elbow");
     const f1 = frame(1, f1Kps);
     const result = estimateMissingLandmarks([f0, f1], 10, 5, "mediapipe");
-    const est = result[1].keypoints.find(k => k.name === "left_elbow");
+    const est = result[1].keypoints.find((k) => k.name === "left_elbow");
     expect(est).toBeDefined();
   });
 
@@ -590,12 +664,15 @@ const ALL_MP_NAMES = Object.values(MP_KP_NAMES);
 function countMidSequenceWinks(frames: PoseFrame[]): string[] {
   const winked: string[] = [];
   for (const name of ALL_MP_NAMES) {
-    const present = frames.map(f => f.keypoints.some(k => k.name === name));
+    const present = frames.map((f) => f.keypoints.some((k) => k.name === name));
     const first = present.indexOf(true);
     const last = present.lastIndexOf(true);
     if (first < 0) continue;
     for (let i = first; i <= last; i++) {
-      if (!present[i]) { winked.push(name); break; }
+      if (!present[i]) {
+        winked.push(name);
+        break;
+      }
     }
   }
   return winked;
@@ -616,7 +693,7 @@ describe("fillPersistentGaps", () => {
       frame(2, [["left_wrist", 0.4, 0.6, 0.8]]),
     ];
     const filled = fillPersistentGaps(frames, "mediapipe");
-    const wrist = filled[1].keypoints.find(k => k.name === "left_wrist");
+    const wrist = filled[1].keypoints.find((k) => k.name === "left_wrist");
     expect(wrist).toBeDefined();
     expect(wrist!.x).toBeCloseTo(0.3);
     expect(wrist!.y).toBeCloseTo(0.5);
@@ -630,12 +707,18 @@ describe("fillPersistentGaps", () => {
     // has moved. The wrist must follow the elbow via the bone vector from a
     // bracketing frame, not sit at the absolute temporal midpoint.
     const frames: PoseFrame[] = [
-      frame(0, [["left_wrist", 0.20, 0.50, 0.9], ["left_elbow", 0.30, 0.30, 0.9]]),
-      frame(1, [["left_elbow", 0.60, 0.30, 0.9]]), // elbow jumped right; wrist gone
-      frame(2, [["left_wrist", 0.20, 0.50, 0.9], ["left_elbow", 0.30, 0.30, 0.9]]),
+      frame(0, [
+        ["left_wrist", 0.2, 0.5, 0.9],
+        ["left_elbow", 0.3, 0.3, 0.9],
+      ]),
+      frame(1, [["left_elbow", 0.6, 0.3, 0.9]]), // elbow jumped right; wrist gone
+      frame(2, [
+        ["left_wrist", 0.2, 0.5, 0.9],
+        ["left_elbow", 0.3, 0.3, 0.9],
+      ]),
     ];
     const filled = fillPersistentGaps(frames, "mediapipe");
-    const wrist = filled[1].keypoints.find(k => k.name === "left_wrist");
+    const wrist = filled[1].keypoints.find((k) => k.name === "left_wrist");
     expect(wrist).toBeDefined();
     // Bone vector wrist-elbow = (-0.1, 0.2) applied to the current elbow (0.6, 0.3).
     expect(wrist!.x).toBeCloseTo(0.5);
@@ -649,8 +732,8 @@ describe("fillPersistentGaps", () => {
       frame(2, [["nose", 0.5, 0.1]]),
     ];
     const filled = fillPersistentGaps(frames, "mediapipe");
-    expect(filled[0].keypoints.find(k => k.name === "nose")).toBeUndefined();
-    expect(filled[1].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    expect(filled[0].keypoints.find((k) => k.name === "nose")).toBeUndefined();
+    expect(filled[1].keypoints.find((k) => k.name === "nose")).toBeUndefined();
   });
 
   it("leaves a joint absent after its last detection (not bracketed)", () => {
@@ -660,18 +743,16 @@ describe("fillPersistentGaps", () => {
       { timestamp: 2, keypoints: [] },
     ];
     const filled = fillPersistentGaps(frames, "mediapipe");
-    expect(filled[2].keypoints.find(k => k.name === "nose")).toBeUndefined();
+    expect(filled[2].keypoints.find((k) => k.name === "nose")).toBeUndefined();
   });
 
   it("never invents a joint the detector never saw", () => {
-    const frames = [goodFrame(0), goodFrame(1), goodFrame(2)].map(f => ({
+    const frames = [goodFrame(0), goodFrame(1), goodFrame(2)].map((f) => ({
       ...f,
-      keypoints: f.keypoints.filter(k => k.name !== "left_pinky"),
+      keypoints: f.keypoints.filter((k) => k.name !== "left_pinky"),
     }));
     const filled = fillPersistentGaps(frames, "mediapipe");
-    filled.forEach(f =>
-      expect(f.keypoints.find(k => k.name === "left_pinky")).toBeUndefined(),
-    );
+    filled.forEach((f) => expect(f.keypoints.find((k) => k.name === "left_pinky")).toBeUndefined());
   });
 
   it("does NOT bridge a joint across a dropout longer than the gap cap", () => {
@@ -687,9 +768,9 @@ describe("fillPersistentGaps", () => {
     ];
     const filled = fillPersistentGaps(frames, "mediapipe");
     // Interior frames span a 4 s bracket (> 2.5 s default) → left absent.
-    expect(filled[1].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
-    expect(filled[2].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
-    expect(filled[3].keypoints.find(k => k.name === "left_wrist")).toBeUndefined();
+    expect(filled[1].keypoints.find((k) => k.name === "left_wrist")).toBeUndefined();
+    expect(filled[2].keypoints.find((k) => k.name === "left_wrist")).toBeUndefined();
+    expect(filled[3].keypoints.find((k) => k.name === "left_wrist")).toBeUndefined();
   });
 
   it("still bridges a dropout within a raised gap cap", () => {
@@ -700,7 +781,7 @@ describe("fillPersistentGaps", () => {
       frame(4, [["left_wrist", 0.8, 0.8, 0.9]]),
     ];
     const filled = fillPersistentGaps(frames, "mediapipe", 5);
-    expect(filled[1].keypoints.find(k => k.name === "left_wrist")).toBeDefined();
+    expect(filled[1].keypoints.find((k) => k.name === "left_wrist")).toBeDefined();
   });
 
   it("closes a multi-second whole-limb dropout end-to-end (no winks)", () => {
@@ -708,8 +789,15 @@ describe("fillPersistentGaps", () => {
     // sequence used to wink out — too long for interpolatePoseFrames to bridge
     // and too degraded (9 joints) for estimateMissingLandmarks to touch.
     const dropped = new Set([
-      "left_elbow", "left_wrist", "left_pinky", "left_index", "left_thumb",
-      "right_knee", "right_ankle", "right_heel", "right_foot_index",
+      "left_elbow",
+      "left_wrist",
+      "left_pinky",
+      "left_index",
+      "left_thumb",
+      "right_knee",
+      "right_ankle",
+      "right_heel",
+      "right_foot_index",
     ]);
     const anchors: PoseFrame[] = [];
     for (let k = 0; k <= 8; k++) {
@@ -717,7 +805,7 @@ describe("fillPersistentGaps", () => {
       const base = goodFrame(t);
       anchors.push(
         t >= 1.5 && t <= 2.5
-          ? { ...base, keypoints: base.keypoints.filter(kp => !dropped.has(kp.name)) }
+          ? { ...base, keypoints: base.keypoints.filter((kp) => !dropped.has(kp.name)) }
           : base,
       );
     }
@@ -765,15 +853,15 @@ function rigidArmFrame(t: number, theta1: number, theta2: number, occludeWrist =
 }
 
 function forearmLength(f: PoseFrame): number | null {
-  const e = f.keypoints.find(k => k.name === "left_elbow");
-  const w = f.keypoints.find(k => k.name === "left_wrist");
+  const e = f.keypoints.find((k) => k.name === "left_elbow");
+  const w = f.keypoints.find((k) => k.name === "left_wrist");
   return e && w ? Math.hypot(w.x - e.x, w.y - e.y) : null;
 }
 
 function forearmAngleDeg(f: PoseFrame): number | null {
-  const e = f.keypoints.find(k => k.name === "left_elbow");
-  const w = f.keypoints.find(k => k.name === "left_wrist");
-  return e && w ? Math.atan2(w.y - e.y, w.x - e.x) * 180 / Math.PI : null;
+  const e = f.keypoints.find((k) => k.name === "left_elbow");
+  const w = f.keypoints.find((k) => k.name === "left_wrist");
+  return e && w ? (Math.atan2(w.y - e.y, w.x - e.x) * 180) / Math.PI : null;
 }
 
 /** Max % deviation of the forearm length from its rigid ground truth. */
@@ -799,7 +887,7 @@ describe("constrainSkeleton", () => {
     const theta1 = -Math.PI / 2;
     const theta2Of = (t: number) => {
       const frac = t <= 0.3 ? 0 : t >= 0.7 ? 1 : (t - 0.3) / 0.4;
-      return (-100 + 120 * frac) * Math.PI / 180;
+      return ((-100 + 120 * frac) * Math.PI) / 180;
     };
     const allTs: number[] = [];
     for (let i = 0; i <= 60; i++) allTs.push(+(i / 30).toFixed(4));
@@ -811,7 +899,10 @@ describe("constrainSkeleton", () => {
 
     const good = filterLandmarks(anchors, 0.3);
     const smoothed = smoothPoseFrames(
-      fillPersistentGaps(estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"), "mediapipe"),
+      fillPersistentGaps(
+        estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"),
+        "mediapipe",
+      ),
     );
 
     // Baseline: the x/y pipeline distorts the rigid bone badly (~25%+).
@@ -828,7 +919,7 @@ describe("constrainSkeleton", () => {
     // vector (tens of degrees of error); bone-space interpolation tracks the
     // true sweep.
     const theta1 = -Math.PI / 2;
-    const theta2Of = (t: number) => (180 * (t / 2)) * Math.PI / 180;
+    const theta2Of = (t: number) => (180 * (t / 2) * Math.PI) / 180;
     const allTs: number[] = [];
     for (let i = 0; i <= 60; i++) allTs.push(+(i / 30).toFixed(4));
     const anchors: PoseFrame[] = [];
@@ -840,7 +931,10 @@ describe("constrainSkeleton", () => {
 
     const good = filterLandmarks(anchors, 0.3);
     const smoothed = smoothPoseFrames(
-      fillPersistentGaps(estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"), "mediapipe"),
+      fillPersistentGaps(
+        estimateMissingLandmarks(interpolatePoseFrames(good, allTs), 10, 5, "mediapipe"),
+        "mediapipe",
+      ),
     );
     const constrained = constrainSkeleton(smoothed, good, "mediapipe");
 
@@ -849,7 +943,7 @@ describe("constrainSkeleton", () => {
     for (const f of constrained) {
       const a = forearmAngleDeg(f);
       if (a === null) continue;
-      const g = theta2Of(f.timestamp) * 180 / Math.PI;
+      const g = (theta2Of(f.timestamp) * 180) / Math.PI;
       let d = Math.abs(a - g);
       if (d > 180) d = 360 - d;
       worst = Math.max(worst, d);
@@ -870,16 +964,19 @@ describe("constrainSkeleton", () => {
     for (let i = 0; i <= 20; i++) allTs.push(+(i / 10).toFixed(4));
     for (let a = 0; a <= 4; a++) {
       const t = a * 0.5;
-      const ex = 0.5, ey = 0.4;
+      const ex = 0.5,
+        ey = 0.4;
       const projLen = RIG_FOREARM * (1 - 0.5 * (a / 4)); // 0.14 → 0.07
-      anchors.push(frame(t, [
-        ["left_shoulder", 0.35, 0.3, 0.95],
-        ["right_shoulder", 0.65, 0.3, 0.95],
-        ["left_hip", 0.4, 0.6, 0.95],
-        ["right_hip", 0.6, 0.6, 0.95],
-        ["left_elbow", ex, ey, 0.95],
-        ["left_wrist", ex + projLen, ey, 0.95],
-      ]));
+      anchors.push(
+        frame(t, [
+          ["left_shoulder", 0.35, 0.3, 0.95],
+          ["right_shoulder", 0.65, 0.3, 0.95],
+          ["left_hip", 0.4, 0.6, 0.95],
+          ["right_hip", 0.6, 0.6, 0.95],
+          ["left_elbow", ex, ey, 0.95],
+          ["left_wrist", ex + projLen, ey, 0.95],
+        ]),
+      );
     }
     const good = filterLandmarks(anchors, 0.3);
     const smoothed = smoothPoseFrames(interpolatePoseFrames(good, allTs));
@@ -887,8 +984,8 @@ describe("constrainSkeleton", () => {
 
     // At the first anchor (t=0) the projected length is full; at the last
     // (t=2) it is half. The pass must reproduce both, not average them.
-    const first = constrained.find(f => f.timestamp === 0)!;
-    const last = constrained.find(f => Math.abs(f.timestamp - 2) < 1e-6)!;
+    const first = constrained.find((f) => f.timestamp === 0)!;
+    const last = constrained.find((f) => Math.abs(f.timestamp - 2) < 1e-6)!;
     expect(forearmLength(first)!).toBeCloseTo(RIG_FOREARM, 3);
     expect(forearmLength(last)!).toBeCloseTo(RIG_FOREARM * 0.5, 3);
   });
@@ -897,22 +994,36 @@ describe("constrainSkeleton", () => {
     // The wrist is absent for the whole sequence — the constraint pass must not
     // conjure it just because a bone reference exists elsewhere.
     const frames: PoseFrame[] = [
-      frame(0, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.4, 0.45]]),
-      frame(1, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.42, 0.46]]),
+      frame(0, [
+        ["left_shoulder", 0.35, 0.3],
+        ["left_elbow", 0.4, 0.45],
+      ]),
+      frame(1, [
+        ["left_shoulder", 0.35, 0.3],
+        ["left_elbow", 0.42, 0.46],
+      ]),
     ];
     const refs: PoseFrame[] = [
-      frame(0, [["left_elbow", 0.4, 0.45], ["left_wrist", 0.4, 0.6]]),
+      frame(0, [
+        ["left_elbow", 0.4, 0.45],
+        ["left_wrist", 0.4, 0.6],
+      ]),
     ];
     const out = constrainSkeleton(frames, refs, "mediapipe");
-    out.forEach(f => expect(f.keypoints.find(k => k.name === "left_wrist")).toBeUndefined());
+    out.forEach((f) => expect(f.keypoints.find((k) => k.name === "left_wrist")).toBeUndefined());
   });
 
   it("leaves a child untouched when its parent is missing this frame", () => {
     // Wrist present but elbow absent → nothing to anchor to; wrist stays put.
     const frames: PoseFrame[] = [frame(0, [["left_wrist", 0.7, 0.7, 0.5]])];
-    const refs: PoseFrame[] = [frame(0, [["left_elbow", 0.4, 0.4], ["left_wrist", 0.5, 0.5]])];
+    const refs: PoseFrame[] = [
+      frame(0, [
+        ["left_elbow", 0.4, 0.4],
+        ["left_wrist", 0.5, 0.5],
+      ]),
+    ];
     const out = constrainSkeleton(frames, refs, "mediapipe");
-    const w = out[0].keypoints.find(k => k.name === "left_wrist")!;
+    const w = out[0].keypoints.find((k) => k.name === "left_wrist")!;
     expect(w.x).toBe(0.7);
     expect(w.y).toBe(0.7);
   });
@@ -926,13 +1037,17 @@ describe("constrainSkeleton", () => {
       ]),
     ];
     const refs: PoseFrame[] = [
-      frame(0, [["left_shoulder", 0.35, 0.3], ["left_elbow", 0.4, 0.45], ["left_wrist", 0.42, 0.6]]),
+      frame(0, [
+        ["left_shoulder", 0.35, 0.3],
+        ["left_elbow", 0.4, 0.45],
+        ["left_wrist", 0.42, 0.6],
+      ]),
     ];
     const out = constrainSkeleton(frames, refs, "mediapipe");
-    const sh = out[0].keypoints.find(k => k.name === "left_shoulder")!;
+    const sh = out[0].keypoints.find((k) => k.name === "left_shoulder")!;
     expect(sh.x).toBe(0.35);
     expect(sh.y).toBe(0.3);
     // The wrist's carried-through (dimmed) score survives the reconstruction.
-    expect(out[0].keypoints.find(k => k.name === "left_wrist")!.score).toBe(0.42);
+    expect(out[0].keypoints.find((k) => k.name === "left_wrist")!.score).toBe(0.42);
   });
 });

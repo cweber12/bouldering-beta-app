@@ -2,7 +2,8 @@
 
 ## Status
 
-accepted
+accepted (decisions 3 and 4 superseded by ADR 0016 — the Climber and Route crops
+are now independent, so the Route is no longer forced to contain the Climber)
 
 Supersedes ADR 0013 decision 1 (the Climber crop shown **locked**, no resize) and
 decision 4 (the Route/Wall crop defaulting to the **whole frame**). Keeps ADR
@@ -21,7 +22,7 @@ Two rough edges remained:
 - **A bad tap had no manual recovery.** When click-time detection mis-sized the
   seed box (or found no pose and dropped the default fallback), the User could
   not nudge the search region; they could only re-tap and hope. ADR 0013 removed
-  the resize affordance because hand-framing did not improve *tracking* — but the
+  the resize affordance because hand-framing did not improve _tracking_ — but the
   seed box is also the **first-acquisition search region**, where a hand
   correction is legitimately useful.
 - **The full-frame Route included the floor/pad.** Below the climber is ground,
@@ -29,7 +30,7 @@ Two rough edges remained:
   those features into route-photo matching.
 
 The toggle also meant the two related boxes were never visible together, so the
-nesting relationship (the Climber sits *inside* the Route) was implicit.
+nesting relationship (the Climber sits _inside_ the Route) was implicit.
 
 ## Decision
 
@@ -69,7 +70,7 @@ Show both crops at once, both adjustable, with the Climber dominant:
    a mis-sized seed, and the floor/pad stays in the Route.
 3. **Tight, climber-hugging Route** — rejected again (as in ADR 0013 decision 4):
    it starves ORB of wall features and breaks route-photo matching. Trimming only
-   the *bottom* keeps the side/top texture.
+   the _bottom_ keeps the side/top texture.
 4. **Spring-back (Route re-hugs the Climber when it retreats)** — rejected: the
    Route would silently resize while the User is only adjusting the Climber.
    Grow-only is less surprising.

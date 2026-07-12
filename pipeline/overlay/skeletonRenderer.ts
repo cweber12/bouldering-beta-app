@@ -15,7 +15,11 @@ type CV = any;
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography, homographyAtTime, type KeyframeHomography } from "@/pipeline/matching/homography";
+import {
+  computeHomography,
+  homographyAtTime,
+  type KeyframeHomography,
+} from "@/pipeline/matching/homography";
 import { buildTransformedKeypoints, lerpKeypoints } from "@/pipeline/overlay/skeletonOverlay";
 
 /** Single output frame with pre-transformed keypoints in image-pixel space. */
@@ -98,9 +102,10 @@ export function buildSkeletonFrames({
 
     // Compute / reuse transformed keypoints for floor frame.
     if (cachedFloorAt !== floorIdx) {
-      cachedFloorKp = sorted[floorIdx].keypoints.length > 0
-        ? buildTransformedKeypoints(sorted[floorIdx], h, videoMeta.width, videoMeta.height)
-        : null;
+      cachedFloorKp =
+        sorted[floorIdx].keypoints.length > 0
+          ? buildTransformedKeypoints(sorted[floorIdx], h, videoMeta.width, videoMeta.height)
+          : null;
       cachedFloorAt = floorIdx;
     }
 
@@ -113,9 +118,10 @@ export function buildSkeletonFrames({
 
     // Compute / reuse transformed keypoints for ceil frame.
     if (cachedCeilAt !== ceilIdx) {
-      cachedCeilKp = ceilIdx !== floorIdx && sorted[ceilIdx].keypoints.length > 0
-        ? buildTransformedKeypoints(sorted[ceilIdx], h, videoMeta.width, videoMeta.height)
-        : null;
+      cachedCeilKp =
+        ceilIdx !== floorIdx && sorted[ceilIdx].keypoints.length > 0
+          ? buildTransformedKeypoints(sorted[ceilIdx], h, videoMeta.width, videoMeta.height)
+          : null;
       cachedCeilAt = ceilIdx;
     }
 
@@ -126,7 +132,10 @@ export function buildSkeletonFrames({
 
     const dt = sorted[ceilIdx].timestamp - sorted[floorIdx].timestamp;
     const alpha = dt > 0 ? (t - sorted[floorIdx].timestamp) / dt : 0;
-    out.push({ timestamp: t - firstTs, keypoints: lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha) });
+    out.push({
+      timestamp: t - firstTs,
+      keypoints: lerpKeypoints(cachedFloorKp, cachedCeilKp, alpha),
+    });
   }
 
   return { frames: out, duration, fps: targetFps };
@@ -142,13 +151,9 @@ export function buildSkeletonFrames({
  * Used before applying a time-varying homography so the pose itself is
  * interpolated in image-independent coordinates.
  */
-function blendPoseFramesNormalized(
-  floor: PoseFrame,
-  ceil: PoseFrame,
-  alpha: number,
-): PoseFrame {
-  const ceilByName = new Map(ceil.keypoints.map(kp => [kp.name, kp]));
-  const keypoints = floor.keypoints.map(kp => {
+function blendPoseFramesNormalized(floor: PoseFrame, ceil: PoseFrame, alpha: number): PoseFrame {
+  const ceilByName = new Map(ceil.keypoints.map((kp) => [kp.name, kp]));
+  const keypoints = floor.keypoints.map((kp) => {
     const c = ceilByName.get(kp.name);
     if (!c) return kp;
     return { ...kp, x: kp.x + alpha * (c.x - kp.x), y: kp.y + alpha * (c.y - kp.y) };
@@ -217,9 +222,10 @@ export function buildPanningSkeletonFrames({
     const dt = ceil.timestamp - floor.timestamp;
     const alpha = ceilIdx !== floorIdx && dt > 0 ? (t - floor.timestamp) / dt : 0;
 
-    const pose = ceilIdx !== floorIdx && ceil.keypoints.length > 0
-      ? blendPoseFramesNormalized(floor, ceil, alpha)
-      : floor;
+    const pose =
+      ceilIdx !== floorIdx && ceil.keypoints.length > 0
+        ? blendPoseFramesNormalized(floor, ceil, alpha)
+        : floor;
 
     // Homography is interpolated at absolute video time `t` so it stays locked
     // to the wall section the climber is on, independent of the pose cadence.
@@ -278,17 +284,13 @@ export function buildMultiSkeletonFrames({
     return h;
   });
 
-  const sortedPerLayer = layers.map((l) =>
-    [...l.frames].sort((a, b) => a.timestamp - b.timestamp),
-  );
+  const sortedPerLayer = layers.map((l) => [...l.frames].sort((a, b) => a.timestamp - b.timestamp));
 
   const firstTs = Math.min(
     ...sortedPerLayer.map((sf) => (sf.length > 0 ? sf[0].timestamp : Infinity)),
   );
   const lastTs = Math.max(
-    ...sortedPerLayer.map((sf) =>
-      sf.length > 0 ? sf[sf.length - 1].timestamp : -Infinity,
-    ),
+    ...sortedPerLayer.map((sf) => (sf.length > 0 ? sf[sf.length - 1].timestamp : -Infinity)),
   );
   const duration = Math.max(lastTs - firstTs, 1 / targetFps);
   const total = Math.ceil(duration * targetFps) + 1;
@@ -297,11 +299,9 @@ export function buildMultiSkeletonFrames({
   const layerFrames: RenderedSkeletonFrame[][] = layers.map(() => []);
 
   // Per-layer caches so each input frame is transformed at most once.
-  const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] =
-    layers.map(() => null);
+  const cachedFloorKp: (Record<string, { x: number; y: number }> | null)[] = layers.map(() => null);
   const cachedFloorAt: number[] = layers.map(() => -1);
-  const cachedCeilKp: (Record<string, { x: number; y: number }> | null)[] =
-    layers.map(() => null);
+  const cachedCeilKp: (Record<string, { x: number; y: number }> | null)[] = layers.map(() => null);
   const cachedCeilAt: number[] = layers.map(() => -1);
 
   for (let i = 0; i < total; i++) {
@@ -315,10 +315,7 @@ export function buildMultiSkeletonFrames({
       }
 
       // Advance floor cursor to the last frame with timestamp ≤ t.
-      while (
-        cursors[li] < sf.length - 1 &&
-        sf[cursors[li] + 1].timestamp <= t
-      ) {
+      while (cursors[li] < sf.length - 1 && sf[cursors[li] + 1].timestamp <= t) {
         cursors[li]++;
       }
 
@@ -326,9 +323,15 @@ export function buildMultiSkeletonFrames({
 
       // Compute / reuse transformed keypoints for floor frame.
       if (cachedFloorAt[li] !== fi) {
-        cachedFloorKp[li] = sf[fi].keypoints.length > 0
-          ? buildTransformedKeypoints(sf[fi], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-          : null;
+        cachedFloorKp[li] =
+          sf[fi].keypoints.length > 0
+            ? buildTransformedKeypoints(
+                sf[fi],
+                homographies[li],
+                layers[li].videoMeta.width,
+                layers[li].videoMeta.height,
+              )
+            : null;
         cachedFloorAt[li] = fi;
       }
 
@@ -340,9 +343,15 @@ export function buildMultiSkeletonFrames({
       const ci = Math.min(fi + 1, sf.length - 1);
 
       if (cachedCeilAt[li] !== ci) {
-        cachedCeilKp[li] = ci !== fi && sf[ci].keypoints.length > 0
-          ? buildTransformedKeypoints(sf[ci], homographies[li], layers[li].videoMeta.width, layers[li].videoMeta.height)
-          : null;
+        cachedCeilKp[li] =
+          ci !== fi && sf[ci].keypoints.length > 0
+            ? buildTransformedKeypoints(
+                sf[ci],
+                homographies[li],
+                layers[li].videoMeta.width,
+                layers[li].videoMeta.height,
+              )
+            : null;
         cachedCeilAt[li] = ci;
       }
 

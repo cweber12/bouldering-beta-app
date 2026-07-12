@@ -44,17 +44,24 @@ export async function compressImageToDataUrl(file: File): Promise<string> {
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX_W = 1280, MAX_H = 960;
+      const MAX_W = 1280,
+        MAX_H = 960;
       const scale = Math.min(1, MAX_W / img.naturalWidth, MAX_H / img.naturalHeight);
       const canvas = document.createElement("canvas");
-      canvas.width  = Math.round(img.naturalWidth  * scale);
+      canvas.width = Math.round(img.naturalWidth * scale);
       canvas.height = Math.round(img.naturalHeight * scale);
       const ctx = canvas.getContext("2d");
-      if (!ctx) { reject(new Error("canvas context unavailable")); return; }
+      if (!ctx) {
+        reject(new Error("canvas context unavailable"));
+        return;
+      }
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       resolve(canvas.toDataURL("image/jpeg", 0.82));
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("image load failed")); };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
     img.src = url;
   });
 }

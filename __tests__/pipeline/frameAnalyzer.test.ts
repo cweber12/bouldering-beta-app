@@ -28,7 +28,7 @@ function makeCv(opts: { mean?: number; std?: number; hfStd?: number } = {}) {
     meanStdDev: vi.fn().mockImplementation((_src, meanMat, stdMat) => {
       const isHfCall = meanStdDevCallCount > 0;
       meanMat.data64F[0] = isHfCall ? 128 : mean;
-      stdMat.data64F[0]  = isHfCall ? hfStd : std;
+      stdMat.data64F[0] = isHfCall ? hfStd : std;
       meanStdDevCallCount++;
     }),
     Mat: vi.fn().mockImplementation(function () {
@@ -126,7 +126,7 @@ describe("analyzeFrame — backlit detection", () => {
         // Each analyzeFrame region invokes meanStdDev twice (once for stats, once for hf)
         const regionIndex = Math.floor(callCount / 2);
         meanMat.data64F[0] = regionIndex === 0 ? 200 : 120; // overall=200, climber=120
-        stdMat.data64F[0]  = 10;
+        stdMat.data64F[0] = 10;
         callCount++;
       }),
       Mat: vi.fn().mockImplementation(function () {
@@ -137,11 +137,12 @@ describe("analyzeFrame — backlit detection", () => {
       }),
     };
 
-    const result = analyzeFrame(
-      cv,
-      makeImageData(200, 200),
-      { x: 50, y: 50, width: 100, height: 100 },
-    );
+    const result = analyzeFrame(cv, makeImageData(200, 200), {
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 100,
+    });
 
     expect(result.isBacklit).toBe(true);
     expect(result.suggestedGamma).toBeGreaterThanOrEqual(1.35);
@@ -212,12 +213,12 @@ describe("analyzeFrame — optional crop fields", () => {
 
   it("computes wall stats when wallCropPx is provided", () => {
     const cv = makeCv({ mean: 128, std: 50, hfStd: 10 });
-    const result = analyzeFrame(
-      cv,
-      makeImageData(200, 200),
-      undefined,
-      { x: 10, y: 10, width: 80, height: 80 },
-    );
+    const result = analyzeFrame(cv, makeImageData(200, 200), undefined, {
+      x: 10,
+      y: 10,
+      width: 80,
+      height: 80,
+    });
     expect(result.wall).not.toBeNull();
     expect(typeof result.wall!.mean).toBe("number");
   });

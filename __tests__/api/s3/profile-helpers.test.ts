@@ -10,13 +10,13 @@ vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: class MockS3Client {
     send = (...args: unknown[]) => mockS3Send(...args);
   },
-  GetObjectCommand: vi.fn(function(this: unknown, opts: unknown) {
+  GetObjectCommand: vi.fn(function (this: unknown, opts: unknown) {
     Object.assign(this as object, { _type: "GetObjectCommand" }, Object(opts));
   }),
-  PutObjectCommand: vi.fn(function(this: unknown, opts: unknown) {
+  PutObjectCommand: vi.fn(function (this: unknown, opts: unknown) {
     Object.assign(this as object, { _type: "PutObjectCommand" }, Object(opts));
   }),
-  ListObjectsV2Command: vi.fn(function(this: unknown, opts: unknown) {
+  ListObjectsV2Command: vi.fn(function (this: unknown, opts: unknown) {
     Object.assign(this as object, { _type: "ListObjectsV2Command" }, Object(opts));
   }),
 }));
@@ -219,10 +219,7 @@ describe("listProfileStorage", () => {
 
   it("returns file names under the folder", async () => {
     mockS3Send.mockResolvedValueOnce({
-      Contents: [
-        { Key: "ProfileData/_index/a.json" },
-        { Key: "ProfileData/_index/b.json" },
-      ],
+      Contents: [{ Key: "ProfileData/_index/a.json" }, { Key: "ProfileData/_index/b.json" }],
       IsTruncated: false,
     });
 
@@ -261,4 +258,3 @@ describe("listProfileStorage", () => {
     await expect(listProfileStorage("ProfileData/_index")).rejects.toThrow("Bucket not found");
   });
 });
-

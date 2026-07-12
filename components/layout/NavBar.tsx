@@ -11,9 +11,7 @@ import InfoDropdown from "@/components/ui/InfoDropdown";
 import ThemeToggle from "@/components/ui/ThemeToggle";
 import AccountMenu from "@/components/layout/AccountMenu";
 
-const PUBLIC_LINKS = [
-  { href: "/docs", label: "Docs" },
-] as const;
+const PUBLIC_LINKS = [{ href: "/docs", label: "Docs" }] as const;
 
 const AUTH_LINKS = [
   { href: "/scan", label: "Scan" },
@@ -138,10 +136,14 @@ export default function NavBar() {
       <div ref={helpRef} className="relative w-full px-4 sm:px-6 lg:px-8">
         <div className="flex h-12 items-center gap-3">
           {/* Brand */}
-          <Link href="/" className="mr-3 flex items-center gap-2 py-2 sm:mr-5" aria-label="Route Scanner home">
+          <Link
+            href="/"
+            className="mr-3 flex items-center gap-2 py-2 sm:mr-5"
+            aria-label="Beta Scanner home"
+          >
             <Image
               src="/climber_scan_logo.svg"
-              alt="Route Scanner"
+              alt="Beta Scanner"
               width={21}
               height={24}
               unoptimized
@@ -155,27 +157,20 @@ export default function NavBar() {
           {/* Desktop nav rail */}
           <div className="hidden items-center md:flex">
             {links.map((link, index) => {
-              const active =
-                path === link.href || path.startsWith(link.href + "/");
+              const active = path === link.href || path.startsWith(link.href + "/");
               return (
                 <div key={link.href} className="flex items-center">
-                  {index > 0 && (
-                    <span className="mx-2 h-3.5 w-px bg-edge/70" aria-hidden="true" />
-                  )}
+                  {index > 0 && <span className="mx-2 h-3.5 w-px bg-edge/70" aria-hidden="true" />}
                   <Link
                     href={link.href}
                     className={cn(
                       "relative px-1 py-1 text-body-sm font-medium transition-colors duration-150",
-                      active
-                        ? "text-fg-inverse"
-                        : "text-fg-light hover:text-fg-inverse",
+                      active ? "text-fg-inverse" : "text-fg-light hover:text-fg-inverse",
                     )}
                     aria-current={active ? "page" : undefined}
                   >
                     {link.label}
-                    {active && (
-                      <span className="absolute inset-x-0 -bottom-2.5 h-0.5 bg-accent" />
-                    )}
+                    {active && <span className="absolute inset-x-0 -bottom-2.5 h-0.5 bg-accent" />}
                   </Link>
                 </div>
               );
@@ -185,22 +180,30 @@ export default function NavBar() {
             {helpSections.length > 0 && (
               <div className="ml-3 flex items-center border-l border-edge/70 pl-3">
                 <button
-                  onClick={() => setHelpOpenPath(old => old === path ? null : path)}
+                  onClick={() => setHelpOpenPath((old) => (old === path ? null : path))}
                   className={cn(
                     "flex items-center gap-1 py-1 text-body-sm font-medium transition-colors duration-150",
-                    helpOpen
-                      ? "text-fg-inverse"
-                      : "text-fg-light hover:text-fg-inverse",
+                    helpOpen ? "text-fg-inverse" : "text-fg-light hover:text-fg-inverse",
                   )}
                   aria-expanded={helpOpen}
                 >
                   Help
                   <svg
-                    className={cn("h-3 w-3 transition-transform duration-200", helpOpen && "rotate-180")}
-                    fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"
+                    className={cn(
+                      "h-3 w-3 transition-transform duration-200",
+                      helpOpen && "rotate-180",
+                    )}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    viewBox="0 0 24 24"
                     aria-hidden="true"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M19.5 8.25l-7.5 7.5-7.5-7.5"
+                    />
                   </svg>
                 </button>
               </div>
@@ -228,17 +231,33 @@ export default function NavBar() {
             {/* Mobile hamburger */}
             <button
               className="ui-control flex h-9 w-9 items-center justify-center rounded-md text-fg-light md:hidden"
-              onClick={() => setMobileOpen(v => !v)}
+              onClick={() => setMobileOpen((v) => !v)}
               aria-label="Toggle menu"
               aria-expanded={mobileOpen}
             >
               {mobileOpen ? (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"
+                  />
                 </svg>
               )}
             </button>
@@ -248,9 +267,8 @@ export default function NavBar() {
         {/* Mobile menu */}
         {mobileOpen && (
           <div className="animate-fade-in flex flex-col gap-1 border-t border-edge/40 pb-4 pt-2 md:hidden">
-            {links.map(link => {
-              const active =
-                path === link.href || path.startsWith(link.href + "/");
+            {links.map((link) => {
+              const active = path === link.href || path.startsWith(link.href + "/");
               return (
                 <Link
                   key={link.href}
@@ -269,7 +287,10 @@ export default function NavBar() {
             })}
             {helpSections.length > 0 && (
               <button
-                onClick={() => { setHelpOpenPath(old => old === path ? null : path); setMobileOpen(false); }}
+                onClick={() => {
+                  setHelpOpenPath((old) => (old === path ? null : path));
+                  setMobileOpen(false);
+                }}
                 className="rounded-md px-3 py-2 text-left text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg-inverse"
               >
                 Help
@@ -277,7 +298,10 @@ export default function NavBar() {
             )}
             <div className="mt-2 border-t border-edge/40 pt-2">
               {!loading && !user && (
-                <Link href="/login" className="block rounded-md border border-edge/80 bg-surface-alt/70 px-3 py-2 text-center text-sm font-medium text-fg-inverse transition hover:border-edge-hover hover:text-fg-inverse">
+                <Link
+                  href="/login"
+                  className="block rounded-md border border-edge/80 bg-surface-alt/70 px-3 py-2 text-center text-sm font-medium text-fg-inverse transition hover:border-edge-hover hover:text-fg-inverse"
+                >
                   Sign in
                 </Link>
               )}
@@ -289,7 +313,10 @@ export default function NavBar() {
                   >
                     Profile
                   </Link>
-                  <button onClick={handleSignOut} className="ui-control rounded-md px-3 py-2 text-sm font-medium">
+                  <button
+                    onClick={handleSignOut}
+                    className="ui-control rounded-md px-3 py-2 text-sm font-medium"
+                  >
                     Sign out
                   </button>
                 </div>
@@ -302,7 +329,7 @@ export default function NavBar() {
         {helpOpen && helpSections.length > 0 && (
           <div className="animate-fade-in absolute left-0 right-0 top-full z-40 border-b border-edge/60 bg-surface-alt/95 backdrop-blur-xl shadow-2xl">
             <div className="px-4 py-5 sm:px-6 flex flex-col gap-3">
-              {helpSections.map(section => (
+              {helpSections.map((section) => (
                 <InfoDropdown key={section.title} title={section.title}>
                   <ul className="flex flex-col gap-1.5 pl-4 list-disc">
                     {section.bullets.map((bullet, j) => (
@@ -320,4 +347,3 @@ export default function NavBar() {
     </nav>
   );
 }
-

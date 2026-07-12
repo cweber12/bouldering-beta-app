@@ -1,4 +1,5 @@
 Scaffold a new React hook. Ask me for:
+
 - The hook name (e.g. `useFrameNormalizer`)
 - Which pipeline/ functions it wraps
 - What state/status it should expose
@@ -36,6 +37,7 @@ export function useMyHook() {
 ```
 
 Rules to follow:
+
 - Never allocate `cv.Mat` or other OpenCV objects directly — only call `pipeline/` functions
 - Never read `cv` from `window` or `globalThis` — always receive it from `useOpenCV()`
 - Expose a typed `status: "idle" | "processing" | "ready" | "failed"`

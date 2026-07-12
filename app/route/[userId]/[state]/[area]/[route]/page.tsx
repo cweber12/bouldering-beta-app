@@ -38,10 +38,13 @@ function RoutePageInner() {
   const csv = sp.get("keys");
   const single = sp.get("key");
   const initialKeys = csv
-    ? csv.split(",").map((k) => k.trim()).filter(Boolean)
+    ? csv
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean)
     : single
-    ? [single]
-    : [];
+      ? [single]
+      : [];
   const modeParam = sp.get("mode");
   const initialMode: ConsoleMode | null =
     modeParam === "single" || modeParam === "multiple" ? modeParam : null;

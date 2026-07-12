@@ -47,6 +47,7 @@
  */
 
 import type { Hold } from "@/pipeline/holds/holdDetection";
+import { adaptColor, type ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 
 // ---------------------------------------------------------------------------
 // Marker colours — the single source of truth for the Holds look.
@@ -162,7 +163,14 @@ function buildRings(clusters: Hold[][], circleR: number, circleStroke: number): 
     const earliest = (kind: "hand" | "foot") =>
       Math.min(...members.filter((m) => m.kind === kind).map((m) => m.firstUseTime));
     if (hasHand) {
-      rings.push({ cx, cy, kind: "hand", radius: circleR, earliestReveal: earliest("hand"), clusterId });
+      rings.push({
+        cx,
+        cy,
+        kind: "hand",
+        radius: circleR,
+        earliestReveal: earliest("hand"),
+        clusterId,
+      });
     }
     if (hasFoot) {
       rings.push({
@@ -254,6 +262,13 @@ function drawRing(
 export interface HoldStyle {
   /** Draw the Holds pass. Default true (callers usually gate via the panel). */
   holdsVisible?: boolean;
+  /**
+   * When set, the Hand/Foot ring colours are nudged (lightness only, hue-locked)
+   * for legibility against the sampled route photo. Omit to render the exact
+   * ADR-0012 token colours. Hue never moves, so cyan still means Hand and orange
+   * still means Foot. See {@link adaptColor}.
+   */
+  contrastAdjust?: ContrastAdjust;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +319,8 @@ export function drawHolds(
   ctx.lineCap = "round";
   for (const ring of visible) {
     const occluders = visible.filter((o) => o.clusterId !== ring.clusterId);
-    drawRing(ctx, ring, occluders, HOLD_RING_COLOR[ring.kind], circleStroke);
+    const color = adaptColor(HOLD_RING_COLOR[ring.kind], style?.contrastAdjust);
+    drawRing(ctx, ring, occluders, color, circleStroke);
   }
   ctx.restore();
 }

@@ -38,9 +38,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // A legitimately-absent object is a 404, not a gateway failure — mirror
     // readProfileStorage's NoSuchKey handling so optional objects (e.g. a route
     // with no saved route-image.json) don't surface as a scary 502.
-    const name = err instanceof Error ? (err as Error & { name?: string }).name ?? "" : "";
-    const code = err instanceof Error ? (err as Error & { Code?: string }).Code ?? "" : "";
-    if (name === "NoSuchKey" || code === "NoSuchKey" || name === "NotFound" || code === "NotFound") {
+    const name = err instanceof Error ? ((err as Error & { name?: string }).name ?? "") : "";
+    const code = err instanceof Error ? ((err as Error & { Code?: string }).Code ?? "") : "";
+    if (
+      name === "NoSuchKey" ||
+      code === "NoSuchKey" ||
+      name === "NotFound" ||
+      code === "NotFound"
+    ) {
       return NextResponse.json({ error: "Not found." }, { status: 404 });
     }
     const msg = awsErrorMessage(err);

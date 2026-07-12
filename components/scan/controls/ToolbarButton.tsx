@@ -17,23 +17,24 @@ export interface ToolbarButtonProps extends ButtonHTMLAttributes<HTMLButtonEleme
  * (aria-expanded, aria-pressed) states, then adds the icon+label layout. Forwards
  * its ref and remaining button props so it can drive popover triggers.
  */
-const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(
-  function ToolbarButton({ icon, label, className, type = "button", ...rest }, ref) {
-    return (
-      <button
-        ref={ref}
-        type={type}
-        className={cn(
-          "ui-icon-btn flex h-8 items-center gap-1.5 px-2 text-xs font-medium",
-          className,
-        )}
-        {...rest}
-      >
-        {icon}
-        <span>{label}</span>
-      </button>
-    );
-  },
-);
+const ToolbarButton = forwardRef<HTMLButtonElement, ToolbarButtonProps>(function ToolbarButton(
+  { icon, label, className, type = "button", ...rest },
+  ref,
+) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      className={cn(
+        "ui-icon-btn flex h-8 items-center gap-1.5 px-2 text-xs font-medium",
+        className,
+      )}
+      {...rest}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+});
 
 export default ToolbarButton;

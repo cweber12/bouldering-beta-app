@@ -69,10 +69,7 @@ export default function LocationAutocomplete({
   return (
     <div ref={containerRef} className="relative" onBlur={handleBlur}>
       {label && (
-        <label
-          htmlFor={inputId}
-          className="mb-1 block text-xs font-medium text-fg-secondary"
-        >
+        <label htmlFor={inputId} className="mb-1 block text-xs font-medium text-fg-secondary">
           {label}
         </label>
       )}
@@ -88,9 +85,7 @@ export default function LocationAutocomplete({
           autoComplete="off"
         />
         {loading && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-fg-muted">
-            …
-          </span>
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-fg-muted">…</span>
         )}
       </div>
 

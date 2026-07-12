@@ -30,10 +30,7 @@ import {
   queryMaxEdgeFor,
   type OrbFeatures,
 } from "@/pipeline/matching/orbDetector";
-import {
-  computeHomography,
-  ransacReprojThresholdFor,
-} from "@/pipeline/matching/homography";
+import { computeHomography, ransacReprojThresholdFor } from "@/pipeline/matching/homography";
 import { emptyHomographyStats, type HomographyStats } from "@/pipeline/analysis/diagnostics";
 import { analyzeFrame } from "@/pipeline/analysis/frameAnalyzer";
 import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
@@ -144,9 +141,7 @@ function loadVideoFrame0(file: File): Promise<ImageData> {
 
 /** Load a reference File — decodes frame 0 for video, else the image itself. */
 function loadReference(file: File): Promise<ImageData> {
-  return file.type.startsWith("video")
-    ? loadVideoFrame0(file)
-    : loadImageData(file);
+  return file.type.startsWith("video") ? loadVideoFrame0(file) : loadImageData(file);
 }
 
 /** Apply applyOrbPreprocessing to an ImageData and return the processed copy. */
@@ -228,8 +223,26 @@ export default function OrbBenchPage() {
       const gate = { srcWidth: refData.width, srcHeight: refData.height };
 
       const variants = [
-        runVariant(cv, "A · legacy (equalize only)", refOrb, queryData, scaledQuery, scale, false, gate),
-        runVariant(cv, "B · symmetric (retinex)", refOrb, queryData, scaledQuery, scale, true, gate),
+        runVariant(
+          cv,
+          "A · legacy (equalize only)",
+          refOrb,
+          queryData,
+          scaledQuery,
+          scale,
+          false,
+          gate,
+        ),
+        runVariant(
+          cv,
+          "B · symmetric (retinex)",
+          refOrb,
+          queryData,
+          scaledQuery,
+          scale,
+          true,
+          gate,
+        ),
       ];
 
       setResult({
@@ -261,14 +274,24 @@ export default function OrbBenchPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-fg">ORB A/B bench</h1>
         <p className="text-sm text-fg-muted">
-          Compares legacy vs symmetric query preprocessing against a reference image.
-          Use a video reference frame (or wall crop) and a route photo of the same wall.
+          Compares legacy vs symmetric query preprocessing against a reference image. Use a video
+          reference frame (or wall crop) and a route photo of the same wall.
         </p>
       </header>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <FilePicker label="Reference (video or frame)" accept="video/*,image/*" file={refFile} onPick={setRefFile} />
-        <FilePicker label="Route photo (query)" accept="image/*" file={queryFile} onPick={setQueryFile} />
+        <FilePicker
+          label="Reference (video or frame)"
+          accept="video/*,image/*"
+          file={refFile}
+          onPick={setRefFile}
+        />
+        <FilePicker
+          label="Route photo (query)"
+          accept="image/*"
+          file={queryFile}
+          onPick={setQueryFile}
+        />
       </div>
 
       <button
@@ -289,8 +312,8 @@ export default function OrbBenchPage() {
       {result && (
         <section className="flex flex-col gap-3">
           <div className="text-xs text-fg-muted">
-            ref {result.refWidth}×{result.refHeight} · {result.refKeypoints} kp ·
-            query {result.queryWidth}×{result.queryHeight} (scale {result.queryScaled.toFixed(3)})
+            ref {result.refWidth}×{result.refHeight} · {result.refKeypoints} kp · query{" "}
+            {result.queryWidth}×{result.queryHeight} (scale {result.queryScaled.toFixed(3)})
           </div>
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-sm">
@@ -325,8 +348,8 @@ export default function OrbBenchPage() {
             </table>
           </div>
           <p className="text-xs text-fg-muted">
-            Higher matches / inliers / ratio on row B vs row A is the fix-#1 signal.
-            RANSAC is non-deterministic, so re-run a few times and watch the trend.
+            Higher matches / inliers / ratio on row B vs row A is the fix-#1 signal. RANSAC is
+            non-deterministic, so re-run a few times and watch the trend.
           </p>
         </section>
       )}

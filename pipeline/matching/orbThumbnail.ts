@@ -21,10 +21,7 @@ const BOX_LINE_WIDTH = 1;
  * @param features  - ORB features including optional cropBox.
  * @returns `data:image/png;base64,...` string of the scaled thumbnail.
  */
-export function generateOrbThumbnail(
-  imageData: ImageData,
-  features: OrbFeatures,
-): string {
+export function generateOrbThumbnail(imageData: ImageData, features: OrbFeatures): string {
   // Draw the source frame at full resolution onto a temporary canvas.
   const full = document.createElement("canvas");
   full.width = imageData.width;
@@ -52,12 +49,7 @@ export function generateOrbThumbnail(
   if (crop) {
     tCtx.strokeStyle = BOX_COLOR;
     tCtx.lineWidth = BOX_LINE_WIDTH;
-    tCtx.strokeRect(
-      crop.x * scale,
-      crop.y * scale,
-      crop.width * scale,
-      crop.height * scale,
-    );
+    tCtx.strokeRect(crop.x * scale, crop.y * scale, crop.width * scale, crop.height * scale);
   }
 
   return thumb.toDataURL("image/png");

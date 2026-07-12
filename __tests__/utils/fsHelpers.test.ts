@@ -383,9 +383,16 @@ describe("keyframe serialisation", () => {
     expect(restored.keyframes![0].timestamp).toBe(0);
     expect(restored.keyframes![1].timestamp).toBe(0.75);
     expect(restored.keyframes![0].features.descriptors).toBeInstanceOf(Uint8Array);
-    expect(restored.keyframes![0].features.descriptors).toEqual(new Uint8Array([0x01, 0x02, 0x03, 0x04]));
+    expect(restored.keyframes![0].features.descriptors).toEqual(
+      new Uint8Array([0x01, 0x02, 0x03, 0x04]),
+    );
     expect(restored.keyframes![1].features.cropBox).toEqual({
-      x: 5, y: 5, width: 100, height: 200, srcWidth: 640, srcHeight: 480,
+      x: 5,
+      y: 5,
+      width: 100,
+      height: 200,
+      srcWidth: 640,
+      srcHeight: 480,
     });
   });
 
@@ -396,7 +403,9 @@ describe("keyframe serialisation", () => {
     const feats = kfs[0].features as Record<string, unknown>;
     expect(Array.isArray(feats.descriptors)).toBe(true);
     const restored = loadAttemptFromJson(serialized);
-    expect(restored.keyframes![1].features.descriptors).toEqual(new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]));
+    expect(restored.keyframes![1].features.descriptors).toEqual(
+      new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]),
+    );
   });
 
   it("loads a Fixed Capture / legacy attempt that has no keyframes field", () => {

@@ -74,11 +74,7 @@ export type MatchQuality = "good" | "weak" | "fail";
  * {@link computeHomography} so a failed match is a data point, not an
  * indistinguishable `null`.
  */
-export type HomographyFailureReason =
-  | "ok"
-  | "too_few_matches"
-  | "degenerate"
-  | "gate_rejected";
+export type HomographyFailureReason = "ok" | "too_few_matches" | "degenerate" | "gate_rejected";
 
 /**
  * Stats out-param for `computeHomography`. The caller pre-allocates one (e.g.
@@ -347,10 +343,7 @@ export function buildReferenceFrameMeta(
  * @param minRunLength Minimum consecutive bad frames to qualify as a stretch
  *                     (the caller passes `GAP_RECOVERY_THRESHOLD = 3 * frameStep`).
  */
-export function detectBadStretches(
-  rows: SampledFrameStatus[],
-  minRunLength: number,
-): BadStretch[] {
+export function detectBadStretches(rows: SampledFrameStatus[], minRunLength: number): BadStretch[] {
   const stretches: BadStretch[] = [];
   let run: BadStretchFrame[] = [];
 

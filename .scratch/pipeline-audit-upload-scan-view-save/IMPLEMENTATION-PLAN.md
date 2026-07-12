@@ -4,8 +4,9 @@
 > and the agreed implementation sequence. Pick this up in a fresh chat to execute.
 >
 > **Decisions taken with the user:**
+>
 > 1. **Issue 07 corrects the auth docs fully** — intentionally overrides the PRD
->    *Out-of-Scope* line (which said only to *record* the inconsistency).
+>    _Out-of-Scope_ line (which said only to _record_ the inconsistency).
 > 2. **Delivery is by workstream** — three sequenced, separately-committed batches (A, B, C).
 
 ## Context
@@ -27,48 +28,52 @@ Every issue's factual claims were verified against the live codebase (findings b
 
 ### Verification summary (all issues are factually grounded)
 
-| Issue | Claim | Verdict | Evidence |
-|---|---|---|---|
-| 01 | Two-object split exists, needs fail-closed completion | ✅ Accurate | `useS3Storage.ts:102` writes metadata **first**, `:103` data second (backwards); load merges via `Object.assign` but `if (dataRes.ok)` never throws on missing heavy data |
-| 02 | No query-photo downscale before ORB | ✅ Accurate | `useImageMatcher.ts:169-180` uses full `naturalWidth/Height`; no max-edge cap |
-| 03 | No serialization text clamp; profile limit exists | ✅ Accurate | `PROFILE_TEXT_LIMIT=500` (`app/api/s3/shared.ts:149`) guards profile only; route inputs have no `maxLength` |
-| 04 | Seek loop unbounded, no abort race | ✅ Accurate | `useVideoProcessor.ts:310-314` awaits `onseeked` with no timeout; abort checked only at loop top (`:306`); recovery loop `:404-433` same pattern |
-| 05 | Camera modal always emits capture | ✅ Accurate | `CameraRecorderModal.tsx:77-84` `onstop` always calls `onCapture`; ESC/backdrop close still fire it; no intent flag |
-| 08 | `estimateFrameWithRetry` is dead code | ✅ Accurate | Defined `poseDetection.ts:136-211`, **zero call sites**; `scorePoseFrame` still used in `climberTracker.ts`; `meanConfidence` used only inside the dead fn |
-| 09 | `filterLandmarks` fixed 2-of-33, no subset/tier | ✅ Accurate | `poseInterpolator.ts:172-183`; called `useVideoProcessor.ts:442` with hardcoded `(0.3, 2, topo.keypointCount)` |
-| 10 | lite/full/heavy + frameStep controls, no presets | ✅ Accurate | `StepSetDetection.tsx:149-172`; `maxPoses` exists in `usePoseModel` but is **never wired** from UI (stuck at default 3) |
-| 07 | Auth docs say Supabase but impl is Firebase | ✅ Accurate (bigger than stated) | **Zero** Supabase in codebase; real auth is `firebase-admin` `verifySessionCookie` (`app/api/s3/shared.ts:35`, `app/api/auth/session/route.ts`) |
-| 06 | Track 3 deferred options | ⚠️ Now incomplete — see below | PRD addendum added 2 more deferrals |
+| Issue | Claim                                                 | Verdict                          | Evidence                                                                                                                                                                  |
+| ----- | ----------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01    | Two-object split exists, needs fail-closed completion | ✅ Accurate                      | `useS3Storage.ts:102` writes metadata **first**, `:103` data second (backwards); load merges via `Object.assign` but `if (dataRes.ok)` never throws on missing heavy data |
+| 02    | No query-photo downscale before ORB                   | ✅ Accurate                      | `useImageMatcher.ts:169-180` uses full `naturalWidth/Height`; no max-edge cap                                                                                             |
+| 03    | No serialization text clamp; profile limit exists     | ✅ Accurate                      | `PROFILE_TEXT_LIMIT=500` (`app/api/s3/shared.ts:149`) guards profile only; route inputs have no `maxLength`                                                               |
+| 04    | Seek loop unbounded, no abort race                    | ✅ Accurate                      | `useVideoProcessor.ts:310-314` awaits `onseeked` with no timeout; abort checked only at loop top (`:306`); recovery loop `:404-433` same pattern                          |
+| 05    | Camera modal always emits capture                     | ✅ Accurate                      | `CameraRecorderModal.tsx:77-84` `onstop` always calls `onCapture`; ESC/backdrop close still fire it; no intent flag                                                       |
+| 08    | `estimateFrameWithRetry` is dead code                 | ✅ Accurate                      | Defined `poseDetection.ts:136-211`, **zero call sites**; `scorePoseFrame` still used in `climberTracker.ts`; `meanConfidence` used only inside the dead fn                |
+| 09    | `filterLandmarks` fixed 2-of-33, no subset/tier       | ✅ Accurate                      | `poseInterpolator.ts:172-183`; called `useVideoProcessor.ts:442` with hardcoded `(0.3, 2, topo.keypointCount)`                                                            |
+| 10    | lite/full/heavy + frameStep controls, no presets      | ✅ Accurate                      | `StepSetDetection.tsx:149-172`; `maxPoses` exists in `usePoseModel` but is **never wired** from UI (stuck at default 3)                                                   |
+| 07    | Auth docs say Supabase but impl is Firebase           | ✅ Accurate (bigger than stated) | **Zero** Supabase in codebase; real auth is `firebase-admin` `verifySessionCookie` (`app/api/s3/shared.ts:35`, `app/api/auth/session/route.ts`)                           |
+| 06    | Track 3 deferred options                              | ⚠️ Now incomplete — see below    | PRD addendum added 2 more deferrals                                                                                                                                       |
 
 ### CONFLICT (resolved): Issue 07 vs PRD Out-of-Scope
-- PRD line 87 lists "broad auth/documentation reconciliation … beyond *recording* the
-  inconsistency" as out of scope; issue 07 asks to *correct* the docs.
+
+- PRD line 87 lists "broad auth/documentation reconciliation … beyond _recording_ the
+  inconsistency" as out of scope; issue 07 asks to _correct_ the docs.
 - **Resolution (user):** do issue 07 fully; note the override explicitly.
 - Scope is larger than the issue text implies: AGENTS.md has an entire Supabase auth
   section AND a `utils/supabase/*` reference, the security checklist mentions Supabase
   cookies, and CLAUDE.md's auth-flow line is a Firebase/Supabase hybrid. All must change.
 
 ### GAP / redundancy: Issue 06 deferred-options list is stale
+
 - Issue 06 acceptance says "all **three** deferred options" (recompute-on-load,
   coarse-to-fine match, rVFC scan loop) — the original (pre-pose) audit set.
-- The PRD pose addendum *Out of Scope* added **two more**: handheld/following-camera +
+- The PRD pose addendum _Out of Scope_ added **two more**: handheld/following-camera +
   camera-motion-compensated homography, and appearance/embedding re-identification. It
   also re-points S4 (rVFC) at "issue 06."
 - **Recommendation:** expand issue 06 to capture **all five** deferrals, done **last** so
   it reflects the final state after A and B land. (No user decision needed.)
 
-### No true contradictions *between issues*
+### No true contradictions _between issues_
+
 - 01–05, 08–10 are mutually consistent; all marked "Blocked by: None."
 - The only PRD-vs-issue contradiction is 07 (resolved above).
 
 ### Sequencing tensions (not blockers, but inform grouping)
+
 - **09 ↔ 10:** 09 wants tier-aware tolerance "once the quality tier exists (issue 10)."
   Doing 09 first ships a non-tier signature that 10 then reworks. → **Do 10's tier-config
   module first, then 09 consumes it.** (Issue 09 anticipates this: "lands with issue 10.")
 - **01 ↔ 03:** both touch the serialization boundary (`fsHelpers.ts serializeAttempt*`,
   `useS3Storage.ts`). → group them so the serialization path is edited once.
 - **08 unblocked:** the tracker it depends on is already merged (`6137a88 Merge
-  feat/climber-identity-tracking`). Doing 08 first de-risks the rest of the pose area.
+feat/climber-identity-tracking`). Doing 08 first de-risks the rest of the pose area.
 - **04 recovery path:** the gap-recovery loop changed to identity-based selection since the
   addendum; issue 04 must bound the **current** `:404-433` recovery loop, not the old one.
 
@@ -83,6 +88,7 @@ Every issue's factual claims were verified against the live codebase (findings b
 ### Workstream A — Pipeline hardening (issues 01, 03, 02, 04, 05)
 
 **A1 — Issue 01 + 03 together (storage / serialization boundary)**
+
 - 01: In `hooks/useS3Storage.ts` swap write order to **data-first, metadata-last**
   (`putObject(dataKeyFor(key), …)` before `putObject(key, …)`). In the split read path,
   replace the silent `if (dataRes.ok)` with an explicit throw (clear, actionable error)
@@ -94,6 +100,7 @@ Every issue's factual claims were verified against the live codebase (findings b
 - Tests: write-order + load-guard (mock S3 boundary); truncation at/above limit.
 
 **A2 — Issue 02 (ORB query-photo normalization)**
+
 - In `hooks/useImageMatcher.ts` (or a helper in `pipeline/orbDetector.ts`), downscale the
   query `ImageData` to a reference-aware longest-edge target with a hard max-edge cap
   before `extractFeatures`; rescale returned keypoints back to native coords (extend the
@@ -101,12 +108,14 @@ Every issue's factual claims were verified against the live codebase (findings b
 - Tests: keypoint coordinate round-trip; matching still valid post-downscale.
 
 **A3 — Issue 04 (bounded seek)**
+
 - Add a shared seek helper that `Promise.race`s the `seeked` event against a timeout and an
   `AbortSignal`; use it in **both** the primary loop (`useVideoProcessor.ts:310`) and the
   identity-based recovery loop (`:404-433`). Make abort interrupt in-flight seeks.
 - Tests: timeout, abort responsiveness, guaranteed loop termination/progress.
 
 **A4 — Issue 05 (camera capture intent gating)**
+
 - In `components/shared/CameraRecorderModal.tsx`, gate `onCapture` on an explicit
   stop-and-save intent ref; teardown (ESC/backdrop/unmount) stops recorder + tracks
   **without** emitting. Apply to both video and photo paths.
@@ -115,11 +124,13 @@ Every issue's factual claims were verified against the live codebase (findings b
 ### Workstream B — Pose detection (issues 08, 10, 09 — in that order)
 
 **B1 — Issue 08 (retire centre-shrink retry)**
+
 - Remove `estimateFrameWithRetry` + `RetryOptions` from `pipeline/poseDetection.ts`. Keep
   `scorePoseFrame` (used in `climberTracker.ts`). Remove `meanConfidence` if it becomes
   unused after the retry fn is deleted; otherwise keep. Delete obsolete retry tests.
 
 **B2 — Issue 10 (Fast/Balanced/Accurate tier selector) — before 09**
+
 - Create one source-of-truth tier module (`utils/poseTiers.ts`) mapping each preset →
   `{ variant, maxPoses, recovery effort, frameStep }`. Replace the model dropdown +
   frameStep slider in `StepSetDetection.tsx` with the preset control; keep advanced knobs.
@@ -128,6 +139,7 @@ Every issue's factual claims were verified against the live codebase (findings b
 - Tests: each preset resolves to expected config bundle.
 
 **B3 — Issue 09 (climbing-weighted, tier-aware filtering)**
+
 - Rework `filterLandmarks` (`pipeline/poseInterpolator.ts`) to judge frames on a
   climbing-relevant keypoint subset (hands/feet/hips/shoulders) and accept a tier-tunable
   tolerance param (default preserves current behavior). Consume the tier from B2.
@@ -135,7 +147,8 @@ Every issue's factual claims were verified against the live codebase (findings b
 
 ### Workstream C — Docs / roadmap (issues 07, 06 — last)
 
-**C1 — Issue 07 (correct auth docs to Firebase)** *(overrides PRD Out-of-Scope, per user)*
+**C1 — Issue 07 (correct auth docs to Firebase)** _(overrides PRD Out-of-Scope, per user)_
+
 - Rewrite the Supabase auth sections in `AGENTS.md` and the auth-flow line in `CLAUDE.md`
   to describe the real Firebase session-cookie architecture (`firebase-admin`,
   `verifySessionCookie`, `app/api/auth/session`, `proxy.ts` cookie check, `getAuthUserId`).
@@ -143,6 +156,7 @@ Every issue's factual claims were verified against the live codebase (findings b
   reference. Docs-only — no runtime auth changes.
 
 **C2 — Issue 06 (roadmap deferrals) — do last**
+
 - Add a roadmap entry capturing **all five** deferred options with rationale + a concrete
   reconsideration trigger each: (1) recompute-on-load, (2) coarse-to-fine match refinement,
   (3) rVFC-first scan loop [S4], (4) handheld/following-camera + motion-compensated

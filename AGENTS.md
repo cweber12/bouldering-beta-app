@@ -1,18 +1,19 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # Bouldering Beta — Agent Rules
 
 ## Stack Snapshot
 
-| Concern | Library / Version |
-|---|---|
-| Framework | Next.js **16.2.1** — App Router, `"use client"` boundary, webpack 5 |
-| UI | React **19.2.4** |
-| Language | TypeScript **strict**, `"module": "esnext"`, `"moduleResolution": "bundler"` |
-| Styling | Tailwind CSS v4 |
-| Computer vision | `@techstark/opencv-js ^4.12.0` (WASM, main thread only) |
+| Concern         | Library / Version                                                            |
+| --------------- | ---------------------------------------------------------------------------- |
+| Framework       | Next.js **16.2.1** — App Router, `"use client"` boundary, webpack 5          |
+| UI              | React **19.2.4**                                                             |
+| Language        | TypeScript **strict**, `"module": "esnext"`, `"moduleResolution": "bundler"` |
+| Styling         | Tailwind CSS v4                                                              |
+| Computer vision | `@techstark/opencv-js ^4.12.0` (WASM, main thread only)                      |
 | Pose estimation | `@mediapipe/tasks-vision ^0.10.34` (MediaPipe Pose Landmarker, GPU delegate) |
-| Testing | Vitest **^4.1.1** + jsdom + `@testing-library/react ^16.3.2` |
-| Path alias | `@/*` → project root |
+| Testing         | Vitest **^4.1.1** + jsdom + `@testing-library/react ^16.3.2`                 |
+| Path alias      | `@/*` → project root                                                         |
 
 > **⚠ This is NOT the Next.js you know.** APIs, conventions and file structure
 > may all differ from training data. Read the relevant guide in
@@ -75,6 +76,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 ## Critical Coding Rules
 
 ### Color system and theming
+
 - All colors must use semantic CSS tokens defined in `app/globals.css` (`@theme inline` for dark defaults, `.theme-light` class for light overrides).
 - **Never** use raw Tailwind palette classes for status/semantic colors: no `red-400`, `amber-900`, `emerald-500`, `black/60` etc. where a semantic token exists.
 - Semantic token classes available: `text-danger`, `bg-danger-surface`, `border-danger-border`, `text-caution`, `bg-caution-surface`, `border-caution-border`, `text-send`, `bg-send`, `bg-send-surface`, `text-attempt`, `bg-attempt`, `bg-attempt-surface`, `text-fg-inverse`.
@@ -87,27 +89,32 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - Canvas drawing values (map pins, skeleton overlays) use `utils/theme.ts` `dark`/`light` objects — keep them in sync with `globals.css` tokens.
 
 ### OpenCV (`cv`)
+
 - OpenCV runs **synchronously on the main thread** via the `cv` object from `useOpenCV`.
 - **Never** create a new WASM runtime inside a Worker — the WASM bootstrap is async and unreliable in worker scope (`importScripts` returns before `onRuntimeInitialized` fires).
 - Every function that allocates OpenCV objects **must** free them in a `finally` block.
 - Thread `cv` explicitly as a function parameter — never read it from global/window state.
 
 ### Pipeline modules
+
 - Files in `pipeline/` must have **zero React imports**. Keep framework boundary clean.
 - All `pipeline/` functions accept `cv` as their first argument (or `CV = any` typed alias).
 - No `async` inside pipeline modules — all OpenCV calls are synchronous.
 
 ### Hooks
+
 - Hooks consume pipeline functions; they own state transitions and error boundaries.
 - Expose `orbStatus: "idle" | "extracting" | "ready" | "failed"` from `useVideoProcessor` so the UI never shows image upload until ORB extraction has completed.
 - `imageFile` state lives in the parent component and is passed to `usePoseVideo` — hooks do not own File objects.
 - **Dismiss/modal seams** — do not hand-roll close-on-outside-click or ESC effects. Use `useClickOutside(ref, onOutside, enabled, eventType?)` and `useEscapeKey(onEscape, enabled?)`. For dialogs/sheets use `components/ui/Modal` (portal + backdrop) and for the crop fullscreen views `components/ui/FullscreenModal` — both already compose the two hooks.
 
 ### TypeScript
+
 - `eslint-disable-next-line @typescript-eslint/no-explicit-any` is acceptable **only** for `type CV = any` and `type PoseDetector = any` (WASM bindings have no TS types).
 - Never use `any` elsewhere.
 
 ### Run classification & S3 key format
+
 - `RouteAttempt.runType` is `"attempt" | "send"` (re-exported as `RunType`).
 - Optional `rating?: string` and `notes?: string` are stored alongside each run.
 - S3 key format: `RouteData/{userId}/{state}/{area}/{route}/run-{timestamp}-{attempt|send}.json`.
@@ -116,6 +123,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - UI colours: amber for attempts, emerald for sends.
 
 ### Profile & social
+
 - Profile data stored at `ProfileData/{userId}/profile.json` (displayName, location, bio, profilePicture as base64 data URL).
 - Search index at `ProfileData/_index/{userId}.json` (displayName, email, location) — updated on every profile save.
 - Following list at `ProfileData/{userId}/following.json` — array of user IDs.
@@ -127,6 +135,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - Profile and following data live in S3 under the `ProfileData/` prefix (same bucket as route data) — there is no separate database service.
 
 ### Authentication (Firebase)
+
 - Auth uses **Firebase Auth** (client SDK) with **server-issued HTTP-only session cookies** — no localStorage tokens, no Supabase.
 - `utils/firebase/client.ts` — browser Firebase app/auth (`getFirebaseAuth`). Client sign-in/sign-up via `signInWithEmailAndPassword` / `createUserWithEmailAndPassword`.
 - `utils/firebase/admin.ts` — server-only Firebase Admin SDK singleton (`getAdminAuth`). Initialised from `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` (server-side env, never `NEXT_PUBLIC_`).
@@ -141,6 +150,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - `components/layout/NavBar.tsx` shows `PUBLIC_TABS` (Home, Docs) for unauthenticated users and `AUTH_TABS` (all tabs) for authenticated users.
 
 ### Testing
+
 - Test files mirror the source tree under `__tests__/`.
 - Use `vi.stubGlobal` + `vi.unstubAllGlobals()` in afterEach for DOM globals.
 - `ImageData` not available in jsdom — use plain object casts: `{ data, width, height, colorSpace } as ImageData`.
@@ -148,6 +158,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - `FakeOrbWorker.prototype.postMessage` save/restore prevents prototype pollution between tests.
 
 ### Media previews with crop overlays
+
 - **Never** display media with `object-contain` CSS when a `CropBoxOverlay` is involved — letterboxing causes crop fractions to map to the container rather than the actual media bounds.
 - Use an aspect-ratio-constrained container with `object-fill` class on the media element so the container IS the media bounds. Crop fractions then map 1:1 to media pixels.
 - CSS variable `--nav-h: 3rem` (NavBar height) is defined in `app/globals.css` `:root`.
@@ -156,7 +167,11 @@ workers/         Legacy Web Worker files (keep, do not delete)
   function mediaContainerStyle(w: number, h: number): React.CSSProperties {
     const ratio = (w / h).toFixed(6);
     const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
-    return { width: `min(100%, calc(${maxH} * ${ratio}))`, maxHeight: maxH, aspectRatio: `${w} / ${h}` };
+    return {
+      width: `min(100%, calc(${maxH} * ${ratio}))`,
+      maxHeight: maxH,
+      aspectRatio: `${w} / ${h}`,
+    };
   }
   // Media element: className="absolute inset-0 w-full h-full object-fill"
   ```
@@ -211,6 +226,7 @@ Fix TypeScript errors before proceeding. Do not disable tsc checks.
 and `git add .` + `git commit` after every code change session without waiting to be asked.**
 
 ### README maintenance
+
 - When a code change adds, removes, or renames user-visible features, pages,
   storage formats, or API behaviour, update `README.md` in the same commit.
 - Keep the S3 key format example, Pages table, and feature summary in the README
@@ -230,9 +246,11 @@ one or two sentences explaining why the change was made
 ```
 
 Formatting rules:
+
 - No quotation marks anywhere in the commit message.
 - No explicit What, How, or Why labels.
 - Use a short summary line, then a blank line, then bullets, then a blank line, then a brief why paragraph.
 
 Types: `feat`, `fix`, `refactor`, `test`, `chore`
+
 <!-- END:nextjs-agent-rules -->

@@ -1,10 +1,10 @@
 # Clustered-ring hold overlay
 
-Supersedes the *marker look and label placement* of
+Supersedes the _marker look and label placement_ of
 [ADR 0010](0010-aligned-leader-hold-numbering.md) (which itself superseded
 [ADR 0007](0007-hold-detection-overlay.md)). The **Hold** inference algorithm, the
 selectivity gates, persistence, and the progressive reveal are all unchanged — this
-ADR only changes how Holds are *drawn* in `pipeline/holdsOverlay.ts`.
+ADR only changes how Holds are _drawn_ in `pipeline/holdsOverlay.ts`.
 
 ## Context
 
@@ -53,7 +53,7 @@ draw-time concern.
 
 6. **Layout fixed up front; gentle inter-ring nudge.** Ring centres and every badge
    slot are solved against all in-bounds Holds before drawing, so nothing jumps as
-   later Holds reveal. Where two *separate* rings sit close, a colliding badge is
+   later Holds reveal. Where two _separate_ rings sit close, a colliding badge is
    nudged a little along its own arc (**capped at ±π/2, never stepped radially
    outward**); a small overlap is tolerated over a far-flung badge.
 

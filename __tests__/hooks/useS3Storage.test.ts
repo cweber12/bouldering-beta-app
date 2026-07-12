@@ -63,8 +63,8 @@ describe("useS3Storage.uploadAttempt write order", () => {
     });
 
     expect(putKeys).toHaveLength(2);
-    expect(putKeys[0]).toMatch(/\.data\.json$/);          // heavy data first
-    expect(putKeys[1]).toBe(key);                          // metadata marker last
+    expect(putKeys[0]).toMatch(/\.data\.json$/); // heavy data first
+    expect(putKeys[1]).toBe(key); // metadata marker last
     expect(putKeys[1].endsWith(".data.json")).toBe(false);
   });
 
@@ -142,9 +142,7 @@ describe("useS3Storage.downloadAttempt load guard", () => {
     const { result } = renderHook(() => useS3Storage());
     let attempt: RouteAttempt | undefined;
     await act(async () => {
-      attempt = await result.current.downloadAttempt(
-        "RouteData/user-123/CO/RR/OR/attempt-1.json",
-      );
+      attempt = await result.current.downloadAttempt("RouteData/user-123/CO/RR/OR/attempt-1.json");
     });
     expect(attempt!.id).toBe("legacy-1");
     // Only the metadata key was fetched (legacy has inline frames → not split).

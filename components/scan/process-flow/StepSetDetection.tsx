@@ -8,12 +8,7 @@ import DualCropOverlay from "@/components/capture/DualCropOverlay";
 import { defaultRouteAroundClimber } from "@/utils/cropContainment";
 import DeveloperViewToggle from "@/components/scan/controls/DeveloperViewToggle";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
-import {
-  QUALITY_TIERS,
-  TIER_LABELS,
-  TIER_DESCRIPTIONS,
-  type QualityTier,
-} from "@/utils/poseTiers";
+import { QUALITY_TIERS, TIER_LABELS, TIER_DESCRIPTIONS, type QualityTier } from "@/utils/poseTiers";
 import { fitMediaStyle, fitMediaWidth, fsMediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { useClickOutside } from "@/hooks/useClickOutside";
@@ -88,9 +83,24 @@ function DetectionSettings({
         aria-expanded={showSettings}
         label="Settings"
         icon={
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg
+            className="h-4 w-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
+            />
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+            />
           </svg>
         }
       />
@@ -105,7 +115,7 @@ function DetectionSettings({
                 role="group"
                 aria-label="Detection quality"
               >
-                {QUALITY_TIERS.map(t => (
+                {QUALITY_TIERS.map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -127,7 +137,7 @@ function DetectionSettings({
               <label className="text-xs font-medium text-fg-secondary">Pose model</label>
               <select
                 value={modelVariant}
-                onChange={e => onModelVariantChange(e.target.value as MediaPipeVariant)}
+                onChange={(e) => onModelVariantChange(e.target.value as MediaPipeVariant)}
                 className="ui-input w-auto px-2 py-1 text-xs"
               >
                 <option value="lite">Lite (fast)</option>
@@ -141,9 +151,13 @@ function DetectionSettings({
               <span className="font-mono text-fg">every {frameStep} frames</span>
             </label>
             <input
-              type="range" min={1} max={30} value={frameStep}
-              onChange={e => onFrameStepChange(Number(e.target.value))}
-              className="w-full accent-accent" aria-label="Frame step"
+              type="range"
+              min={1}
+              max={30}
+              value={frameStep}
+              onChange={(e) => onFrameStepChange(Number(e.target.value))}
+              className="w-full accent-accent"
+              aria-label="Frame step"
             />
             <p className="text-xs text-fg-muted">
               1 = every frame (slowest) &mdash; 30 = every 30th frame (fastest, more interpolation)
@@ -152,7 +166,9 @@ function DetectionSettings({
             <div className="border-t border-edge/60 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex flex-col">
-                  <span className="text-xs font-medium text-fg-secondary">Long route (panning)</span>
+                  <span className="text-xs font-medium text-fg-secondary">
+                    Long route (panning)
+                  </span>
                   <span className="text-xs text-fg-muted">Camera pans up the wall</span>
                 </span>
                 <button
@@ -169,8 +185,8 @@ function DetectionSettings({
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-fg-muted">
-                Lines up each part of the pan with the route photo. Leave off for a fixed
-                (tripod) shot.
+                Lines up each part of the pan with the route photo. Leave off for a fixed (tripod)
+                shot.
               </p>
             </div>
 
@@ -210,7 +226,8 @@ function TransportBar({
       >
         {playing ? (
           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
+            <rect x="6" y="4" width="4" height="16" />
+            <rect x="14" y="4" width="4" height="16" />
           </svg>
         ) : (
           <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -219,9 +236,14 @@ function TransportBar({
         )}
       </button>
       <input
-        type="range" min={0} max={duration || 1} step={0.01} value={currentTime}
+        type="range"
+        min={0}
+        max={duration || 1}
+        step={0.01}
+        value={currentTime}
         onChange={onSeek}
-        className="flex-1 accent-accent" aria-label="Video progress"
+        className="flex-1 accent-accent"
+        aria-label="Video progress"
       />
       <span className="shrink-0 font-mono text-[11px] text-fg-muted">
         {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
@@ -249,7 +271,11 @@ export interface StepSetDetectionProps {
    * (and auto-renders the Wall Crop). Returns false when no pose was found at the
    * tap, so the step can hint the user to pick a clearer frame (ADR 0013).
    */
-  onClimberTapDetect?: (frame: ImageData, point: { x: number; y: number }, timestampSec: number) => boolean;
+  onClimberTapDetect?: (
+    frame: ImageData,
+    point: { x: number; y: number },
+    timestampSec: number,
+  ) => boolean;
   tier: QualityTier;
   onTierChange: (t: QualityTier) => void;
   modelVariant: MediaPipeVariant;
@@ -292,24 +318,27 @@ export default function StepSetDetection({
   onBack,
 }: StepSetDetectionProps) {
   // ── Video refs / state ─────────────────────────────────────────────────
-  const cropVideoRef       = useRef<HTMLVideoElement>(null);
-  const cropCanvasRef      = useRef<HTMLCanvasElement>(null);
+  const cropVideoRef = useRef<HTMLVideoElement>(null);
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
   const fullscreenVideoRef = useRef<HTMLVideoElement>(null);
 
   // Measures the video stage so the media is square-bounded to the exact
   // available vertical space (drives both height and the landscape width cap).
   const [stageRef, stageHeight] = useMeasuredHeight();
 
-  const [hasCropFrame,       setHasCropFrame]       = useState(false);
-  const [isPlaying,          setIsPlaying]          = useState(false);
-  const [videoCurrentTime,   setVideoCurrentTime]   = useState(0);
-  const [videoDuration,      setVideoDuration]      = useState(0);
+  const [hasCropFrame, setHasCropFrame] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   // Default to portrait (9:16) — ascents are recorded vertically, so this
   // minimises the layout snap when the real metadata loads.
-  const [videoNaturalSize,   setVideoNaturalSize]   = useState<{ w: number; h: number }>({ w: 9, h: 16 });
-  const [videoFullscreen,    setVideoFullscreen]    = useState(false);
+  const [videoNaturalSize, setVideoNaturalSize] = useState<{ w: number; h: number }>({
+    w: 9,
+    h: 16,
+  });
+  const [videoFullscreen, setVideoFullscreen] = useState(false);
   const [fsVideoCurrentTime, setFsVideoCurrentTime] = useState(0);
-  const [fsIsPlaying,        setFsIsPlaying]        = useState(false);
+  const [fsIsPlaying, setFsIsPlaying] = useState(false);
 
   // Detection settings popover.
   const [showSettings, setShowSettings] = useState(false);
@@ -343,13 +372,18 @@ export default function StepSetDetection({
     }
   }
 
-  function handleReTap()         { setHintMinimized(false); setScanNudged(false); setTapMissed(false); onClimberPointChange?.(null); }
+  function handleReTap() {
+    setHintMinimized(false);
+    setScanNudged(false);
+    setTapMissed(false);
+    onClimberPointChange?.(null);
+  }
 
   function handleCropVideoLoaded() {
-    const video  = cropVideoRef.current;
+    const video = cropVideoRef.current;
     const canvas = cropCanvasRef.current;
     if (!video || !canvas) return;
-    canvas.width  = video.videoWidth  || 640;
+    canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 360;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -362,7 +396,11 @@ export default function StepSetDetection({
   function handleFsPlayPause() {
     const v = fullscreenVideoRef.current;
     if (!v) return;
-    if (v.paused) { v.play().catch(() => {}); } else { v.pause(); }
+    if (v.paused) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
   }
 
   function handleFsSeek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -375,7 +413,11 @@ export default function StepSetDetection({
   function handleVideoPlayPause() {
     const video = cropVideoRef.current;
     if (!video) return;
-    if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
+    if (video.paused) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
   }
 
   function handleVideoSeek(e: React.ChangeEvent<HTMLInputElement>) {
@@ -392,7 +434,10 @@ export default function StepSetDetection({
       setScanNudged(true);
       return;
     }
-    const t = (videoFullscreen ? fullscreenVideoRef.current?.currentTime : cropVideoRef.current?.currentTime) ?? 0;
+    const t =
+      (videoFullscreen
+        ? fullscreenVideoRef.current?.currentTime
+        : cropVideoRef.current?.currentTime) ?? 0;
     onScan(t > 0 ? t : 0);
   }
 
@@ -403,7 +448,7 @@ export default function StepSetDetection({
     modelVariant,
     frameStep,
     panning,
-    onToggle: () => setShowSettings(p => !p),
+    onToggle: () => setShowSettings((p) => !p),
     onClose: () => setShowSettings(false),
     onTierChange,
     onModelVariantChange,
@@ -428,9 +473,10 @@ export default function StepSetDetection({
 
   // Crop overlay. Before a tap the overlay is a bare tap surface so the box never
   // blocks tapping the climber. After a tap, both the Climber box (inner) and the
-  // Route box (outer, around the climber) are shown and independently adjustable;
-  // the Climber pushes the Route out and the Route can't cross inside it (ADR 0014).
-  // The climber is re-identified via the Re-tap button, not by tapping the boxes.
+  // Route box (outer) are shown and independently adjustable — each resizes freely
+  // (frame-clamped only); the Route is not tied to the Climber, so it can be
+  // trimmed down to just the rock face (ADR 0016). The climber is re-identified
+  // via the Re-tap button, not by tapping the boxes.
   const cropOverlayNode = !hasCropFrame ? null : climberPoint == null ? (
     <CropBoxOverlay
       tapOnly
@@ -454,29 +500,35 @@ export default function StepSetDetection({
   // the bare "Tap the climber" cue never blocks the tap surface beneath; the
   // longer, minimizable tips opt their pill back into pointer events for the
   // minimize control. Copy is terse and imperative, manual-style.
-  const stageHint: { text: string; tone: "info" | "caution"; minimizable: boolean } | null = (() => {
-    if (!hasCropFrame) return null;
-    if (climberPoint == null) {
-      return scanNudged
-        ? { text: "Tap the climber, or Scan anyway.", tone: "caution", minimizable: false }
-        : { text: "Tap the climber.", tone: "info", minimizable: false };
-    }
-    if (tapMissed) {
+  const stageHint: { text: string; tone: "info" | "caution"; minimizable: boolean } | null =
+    (() => {
+      if (!hasCropFrame) return null;
+      if (climberPoint == null) {
+        return scanNudged
+          ? { text: "Tap the climber, or Scan anyway.", tone: "caution", minimizable: false }
+          : { text: "Tap the climber.", tone: "info", minimizable: false };
+      }
+      if (tapMissed) {
+        return {
+          text: "No climber found there — tap again or pick a clearer frame.",
+          tone: "caution",
+          minimizable: false,
+        };
+      }
       return {
-        text: "No climber found there — tap again or pick a clearer frame.",
-        tone: "caution",
-        minimizable: false,
+        text: "Drag the white box for the climber, the amber box for the route. Then Scan.",
+        tone: "info",
+        minimizable: true,
       };
-    }
-    return {
-      text: "Drag the white box for the climber, the amber box for the route. Then Scan.",
-      tone: "info",
-      minimizable: true,
-    };
-  })();
+    })();
 
   const stageHintNode = stageHint ? (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3">
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 top-3 z-20 flex px-3",
+        stageHint.minimizable && hintMinimized ? "justify-end" : "justify-center",
+      )}
+    >
       {stageHint.minimizable && hintMinimized ? (
         <button
           type="button"
@@ -485,8 +537,19 @@ export default function StepSetDetection({
           aria-label="Show framing tip"
           title="Show tip"
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+          <svg
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+            />
           </svg>
         </button>
       ) : (
@@ -511,7 +574,14 @@ export default function StepSetDetection({
               aria-label="Hide tip"
               title="Hide tip"
             >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <svg
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -534,8 +604,19 @@ export default function StepSetDetection({
               title="Re-tap a different climber"
               label="Re-tap"
               icon={
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
                 </svg>
               }
             />
@@ -546,12 +627,34 @@ export default function StepSetDetection({
             label={variant === "inline" ? "Expand" : "Exit"}
             icon={
               variant === "inline" ? (
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14"
+                  />
                 </svg>
               ) : (
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6"
+                  />
                 </svg>
               )
             }
@@ -583,16 +686,49 @@ export default function StepSetDetection({
               ? "ui-control-primary"
               : "ui-control",
         )}
-        title={canScan ? (nudging ? "Scan without marking a climber" : "Start pose detection") : "Loading model…"}
+        title={
+          canScan
+            ? nudging
+              ? "Scan without marking a climber"
+              : "Start pose detection"
+            : "Loading model…"
+        }
       >
         {canScan ? (
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z" />
+          <svg
+            className="h-4 w-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 010 1.972l-11.54 6.347a1.125 1.125 0 01-1.667-.986V5.653z"
+            />
           </svg>
         ) : (
-          <svg className="h-4 w-4 shrink-0 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          <svg
+            className="h-4 w-4 shrink-0 animate-spin"
+            fill="none"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            />
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            />
           </svg>
         )}
         {label}
@@ -655,7 +791,9 @@ export default function StepSetDetection({
           {hasCropFrame && (
             <div
               className="mx-auto w-full shrink-0"
-              style={{ maxWidth: fitMediaWidth(videoNaturalSize.w, videoNaturalSize.h, stageHeight) }}
+              style={{
+                maxWidth: fitMediaWidth(videoNaturalSize.w, videoNaturalSize.h, stageHeight),
+              }}
             >
               <TransportBar
                 playing={isPlaying}
@@ -699,7 +837,9 @@ export default function StepSetDetection({
               playsInline
               onPlay={() => setFsIsPlaying(true)}
               onPause={() => setFsIsPlaying(false)}
-              onTimeUpdate={() => setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)}
+              onTimeUpdate={() =>
+                setFsVideoCurrentTime(fullscreenVideoRef.current?.currentTime ?? 0)
+              }
               className="absolute inset-0 w-full h-full object-fill"
             />
             {cropOverlayNode}

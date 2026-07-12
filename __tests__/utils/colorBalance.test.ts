@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  channelMeans,
-  castRatio,
-  neutralizeColorCast,
-} from "@/utils/colorBalance";
+import { channelMeans, castRatio, neutralizeColorCast } from "@/utils/colorBalance";
 
 /** Build an N-pixel RGBA buffer with a uniform colour. */
 function solid(r: number, g: number, b: number, pixels = 64): Uint8ClampedArray {

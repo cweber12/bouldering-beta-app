@@ -11,9 +11,9 @@ import { type CropFraction } from "@/utils/cropFraction";
 //   • inside the climber  → moves the climber (climber layer is on top)
 //   • the ring between     → moves the route
 //   • each box's edge handles resize that box
-// Containment physics (climber pushes route out, route can't cross inside the
-// climber) live in the parent via utils/cropContainment — this component only
-// emits the raw dragged box per target. See ADR 0014.
+// The two boxes are independent: this component emits the raw dragged box per
+// target, frame-clamped only. There is no cross-box containment — the parent
+// (utils/cropContainment) just frame-clamps each. See ADR 0016.
 // ---------------------------------------------------------------------------
 
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "move";
@@ -51,15 +51,24 @@ function getHandleKnobStyle(id: HandleId, color: string): React.CSSProperties {
   };
   const thick = `${SEG_W}px solid ${color}`;
   switch (id) {
-    case "nw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
-    case "ne": return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
-    case "sw": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
-    case "se": return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
-    case "n":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "s":  return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
-    case "e":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    case "w":  return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
-    default: return base;
+    case "nw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderLeft: thick };
+    case "ne":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderTop: thick, borderRight: thick };
+    case "sw":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderLeft: thick };
+    case "se":
+      return { ...base, width: SEG_LEN, height: SEG_LEN, borderBottom: thick, borderRight: thick };
+    case "n":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "s":
+      return { ...base, width: SEG_LEN - 2, height: SEG_W, background: color };
+    case "e":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    case "w":
+      return { ...base, width: SEG_W, height: SEG_LEN - 2, background: color };
+    default:
+      return base;
   }
 }
 
@@ -254,11 +263,21 @@ export default function DualCropOverlay({
       />
       <div
         className="crop-overlay-mask absolute pointer-events-none"
-        style={{ top: pct(route.y), left: 0, width: pct(route.x), bottom: pct(1 - route.y - route.h) }}
+        style={{
+          top: pct(route.y),
+          left: 0,
+          width: pct(route.x),
+          bottom: pct(1 - route.y - route.h),
+        }}
       />
       <div
         className="crop-overlay-mask absolute pointer-events-none"
-        style={{ top: pct(route.y), left: pct(route.x + route.w), right: 0, bottom: pct(1 - route.y - route.h) }}
+        style={{
+          top: pct(route.y),
+          left: pct(route.x + route.w),
+          right: 0,
+          bottom: pct(1 - route.y - route.h),
+        }}
       />
 
       {/* Route layer below, Climber layer on top so the climber wins ties. */}

@@ -54,6 +54,10 @@ export interface StepMatchRoutePhotoProps {
   // Skeleton style
   onSkeletonStyleChange: (s: SkeletonStyle) => void;
   onHoldsStyleChange: (h: HoldStyle) => void;
+  // Contrast boost (opt-in) for the whole overlay (Skeleton + Holds).
+  contrastEnabled?: boolean;
+  onContrastToggle?: (on: boolean) => void;
+  contrastPoor?: boolean;
   // Export
   exportStatus: "idle" | "rendering" | "done";
   exportProgress: number;
@@ -98,6 +102,9 @@ export default function StepMatchRoutePhoto({
   holdStyle,
   onSkeletonStyleChange,
   onHoldsStyleChange,
+  contrastEnabled,
+  onContrastToggle,
+  contrastPoor,
   exportStatus,
   exportProgress,
   onApplyMatch,
@@ -113,11 +120,14 @@ export default function StepMatchRoutePhoto({
   saveError,
   matchDiagnostics,
 }: StepMatchRoutePhotoProps) {
-  const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({ w: 4, h: 3 });
-  const [routePhotoFullscreen,  setRoutePhotoFullscreen]  = useState(false);
-  const [showMatchStats,        setShowMatchStats]        = useState(false);
-  const [showPhotoChooser,      setShowPhotoChooser]      = useState(false);
-  const [climberOpen,           setClimberOpen]           = useState(false);
+  const [routePhotoNaturalSize, setRoutePhotoNaturalSize] = useState<{ w: number; h: number }>({
+    w: 4,
+    h: 3,
+  });
+  const [routePhotoFullscreen, setRoutePhotoFullscreen] = useState(false);
+  const [showMatchStats, setShowMatchStats] = useState(false);
+  const [showPhotoChooser, setShowPhotoChooser] = useState(false);
+  const [climberOpen, setClimberOpen] = useState(false);
   const matchStatsRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<FramePlayerHandle>(null);
   const { advanced } = useAdvancedView();
@@ -156,8 +166,19 @@ export default function StepMatchRoutePhoto({
       onClick={onApplyMatch}
       className="motion-cta ui-control-primary flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold"
     >
-      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z" />
+      <svg
+        className="h-4 w-4 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.641 0-8.573-3.007-9.963-7.178z"
+        />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
       Place on route
@@ -184,9 +205,24 @@ export default function StepMatchRoutePhoto({
       title="Change photo"
       label="Change"
       icon={
-        <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
+        <svg
+          className="h-4 w-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+          />
         </svg>
       }
     />
@@ -198,68 +234,105 @@ export default function StepMatchRoutePhoto({
       title="Expand preview"
       label="Expand"
       icon={
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14" />
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M15 3h6m0 0v6m0-6L14 10M9 21H3m0 0v-6m0 6L10 14"
+          />
         </svg>
       }
     />
   );
 
-  const exportBtn = exportStatus !== "rendering" ? (
-    <button
-      type="button"
-      onClick={onExportVideo}
-      className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
-      title="Download your climb as a video"
-    >
-      <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-      </svg>
-      {exportStatus === "done" ? "Re-export video" : "Export video"}
-    </button>
-  ) : null;
+  const exportBtn =
+    exportStatus !== "rendering" ? (
+      <button
+        type="button"
+        onClick={onExportVideo}
+        className="ui-control flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        title="Download your climb as a video"
+      >
+        <svg
+          className="h-4 w-4 shrink-0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+          />
+        </svg>
+        {exportStatus === "done" ? "Re-export video" : "Export video"}
+      </button>
+    ) : null;
 
   // ── Match stats popover (floating, after match) — Developer view only ──
-  const matchStatsControl = advanced && matchStatus === "done" && matchResult ? (
-    <div ref={matchStatsRef} className="relative">
-      <ToolbarButton
-        onClick={() => setShowMatchStats(p => !p)}
-        aria-expanded={showMatchStats}
-        title="Match statistics"
-        label="Stats"
-        icon={
-          <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-          </svg>
-        }
-      />
-      {showMatchStats && (
-        <div className="ui-popover absolute right-0 top-full z-30 mt-1.5 w-56 px-4 py-3">
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div>
-              <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
-              <p className="text-xs text-fg-muted">matches</p>
+  const matchStatsControl =
+    advanced && matchStatus === "done" && matchResult ? (
+      <div ref={matchStatsRef} className="relative">
+        <ToolbarButton
+          onClick={() => setShowMatchStats((p) => !p)}
+          aria-expanded={showMatchStats}
+          title="Match statistics"
+          label="Stats"
+          icon={
+            <svg
+              className="h-4 w-4 shrink-0"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+              />
+            </svg>
+          }
+        />
+        {showMatchStats && (
+          <div className="ui-popover absolute right-0 top-full z-30 mt-1.5 w-56 px-4 py-3">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="text-xl font-bold text-fg">{matchResult.matches.length}</p>
+                <p className="text-xs text-fg-muted">matches</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
+                <p className="text-xs text-fg-muted">query pts</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
+                <p className="text-xs text-fg-muted">ref pts</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xl font-bold text-fg">{matchResult.queryKeypoints}</p>
-              <p className="text-xs text-fg-muted">query pts</p>
-            </div>
-            <div>
-              <p className="text-xl font-bold text-fg">{matchResult.referenceKeypoints}</p>
-              <p className="text-xs text-fg-muted">ref pts</p>
-            </div>
+            {matchResult.matches.length < 10 && (
+              <p className="mt-2 text-xs text-caution">
+                Fewer than 10 matches &mdash; the homography may be unstable.
+              </p>
+            )}
           </div>
-          {matchResult.matches.length < 10 && (
-            <p className="mt-2 text-xs text-caution">
-              Fewer than 10 matches &mdash; the homography may be unstable.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  ) : null;
+        )}
+      </div>
+    ) : null;
 
-  const errorText = saveError ?? (matchStatus === "error" || frameStatus === "error" ? (matchError ?? frameError) : null);
+  const errorText =
+    saveError ??
+    (matchStatus === "error" || frameStatus === "error" ? (matchError ?? frameError) : null);
 
   // ── Top toolbar — only the pre-match crop controls. Once the overlay is built,
   // the Climber/Stats/Export cluster moves to the bar directly above the preview.
@@ -300,23 +373,27 @@ export default function StepMatchRoutePhoto({
         totalSteps={4}
         stepName="Place on route"
         instruction={instruction}
-        purpose={!routeMatchTriggered && !isMatching
-          ? "Add a photo of the route to place your climb on it."
-          : undefined}
+        purpose={
+          !routeMatchTriggered && !isMatching
+            ? "Add a photo of the route to place your climb on it."
+            : undefined
+        }
         onBack={onBack}
         toolbar={toolbarNode}
         primaryAction={routeMatchTriggered ? saveDropdown : projectButton}
       >
         <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-3 sm:p-4">
-
           {errorText && (
-            <p className="feedback-banner feedback-banner-danger max-w-md text-center">{errorText}</p>
+            <p className="feedback-banner feedback-banner-danger max-w-md text-center">
+              {errorText}
+            </p>
           )}
 
           {/* Auto-frame failed: prompt the user to draw the route area. */}
           {!routeMatchTriggered && !isMatching && autoFrameStatus === "failed" && (
             <p className="feedback-banner feedback-banner-caution max-w-md text-center">
-              Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route area yourself.
+              Couldn&rsquo;t auto-frame your climb &mdash; drag the box to frame the route area
+              yourself.
             </p>
           )}
 
@@ -324,7 +401,11 @@ export default function StepMatchRoutePhoto({
           {!routeMatchTriggered && !isMatching && (
             <div
               className="relative overflow-hidden rounded-(--radius-panel) border border-edge/50 bg-surface-alt/55 shadow-lg shadow-black/10"
-              style={mediaContainerStyle(routePhotoNaturalSize.w, routePhotoNaturalSize.h, "13.5rem")}
+              style={mediaContainerStyle(
+                routePhotoNaturalSize.w,
+                routePhotoNaturalSize.h,
+                "13.5rem",
+              )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -336,7 +417,11 @@ export default function StepMatchRoutePhoto({
                   setRoutePhotoNaturalSize({ w: img.naturalWidth || 4, h: img.naturalHeight || 3 });
                 }}
               />
-              <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
+              <CropBoxOverlay
+                box={routePhotoCrop}
+                onChange={onRoutePhotoCropChange}
+                borderRadius="2px"
+              />
             </div>
           )}
 
@@ -353,7 +438,10 @@ export default function StepMatchRoutePhoto({
           {/* After: pose overlay player with the control bar above and the
               Climber drawer anchored to the player's right edge */}
           {isFrameReady && skeletonData && (
-            <div className="mx-auto flex w-full flex-col gap-1.5" style={{ maxWidth: playerMaxWidth }}>
+            <div
+              className="mx-auto flex w-full flex-col gap-1.5"
+              style={{ maxWidth: playerMaxWidth }}
+            >
               {previewBar}
               <div className="relative">
                 <FramePlayer
@@ -370,6 +458,10 @@ export default function StepMatchRoutePhoto({
                   onClose={() => setClimberOpen(false)}
                   onChange={onSkeletonStyleChange}
                   onHoldsChange={onHoldsStyleChange}
+                  contrastEnabled={contrastEnabled}
+                  onContrastToggle={onContrastToggle}
+                  contrastPoor={contrastPoor}
+                  contrastAvailable
                   footer={<DeveloperViewToggle />}
                 />
               </div>
@@ -382,7 +474,10 @@ export default function StepMatchRoutePhoto({
                     <span>{exportProgress}%</span>
                   </div>
                   <div className="h-1 overflow-hidden rounded-full bg-inset">
-                    <div className="h-full rounded-full bg-accent transition-all duration-150" style={{ width: `${exportProgress}%` }} />
+                    <div
+                      className="h-full rounded-full bg-accent transition-all duration-150"
+                      style={{ width: `${exportProgress}%` }}
+                    />
                   </div>
                 </div>
               )}
@@ -404,8 +499,19 @@ export default function StepMatchRoutePhoto({
               title="Close fullscreen (Esc)"
               label="Close"
               icon={
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M9 9L3 3m0 0h6m-6 0V9M15 9l6-6m0 0v6m0-6h-6M9 15l-6 6m0 0h6m-6 0v-6M15 15l6 6m0 0v-6m0 6h-6"
+                  />
                 </svg>
               }
             />
@@ -415,7 +521,10 @@ export default function StepMatchRoutePhoto({
           !routeMatchTriggered ? (
             <footer className="flex justify-center gap-3 border-t border-edge/40 bg-surface px-4 py-3">
               <button
-                onClick={() => { setRoutePhotoFullscreen(false); onApplyMatch(); }}
+                onClick={() => {
+                  setRoutePhotoFullscreen(false);
+                  onApplyMatch();
+                }}
                 className="ui-control-primary flex items-center justify-center gap-2 rounded-md px-8 py-3 text-sm font-semibold"
               >
                 Place on route
@@ -434,14 +543,21 @@ export default function StepMatchRoutePhoto({
             alt="Route photo preview"
             className="absolute inset-0 w-full h-full object-fill"
           />
-          <CropBoxOverlay box={routePhotoCrop} onChange={onRoutePhotoCropChange} borderRadius="2px" />
+          <CropBoxOverlay
+            box={routePhotoCrop}
+            onChange={onRoutePhotoCropChange}
+            borderRadius="2px"
+          />
         </div>
       </FullscreenModal>
 
       <RoutePhotoChooser
         open={showPhotoChooser}
         onClose={() => setShowPhotoChooser(false)}
-        onPhoto={(file) => { setShowPhotoChooser(false); onChangePhoto(file); }}
+        onPhoto={(file) => {
+          setShowPhotoChooser(false);
+          onChangePhoto(file);
+        }}
       />
 
       <DiagnosticsPanel record={matchDiagnostics ?? null} />

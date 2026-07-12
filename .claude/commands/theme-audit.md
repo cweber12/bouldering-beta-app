@@ -4,13 +4,13 @@ Audit the codebase for theme rule violations. Work through each check and report
 
 Grep all `.tsx`, `.ts`, and `.css` files (excluding `node_modules`, `.next`, `coverage`, `workers`) for these patterns and map each to the correct semantic token:
 
-| Forbidden pattern | Correct semantic token |
-|---|---|
-| `red-[0-9]`, `rose-[0-9]` | `text-danger` / `bg-danger-surface` / `border-danger-border` |
-| `amber-[0-9]`, `yellow-[0-9]` | `text-caution` / `bg-caution-surface` / `border-caution-border` |
-| `emerald-[0-9]`, `green-[0-9]` | `text-send` / `bg-send` / `bg-send-surface` (unless in a data-viz or chart context) |
-| `black/[0-9]` in overlays | `bg-surface/70 backdrop-blur-sm` |
-| `bg-black`, `text-white` where surface tokens apply | `bg-surface`, `text-fg` |
+| Forbidden pattern                                   | Correct semantic token                                                              |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `red-[0-9]`, `rose-[0-9]`                           | `text-danger` / `bg-danger-surface` / `border-danger-border`                        |
+| `amber-[0-9]`, `yellow-[0-9]`                       | `text-caution` / `bg-caution-surface` / `border-caution-border`                     |
+| `emerald-[0-9]`, `green-[0-9]`                      | `text-send` / `bg-send` / `bg-send-surface` (unless in a data-viz or chart context) |
+| `black/[0-9]` in overlays                           | `bg-surface/70 backdrop-blur-sm`                                                    |
+| `bg-black`, `text-white` where surface tokens apply | `bg-surface`, `text-fg`                                                             |
 
 ## Check 2 — Canvas drawing code
 

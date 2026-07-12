@@ -73,13 +73,13 @@ export interface FrameAnalysis {
 // Thresholds
 // ---------------------------------------------------------------------------
 
-const OVEREXPOSED_MEAN    = 195;
-const UNDEREXPOSED_MEAN   = 60;
+const OVEREXPOSED_MEAN = 195;
+const UNDEREXPOSED_MEAN = 60;
 /** Minimum brightness delta (overall − climber) to classify as backlit. */
-const BACKLIT_DELTA       = 65;
+const BACKLIT_DELTA = 65;
 const LOW_CONTRAST_STDDEV = 30;
 /** High-frequency energy below this value is classified as blurry. */
-const BLURRY_SHARPNESS    = 60;
+const BLURRY_SHARPNESS = 60;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -108,16 +108,13 @@ export function analyzeFrame(
     ? computeRegionStats(cv, cropImageData(imageData, climberCropPx))
     : null;
 
-  const wall = wallCropPx
-    ? computeRegionStats(cv, cropImageData(imageData, wallCropPx))
-    : null;
+  const wall = wallCropPx ? computeRegionStats(cv, cropImageData(imageData, wallCropPx)) : null;
 
-  const isOverexposed  = overall.mean > OVEREXPOSED_MEAN;
+  const isOverexposed = overall.mean > OVEREXPOSED_MEAN;
   const isUnderexposed = overall.mean < UNDEREXPOSED_MEAN;
-  const isBacklit      = climber !== null
-    && (overall.mean - climber.mean) > BACKLIT_DELTA;
-  const isLowContrast  = overall.stdDev < LOW_CONTRAST_STDDEV;
-  const isBlurry       = overall.sharpness < BLURRY_SHARPNESS;
+  const isBacklit = climber !== null && overall.mean - climber.mean > BACKLIT_DELTA;
+  const isLowContrast = overall.stdDev < LOW_CONTRAST_STDDEV;
+  const isBlurry = overall.sharpness < BLURRY_SHARPNESS;
 
   // --- Suggested gamma -------------------------------------------------------
   let suggestedGamma = 1.0;
@@ -129,7 +126,7 @@ export function analyzeFrame(
     suggestedGamma = 1.35 + severity * 0.45;
   } else if (isUnderexposed) {
     // Gentle lift proportional to how far below the floor the frame is.
-    suggestedGamma = 1.30 + Math.min(0.30, (UNDEREXPOSED_MEAN - overall.mean) / 80);
+    suggestedGamma = 1.3 + Math.min(0.3, (UNDEREXPOSED_MEAN - overall.mean) / 80);
   } else if (isOverexposed) {
     // Compress highlights — stronger compression for more severe overexposure.
     const severity = Math.min(1, (overall.mean - OVEREXPOSED_MEAN) / 60);
@@ -140,17 +137,24 @@ export function analyzeFrame(
   let contrastAlpha = 0;
 
   if (overall.stdDev < 20) {
-    contrastAlpha = 0.65;                         // very flat histogram
+    contrastAlpha = 0.65; // very flat histogram
   } else if (overall.stdDev < LOW_CONTRAST_STDDEV) {
-    contrastAlpha = 0.45;                         // moderately flat
+    contrastAlpha = 0.45; // moderately flat
   } else if (isOverexposed || isUnderexposed) {
-    contrastAlpha = 0.30;                         // global shift, light assist
+    contrastAlpha = 0.3; // global shift, light assist
   }
 
   return {
-    overall, climber, wall,
-    isOverexposed, isUnderexposed, isBacklit, isLowContrast, isBlurry,
-    suggestedGamma, contrastAlpha,
+    overall,
+    climber,
+    wall,
+    isOverexposed,
+    isUnderexposed,
+    isBacklit,
+    isLowContrast,
+    isBlurry,
+    suggestedGamma,
+    contrastAlpha,
   };
 }
 
@@ -165,25 +169,25 @@ export function analyzeFrame(
  * high-frequency energy (blur residual variance as a sharpness proxy).
  */
 function computeRegionStats(cv: CV, imageData: ImageData): RegionStats {
-  let src: CV | null     = null;
-  let gray: CV | null    = null;
+  let src: CV | null = null;
+  let gray: CV | null = null;
   let blurred: CV | null = null;
-  let hf: CV | null      = null;
-  let meanM: CV | null   = null;
-  let stdM: CV | null    = null;
-  let hfMean: CV | null  = null;
-  let hfStd: CV | null   = null;
+  let hf: CV | null = null;
+  let meanM: CV | null = null;
+  let stdM: CV | null = null;
+  let hfMean: CV | null = null;
+  let hfStd: CV | null = null;
 
   try {
-    src  = cv.matFromImageData(imageData);
+    src = cv.matFromImageData(imageData);
     gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
     // Mean and standard deviation
     meanM = new cv.Mat();
-    stdM  = new cv.Mat();
+    stdM = new cv.Mat();
     cv.meanStdDev(gray, meanM, stdM);
-    const mean   = (meanM.data64F as Float64Array)[0];
+    const mean = (meanM.data64F as Float64Array)[0];
     const stdDev = (stdM.data64F as Float64Array)[0];
 
     // High-frequency energy: residual of subtracting a smooth illumination
@@ -194,9 +198,9 @@ function computeRegionStats(cv: CV, imageData: ImageData): RegionStats {
     cv.addWeighted(gray, 1.0, blurred, -1.0, 128, hf);
 
     hfMean = new cv.Mat();
-    hfStd  = new cv.Mat();
+    hfStd = new cv.Mat();
     cv.meanStdDev(hf, hfMean, hfStd);
-    const sharpness = ((hfStd.data64F as Float64Array)[0]) ** 2;
+    const sharpness = (hfStd.data64F as Float64Array)[0] ** 2;
 
     return { mean, stdDev, sharpness };
   } finally {

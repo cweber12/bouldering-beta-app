@@ -81,7 +81,7 @@ of the whole-route photo and needs the detail to match.
   smooth motion between Keyframes. Violent handheld shake is explicitly not
   supported by this mode (use Fixed Capture, or it degrades).
 - **Parallax limit:** the climber is in front of the wall plane, so under camera
-  *translation* (not pure rotation) the planar homography mis-projects the body
+  _translation_ (not pure rotation) the planar homography mis-projects the body
   slightly. Modest for typical shooting distances; not corrected without depth.
 - **Planarity over a long route** is a stronger assumption than over a short
   boulder; routes that curve around an arete will accumulate per-keyframe error.

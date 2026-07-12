@@ -43,8 +43,8 @@ export interface CropBox {
  * keypoints exist in the set.
  */
 export function extractHipCenter(keypoints: Keypoint[]): HipCenter | null {
-  const lh = keypoints.find(kp => kp.name === "left_hip");
-  const rh = keypoints.find(kp => kp.name === "right_hip");
+  const lh = keypoints.find((kp) => kp.name === "left_hip");
+  const rh = keypoints.find((kp) => kp.name === "right_hip");
   if (!lh && !rh) return null;
   if (lh && rh) return { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2 };
   const hip = (lh ?? rh)!;
@@ -71,7 +71,7 @@ export function mapKeypointsToFullFrame(
   videoWidth: number,
   videoHeight: number,
 ): Keypoint[] {
-  return keypoints.map(kp => ({
+  return keypoints.map((kp) => ({
     ...kp,
     x: (kp.x * crop.width + crop.x) / videoWidth,
     y: (kp.y * crop.height + crop.y) / videoHeight,

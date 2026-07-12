@@ -1,4 +1,5 @@
 Scaffold a new pipeline module. Ask me for:
+
 - The module name (e.g. `frameNormalizer`)
 - The exported function signatures (name, parameters, return type)
 
@@ -21,6 +22,7 @@ export function myFunction(cv: CV, ...): ReturnType {
 ```
 
 Rules to follow:
+
 - Zero React imports
 - `type CV = any` alias at the top (with eslint-disable comment)
 - Every exported function takes `cv: CV` as its first parameter

@@ -11,9 +11,30 @@ vi.mock("next/image", () => ({
 }));
 
 const items = [
-  { key: "k1", state: "CO", area: "Boulder", route: "Classic", runType: "send", timestamp: "day-one" },
-  { key: "k2", state: "CO", area: "Boulder", route: "Classic", runType: "attempt", timestamp: "day-two" },
-  { key: "k3", state: "CO", area: "Boulder", route: "Classic", runType: "attempt", timestamp: "day-three" },
+  {
+    key: "k1",
+    state: "CO",
+    area: "Boulder",
+    route: "Classic",
+    runType: "send",
+    timestamp: "day-one",
+  },
+  {
+    key: "k2",
+    state: "CO",
+    area: "Boulder",
+    route: "Classic",
+    runType: "attempt",
+    timestamp: "day-two",
+  },
+  {
+    key: "k3",
+    state: "CO",
+    area: "Boulder",
+    route: "Classic",
+    runType: "attempt",
+    timestamp: "day-three",
+  },
 ];
 
 function stubFetchOk() {
@@ -107,9 +128,7 @@ describe("CompareClimbRail", () => {
       />,
     );
 
-    await waitFor(() =>
-      expect(screen.getByText("Add a climb to compare")).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText("Add a climb to compare")).toBeTruthy());
   });
 
   it("renders the Compare Multiple toggle and fires onToggleMode", async () => {
@@ -188,12 +207,7 @@ describe("CompareClimbRail", () => {
 
   it("shows a send indicator only for sends (not attempts)", async () => {
     render(
-      <CompareClimbRail
-        {...baseProps}
-        activeKeys={[]}
-        colorForKey={() => null}
-        atMax={false}
-      />,
+      <CompareClimbRail {...baseProps} activeKeys={[]} colorForKey={() => null} atMax={false} />,
     );
     await waitFor(() => expect(buttonByTimestamp("day-one")).toBeTruthy());
     // k1 is a send; k2/k3 are attempts → exactly one send dot.

@@ -11,12 +11,7 @@ describe("ToolRouteHeader", () => {
   });
 
   it("renders optional actions", () => {
-    render(
-      <ToolRouteHeader
-        title="Compare"
-        actions={<button type="button">Action</button>}
-      />,
-    );
+    render(<ToolRouteHeader title="Compare" actions={<button type="button">Action</button>} />);
 
     expect(screen.getByRole("button", { name: "Action" })).toBeTruthy();
   });

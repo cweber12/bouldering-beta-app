@@ -23,9 +23,19 @@ type CV = any;
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { VideoMeta, OrbFeatures, OrbMatch } from "@/storage/sessionStore";
-import { computeHomography, ransacReprojThresholdFor, type KeyframeHomography } from "@/pipeline/matching/homography";
+import {
+  computeHomography,
+  ransacReprojThresholdFor,
+  type KeyframeHomography,
+} from "@/pipeline/matching/homography";
 import { capToPixelBudget } from "@/utils/imageHelpers";
-import { buildTransformedKeypoints, drawSkeleton, lerpKeypoints, computeStableBodyScale, type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
+import {
+  buildTransformedKeypoints,
+  drawSkeleton,
+  lerpKeypoints,
+  computeStableBodyScale,
+  type SkeletonStyle,
+} from "@/pipeline/overlay/skeletonOverlay";
 import { buildPanningSkeletonFrames } from "@/pipeline/overlay/skeletonRenderer";
 import { recordOverlayVideo } from "@/pipeline/render/overlayVideoRecorder";
 
@@ -104,7 +114,10 @@ export async function renderPoseVideo({
   // shares the pixel space the query ORB features (and therefore the homography)
   // were computed in. Without this, a >MAX_DECODE_PIXELS photo would render at
   // full size while the keypoints live in capped space, mis-placing the overlay.
-  const { width: canvasW, height: canvasH } = capToPixelBudget(imageBitmap.width, imageBitmap.height);
+  const { width: canvasW, height: canvasH } = capToPixelBudget(
+    imageBitmap.width,
+    imageBitmap.height,
+  );
 
   const panning = (keyframeHomographies?.length ?? 0) > 0;
 
@@ -144,7 +157,7 @@ export async function renderPoseVideo({
 
   // Derive total output duration from start- to end-timestamp of pose data.
   const firstTs = sortedFrames.length > 0 ? sortedFrames[0].timestamp : 0;
-  const lastTs  = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].timestamp : 0;
+  const lastTs = sortedFrames.length > 0 ? sortedFrames[sortedFrames.length - 1].timestamp : 0;
   const duration = Math.max(lastTs - firstTs, 1 / fps);
   const totalOutputFrames = Math.ceil(duration * fps) + 1;
 
@@ -166,9 +179,10 @@ export async function renderPoseVideo({
     ? computeStableBodyScale(panningFrames, canvasW, canvasH)
     : computeStableBodyScale(
         sortedFrames.map((f) => ({
-          keypoints: f.keypoints.length > 0
-            ? buildTransformedKeypoints(f, h!, videoMeta.width, videoMeta.height)
-            : {},
+          keypoints:
+            f.keypoints.length > 0
+              ? buildTransformedKeypoints(f, h!, videoMeta.width, videoMeta.height)
+              : {},
         })),
         canvasW,
         canvasH,
@@ -209,9 +223,15 @@ export async function renderPoseVideo({
 
       // Compute / reuse transformed keypoints for floor frame.
       if (cachedFloorAt !== floorIdx) {
-        cachedFloorKp = sortedFrames[floorIdx].keypoints.length > 0
-          ? buildTransformedKeypoints(sortedFrames[floorIdx], h!, videoMeta.width, videoMeta.height)
-          : null;
+        cachedFloorKp =
+          sortedFrames[floorIdx].keypoints.length > 0
+            ? buildTransformedKeypoints(
+                sortedFrames[floorIdx],
+                h!,
+                videoMeta.width,
+                videoMeta.height,
+              )
+            : null;
         cachedFloorAt = floorIdx;
       }
 
@@ -220,9 +240,15 @@ export async function renderPoseVideo({
       const ceilIdx = Math.min(floorIdx + 1, sortedFrames.length - 1);
 
       if (cachedCeilAt !== ceilIdx) {
-        cachedCeilKp = ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
-          ? buildTransformedKeypoints(sortedFrames[ceilIdx], h!, videoMeta.width, videoMeta.height)
-          : null;
+        cachedCeilKp =
+          ceilIdx !== floorIdx && sortedFrames[ceilIdx].keypoints.length > 0
+            ? buildTransformedKeypoints(
+                sortedFrames[ceilIdx],
+                h!,
+                videoMeta.width,
+                videoMeta.height,
+              )
+            : null;
         cachedCeilAt = ceilIdx;
       }
 

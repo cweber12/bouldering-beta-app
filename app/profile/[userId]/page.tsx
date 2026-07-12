@@ -109,7 +109,9 @@ export default function PublicProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId]);
 
   // ------ Load climbs (paginated) -----------------------------------------
@@ -144,7 +146,9 @@ export default function PublicProfilePage() {
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [userId, climbPage, filterState, filterArea, filterRoute, filterRating]);
 
   // ------ Load pins when map mode is active --------------------------------
@@ -158,22 +162,39 @@ export default function PublicProfilePage() {
       try {
         const res = await fetch(`/api/profile/${userId}/pins`);
         if (!res.ok) return;
-        const data = (await res.json()) as { pins?: Array<{ key: string; lat: number; lng: number; route: string; area: string; runType: string; timestamp?: string }> };
+        const data = (await res.json()) as {
+          pins?: Array<{
+            key: string;
+            lat: number;
+            lng: number;
+            route: string;
+            area: string;
+            runType: string;
+            timestamp?: string;
+          }>;
+        };
         if (!cancelled && Array.isArray(data.pins)) {
-          setPins(data.pins.map((p) => ({
-            key: p.key,
-            lat: p.lat,
-            lng: p.lng,
-            label: `${p.route} \u2014 ${p.area}`,
-            runType: p.runType,
-            timestamp: p.timestamp,
-          })));
+          setPins(
+            data.pins.map((p) => ({
+              key: p.key,
+              lat: p.lat,
+              lng: p.lng,
+              label: `${p.route} \u2014 ${p.area}`,
+              runType: p.runType,
+              timestamp: p.timestamp,
+            })),
+          );
         }
-      } catch { /* ignore */ }
-      finally { if (!cancelled) setLoadingPins(false); }
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setLoadingPins(false);
+      }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [viewMode, userId]);
 
   // ------ Load follow list ------------------------------------------------
@@ -190,10 +211,14 @@ export default function PublicProfilePage() {
         if (!cancelled && Array.isArray(data.following)) {
           setFollowing(data.following);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, user]);
 
   // ------ Follow / Unfollow -----------------------------------------------
@@ -234,28 +259,31 @@ export default function PublicProfilePage() {
     setSelectedClimb(climb);
   }, []);
 
-  const handlePinClick = useCallback(async (climbKey: string) => {
-    // Check if we already have this climb in the grid data.
-    const found = climbs.find((c) => c.key === climbKey);
-    if (found) {
-      setSelectedClimb(found);
-      return;
-    }
-    // Otherwise fetch the detail from the API.
-    setLoadingDetail(true);
-    try {
-      const res = await fetch(
-        `/api/profile/${userId}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
-      );
-      if (!res.ok) return;
-      const data = (await res.json()) as ClimbDetailData;
-      setSelectedClimb(data);
-    } catch (err) {
-      console.error("[profile view] detail fetch error:", err);
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, [userId, climbs]);
+  const handlePinClick = useCallback(
+    async (climbKey: string) => {
+      // Check if we already have this climb in the grid data.
+      const found = climbs.find((c) => c.key === climbKey);
+      if (found) {
+        setSelectedClimb(found);
+        return;
+      }
+      // Otherwise fetch the detail from the API.
+      setLoadingDetail(true);
+      try {
+        const res = await fetch(
+          `/api/profile/${userId}/climbs/detail?key=${encodeURIComponent(climbKey)}`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as ClimbDetailData;
+        setSelectedClimb(data);
+      } catch (err) {
+        console.error("[profile view] detail fetch error:", err);
+      } finally {
+        setLoadingDetail(false);
+      }
+    },
+    [userId, climbs],
+  );
 
   // ------ Filter helpers --------------------------------------------------
 
@@ -279,10 +307,7 @@ export default function PublicProfilePage() {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <Link
-        href="/profile"
-        className="mb-6 inline-block text-xs text-fg-muted hover:text-accent"
-      >
+      <Link href="/profile" className="mb-6 inline-block text-xs text-fg-muted hover:text-accent">
         &larr; Back to my profile
       </Link>
 
@@ -293,267 +318,281 @@ export default function PublicProfilePage() {
         </div>
       ) : (
         <>
-        {/* ---- Profile header ---- */}
-        <section className="mb-8 flex items-center gap-6">
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-(--color-inset)">
-            {profile?.profilePicture ? (
-              <Image
-                src={profile.profilePicture}
-                alt={`${displayName}'s avatar`}
-                width={80}
-                height={80}
-                unoptimized
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl text-fg-secondary">
-                {displayName[0]?.toUpperCase() ?? "?"}
+          {/* ---- Profile header ---- */}
+          <section className="mb-8 flex items-center gap-6">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-edge bg-(--color-inset)">
+              {profile?.profilePicture ? (
+                <Image
+                  src={profile.profilePicture}
+                  alt={`${displayName}'s avatar`}
+                  width={80}
+                  height={80}
+                  unoptimized
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-2xl text-fg-secondary">
+                  {displayName[0]?.toUpperCase() ?? "?"}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <h1 className="text-lg font-semibold text-fg">{displayName}</h1>
+              {profile?.location && <p className="text-xs text-fg-muted">{profile.location}</p>}
+              {profile?.bio && <p className="mt-1 text-sm text-fg-secondary">{profile.bio}</p>}
+
+              {!isOwnProfile && !authLoading && user && (
+                <div className="mt-2">
+                  {isFollowing ? (
+                    <button
+                      onClick={handleUnfollow}
+                      className="ui-action-unfollow px-3 py-1 text-xs"
+                    >
+                      Unfollow
+                    </button>
+                  ) : (
+                    <button onClick={handleFollow} className="ui-action-follow px-3 py-1 text-xs">
+                      Follow
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {isOwnProfile && (
+                <Link href="/profile" className="mt-2 text-xs text-accent hover:text-accent-hover">
+                  Edit profile
+                </Link>
+              )}
+            </div>
+          </section>
+
+          <hr className="mb-6 border-edge" />
+
+          {/* ---- Filters ---- */}
+          <section className="mb-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={filterState}
+                  onChange={(e) => setFilterState(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                  placeholder="Any"
+                  className="ui-input w-28 px-2 py-1.5 text-xs"
+                />
               </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <h1 className="text-lg font-semibold text-fg">{displayName}</h1>
-            {profile?.location && (
-              <p className="text-xs text-fg-muted">{profile.location}</p>
-            )}
-            {profile?.bio && (
-              <p className="mt-1 text-sm text-fg-secondary">{profile.bio}</p>
-            )}
-
-            {!isOwnProfile && !authLoading && user && (
-              <div className="mt-2">
-                {isFollowing ? (
-                  <button
-                    onClick={handleUnfollow}
-                    className="ui-action-unfollow px-3 py-1 text-xs"
-                  >
-                    Unfollow
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleFollow}
-                    className="ui-action-follow px-3 py-1 text-xs"
-                  >
-                    Follow
-                  </button>
-                )}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  Area
+                </label>
+                <input
+                  type="text"
+                  value={filterArea}
+                  onChange={(e) => setFilterArea(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                  placeholder="Any"
+                  className="ui-input w-28 px-2 py-1.5 text-xs"
+                />
               </div>
-            )}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  Route
+                </label>
+                <input
+                  type="text"
+                  value={filterRoute}
+                  onChange={(e) => setFilterRoute(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                  placeholder="Any"
+                  className="ui-input w-28 px-2 py-1.5 text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">
+                  Rating
+                </label>
+                <input
+                  type="text"
+                  value={filterRating}
+                  onChange={(e) => setFilterRating(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && applyFilters()}
+                  placeholder="Any"
+                  className="ui-input w-24 px-2 py-1.5 text-xs"
+                />
+              </div>
+              {(filterState || filterArea || filterRoute || filterRating) && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </section>
 
-            {isOwnProfile && (
-              <Link
-                href="/profile"
-                className="mt-2 text-xs text-accent hover:text-accent-hover"
-              >
-                Edit profile
-              </Link>
-            )}
-          </div>
-        </section>
-
-        <hr className="mb-6 border-edge" />
-
-        {/* ---- Filters ---- */}
-        <section className="mb-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">State</label>
-              <input
-                type="text"
-                value={filterState}
-                onChange={(e) => setFilterState(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-                placeholder="Any"
-                className="ui-input w-28 px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Area</label>
-              <input
-                type="text"
-                value={filterArea}
-                onChange={(e) => setFilterArea(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-                placeholder="Any"
-                className="ui-input w-28 px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Route</label>
-              <input
-                type="text"
-                value={filterRoute}
-                onChange={(e) => setFilterRoute(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-                placeholder="Any"
-                className="ui-input w-28 px-2 py-1.5 text-xs"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-medium uppercase tracking-wider text-fg-muted">Rating</label>
-              <input
-                type="text"
-                value={filterRating}
-                onChange={(e) => setFilterRating(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && applyFilters()}
-                placeholder="Any"
-                className="ui-input w-24 px-2 py-1.5 text-xs"
-              />
-            </div>
-            {(filterState || filterArea || filterRoute || filterRating) && (
+          {/* ---- List / Map toggle ---- */}
+          <section className="mb-6 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-fg">
+              Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
+            </h2>
+            <div className="ui-segmented text-xs" role="group" aria-label="View mode">
               <button
                 type="button"
-                onClick={clearFilters}
-                className="rounded-lg px-2 py-1.5 text-xs text-fg-muted transition hover:text-fg-secondary"
+                onClick={() => setViewMode("list")}
+                className="ui-segmented-button px-3 py-1.5"
+                aria-pressed={viewMode === "list"}
               >
-                Clear
+                List
               </button>
-            )}
-          </div>
-        </section>
-
-        {/* ---- List / Map toggle ---- */}
-        <section className="mb-6 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-fg">
-            Climbs {climbTotal > 0 && <span className="text-fg-muted">({climbTotal})</span>}
-          </h2>
-          <div className="ui-segmented text-xs" role="group" aria-label="View mode">
-            <button
-              type="button"
-              onClick={() => setViewMode("list")}
-              className="ui-segmented-button px-3 py-1.5"
-              aria-pressed={viewMode === "list"}
-            >
-              List
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("map")}
-              className="ui-segmented-button px-3 py-1.5"
-              aria-pressed={viewMode === "map"}
-            >
-              Map
-            </button>
-          </div>
-        </section>
-
-        {/* ---- Map view ---- */}
-        {viewMode === "map" && (
-          <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
-            {loadingPins ? (
-              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-                Loading map&#8230;
-              </div>
-            ) : pins.length === 0 ? (
-              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-                No GPS-tagged climbs yet.
-              </div>
-            ) : (
-              <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
-            )}
+              <button
+                type="button"
+                onClick={() => setViewMode("map")}
+                className="ui-segmented-button px-3 py-1.5"
+                aria-pressed={viewMode === "map"}
+              >
+                Map
+              </button>
+            </div>
           </section>
-        )}
 
-        {/* ---- Climb grid (4×4) ---- */}
-        {viewMode === "list" && (
-          <section className="mb-8">
-            {loadingClimbs ? (
-              <div className="flex flex-col items-center gap-4 py-10">
-                <LoadingSpinner />
-                <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
-              </div>
-            ) : climbs.length === 0 ? (
-              <p className="py-8 text-center text-xs text-fg-muted">
-                {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
-              </p>
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {climbs.map((c) => (
-                    <div
-                      key={c.key}
-                      onClick={() => handleCardClick(c)}
-                      className="group relative cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover"
-                    >
-                      {/* Thumbnail or placeholder */}
-                      <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
-                        {c.thumbnail ? (
-                          <Image
-                            src={c.thumbnail}
-                            alt={`${c.route} climb`}
-                            fill
-                            unoptimized
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
-                            <svg className="h-10 w-10" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24" aria-hidden="true">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                            </svg>
-                          </div>
-                        )}
-
-                        {/* Run type badge */}
-                        <RunTypeBadge
-                          runType={c.runType}
-                          variant="overlay"
-                          className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                        />
-                      </div>
-
-                      {/* Info + options */}
-                      <div className="flex items-start gap-1 px-2 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-                          <p className="truncate text-[10px] text-fg-muted">
-                            {c.area} &middot; {c.state}
-                          </p>
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
-                            {c.rating && (
-                              <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
-                                {c.rating}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
-                          <ClimbOptionsDropdown climbKey={c.key} />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          {/* ---- Map view ---- */}
+          {viewMode === "map" && (
+            <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
+              {loadingPins ? (
+                <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                  Loading map&#8230;
                 </div>
+              ) : pins.length === 0 ? (
+                <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                  No GPS-tagged climbs yet.
+                </div>
+              ) : (
+                <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
+              )}
+            </section>
+          )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="mt-6 flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
-                      disabled={climbPage <= 1}
-                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                    >
-                      Previous
-                    </button>
-                    <span className="text-xs text-fg-muted">
-                      Page {climbPage} of {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={climbPage >= totalPages}
-                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                    >
-                      Next
-                    </button>
+          {/* ---- Climb grid (4×4) ---- */}
+          {viewMode === "list" && (
+            <section className="mb-8">
+              {loadingClimbs ? (
+                <div className="flex flex-col items-center gap-4 py-10">
+                  <LoadingSpinner />
+                  <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
+                </div>
+              ) : climbs.length === 0 ? (
+                <p className="py-8 text-center text-xs text-fg-muted">
+                  {climbTotal === 0
+                    ? "No climbs recorded yet."
+                    : "No climbs match the current filters."}
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                    {climbs.map((c) => (
+                      <div
+                        key={c.key}
+                        onClick={() => handleCardClick(c)}
+                        className="group relative cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover"
+                      >
+                        {/* Thumbnail or placeholder */}
+                        <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
+                          {c.thumbnail ? (
+                            <Image
+                              src={c.thumbnail}
+                              alt={`${c.route} climb`}
+                              fill
+                              unoptimized
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
+                              <svg
+                                className="h-10 w-10"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                                />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* Run type badge */}
+                          <RunTypeBadge
+                            runType={c.runType}
+                            variant="overlay"
+                            className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                          />
+                        </div>
+
+                        {/* Info + options */}
+                        <div className="flex items-start gap-1 px-2 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                            <p className="truncate text-[10px] text-fg-muted">
+                              {c.area} &middot; {c.state}
+                            </p>
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                              {c.rating && (
+                                <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                                  {c.rating}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div
+                            className="shrink-0 self-center"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ClimbOptionsDropdown climbKey={c.key} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-              </>
-            )}
-          </section>
-        )}
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="mt-6 flex items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
+                        disabled={climbPage <= 1}
+                        className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs text-fg-muted">
+                        Page {climbPage} of {totalPages}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={climbPage >= totalPages}
+                        className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
         </>
       )}
 
