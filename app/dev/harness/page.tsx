@@ -21,7 +21,6 @@ import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
-import ScanProgress from "@/components/scan/process-flow/ScanProgress";
 import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
@@ -271,7 +270,6 @@ function Calibrator({
 }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [phase, setPhase] = useState<RunPhase>("idle");
   const [phaseError, setPhaseError] = useState<string | null>(null);
@@ -313,8 +311,6 @@ function Calibrator({
     firstFrameFile,
     currentFrame,
     totalFrames,
-    orbPreview,
-    currentPose,
     cropTrace,
     detectionFrames,
   } = useVideoProcessor(100);
@@ -390,16 +386,6 @@ function Calibrator({
         if (revoked) return;
         setVideoUrl(url);
         setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
-
-        // Probe natural dimensions to shape the scan-progress stage.
-        const probe = document.createElement("video");
-        probe.preload = "metadata";
-        probe.onloadedmetadata = () => {
-          if (probe.videoWidth && probe.videoHeight && !revoked) {
-            setVideoAspect({ w: probe.videoWidth, h: probe.videoHeight });
-          }
-        };
-        probe.src = url;
 
         const { setup } = await setupRes.json();
         if (setup && !revoked) {
@@ -492,6 +478,12 @@ function Calibrator({
           filterTolerance: cfg.filterTolerance,
           motionThreshold: cfg.motionThreshold,
           refineStride: cfg.refineStride,
+        },
+        {
+          emitLivePreview: false,
+          frameOutput: "detected",
+          detectHolds: false,
+          generateThumbnail: false,
         },
       );
     } catch (err) {
@@ -602,7 +594,7 @@ function Calibrator({
     );
   }
 
-  // ── In-scan progress: the scan flow's live x-ray + percentage + a bar ──
+  // ── In-scan progress: harness uses a low-overhead progress shell only ──
   if (phase === "running" || phase === "posting") {
     const pct = totalFrames > 0 ? Math.min(100, Math.round((currentFrame / totalFrames) * 100)) : 0;
     const finishing =
@@ -612,14 +604,45 @@ function Calibrator({
         <div className="absolute inset-x-0 top-0 z-10">
           <ScanLoadingBar progressPct={pct} finishing={finishing} />
         </div>
-        <ScanProgress
-          orbPreview={orbPreview}
-          currentPose={currentPose}
-          videoAspect={videoAspect}
-          progressPct={pct}
-          finishing={finishing}
-          onCancel={handleCancelRun}
-        />
+        <section className="flex h-full min-h-0 flex-col" aria-label="Scanning Test Video">
+          <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
+            <div className="mx-auto flex h-7 w-full max-w-5xl items-center gap-3">
+              <span className="text-sm font-medium text-fg">Scanning Test Video</span>
+            </div>
+          </header>
+
+          <div className="flex min-h-0 flex-1 items-center justify-center bg-surface px-6">
+            <div className="flex w-full max-w-md flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-fg-secondary">
+                  {finishing ? "Preparing results" : "Detecting frames"}
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-fg">{pct}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-edge/30" aria-hidden="true">
+                <div
+                  className="h-full bg-send transition-[width] duration-200"
+                  style={{ width: `${finishing ? 100 : pct}%` }}
+                />
+              </div>
+              <p className="font-mono text-xs text-fg-muted">
+                {currentFrame} / {totalFrames || "?"} sampled frames
+              </p>
+            </div>
+          </div>
+
+          <footer className="shrink-0 border-t border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
+            <div className="mx-auto flex w-full max-w-5xl items-center justify-start">
+              <button
+                type="button"
+                onClick={handleCancelRun}
+                className="rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
+              >
+                Cancel scan
+              </button>
+            </div>
+          </footer>
+        </section>
       </div>
     );
   }

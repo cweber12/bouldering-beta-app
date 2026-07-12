@@ -64,6 +64,10 @@ Three forces shape the design:
    detection quality (the run is already posted; the preview is review-only). Dev
    surfaces (ORB feature points, the diagnostics panel) are open by default in the
    harness, scoped locally so the app-wide Developer-view preference is untouched.
+   While the run is in progress the harness shows only a plain progress shell,
+   not the production **Scan Loading View** x-ray stage, so detected-frame
+   evaluation does not spend main-thread time drawing the live Skeleton trail or
+   ORB starfield.
    Phase two replays the stored Setup headlessly through
    `useVideoProcessor` whenever detection logic changes, with no human in the
    loop. The Quality Tier is pinned in the Setup (not swept), so setup is held
@@ -82,11 +86,11 @@ Three forces shape the design:
    the pose `frames`; the `orb` payload is capture-time extraction data only —
    the **Reference Frame Metadata** (keypoint count, region
    brightness/contrast/sharpness, condition flags) — and no match runs at capture
-   time. The frames are the **dense/smoothed** frames the pipeline already saves
-   to `sessionStore`, not the sparse detected array: `useVideoProcessor` does not
-   expose the sparse frames, and the dense frames are exactly what the overlay
-   renders, so a regression eyeballs faithfully without touching the production
-   hook.
+   time. The frames are the accepted **Detection Frame** poses after flip and
+   landmark-quality filtering, not dense interpolated playback frames. The
+   evaluation harness is for detector quality first; interpolation quality needs
+   its own later evaluation mode so synthetic in-between frames do not obscure
+   whether the detector found the Climber on the sampled frame.
 
 4. **Every run is self-attributing.** Each `pose`/`orb` payload stamps
    `appVersion` (git SHA), the resolved detection config (tier, model variant,

@@ -84,6 +84,17 @@ export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
+interface ProcessingOptions {
+  /** Emit live skeleton / ORB preview state for the animated scan loading view. */
+  emitLivePreview?: boolean;
+  /** Persist dense interpolated frames, or only accepted detector frames. */
+  frameOutput?: "interpolated" | "detected";
+  /** Compute scan-time Holds from output frames. */
+  detectHolds?: boolean;
+  /** Generate the ORB thumbnail stored with user-facing Runs. */
+  generateThumbnail?: boolean;
+}
+
 /**
  * Re-analyse lighting every N pose-detection frames so preprocessing adapts
  * to gradual changes in illumination as the climber moves through the scene.
@@ -220,6 +231,7 @@ export interface VideoProcessorResult {
    * @param backend   - Which pose backend is active. Default: "mediapipe".
    * @param detection - Optional quality-tier detection knobs (gap-recovery
    *                    aggressiveness, landmark-filter tolerance).
+   * @param options   - Optional processing toggles for dev-only harnesses.
    */
   process: (
     file: File,
@@ -256,6 +268,7 @@ export interface VideoProcessorResult {
       /** Frame stride used while refining a gap (1 = every frame). */
       refineStride?: number;
     },
+    options?: ProcessingOptions,
   ) => Promise<void>;
   /** Abort any in-flight processing and reset all state back to idle. */
   reset: () => void;
@@ -381,7 +394,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         motionThreshold?: number;
         refineStride?: number;
       } = {},
+      options: ProcessingOptions = {},
     ) => {
+      const emitLivePreview = options.emitLivePreview ?? true;
+      const frameOutput = options.frameOutput ?? "interpolated";
+      const shouldDetectHolds = options.detectHolds ?? true;
+      const shouldGenerateThumbnail = options.generateThumbnail ?? true;
+
       abortRef.current = false;
       const seekController = new AbortController();
       seekAbortRef.current = seekController;
@@ -639,7 +658,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (i === 0) {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
-            latestPreviewFrameData = referenceImageData;
+            if (emitLivePreview) latestPreviewFrameData = referenceImageData;
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
             // Snapshot the frame-0 conditions for diagnostics before currentAnalysis
             // is re-assigned by the periodic re-analysis below.
@@ -660,7 +679,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             }, "image/png");
           }
 
-          if (i === middleIndex) {
+          if (shouldGenerateThumbnail && i === middleIndex) {
             middleFrameImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
           }
 
@@ -766,14 +785,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             detectionFrameCount++;
             if (detectionFrameCount % POSE_REANALYSIS_INTERVAL === 0) {
               const reData = ctx.getImageData(0, 0, videoWidth, videoHeight);
-              latestPreviewFrameData = reData;
+              if (emitLivePreview) latestPreviewFrameData = reData;
               currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
             }
 
             // Feed the scan loading view (the "x-ray"): the live detected pose
             // drives the accented skeleton. The ORB starfield is refreshed on a
             // throttled cadence so it scrolls with the wall while staying cheap.
-            if (chosen && mountedRef.current) {
+            if (emitLivePreview && chosen && mountedRef.current) {
               setCurrentPose(chosen);
               if (shouldEmitOrbPreview(video.currentTime, lastOrbPreviewEmitSec)) {
                 lastOrbPreviewEmitSec = video.currentTime;
@@ -1002,17 +1021,30 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // makes rotating limbs stretch/snap and occluded joints bend the wrong
         // way (see ADR 0015).
         const goodFrames = filterLandmarks(kept, 0.3, detection.filterTolerance);
-        const interpolated = interpolatePoseFrames(goodFrames, allTimestamps);
-        const estimated = estimateMissingLandmarks(interpolated, 10, 5, backend);
-        const filled = fillPersistentGaps(estimated, backend);
-        const smoothed = smoothPoseFrames(filled);
-        const frames = constrainSkeleton(smoothed, goodFrames, backend);
+        const frames =
+          frameOutput === "detected"
+            ? goodFrames
+            : constrainSkeleton(
+                smoothPoseFrames(
+                  fillPersistentGaps(
+                    estimateMissingLandmarks(
+                      interpolatePoseFrames(goodFrames, allTimestamps),
+                      10,
+                      5,
+                      backend,
+                    ),
+                    backend,
+                  ),
+                ),
+                goodFrames,
+                backend,
+              );
 
         // Author Holds at scan time in the Run's own video space (Fixed Capture
         // only). The result is persisted with the Run and editable on the
         // Detection Preview; Panning Capture has no single whole-Route frame, so
         // it keeps undefined holds and falls back to the on-the-fly path (ADR 0009).
-        const holds: StoredHold[] | undefined = panning
+        const holds: StoredHold[] | undefined = !shouldDetectHolds || panning
           ? undefined
           : detectHoldsVideoSpace(frames, videoMeta.width, videoMeta.height);
 
@@ -1108,7 +1140,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                   : extractFeatures(cv, processedOrbImageData, false);
             }
 
-            const thumbSource = middleFrameImageData ?? referenceImageData;
+            const thumbSource = shouldGenerateThumbnail
+              ? (middleFrameImageData ?? referenceImageData)
+              : null;
             const thumbnail = thumbSource
               ? generateOrbThumbnail(thumbSource, orbFeatures)
               : undefined;
