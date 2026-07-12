@@ -23,7 +23,9 @@ export function hashFile(file: File): Promise<string> {
 
   const promise = (async () => {
     const buffer = await file.arrayBuffer();
-    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    // Normalise to a BufferSource view so Web Crypto accepts jsdom/undici File
+    // buffers consistently across Node runtimes.
+    const digest = await crypto.subtle.digest("SHA-256", new Uint8Array(buffer));
     return Array.from(new Uint8Array(digest))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
