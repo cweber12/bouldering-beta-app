@@ -123,7 +123,8 @@ trivial, so geometry is computed inline without a cache. They are toggled
 independently from the Climber panel's Holds row, and edited from the **Holds**
 drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
-be toggled off).
+be toggled off). The dev harness's Detection Preview adds a detection-frame
+filmstrip and stepper for jumping through sampled frames and flagged stretches.
 
 ### Adaptive overlay contrast
 

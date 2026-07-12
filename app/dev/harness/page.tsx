@@ -23,7 +23,8 @@ import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import ScanProgress from "@/components/scan/process-flow/ScanProgress";
 import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
-import FramePlayer from "@/components/skeleton/FramePlayer";
+import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
+import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
@@ -99,6 +100,18 @@ function defaultClimberBox(point: { x: number; y: number }): CropFraction {
     w: Math.min(w, 1 - clamp01(point.x - w / 2)),
     h: Math.min(h, 1 - clamp01(point.y - h / 2)),
   };
+}
+
+function findFrameIndexByTime(frames: { timestamp: number }[], time: number): number {
+  if (frames.length === 0) return 0;
+  let lo = 0;
+  let hi = frames.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (frames[mid].timestamp <= time) lo = mid;
+    else hi = mid - 1;
+  }
+  return frames[lo].timestamp <= time ? lo : 0;
 }
 
 export default function HarnessPage() {
@@ -259,6 +272,9 @@ function Calibrator({
   const [previewAttempt, setPreviewAttempt] = useState<RouteAttempt | null>(null);
   const [previewDiag, setPreviewDiag] = useState<ScanDiagnostics | null>(null);
   const [relayStatus, setRelayStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const previewPlayerRef = useRef<FramePlayerHandle>(null);
+  const [previewPlaying, setPreviewPlaying] = useState(true);
+  const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
 
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(getTierConfig(DEFAULT_TIER).variant);
@@ -289,10 +305,54 @@ function Calibrator({
     orbPreview,
     currentPose,
     cropTrace,
+    detectionFrames,
   } = useVideoProcessor(100);
 
   // Detection Preview: show the per-frame Adaptive Crop overlay (default on).
   const [showCrops, setShowCrops] = useState(true);
+  const previewFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
+
+  useEffect(() => {
+    if (phase !== "preview") return;
+    setPreviewPlaying(true);
+    setPreviewFrameIndex(0);
+  }, [phase, previewFrames]);
+
+  useEffect(() => {
+    if (phase !== "preview" || previewFrames.length === 0) return;
+    let raf = 0;
+
+    const syncCurrentFrame = () => {
+      const playerTime = previewPlayerRef.current?.getCurrentTime() ?? 0;
+      const nextIndex = findFrameIndexByTime(previewFrames, playerTime);
+      setPreviewFrameIndex((prev) => (prev === nextIndex ? prev : nextIndex));
+      raf = requestAnimationFrame(syncCurrentFrame);
+    };
+
+    raf = requestAnimationFrame(syncCurrentFrame);
+    return () => cancelAnimationFrame(raf);
+  }, [phase, previewFrames]);
+
+  const handlePreviewSeek = useCallback(
+    (index: number) => {
+      const frame = previewFrames[index];
+      if (!frame) return;
+      setPreviewPlaying(false);
+      setPreviewFrameIndex(index);
+      previewPlayerRef.current?.pause();
+      previewPlayerRef.current?.seek(frame.timestamp);
+    },
+    [previewFrames],
+  );
+
+  const handlePreviewTogglePlay = useCallback(() => {
+    setPreviewPlaying((playing) => {
+      const next = !playing;
+      if (next) previewPlayerRef.current?.play();
+      else previewPlayerRef.current?.pause();
+      return next;
+    });
+  }, []);
 
   function handleTierChange(t: QualityTier) {
     setTier(t);
@@ -597,15 +657,26 @@ function Calibrator({
           </div>
         </div>
 
-        <div className="relative flex min-h-0 flex-1 flex-col bg-surface">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
+          <DetectionFrameStepper
+            frames={previewFrames}
+            currentIndex={previewFrameIndex}
+            onSeek={handlePreviewSeek}
+            onTogglePlay={handlePreviewTogglePlay}
+            isPlaying={previewPlaying}
+            className="shrink-0"
+          />
+          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
           {firstFrameFile && skel ? (
             <FramePlayer
+              ref={previewPlayerRef}
               imageFile={firstFrameFile}
               videoSrc={videoUrl}
               videoTimeOffset={skel.startOffsetSec}
               layers={[{ frames: skel.frames, style: topoStyle }]}
               duration={skel.duration}
               autoPlay
+              hidePlayButton
               orbKeypoints={orbKeypoints}
               cropTrace={showCrops ? cropTrace : undefined}
               fit="contain"
@@ -618,7 +689,8 @@ function Calibrator({
               diagnostics for why.
             </div>
           )}
-          <DiagnosticsPanel record={previewDiag} defaultOpen />
+            <DiagnosticsPanel record={previewDiag} defaultOpen />
+          </div>
         </div>
       </div>
     );

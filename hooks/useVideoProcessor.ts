@@ -47,6 +47,7 @@ import {
   buildScanDiagnostics,
   buildReferenceFrameMeta,
   detectBadStretches,
+  WEAK_CONFIDENCE_THRESHOLD,
   summarizeMinAvgMax,
   type ScanDiagnostics,
   type SampledFrameStatus,
@@ -71,6 +72,7 @@ type CV = any;
 
 export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
+type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
 /**
  * Re-analyse lighting every N pose-detection frames so preprocessing adapts
@@ -275,6 +277,10 @@ export interface VideoProcessorResult {
    * null otherwise. Never written to the attempt, so it never reaches S3.
    */
   cropTrace: CropTrace | null;
+  /**
+   * Dev-only detection-frame timeline for the harness filmstrip.
+   */
+  detectionFrames: { timestamp: number; status: DetectionFrameStatus }[] | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -313,6 +319,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [orbPreview, setOrbPreview] = useState<NormalizedPoint[] | null>(null);
   const [currentPose, setCurrentPose] = useState<PoseFrame | null>(null);
   const [cropTrace, setCropTrace] = useState<CropTrace | null>(null);
+  const [detectionFrames, setDetectionFrames] = useState<{ timestamp: number; status: DetectionFrameStatus }[] | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -350,6 +357,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setOrbPreview(null);
       setCurrentPose(null);
       setCropTrace(null);
+      setDetectionFrames(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -900,6 +908,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (mountedRef.current) setCropTrace(cropTraceEntries);
         }
 
+        if (mountedRef.current) {
+          setDetectionFrames(
+            sampledStatus.map((row) => ({
+              timestamp: row.timestamp,
+              status: row.wasFlip
+                ? "flip"
+                : !row.detected
+                  ? "missing"
+                  : row.avgConfidence < WEAK_CONFIDENCE_THRESHOLD
+                    ? "weak"
+                    : "detected",
+            })),
+          );
+        }
+
         // Pipeline: filter → interpolate → estimate → fill persistent gaps →
         // smooth → constrain. Filtering is climbing-weighted; tolerance comes
         // from the quality tier (undefined → filterLandmarks' built-in default).
@@ -1186,6 +1209,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setOrbPreview(null);
       setCurrentPose(null);
       setCropTrace(null);
+      setDetectionFrames(null);
     }
   }, []);
 
@@ -1198,5 +1222,5 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     };
   }, []);
 
-  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose, cropTrace };
+  return { process, reset, status, orbStatus, currentFrame, totalFrames, attemptId, firstFrameFile, errorMessage, scanDiagnostics, orbPreview, currentPose, cropTrace, detectionFrames };
 }
