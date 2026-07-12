@@ -22,6 +22,14 @@ export interface CompareToolbarProps {
    * The single/multiple switch itself lives in the climb rail, not here.
    */
   consoleMode?: ConsoleMode;
+  /**
+   * Contrast boost — opt-in (off by default). When a route-photo backdrop is
+   * available (`contrastAvailable`), a "Contrast" toggle is shown; turning it on
+   * nudges every overlay colour (hue-locked) for legibility against the wall.
+   */
+  contrastAvailable?: boolean;
+  contrastEnabled?: boolean;
+  onContrastToggle?: (on: boolean) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +93,9 @@ export default function CompareToolbar({
   refineOpen,
   onToggleRefine,
   consoleMode = "multiple",
+  contrastAvailable = false,
+  contrastEnabled = false,
+  onContrastToggle,
 }: CompareToolbarProps) {
   const isMultiple = consoleMode === "multiple";
   return (
@@ -159,6 +170,37 @@ export default function CompareToolbar({
           {/* Divider between stage controls and focus tools */}
           <span className="mx-0.5 hidden h-5 w-px bg-edge/40 sm:block" aria-hidden="true" />
         </>
+      )}
+
+      {/* Contrast boost — opt-in toggle (shown once a route photo is sampled).
+          Gates backdrop adaptation for the whole overlay; off renders the exact
+          slot colours. */}
+      {contrastAvailable && (
+        <button
+          type="button"
+          onClick={() => onContrastToggle?.(!contrastEnabled)}
+          aria-pressed={contrastEnabled}
+          className={cn(
+            "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition",
+            contrastEnabled
+              ? "border border-accent/60 bg-accent/10 text-accent"
+              : "border border-transparent text-fg-muted hover:bg-inset/60 hover:text-fg",
+          )}
+          title="Boost overlay contrast against the wall"
+        >
+          <svg
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 3a9 9 0 000 18V3z" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+          Contrast
+        </button>
       )}
 
       {/* Refine — secondary disclosure */}

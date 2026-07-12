@@ -51,11 +51,13 @@ import {
 import { detectHoldsVideoSpace } from "@/pipeline/holds/holdDetection";
 import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
+import type { CropTrace, CropTraceEntry } from "@/utils/cropTrace";
 import type { PoseBackend } from "@/utils/poseConstants";
 import {
   buildScanDiagnostics,
   buildReferenceFrameMeta,
   detectBadStretches,
+  WEAK_CONFIDENCE_THRESHOLD,
   summarizeMinAvgMax,
   type ScanDiagnostics,
   type SampledFrameStatus,
@@ -80,6 +82,7 @@ type CV = any;
 
 export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
+type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
 /**
  * Re-analyse lighting every N pose-detection frames so preprocessing adapts
@@ -88,6 +91,14 @@ export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
  * every 10 seconds of video.
  */
 const POSE_REANALYSIS_INTERVAL = 20;
+
+/** Processed-time cadence (seconds) for loading-screen ORB preview refresh. */
+export const ORB_PREVIEW_UPDATE_INTERVAL_SEC = 0.75;
+
+/** Gate ORB preview refreshes to a bounded display cadence. */
+export function shouldEmitOrbPreview(currentTimeSec: number, lastEmitTimeSec: number): boolean {
+  return lastEmitTimeSec < 0 || currentTimeSec - lastEmitTimeSec >= ORB_PREVIEW_UPDATE_INTERVAL_SEC;
+}
 
 /**
  * Module-level monotonic counter (seconds) for MediaPipe timestamps.
@@ -259,9 +270,9 @@ export interface VideoProcessorResult {
   attemptId: string | null;
   /**
    * The pristine first video frame as a PNG File, captured during the seek loop
-   * for the Detection Preview background. Available shortly after processing
-   * starts; null before. Reusing the already-decoded frame avoids a fragile
-   * second video decode on the review step.
+   * as a Detection Preview fallback poster while the source video is preparing.
+   * Available shortly after processing starts; null before. Reusing the already-
+   * decoded frame avoids a fragile second video decode on the review step.
    */
   firstFrameFile: File | null;
   errorMessage: string | null;
@@ -272,9 +283,9 @@ export interface VideoProcessorResult {
   scanDiagnostics: ScanDiagnostics | null;
   /**
    * The wall ORB feature field from the reference frame, as full-frame
-   * normalised points with the climber masked out. Emitted once, at the first
-   * detection frame, so the scan loading view can paint it as the ambient
-   * "starfield" the pose skeletons climb through. Null before it is ready.
+   * normalised points with the climber masked out. Emitted on a throttled
+   * cadence while the seek loop runs so the loading "starfield" stays coherent
+   * with camera motion. Null before the first emission.
    */
   orbPreview: NormalizedPoint[] | null;
   /**
@@ -284,6 +295,17 @@ export interface VideoProcessorResult {
    * before the first pose is detected.
    */
   currentPose: PoseFrame | null;
+  /**
+   * Dev-only per-frame crop trace for the detection eval harness: the Adaptive
+   * Crop search region, the tight landmark box, and re-acquire / refinement
+   * flags for each crop event. Populated only under {@link DIAGNOSTICS_ENABLED};
+   * null otherwise. Never written to the attempt, so it never reaches S3.
+   */
+  cropTrace: CropTrace | null;
+  /**
+   * Dev-only detection-frame timeline for the harness filmstrip.
+   */
+  detectionFrames: { timestamp: number; status: DetectionFrameStatus }[] | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -321,6 +343,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [scanDiagnostics, setScanDiagnostics] = useState<ScanDiagnostics | null>(null);
   const [orbPreview, setOrbPreview] = useState<NormalizedPoint[] | null>(null);
   const [currentPose, setCurrentPose] = useState<PoseFrame | null>(null);
+  const [cropTrace, setCropTrace] = useState<CropTrace | null>(null);
+  const [detectionFrames, setDetectionFrames] = useState<
+    { timestamp: number; status: DetectionFrameStatus }[] | null
+  >(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -369,6 +395,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setScanDiagnostics(null);
       setOrbPreview(null);
       setCurrentPose(null);
+      setCropTrace(null);
+      setDetectionFrames(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -464,9 +492,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let referenceImageData: ImageData | null = null;
         let middleFrameImageData: ImageData | null = null;
         const middleIndex = Math.floor(frameCount / 2);
-        // Emit the ORB starfield for the loading view once, at the first frame
-        // that yields a pose (so the climber mask is available).
-        let orbPreviewSent = false;
+        // ORB preview emission state for the loading view. The starfield is
+        // refreshed on a throttled cadence so it moves with camera motion.
+        let lastOrbPreviewEmitSec = -Infinity;
+        let latestPreviewFrameData: ImageData | null = null;
 
         // Lighting analysis — seeded from frame 0, adapted at intervals
         let currentAnalysis: FrameAnalysis | null = null;
@@ -479,6 +508,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         let recoveryFramesUsed = 0; // frames accepted in Adaptive Refinement
         let gapsRefined = 0; // gaps the refinement pass re-probed
         let limbExpandedFrames = 0; // detection frames where a missing-limb reach disk was applied (ADR 0014)
+        // Dev-only per-frame crop trace for the harness Detection Preview. Only
+        // filled under DIAGNOSTICS_ENABLED; exposed via setCropTrace, never on
+        // the attempt (so it never reaches S3). See utils/cropTrace.ts.
+        const cropTraceEntries: CropTraceEntry[] = [];
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -606,6 +639,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           if (i === 0) {
             // Capture first frame for ORB reference and seed the lighting analysis.
             referenceImageData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+            latestPreviewFrameData = referenceImageData;
             currentAnalysis = analyzeFrame(cv, referenceImageData, climberCropPx, wallCropPx);
             // Snapshot the frame-0 conditions for diagnostics before currentAnalysis
             // is re-assigned by the periodic re-analysis below.
@@ -670,12 +704,15 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             // Lost inside a crop → widen to the full frame and re-acquire by
             // identity rather than locking onto a bystander.
+            let reacquired = false;
             if (!chosen && region) {
               chosen = detectClimber(null, predicted, REACQUIRE_GATE);
+              reacquired = true;
             }
 
             let avgConfidence = 0;
             let keypointCount = 0;
+            let landmarkBox: CropBox | null = null; // deriveClimberCrop, for the dev crop trace
             if (chosen) {
               chosen.timestamp = video.currentTime;
               detected.push(chosen);
@@ -687,6 +724,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               const c = poseCentroid(chosen.keypoints);
               if (c) history.push(c);
               const box = deriveClimberCrop(chosen.keypoints, videoWidth, videoHeight);
+              landmarkBox = box;
               if (box) {
                 lastClimberBox = box;
                 coverageSamples.push((box.width * box.height) / (videoWidth * videoHeight));
@@ -709,34 +747,62 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
             frameCaptures.push({ frameIndex: i, timestamp: video.currentTime, cropBox: region });
 
+            // Dev crop trace: the Adaptive Crop search region fed to the detector,
+            // the tight landmark box it found, and the re-acquire flag. Drawn on
+            // the harness Detection Preview; never persisted to the attempt/S3.
+            if (DIAGNOSTICS_ENABLED) {
+              cropTraceEntries.push({
+                timestamp: video.currentTime,
+                frameIndex: i,
+                detected: !!chosen,
+                reacquired,
+                refinement: false,
+                searchRegion: region,
+                landmarkBox,
+              });
+            }
+
             // Periodically re-analyse lighting to adapt to scene changes.
             detectionFrameCount++;
             if (detectionFrameCount % POSE_REANALYSIS_INTERVAL === 0) {
               const reData = ctx.getImageData(0, 0, videoWidth, videoHeight);
+              latestPreviewFrameData = reData;
               currentAnalysis = analyzeFrame(cv, reData, climberCropPx, wallCropPx);
             }
 
             // Feed the scan loading view (the "x-ray"): the live detected pose
-            // drives the accented skeleton, and the first pose also triggers a
-            // one-time ORB wall-feature field (the ambient starfield). Both are
-            // painted at true frame-relative positions on a dark backdrop.
+            // drives the accented skeleton. The ORB starfield is refreshed on a
+            // throttled cadence so it scrolls with the wall while staying cheap.
             if (chosen && mountedRef.current) {
               setCurrentPose(chosen);
-              if (!orbPreviewSent && referenceImageData) {
-                orbPreviewSent = true;
+              if (shouldEmitOrbPreview(video.currentTime, lastOrbPreviewEmitSec)) {
+                lastOrbPreviewEmitSec = video.currentTime;
                 try {
-                  setOrbPreview(
-                    extractWallFeaturePoints(
-                      cv,
-                      referenceImageData,
-                      chosen.keypoints,
-                      currentAnalysis,
-                      cropOptions,
-                      wallCropPx,
-                      videoWidth,
-                      videoHeight,
-                    ),
-                  );
+                  if (panning && keyframes.length > 0) {
+                    const latestKeyframe = keyframes[keyframes.length - 1];
+                    setOrbPreview(
+                      latestKeyframe.features.keypoints.map((kp) => ({
+                        x: kp.pt.x / videoWidth,
+                        y: kp.pt.y / videoHeight,
+                      })),
+                    );
+                  } else {
+                    const previewFrameData: ImageData =
+                      latestPreviewFrameData ?? ctx.getImageData(0, 0, videoWidth, videoHeight);
+                    latestPreviewFrameData = previewFrameData;
+                    setOrbPreview(
+                      extractWallFeaturePoints(
+                        cv,
+                        previewFrameData,
+                        chosen.keypoints,
+                        currentAnalysis,
+                        cropOptions,
+                        wallCropPx,
+                        videoWidth,
+                        videoHeight,
+                      ),
+                    );
+                  }
                 } catch (err) {
                   console.warn("[useVideoProcessor] ORB preview extraction failed", err);
                 }
@@ -880,10 +946,47 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               }
               prevAccepted = candidate;
               budget--;
+
+              // Dev crop trace: Refinement always re-detects on the full frame,
+              // so there is no search region to draw — record it as a flag and
+              // keep the landmark box it produced.
+              if (DIAGNOSTICS_ENABLED) {
+                cropTraceEntries.push({
+                  timestamp: candidate.timestamp,
+                  frameIndex: tsIdx,
+                  detected: true,
+                  reacquired: false,
+                  refinement: true,
+                  searchRegion: null,
+                  landmarkBox: deriveClimberCrop(candidate.keypoints, videoWidth, videoHeight),
+                });
+              }
             }
           }
 
           kept.sort((a, b) => a.timestamp - b.timestamp);
+        }
+
+        // Publish the dev crop trace (main-loop rows + any Refinement rows),
+        // sorted by video time so the preview can hold/step to the active crop.
+        if (DIAGNOSTICS_ENABLED) {
+          cropTraceEntries.sort((a, b) => a.timestamp - b.timestamp);
+          if (mountedRef.current) setCropTrace(cropTraceEntries);
+        }
+
+        if (mountedRef.current) {
+          setDetectionFrames(
+            sampledStatus.map((row) => ({
+              timestamp: row.timestamp,
+              status: row.wasFlip
+                ? "flip"
+                : !row.detected
+                  ? "missing"
+                  : row.avgConfidence < WEAK_CONFIDENCE_THRESHOLD
+                    ? "weak"
+                    : "detected",
+            })),
+          );
         }
 
         // Pipeline: filter → interpolate → estimate → fill persistent gaps →
@@ -1179,6 +1282,8 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setScanDiagnostics(null);
       setOrbPreview(null);
       setCurrentPose(null);
+      setCropTrace(null);
+      setDetectionFrames(null);
     }
   }, []);
 
@@ -1204,5 +1309,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     scanDiagnostics,
     orbPreview,
     currentPose,
+    cropTrace,
+    detectionFrames,
   };
 }

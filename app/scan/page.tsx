@@ -14,6 +14,8 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
+import { useContrastAdjust } from "@/hooks/useContrastAdjust";
+import { paletteContrastIsPoor } from "@/pipeline/overlay/contrastAdapter";
 import { useS3Storage } from "@/hooks/useS3Storage";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useGeocoding } from "@/hooks/useGeocoding";
@@ -25,14 +27,14 @@ import type { HoldStyle } from "@/pipeline/holds/holdsOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
-import { containRoute, defaultRouteAroundClimber } from "@/utils/cropContainment";
+import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { getTopology } from "@/utils/poseConstants";
 import CameraRecorderModal from "@/components/capture/CameraRecorderModal";
 import StepPickVideo from "@/components/scan/process-flow/StepPickVideo";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import StepViewLandmarks from "@/components/scan/process-flow/StepViewLandmarks";
 import StepMatchRoutePhoto from "@/components/scan/process-flow/StepMatchRoutePhoto";
-import ScanProgress from "@/components/scan/process-flow/ScanProgress";
+import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import MetadataBottomSheet, {
   type MetadataSheetLocation,
   type MetadataSheetRunDetails,
@@ -171,8 +173,6 @@ function ScanPageInner() {
     firstFrameFile,
     errorMessage,
     scanDiagnostics,
-    orbPreview,
-    currentPose,
   } = useVideoProcessor(100);
   const {
     uploadAttempt,
@@ -200,9 +200,6 @@ function ScanPageInner() {
   const [notes, setNotes] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(() => cachedPendingFile);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(() => cachedVideoUrl);
-  // Natural pixel dimensions of the selected video — shapes the scan loading
-  // stage so the ORB starfield + skeletons keep their true frame proportions.
-  const [videoAspect, setVideoAspect] = useState<{ w: number; h: number } | null>(null);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [s3Saved, setS3Saved] = useState(false);
@@ -234,6 +231,9 @@ function ScanPageInner() {
   const [skeletonStyle, setSkeletonStyle] = useState<SkeletonStyle>({});
   // Holds overlay style — the Overlay panel emits a full HoldStyle on mount.
   const [holdStyle, setHoldStyle] = useState<HoldStyle>({});
+  // Contrast boost — opt-in (off by default). When on, gates backdrop adaptation
+  // for both the Skeleton and Holds overlays. Off renders the authored palette.
+  const [contrastEnabled, setContrastEnabled] = useState(false);
 
   // On-demand video export state
   const [exportStatus, setExportStatus] = useState<"idle" | "rendering" | "done">("idle");
@@ -260,7 +260,20 @@ function ScanPageInner() {
   // Derive topology-aware skeleton style
   const activeAttemptId0 = status === "done" ? attemptId : null;
   const activeAttempt0 = activeAttemptId0 ? getAttempt(activeAttemptId0) : null;
-  const topoStyle: SkeletonStyle = useMemo(() => {
+  // Adaptive contrast — always sample each surface's backdrop luminance band once
+  // (memoised by file identity + crop) so we can *detect* poor contrast and offer
+  // the opt-in boost. The sampled adjust is only applied when the user turns the
+  // boost on (contrastEnabled); otherwise the overlay renders the authored palette.
+  //  • post-scan review (Skeleton over the first video frame) → the wall crop.
+  //  • route-photo overlay + exported WebM → the whole route photo.
+  const wallContrastAdjust = useContrastAdjust(firstFrameFile, wallCrop);
+  const routeContrastAdjust = useContrastAdjust(routePhotoFile);
+
+  // Poor-contrast detection drives the panel's one-click prompt.
+  const wallContrastPoor = !!wallContrastAdjust && paletteContrastIsPoor(wallContrastAdjust);
+  const routeContrastPoor = !!routeContrastAdjust && paletteContrastIsPoor(routeContrastAdjust);
+
+  const baseTopoStyle: SkeletonStyle = useMemo(() => {
     const backend = activeAttempt0?.poseBackend ?? "mediapipe";
     const topo = getTopology(backend);
     return {
@@ -269,6 +282,24 @@ function ScanPageInner() {
       keypointNames: topo.keypointNames,
     };
   }, [skeletonStyle, activeAttempt0]);
+
+  // Per-surface styles: the review step adapts to the wall, the match step (and
+  // the exported WebM, via styleRef) adapts to the route photo — only while the
+  // boost is enabled.
+  const landmarksTopoStyle: SkeletonStyle = useMemo(
+    () => ({ ...baseTopoStyle, contrastAdjust: contrastEnabled ? wallContrastAdjust : undefined }),
+    [baseTopoStyle, contrastEnabled, wallContrastAdjust],
+  );
+  const topoStyle: SkeletonStyle = useMemo(
+    () => ({ ...baseTopoStyle, contrastAdjust: contrastEnabled ? routeContrastAdjust : undefined }),
+    [baseTopoStyle, contrastEnabled, routeContrastAdjust],
+  );
+
+  // Holds style with the route-photo adaptation merged in for the overlay pass.
+  const topoHoldStyle: HoldStyle = useMemo(
+    () => ({ ...holdStyle, contrastAdjust: contrastEnabled ? routeContrastAdjust : undefined }),
+    [holdStyle, contrastEnabled, routeContrastAdjust],
+  );
 
   // Keep styleRef in sync
   useEffect(() => {
@@ -447,16 +478,6 @@ function ScanPageInner() {
     const url = URL.createObjectURL(file);
     previewUrlRef.current = url;
     setVideoPreviewUrl(url);
-    // Probe the natural dimensions for the loading-stage aspect ratio.
-    setVideoAspect(null);
-    const probe = document.createElement("video");
-    probe.preload = "metadata";
-    probe.onloadedmetadata = () => {
-      if (probe.videoWidth && probe.videoHeight) {
-        setVideoAspect({ w: probe.videoWidth, h: probe.videoHeight });
-      }
-    };
-    probe.src = url;
     setPendingFile(file);
     setClimberCrop(DEFAULT_CROP);
     setWallCrop(DEFAULT_CROP);
@@ -551,32 +572,28 @@ function ScanPageInner() {
       const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
       const climber = derived ?? defaultClimberBox(point);
       setClimberCrop(climber);
-      // Route appears around the Climber: near full-frame, bottom pulled up to the
-      // Climber's bottom (ADR 0014). Keep the User's framing if they touched it.
-      setWallCrop((prev) =>
-        wallTouchedRef.current ? containRoute(prev, climber) : defaultRouteAroundClimber(climber),
-      );
+      // Route starts framed around the Climber (inset from the edges, floor
+      // trimmed). It is independent of the Climber, so keep the User's own
+      // framing untouched if they already sized it (ADR 0016).
+      setWallCrop((prev) => (wallTouchedRef.current ? prev : defaultRouteAroundClimber(climber)));
       return derived != null;
     },
     [model],
   );
 
   // The user dragged the Climber box — it overrides the detection seed region.
-  // The Climber is dominant, so it pushes the Route out to keep containing it.
+  // The Climber and Route are independent, so this leaves the Route alone.
   const handleClimberCropChange = useCallback((c: CropFraction) => {
     setClimberCrop(c);
-    setWallCrop((prev) => containRoute(prev, c));
   }, []);
 
   // The user dragged the Route box — remember it so a re-tap keeps their framing.
-  // The Route is subordinate: it can never cross inside the Climber.
-  const handleWallCropChange = useCallback(
-    (c: CropFraction) => {
-      wallTouchedRef.current = true;
-      setWallCrop(containRoute(c, climberCrop));
-    },
-    [climberCrop],
-  );
+  // The Route is free to be any size (frame-clamped only), independent of the
+  // Climber, so the User can trim it down to just the rock face.
+  const handleWallCropChange = useCallback((c: CropFraction) => {
+    wallTouchedRef.current = true;
+    setWallCrop(frameClampCrop(c));
+  }, []);
 
   // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
   const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
@@ -849,42 +866,64 @@ function ScanPageInner() {
         />
       )}
 
-      {step === "landmarks" && showScanLoading && (
-        <ScanProgress
-          orbPreview={orbPreview}
-          currentPose={currentPose}
-          videoAspect={videoAspect}
-          progressPct={progressPct}
-          finishing={!isProcessing || progressPct >= 100}
-          onCancel={handleCancelScan}
-        />
-      )}
+      {step === "landmarks" && (
+        <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
+          <StepViewLandmarks
+            isProcessing={isProcessing}
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            orbStatus={orbStatus}
+            frameStep={frameStep}
+            processingError={status === "error" ? errorMessage : null}
+            activeAttempt={activeAttempt}
+            sourceVideoUrl={videoPreviewUrl}
+            firstFrameFile={firstFrameFile}
+            firstFrameSkeletonData={firstFrameSkeletonData}
+            topoStyle={landmarksTopoStyle}
+            onSkeletonStyleChange={setSkeletonStyle}
+            contrastEnabled={contrastEnabled}
+            onContrastToggle={setContrastEnabled}
+            contrastPoor={wallContrastPoor}
+            onEditClimb={handleEditClimb}
+            onScanAnother={handleSaveComplete}
+            orbReady={orbReady}
+            onViewOnRoutePhoto={handleViewOnRoutePhoto}
+            onUpload={handleOpenUploadSheet}
+            s3Saved={s3Saved}
+            s3Loading={s3Status === "loading"}
+            saveError={saveError}
+            onViewScans={() => router.push("/profile")}
+            scanDiagnostics={scanDiagnostics}
+          />
 
-      {step === "landmarks" && !showScanLoading && (
-        <StepViewLandmarks
-          isProcessing={isProcessing}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          progressPct={progressPct}
-          orbStatus={orbStatus}
-          frameStep={frameStep}
-          processingError={status === "error" ? errorMessage : null}
-          activeAttempt={activeAttempt}
-          firstFrameFile={firstFrameFile}
-          firstFrameSkeletonData={firstFrameSkeletonData}
-          topoStyle={topoStyle}
-          onSkeletonStyleChange={setSkeletonStyle}
-          onEditClimb={handleEditClimb}
-          onScanAnother={handleSaveComplete}
-          orbReady={orbReady}
-          onViewOnRoutePhoto={handleViewOnRoutePhoto}
-          onUpload={handleOpenUploadSheet}
-          s3Saved={s3Saved}
-          s3Loading={s3Status === "loading"}
-          saveError={saveError}
-          onViewScans={() => router.push("/profile")}
-          scanDiagnostics={scanDiagnostics}
-        />
+          {showScanLoading && (
+            <div className="absolute inset-0 z-20 bg-surface/70 backdrop-blur-sm">
+              <div className="absolute inset-x-0 top-0">
+                <ScanLoadingBar
+                  progressPct={progressPct}
+                  finishing={!isProcessing || progressPct >= 100}
+                />
+              </div>
+
+              <div className="flex h-full items-center justify-center px-4">
+                <div className="rounded-(--radius-panel) border border-edge/60 bg-surface-alt/90 px-4 py-2 text-sm text-fg-secondary">
+                  {!isProcessing || progressPct >= 100
+                    ? "Finishing up..."
+                    : `Scanning ${progressPct}%`}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCancelScan}
+                aria-label="Cancel scan"
+                className="absolute right-4 top-4 rounded-md border border-edge/60 bg-surface px-3 py-1.5 text-xs font-medium text-fg hover:bg-surface-alt"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {step === "match" && routePhotoFile && routePhotoPreviewUrl && (
@@ -909,9 +948,12 @@ function ScanPageInner() {
           isFrameReady={isFrameReady}
           isMatching={isMatching}
           holds={holds}
-          holdStyle={holdStyle}
+          holdStyle={topoHoldStyle}
           onSkeletonStyleChange={setSkeletonStyle}
           onHoldsStyleChange={setHoldStyle}
+          contrastEnabled={contrastEnabled}
+          onContrastToggle={setContrastEnabled}
+          contrastPoor={routeContrastPoor}
           exportStatus={exportStatus}
           exportProgress={exportProgress}
           onApplyMatch={handleApplyRouteMatch}

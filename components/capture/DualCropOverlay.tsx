@@ -11,9 +11,9 @@ import { type CropFraction } from "@/utils/cropFraction";
 //   • inside the climber  → moves the climber (climber layer is on top)
 //   • the ring between     → moves the route
 //   • each box's edge handles resize that box
-// Containment physics (climber pushes route out, route can't cross inside the
-// climber) live in the parent via utils/cropContainment — this component only
-// emits the raw dragged box per target. See ADR 0014.
+// The two boxes are independent: this component emits the raw dragged box per
+// target, frame-clamped only. There is no cross-box containment — the parent
+// (utils/cropContainment) just frame-clamps each. See ADR 0016.
 // ---------------------------------------------------------------------------
 
 type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "move";

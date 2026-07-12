@@ -31,6 +31,7 @@
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import { MP_SKELETON_EDGES, MP_KP_NAMES } from "@/utils/poseConstants";
 import { applyHomographyMatrix } from "@/pipeline/matching/homography";
+import { adaptColor, adaptRamp, type ContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 
 // ---------------------------------------------------------------------------
 // Defaults (all thickness/size values are × body scale unless noted)
@@ -47,8 +48,8 @@ const SIDE_HUE_SHIFT_LEFT = 0.04;
 const SIDE_HUE_SHIFT_RIGHT = 0.09;
 const ARM_HAND_COLOR = "#39B1D1";
 const LEG_FOOT_COLOR = "#F6850C";
-const ANATOMICAL_LEFT_HUE_SHIFT = -0.015;
-const ANATOMICAL_RIGHT_HUE_SHIFT = 0.015;
+const ANATOMICAL_LEFT_HUE_SHIFT = -0.025;
+const ANATOMICAL_RIGHT_HUE_SHIFT = 0.025;
 /** Opacity multiplier for the silhouette head. The head now floats free (the
  *  neck capsule was removed), so keep it faint to make the detachment subtle. */
 const HEAD_SILHOUETTE_OPACITY = 0.55;
@@ -237,6 +238,14 @@ export interface SkeletonStyle {
    * Default: auto (enabled only when using default colours).
    */
   anatomicalPalette?: boolean;
+
+  /**
+   * When set, every emitted overlay colour is nudged (lightness only, hue-locked)
+   * for legibility against the sampled backdrop this describes. Omit — or pass
+   * with Auto-contrast off — to render the authored palette exactly. See
+   * {@link adaptColor}.
+   */
+  contrastAdjust?: ContrastAdjust;
 }
 
 /**
@@ -392,6 +401,19 @@ function sameColor(a: string, b: string): boolean {
   return pa.r === pb.r && pa.g === pb.g && pa.b === pb.b;
 }
 
+/** Saturation at/below which a colour is an achromatic **neutral anchor**
+ *  (white / grey / black). Used only to exempt the shared white Compare joint
+ *  from contrast adaptation — a neutral has no hue to protect, so nudging it
+ *  would just slide a deliberately-neutral pin toward grey (PRD: the white joint
+ *  is a fixed anchor). Every chromatic palette identity sits far above this. */
+const NEUTRAL_SAT_FLOOR = 0.08;
+
+/** Whether a colour is a near-achromatic neutral (its HSL saturation is tiny). */
+function isNeutralColor(css: string): boolean {
+  const { r, g, b } = parseRgb(css);
+  return rgbToHsl(r, g, b)[1] <= NEUTRAL_SAT_FLOOR;
+}
+
 function mixCss(a: string, b: string, t: number): string {
   const ta = Math.max(0, Math.min(1, t));
   const ca = parseRgb(a);
@@ -451,7 +473,13 @@ function armProgress(name: string): number | null {
   if (name.endsWith("_shoulder")) return 0;
   if (name.endsWith("_elbow")) return 0.5;
   if (name.endsWith("_wrist")) return 0.82;
-  if (name.endsWith("_thumb") || name.endsWith("_index") || name.endsWith("_pinky")) return 1;
+  // `_foot_index` is a toe, not the hand index — exclude it so it stays a leg/foot point.
+  if (
+    name.endsWith("_thumb") ||
+    name.endsWith("_pinky") ||
+    (name.endsWith("_index") && !name.endsWith("_foot_index"))
+  )
+    return 1;
   return null;
 }
 
@@ -488,10 +516,17 @@ function edgeStrokeStyle(
   to: Pt,
   useAnatomicalPalette: boolean,
   singleColor: string,
+  adjust: ContrastAdjust | undefined,
 ): string | CanvasGradient {
-  if (!useAnatomicalPalette) return sideColor(singleColor, edgeSide(fromName, toName));
-  const fromColor = anatomicalPointColor(fromName);
-  const toColor = anatomicalPointColor(toName);
+  if (!useAnatomicalPalette) {
+    return adaptColor(sideColor(singleColor, edgeSide(fromName, toName)), adjust);
+  }
+  // Adapt the ramp endpoints together so the arm/leg gradient never compresses.
+  const [fromColor, toColor] = adaptRamp(
+    anatomicalPointColor(fromName),
+    anatomicalPointColor(toName),
+    adjust,
+  );
   if (sameColor(fromColor, toColor) || typeof ctx.createLinearGradient !== "function")
     return fromColor;
   const g = ctx.createLinearGradient(from.x, from.y, to.x, to.y);
@@ -696,11 +731,14 @@ function drawSilhouette(
   scale: number,
   limbThickness: number,
   useAnatomicalPalette: boolean,
+  adjust: ContrastAdjust | undefined,
 ): void {
   const limbR = Math.max(0.5, limbThickness * scale);
   const extremityR = Math.max(0.5, limbR * EXTREMITY_WIDTH_FACTOR);
 
-  const torsoHeadColor = useAnatomicalPalette ? DEFAULT_COLOR : color;
+  // Adapt the base BEFORE deriving depth shades, so the rim/core relationship
+  // stays relative to the nudged colour (ADR-0005 shades are lightness shifts).
+  const torsoHeadColor = adaptColor(useAnatomicalPalette ? DEFAULT_COLOR : color, adjust);
   const dark = shiftLightness(torsoHeadColor, RIM_DARK_SHIFT);
 
   const ls = kp.left_shoulder,
@@ -722,8 +760,14 @@ function drawSilhouette(
     if (!a || !b) return;
     sctx.lineWidth = 2 * r;
     if (useAnatomicalPalette) {
-      const from = shiftLightness(anatomicalPointColor(fromName), lightnessShift);
-      const to = shiftLightness(anatomicalPointColor(toName), lightnessShift);
+      // Adapt the ramp endpoints together, then shade each for depth.
+      const [fromBase, toBase] = adaptRamp(
+        anatomicalPointColor(fromName),
+        anatomicalPointColor(toName),
+        adjust,
+      );
+      const from = shiftLightness(fromBase, lightnessShift);
+      const to = shiftLightness(toBase, lightnessShift);
       if (sameColor(from, to) || typeof sctx.createLinearGradient !== "function") {
         sctx.strokeStyle = from;
       } else {
@@ -734,7 +778,7 @@ function drawSilhouette(
       }
     } else {
       sctx.strokeStyle = shiftLightness(
-        sideColor(color, edgeSide(fromName, toName)),
+        adaptColor(sideColor(color, edgeSide(fromName, toName)), adjust),
         lightnessShift,
       );
     }
@@ -892,6 +936,11 @@ export function drawSkeleton(
       sameColor(lineColor, DEFAULT_SKELETON_COLOR) &&
       sameColor(jointColor, DEFAULT_JOINT_COLOR));
 
+  // Adaptive contrast: when supplied, every emitted colour is nudged (lightness
+  // only, hue-locked) for legibility against the sampled backdrop. Undefined ⇒
+  // exactly today's palette (the feature is purely additive).
+  const adjust = options?.contrastAdjust;
+
   // Prefer the sequence-stable scale so limb widths do not pulse with movement;
   // fall back to a per-frame scale only when a caller draws without supplying one.
   const scale = options?.bodyScale ?? bodyScale(keypoints, ctx.canvas.width, ctx.canvas.height);
@@ -908,6 +957,7 @@ export function drawSkeleton(
         scale,
         limbThickness,
         useAnatomicalPalette,
+        adjust,
       );
       ctx.save();
       ctx.globalAlpha = silhouetteOpacity;
@@ -945,6 +995,7 @@ export function drawSkeleton(
         to,
         useAnatomicalPalette,
         lineColor,
+        adjust,
       );
       ctx.lineWidth = lineWidth;
       ctx.globalAlpha = isDim(from) || isDim(to) ? dimOpacity : 1;
@@ -958,10 +1009,14 @@ export function drawSkeleton(
   // ── Skeleton pass — joint points. ──
   if (jointsVisible) {
     const r = Math.max(0.5, jointRadius * scale);
+    // A neutral joint colour (the shared white Compare joint) is a fixed anchor —
+    // exempt it from adaptation so it never greys out against a bright wall. A
+    // chromatic joint colour still adapts like any other identity.
+    const jointAdjust = isNeutralColor(jointColor) ? undefined : adjust;
     for (const [name, pt] of Object.entries(keypoints)) {
       ctx.fillStyle = useAnatomicalPalette
-        ? anatomicalPointColor(name)
-        : sideColor(jointColor, sideOf(name));
+        ? adaptColor(anatomicalPointColor(name), adjust)
+        : adaptColor(sideColor(jointColor, sideOf(name)), jointAdjust);
       ctx.globalAlpha = isDim(pt) ? dimOpacity : 1;
       ctx.beginPath();
       ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);

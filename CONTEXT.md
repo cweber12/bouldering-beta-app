@@ -32,23 +32,37 @@ Climber, then re-derived each detection frame from the previous pose so it
 follows the Climber as they move and change scale. Sized and positioned to hold
 the whole body **and** the next move inside the region — so a reaching limb is
 not clipped out of detection. The Climber is the **only** thing the Adaptive
-Crop frames, and a tap is the only Climber input: there is no hand-drawn Climber
-box.
+Crop frames. It is seeded at scan start by the **Climber Crop** (the tap creates
+that seed box; the User may adjust it), then re-derived per frame from landmarks
+— the manual box only seeds first acquisition, it does not track.
 _Avoid_: bounding box, ROI, the (manual) "crop box".
 
 **Manual Crop**:
-A user-adjustable box. The **Wall Crop** is now the only Manual Crop: it
-auto-renders around the Climber and the **User** may resize it. The Climber is
-no longer framed by a Manual Crop — it is selected by a tap and framed by the
-**Adaptive Crop**.
+A user-adjustable box. There are now **two**, independent of each other (ADR
+0016): the **Climber Crop** and the **Wall Crop**. Both are shown together and
+directly grabbable (`DualCropOverlay`); dragging one never moves the other. The
+per-frame **Adaptive Crop** is _not_ a Manual Crop — it stays landmark-derived
+during the scan.
 _Avoid_: selection, region.
+
+**Climber Crop**:
+The User-adjustable seed box for the **Climber** (code: `climberCrop`). It sets
+MediaPipe's first-acquisition search region and the lighting-analysis region for
+the **Climber**. Tap-seeded (`climberPoint`) and manually overridable, but it
+only seeds — the per-frame **Adaptive Crop** re-derives from landmarks during the
+scan, so hand-adjusting the Climber Crop does not change tracking, only where the
+first pose is acquired and where lighting is measured.
+_Avoid_: seed box (in prose), bounding box.
 
 **Wall Crop**:
 A region of stable wall texture (excluding the Climber) used to extract ORB
-features for route-photo matching. Defaults to the whole frame (the Climber is
-masked out during extraction) so matching has the most wall texture; the User
-may shrink it to exclude sky, ground, or bystanders.
-_Avoid_: background crop.
+features for route-photo matching (code: `wallCrop`). Independent of the
+**Climber Crop** (ADR 0016): the User may trim it down to just the rock face.
+Defaults inset from the frame edges with the bottom pulled up to the Climber's
+bottom (trimming floor/pad), and the User may shrink it further to exclude sky,
+ground, or bystanders.
+_Avoid_: background crop; Route crop (the ADRs drifted to this — it collides
+with **Route** the problem; the term is Wall Crop).
 
 **Quality Tier**:
 A user-facing speed/accuracy preset (Fast / Balanced / Accurate) that selects the
@@ -58,6 +72,17 @@ after a tier is picked. Trades a slower **Scan** for a cleaner overlay.
 _Avoid_: mode, level, model setting.
 
 ### Detection quality
+
+**Detection Frame**:
+A single sampled video frame that pose detection was run on — every Nth frame the
+seek loop sampled, plus any **Adaptive Refinement** re-samples — whether or not a
+**Climber** pose was accepted. The unit the detection-eval harness steps through
+and annotates; a "missing skeleton" is a Detection Frame with no accepted pose, an
+equally valid thing to land on. Distinct from a raw video frame (most are never
+fed to the detector) and from a dense playback frame (a synthetic in-between
+carrying an **Interpolated Landmark**, not a detection event).
+_Avoid_: sample, video frame (ambiguous — most video frames are not Detection
+Frames).
 
 **Landmark Flip**:
 A frame in which the pose model mislabels the **Climber**'s left/right sides
@@ -103,10 +128,16 @@ _Avoid_: tripod mode, static mode.
 A **Run** recorded while deliberately panning the camera along a longer **Route**
 that does not fit in one frame. Aligned to the **Route Photo** per-**Keyframe**
 rather than by a single homography, so the skeleton overlay tracks the wall as
-the camera moves. Opt-in via a scan-setup toggle; it does not replace **Fixed
-Capture**.
-_Avoid_: handheld mode, moving-camera mode (it is specifically a _deliberate
-pan_, not shake/jitter correction — fast handheld shake is out of scope).
+the camera moves. This mode also covers handheld / shaky moving-camera footage
+where the wall drifts in frame, so the UI label may refer to "Moving camera".
+Opt-in via a scan-setup toggle; it does not replace **Fixed Capture**.
+_Avoid_: tripod mode (use **Fixed Capture** there).
+
+**Scan Loading View**:
+The in-scan x-ray stage shown while detection runs: a live pose skeleton over a
+live ORB wall-feature starfield in video space (no homography). The starfield is
+throttled and refreshed during processing so it moves with camera motion.
+_Avoid_: detection preview, route overlay.
 
 **Keyframe**:
 A sampled video frame in a **Panning Capture** at which **Wall Crop** features
@@ -144,13 +175,14 @@ _Avoid_: route image, background photo.
 ### Overlay & review
 
 **Detection Preview**:
-The skeleton played back over the **Run**'s own first video frame, in raw
-video-pixel space with **no homography** applied. Its purpose is to review
-detection quality (did the pose pipeline track the **Climber** cleanly) before a
-**Route Photo** is involved. Shown on the review step immediately after a scan.
-It is also where **Holds** are reviewed, added, and removed before the Run is
-saved (Fixed Capture only — a Panning Capture Run has no single frame that shows
-the whole **Route**).
+The skeleton played back over the **Run**'s own source video, in raw video-pixel
+space with **no homography** applied (first frame used as a temporary fallback
+poster while video is preparing). Its purpose is to review detection quality
+(did the pose pipeline track the **Climber** cleanly) before a **Route Photo**
+is involved. Shown on the review step immediately after a scan. It is also where
+**Holds** are reviewed, added, and removed before the Run is saved (Fixed
+Capture only — a Panning Capture Run has no single frame that shows the whole
+**Route**).
 _Avoid_: preview, landmark preview (ambiguous with the **Route Overlay**).
 
 **Route Overlay**:
@@ -251,6 +283,58 @@ features, so the features always travel with the conditions under which they wer
 extracted. The one piece of diagnostic data that lives in S3 rather than locally;
 read back at match time to build a **Match Diagnostics** record.
 _Avoid_: frame stats (too generic).
+
+**Ground Truth** (Landmarks):
+The per-video reference pose the detection-eval harness scores runs against: the
+correct **Climber** landmarks on each **Detection Frame**, authored once in the
+calibration pass by running a throwaway detection scaffold and dragging the wrong
+landmarks into place (or marking a frame as having no Climber). Frozen alongside
+the video's crops and metadata as calibration output; never re-entered. Each
+frame is **verified** (a human corrected or confirmed it) or **unverified** (left
+as the scaffold's detection); scoring treats verified frames as true reference and
+unverified ones as a weaker signal. The scaffold run that seeds it is discarded —
+only the Ground Truth persists, not a scored run.
+_Avoid_: ground-truth run (it is not a **Run** — it yields no scored result);
+labels (those are the video-level metadata, a different thing).
+
+**Detection Error**:
+A per-run, per-**Detection Frame** discrepancy between a headless run's detected
+pose and the video's **Ground Truth**, computed automatically with no human
+judgement per run. Kinds: **missing** (Ground Truth has a Climber, the run found
+none), **wrong** (the run's pose is far from Ground Truth — a **Bystander** or a
+gross mislabel), **extreme** (an anatomically implausible pose), and **drift**
+(the pose is on the Climber but landmarks are displaced, measured as distance from
+Ground Truth). Once Ground Truth exists, errors are derived, not hand-tagged, and
+_causes_ are found by correlating errors against the auto per-frame conditions and
+the video-level metadata across the corpus — not attributed by hand per frame.
+_Avoid_: fault (superseded — errors are derived, not authored); reusing **Overlay
+Quality** "drift" (scan-level, on the **Route Overlay**).
+
+### Test corpus (detection eval harness)
+
+**Test Video**:
+A climbing video downloaded by a separate program to evaluate detection quality —
+_not_ a **Run** a **User** recorded. It never touches S3; it lives in that
+program's per-video bundle (a `metadata.json` of human-labelled conditions, a
+`final_frame.png`, and a `detections/` folder). Its `route_folder` groups Test
+Videos of the same wall, so a `route_folder` maps to a **Route**, one Test Video
+maps to one **Run** of it, and each `final_frame.png` is a candidate **Route
+Photo** for matching the _other_ Runs of that Route (a later cross-video phase).
+_Avoid_: sample, clip, Run (a Run is User-recorded and saved to S3).
+
+**Scan Setup**:
+The frozen set of manual scan inputs attached to a **Test Video** so its scan can
+be replayed headlessly with no **User**: the **Climber Crop**, the **Wall Crop**,
+the Climber tap (`climberPoint`), the **Fixed**/**Panning Capture** flag, and the
+**Quality Tier**. Set once in a manual calibration pass — which now also authors
+the video's **Ground Truth** by correcting a throwaway detection scaffold, and lets
+the User edit the video-level metadata (`analysis_inputs`) — and reused verbatim by
+every later headless re-run, so a quality change between runs is attributable to
+detection-logic changes, not setup drift. The scaffold run is discarded; calibration
+saves no scored run. Stored as `setup.json` in the Test Video's bundle, beside the
+`ground-truth.json` **Ground Truth**.
+_Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
+Setup), config, calibration, fixture.
 
 ## Relationships
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { drawHolds, HOLD_RING_COLOR } from "@/pipeline/holds/holdsOverlay";
+import { computeContrastAdjust } from "@/pipeline/overlay/contrastAdapter";
 import type { Hold } from "@/pipeline/holds/holdDetection";
 
 // ---------------------------------------------------------------------------
@@ -178,6 +179,25 @@ describe("drawHolds colour-coded rings", () => {
     // Every arc shares the single centroid — no occluder arcs from a different spot.
     const cxs = new Set(arcs.map((a) => a[0].toFixed(3)));
     expect(cxs.size).toBe(1);
+  });
+
+  it("adapts ring colours to the backdrop when contrastAdjust is supplied, unchanged without it", () => {
+    // Without an adjust, the exact ADR-0012 token colours are emitted.
+    const plain = makeCtx();
+    drawHolds(plain.ctx, HOLDS, 5, undefined, BODY_SCALE);
+    expect(plain.ringColors()).toContain(HOLD_RING_COLOR.hand);
+    expect(plain.ringColors()).toContain(HOLD_RING_COLOR.foot);
+
+    // A busy mid-luma wall forces both rings to shift off their token colours,
+    // but hue is preserved (still recognisable cyan / orange) — so the emitted
+    // strings differ from the tokens.
+    const adjust = computeContrastAdjust({ meanLuma: 0.45, stdLuma: 0.2 });
+    const adapted = makeCtx();
+    drawHolds(adapted.ctx, HOLDS, 5, { contrastAdjust: adjust }, BODY_SCALE);
+    const colors = adapted.ringColors();
+    expect(colors).toHaveLength(2);
+    expect(colors).not.toContain(HOLD_RING_COLOR.hand);
+    expect(colors).not.toContain(HOLD_RING_COLOR.foot);
   });
 
   it("draws nothing when holds are empty or hidden", () => {

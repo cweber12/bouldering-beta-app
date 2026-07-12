@@ -1,4 +1,4 @@
-# Route Scanner
+# Beta Scanner
 
 Scan a climbing run in-browser using **MediaPipe Pose Landmarker** pose
 estimation and **OpenCV.js** ORB feature matching — then save results to
@@ -14,13 +14,13 @@ Two capture modes share that pipeline:
 - **Fixed Capture** (default) — a static (tripod/propped) shot where the whole
   route stays in frame. A single homography from the **first frame** aligns the
   run to the route photo for every frame.
-- **Panning Capture** (opt-in "Long route / panning" toggle) — for a longer
-  route shot by deliberately panning the camera up the wall. The run stores ORB
-  **keyframes** (wall-crop features sampled ~every 0.75 s) and aligns each pan
-  section to the route photo independently, so the overlay tracks the wall as
-  the camera moves. The photo is the global reference, so the alignment is
-  drift-free; in-between frames decompose-interpolate the bracketing keyframe
-  homographies. Fast handheld shake is out of scope — use Fixed Capture there.
+- **Panning Capture** (opt-in "Moving camera" toggle) — for longer routes and
+  any moving-camera footage (panning, handheld drift, mild shake). The run
+  stores ORB **keyframes** (wall-crop features sampled ~every 0.75 s) and
+  aligns each moving section to the route photo independently, so the overlay
+  tracks the wall as the camera moves. The photo is the global reference, so
+  the alignment is drift-free; in-between frames decompose-interpolate the
+  bracketing keyframe homographies.
 
 Each run is classified as an **attempt** (did not top) or a **send** (topped).
 Optional **rating** (e.g. "V3") and freeform **notes** can be attached to any run.
@@ -123,13 +123,47 @@ trivial, so geometry is computed inline without a cache. They are toggled
 independently from the Climber panel's Holds row, and edited from the **Holds**
 drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
-be toggled off).
+be toggled off). The dev harness's Detection Preview adds a detection-frame
+filmstrip and stepper for jumping through sampled frames and flagged stretches.
+
+### Adaptive overlay contrast
+
+A **Boost contrast** control in the Climber panel keeps the overlay legible
+against the wall it is drawn on. It is **opt-in and off by default**: the backdrop
+is always sampled (so poor contrast can be _detected_), but adaptation is only
+applied once the user turns the boost on. When the wall is detected to give the
+palette poor contrast (`paletteContrastIsPoor`), the panel surfaces a one-click
+"Low contrast on this wall — boost it" prompt; otherwise it shows a plain toggle.
+
+The backdrop's luminance band is sampled once per surface (`useContrastAdjust` →
+`sampleBackdropLuma` draws the photo, or the wall crop, to a small offscreen
+canvas and hands the pixels to the pure `computeLumaStats`), and
+`contrastAdapter.adaptColor` nudges each overlay colour's **lightness only** just
+far enough to clear the contrast target against that band. Hue never moves — cyan
+still means Hand Hold, orange still means Foot Hold (ADR 0012), and the anatomical
+Skeleton keeps its limb identities — saturation is only ever raised (to rescue a
+hue a lightness push would wash out), and the result is clamped away from pure
+black/white so a nudge stays a nudge rather than a blackout. The target is
+deliberately gentler than WCAG's 3:1 graphical-object bar: on a bright wall a
+bright overlay cannot get _brighter_ than the wall, so a hard 3:1 would force it
+to near-black. The review step samples the wall crop; the route-photo overlay and
+the exported/baked WebM sample the route photo. Turning the boost off renders the
+authored palette exactly — the feature is purely additive, and nothing is
+persisted (the adjustment is recomputed deterministically from the photo, so saved
+runs need no migration). The target and band width are named constants
+(`TARGET_CONTRAST_RATIO`, `BAND_K`) at the top of `contrastAdapter.ts`.
+
+The route console (single, side-by-side, and multi-climb overlay) carries the
+same boost via a **Contrast** toggle in its stage toolbar, sampling the route
+photo. Because every climb differs by hue and hue never moves, adaptation can only
+slide lightness within each identity, so slots stay distinguishable; the shared
+white joint is a neutral anchor and is exempt from adaptation.
 
 ## Pages
 
 | Route               | Purpose                                                                                                                                                              | Auth required |
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| `/`                 | Landing page — intro, live demo, and how-it-works summary                                                                                                            | No            |
+| `/`                 | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary              | No            |
 | `/login`            | Sign in / sign up with email & password                                                                                                                              | No            |
 | `/scan`             | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                        | Yes           |
 | `/compare`          | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment                 | Yes           |
@@ -150,14 +184,14 @@ adjustable at the same time — the inner **Climber** box and the outer **Route*
 box around it (drag a box's interior to move it, a handle to resize). Re-tap to
 pick a different climber.
 
-| Target          | Purpose                                                                                                                                                                                                                                                             |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically.        |
-| Route (outer)   | Feature-matching region on the first video frame. Starts near full-frame with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to exclude sky or bystanders and line the climb up with the route photo. |
+| Target          | Purpose                                                                                                                                                                                                                                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Climber (inner) | Pose detection seed window, derived from the climber's landmarks at the tap (sized to the body plus room for the next move). Adjust it to correct the first-frame search region; during the scan the per-frame crop still follows the climber automatically.                                                        |
+| Route (outer)   | Feature-matching region on the first video frame. Starts framed around the climber — inset from the frame edges with its **bottom pulled up to the climber's bottom** (excluding the floor/pad, which is matching noise); drag it to trim it down to just the rock face and line the climb up with the route photo. |
 
-The Climber box is dominant: moving it pushes the Route out to keep containing
-it, and the Route can never be dragged inside the Climber. Click **Scan video**
-after framing the boxes.
+The two boxes are independent — resize each freely. The Route is not tied to the
+Climber, so you can shrink it to just the target face even when the climber is
+wider than the rock. Click **Scan video** after framing the boxes.
 
 ## Guided scan flow
 
@@ -174,8 +208,8 @@ goal-named — no pipeline jargon (ORB, homography, feature points) appears unle
 2. **Mark detection** — tap the climber to lock tracking onto them (a coaching
    pill on the media shows where to tap), then frame the route. Pressing
    Scan with no climber marked surfaces a soft nudge ("Scan anyway") rather than
-   blocking. Quality tier, pose model, sampling stride, the **Long route
-   (panning)** toggle, and the **Developer view** switch live in a single
+   blocking. Quality tier, pose model, sampling stride, the **Moving camera**
+   toggle, and the **Developer view** switch live in a single
    **Settings** popover.
 3. **Review climb** — watch the traced climb (clean by default; feature points
    appear only in Developer view). The promoted primary action, **Place on
@@ -357,6 +391,18 @@ npm run dev
 ```
 
 Open <http://localhost:3000>.
+
+The landing-page live demo replays a saved run's ORB starfield + pose as the
+scan loading animation, reading `public/landing-demo.json` as the default (a
+placeholder ships in the repo). Regenerate it from a folder of Save-to-device
+run files with:
+
+```powershell
+npm run make:landing-demo -- ./RouteData
+```
+
+It picks the newest Fixed-Capture run (one with `orbFeatures`), projects it to
+the slim replay shape, and writes `public/landing-demo.json`.
 
 ## Code quality
 

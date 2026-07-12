@@ -166,10 +166,8 @@ function DetectionSettings({
             <div className="border-t border-edge/60 pt-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex flex-col">
-                  <span className="text-xs font-medium text-fg-secondary">
-                    Long route (panning)
-                  </span>
-                  <span className="text-xs text-fg-muted">Camera pans up the wall</span>
+                  <span className="text-xs font-medium text-fg-secondary">Moving camera</span>
+                  <span className="text-xs text-fg-muted">Panning, handheld, or shaky</span>
                 </span>
                 <button
                   type="button"
@@ -185,8 +183,8 @@ function DetectionSettings({
                 </button>
               </div>
               <p className="mt-1.5 text-xs text-fg-muted">
-                Lines up each part of the pan with the route photo. Leave off for a fixed (tripod)
-                shot.
+                Lines up each moving-camera section with the route photo. Leave off for a fixed
+                (tripod) shot.
               </p>
             </div>
 
@@ -473,9 +471,10 @@ export default function StepSetDetection({
 
   // Crop overlay. Before a tap the overlay is a bare tap surface so the box never
   // blocks tapping the climber. After a tap, both the Climber box (inner) and the
-  // Route box (outer, around the climber) are shown and independently adjustable;
-  // the Climber pushes the Route out and the Route can't cross inside it (ADR 0014).
-  // The climber is re-identified via the Re-tap button, not by tapping the boxes.
+  // Route box (outer) are shown and independently adjustable — each resizes freely
+  // (frame-clamped only); the Route is not tied to the Climber, so it can be
+  // trimmed down to just the rock face (ADR 0016). The climber is re-identified
+  // via the Re-tap button, not by tapping the boxes.
   const cropOverlayNode = !hasCropFrame ? null : climberPoint == null ? (
     <CropBoxOverlay
       tapOnly
@@ -522,7 +521,12 @@ export default function StepSetDetection({
     })();
 
   const stageHintNode = stageHint ? (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3 z-20 flex justify-center px-3">
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 top-3 z-20 flex px-3",
+        stageHint.minimizable && hintMinimized ? "justify-end" : "justify-center",
+      )}
+    >
       {stageHint.minimizable && hintMinimized ? (
         <button
           type="button"

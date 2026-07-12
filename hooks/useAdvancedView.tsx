@@ -32,7 +32,7 @@ function readStored(): boolean {
  * it carries no visual class, so there is no hydration flash to avoid.
  */
 export function AdvancedViewProvider({ children }: { children: ReactNode }) {
-  const [advanced, setAdvancedState] = useState<boolean>(() => readStored());
+  const [advanced, setAdvancedState] = useState(readStored);
 
   const persist = useCallback((on: boolean) => {
     try {

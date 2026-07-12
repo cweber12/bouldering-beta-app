@@ -19,6 +19,7 @@ import { useS3Storage } from "@/hooks/useS3Storage";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
 import { useImageMatcher, type ImageMatchResult } from "@/hooks/useImageMatcher";
+import { useContrastAdjust } from "@/hooks/useContrastAdjust";
 import type { FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 import { DEFAULT_CROP } from "@/utils/cropFraction";
@@ -149,6 +150,16 @@ export default function RouteConsole({
 
   // Refine disclosure — the route photo + crop controls, collapsed by default.
   const [refineOpen, setRefineOpen] = useState(false);
+
+  // Adaptive contrast — sample the route photo's luminance band (memoised by file
+  // identity) so overlay colours can be nudged for legibility against the wall.
+  // Opt-in (off by default): the sampled adjust is only applied while the boost is
+  // on; otherwise every climb renders its exact slot colour. Hue never moves, so
+  // slots stay distinguishable and the white joint anchor is exempt.
+  const [contrastEnabled, setContrastEnabled] = useState(false);
+  const routeContrastAdjust = useContrastAdjust(imageFile);
+  const contrastAvailable = !!routeContrastAdjust;
+  const activeContrast = contrastEnabled ? routeContrastAdjust : undefined;
 
   // Dropdown state for the in-refine "Update photo" button.
   const [showUpdateMenu, setShowUpdateMenu] = useState(false);
@@ -553,6 +564,9 @@ export default function RouteConsole({
         }}
         refineOpen={refineOpen}
         onToggleRefine={() => setRefineOpen((v) => !v)}
+        contrastAvailable={contrastAvailable}
+        contrastEnabled={contrastEnabled}
+        onContrastToggle={setContrastEnabled}
       />
     ) : undefined;
 
@@ -945,6 +959,7 @@ export default function RouteConsole({
                           matchTrigger={matchTrigger}
                           cv={cv}
                           limbColor={slotColors[singleIdx]}
+                          contrastAdjust={activeContrast}
                           onMatchResult={handleMatchResult}
                           fillHeight
                           playerRef={(el) => {
@@ -984,6 +999,7 @@ export default function RouteConsole({
                               matchTrigger={matchTrigger}
                               cv={cv}
                               limbColor={slotColors[i]}
+                              contrastAdjust={activeContrast}
                               startOffset={slotOffsets[i]}
                               onMatchResult={handleMatchResult}
                               onColorChange={handleColorChange}
@@ -1036,6 +1052,7 @@ export default function RouteConsole({
                         cv={cv}
                         slotColors={slotColors}
                         slotOffsets={slotOffsets}
+                        contrastAdjust={activeContrast}
                       />
                     </div>
 

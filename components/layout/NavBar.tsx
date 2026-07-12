@@ -139,11 +139,11 @@ export default function NavBar() {
           <Link
             href="/"
             className="mr-3 flex items-center gap-2 py-2 sm:mr-5"
-            aria-label="Route Scanner home"
+            aria-label="Beta Scanner home"
           >
             <Image
               src="/climber_scan_logo.svg"
-              alt="Route Scanner"
+              alt="Beta Scanner"
               width={21}
               height={24}
               unoptimized

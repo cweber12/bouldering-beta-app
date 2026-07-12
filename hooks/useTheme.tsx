@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 type Theme = "dark" | "light";
 
@@ -45,18 +37,10 @@ function applyTheme(theme: Theme): void {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => readAppliedTheme());
+  const [theme, setTheme] = useState<Theme>(readAppliedTheme);
 
-  // Propagate state changes to the DOM. Skip the very first run produced by
-  // the initial render (theme="dark" from SSR) so we don't overwrite the class
-  // that FOUC correctly set before React hydrated. After the mount sync above
-  // updates state, subsequent runs are user-initiated and should apply normally.
-  const syncDone = useRef(false);
+  // Keep the DOM class and localStorage in sync with React state.
   useEffect(() => {
-    if (!syncDone.current) {
-      syncDone.current = true;
-      return;
-    }
     applyTheme(theme);
   }, [theme]);
 
