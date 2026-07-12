@@ -44,7 +44,6 @@ function baseProps(overrides: Partial<Props> = {}): Props {
     isProcessing: false,
     currentFrame: 1,
     totalFrames: 10,
-    progressPct: 100,
     orbStatus: "ready",
     frameStep: 5,
     processingError: null,

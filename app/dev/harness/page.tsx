@@ -22,6 +22,7 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import ScanProgress from "@/components/scan/process-flow/ScanProgress";
+import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import FramePlayer from "@/components/skeleton/FramePlayer";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
@@ -528,11 +529,8 @@ function Calibrator({
       phase === "posting" || status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
     return (
       <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
-        <div className="absolute inset-x-0 top-0 z-10 h-1 bg-edge/30" aria-hidden="true">
-          <div
-            className="h-full bg-send transition-[width] duration-200"
-            style={{ width: `${finishing ? 100 : pct}%` }}
-          />
+        <div className="absolute inset-x-0 top-0 z-10">
+          <ScanLoadingBar progressPct={pct} finishing={finishing} />
         </div>
         <ScanProgress
           orbPreview={orbPreview}

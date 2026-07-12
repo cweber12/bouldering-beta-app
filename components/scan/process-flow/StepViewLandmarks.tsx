@@ -26,7 +26,6 @@ export interface StepViewLandmarksProps {
   isProcessing: boolean;
   currentFrame: number;
   totalFrames: number;
-  progressPct: number;
   orbStatus: "idle" | "extracting" | "ready" | "failed";
   frameStep: number;
   processingError: string | null;
@@ -67,7 +66,6 @@ export default function StepViewLandmarks({
   isProcessing,
   currentFrame,
   totalFrames,
-  progressPct,
   orbStatus,
   frameStep,
   processingError,
@@ -225,49 +223,35 @@ export default function StepViewLandmarks({
     >
       <div className="h-full overflow-hidden">
 
-        {/* ── Processing: vertically centered scan animation ── */}
-        {isProcessing && (
-          <div className="flex h-full flex-col items-center justify-center gap-6 px-6 py-8">
-            <div className="relative h-32 w-52 overflow-hidden rounded-(--radius-panel) border border-accent/30 bg-inset">
-              <div
-                className="absolute inset-0 opacity-[0.08] pointer-events-none"
-                style={{
-                  backgroundImage: "linear-gradient(var(--color-accent) 1px, transparent 1px), linear-gradient(90deg, var(--color-accent) 1px, transparent 1px)",
-                  backgroundSize: "18px 18px",
-                }}
-              />
-              <div
-                className="absolute inset-x-0 top-0 bg-accent/15 transition-all duration-300"
-                style={{ height: `${progressPct}%` }}
-              />
-              <div
-                className="absolute inset-x-0 h-10 pointer-events-none transition-all duration-300"
-                style={{ top: `calc(${progressPct}% - 1.25rem)` }}
-              >
-                <div className="w-full h-full bg-linear-to-b from-transparent via-accent/30 to-transparent" />
-              </div>
-              <div
-                className="absolute inset-x-0 h-px bg-accent transition-all duration-300"
-                style={{ top: `${progressPct}%` }}
-              />
+        {/* Keep the preview stage mounted while loading so scan progress overlays
+            can mute the existing content rather than swapping to a heavy scene. */}
+        {!showResults && !processingError && (
+          <div className="flex h-full w-full flex-col">
+            <div className="mx-auto flex w-full max-w-2xl shrink-0 flex-col gap-3 px-4 pt-4 empty:hidden sm:px-6">
+              <p className="text-center text-xs text-fg-muted">
+                {isProcessing
+                  ? `Frame ${currentFrame} of ${totalFrames} · every ${frameStep} frames`
+                  : orbStatus === "extracting"
+                    ? "Reading the wall texture..."
+                    : "Preparing preview..."}
+              </p>
             </div>
 
-            <div className="text-center leading-none">
-              <span className="text-5xl font-bold tabular-nums text-fg tracking-tight">{progressPct}</span>
-              <span className="text-xl font-medium text-fg-secondary ml-1">%</span>
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-surface">
+              {sourceVideoUrl ? (
+                <video
+                  src={sourceVideoUrl}
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                  preload="metadata"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <p className="px-4 py-4 text-center text-xs text-fg-muted sm:px-6">Loading preview&#8230;</p>
+              )}
             </div>
-
-            <p className="text-sm text-fg-secondary">
-              Frame {currentFrame} of {totalFrames}
-              <span className="ml-1.5 text-fg-muted">· every {frameStep} frames</span>
-            </p>
-          </div>
-        )}
-
-        {/* ── Post-processing state ── */}
-        {!isProcessing && orbStatus === "extracting" && (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-sm text-fg-secondary">Reading the wall texture&#8230;</p>
           </div>
         )}
 
