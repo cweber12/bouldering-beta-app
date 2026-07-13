@@ -6,13 +6,15 @@
  * Lists the external downloader's Test Video corpus (via /api/dev/corpus) and
  * lets you calibrate each video's Scan Setup — Climber Crop, Wall Crop, tap,
  * panning, Quality Tier — by reusing the production StepSetDetection UI.
- * Confirming (Scan) saves setup.json AND runs one baseline detection, relaying
- * the pose + orb run to the downloader, then shows a Detection Preview (the same
+ * Confirming (Scan) saves setup.json AND runs one throwaway detection scaffold
+ * for authoring Ground Truth, then shows a Detection Preview (the same
  * FramePlayer skeleton overlay + DiagnosticsPanel as the scan flow) to review
- * detection quality. "Save setup only" persists the Setup without running.
- * Dev views (ORB feature points, diagnostics) are open by default here, without
- * touching the app-wide Developer-view preference. Rendered only in development.
- * See docs/adr/0017.
+ * detection quality and correct landmarks. The scaffold run stays in memory only
+ * — calibration never posts a scored run to the downloader (that comes from the
+ * separate scoring pass, issue 08). "Save setup only" persists the Setup without
+ * running. Dev views (ORB feature points, diagnostics) are open by default here,
+ * without touching the app-wide Developer-view preference. Rendered only in
+ * development. See docs/adr/0017 and docs/adr/0018.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -46,7 +48,6 @@ import { getTopology } from "@/utils/poseConstants";
 import { type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
 import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
-import { buildHarnessPayloads } from "@/utils/harnessPayloads";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -262,11 +263,11 @@ export default function HarnessPage() {
 
 // ---------------------------------------------------------------------------
 // Calibrator — loads a Test Video + its Setup, reuses StepSetDetection to
-// author the Scan Setup, and on confirm saves it and runs one baseline
-// detection, relaying the run to the downloader.
+// author the Scan Setup, and on confirm saves it and runs one throwaway
+// detection scaffold used only to author Ground Truth. No scored run is posted.
 // ---------------------------------------------------------------------------
 
-type RunPhase = "idle" | "saving" | "running" | "posting" | "preview" | "done" | "error";
+type RunPhase = "idle" | "saving" | "running" | "preview" | "done" | "error";
 
 function Calibrator({
   item,
@@ -286,12 +287,10 @@ function Calibrator({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [phase, setPhase] = useState<RunPhase>("idle");
   const [phaseError, setPhaseError] = useState<string | null>(null);
-  const setupHashRef = useRef<string | null>(null);
 
   // Post-scan review state (Detection Preview).
   const [previewAttempt, setPreviewAttempt] = useState<RouteAttempt | null>(null);
   const [previewDiag, setPreviewDiag] = useState<ScanDiagnostics | null>(null);
-  const [relayStatus, setRelayStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const previewPlayerRef = useRef<FramePlayerHandle>(null);
   const [previewPlaying, setPreviewPlaying] = useState(true);
   const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
@@ -491,14 +490,15 @@ function Calibrator({
     }
   }
 
-  // Confirm: save the Setup, then run one baseline detection (the effect below
-  // relays the result once the pipeline finishes).
+  // Confirm: save the Setup, then run one throwaway detection scaffold (the
+  // effect below hands the result to the Ground Truth editor once the pipeline
+  // finishes). Nothing is posted as a scored run.
   async function handleConfirmAndRun() {
     if (!videoFile || !model || !cv) return;
     setPhase("saving");
     setPhaseError(null);
     try {
-      setupHashRef.current = await saveSetup();
+      await saveSetup();
       setPhase("running");
       const cfg = getTierConfig(tier);
       await process(
@@ -529,8 +529,9 @@ function Calibrator({
     }
   }
 
-  // Relay the run once the pipeline has produced diagnostics (which are assembled
-  // only after ORB extraction completes).
+  // Hand the scaffold run to the Detection Preview once the pipeline has produced
+  // diagnostics (assembled only after ORB extraction completes). The run lives in
+  // memory for Ground Truth authoring; calibration never posts a scored run.
   useEffect(() => {
     if (phase !== "running") return;
     if (status === "error") {
@@ -549,48 +550,10 @@ function Calibrator({
     }
 
     const attempt = attemptId ? (getAttempt(attemptId) ?? null) : null;
-    const { pose, orb } = buildHarnessPayloads({
-      diagnostics: scanDiagnostics,
-      frames: attempt?.frames ?? [],
-      referenceFrameMeta: attempt?.referenceFrameMeta ?? null,
-      setupHash: setupHashRef.current ?? "",
-    });
-
-    // Capture the review data now; the relay runs in the background and its
-    // outcome is shown in the preview (the preview appears either way).
     setPreviewAttempt(attempt);
     setPreviewDiag(scanDiagnostics);
-    setRelayStatus(null);
-    setPhase("posting");
-    (async () => {
-      let relay: { ok: boolean; message: string };
-      try {
-        const res = await fetch("/api/dev/detections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ video_path: item.videoPath, pose, orb }),
-        });
-        const text = await res.text();
-        if (!res.ok) {
-          // The relay passes the downloader's status + body through verbatim, so
-          // surface its message (error or FastAPI's `detail`) with the status.
-          let detail = text;
-          try {
-            const j = JSON.parse(text);
-            detail = j.error ?? j.detail ?? text;
-          } catch {
-            /* non-JSON body — use the raw text */
-          }
-          throw new Error(`Relay failed (${res.status}): ${detail}`);
-        }
-        relay = { ok: true, message: "Run posted to the corpus." };
-      } catch (err) {
-        relay = { ok: false, message: err instanceof Error ? err.message : String(err) };
-      }
-      setRelayStatus(relay);
-      setPhase("preview");
-    })();
-  }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage, item.videoPath]);
+    setPhase("preview");
+  }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
 
   // On entering the preview, seed Ground Truth from the scaffold detection: a pure
   // scaffold (the drift baseline) and a working copy that preserves any previously
@@ -638,7 +601,6 @@ function Calibrator({
 
   // Return to calibration from the preview, keeping the current Setup in place.
   function handleRescan() {
-    setRelayStatus(null);
     setPreviewAttempt(null);
     setPreviewDiag(null);
     setPhaseError(null);
@@ -677,10 +639,9 @@ function Calibrator({
   }
 
   // ── In-scan progress: harness uses a low-overhead progress shell only ──
-  if (phase === "running" || phase === "posting") {
+  if (phase === "running") {
     const pct = totalFrames > 0 ? Math.min(100, Math.round((currentFrame / totalFrames) * 100)) : 0;
-    const finishing =
-      phase === "posting" || status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
+    const finishing = status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
     return (
       <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
         <div className="absolute inset-x-0 top-0 z-10">
@@ -754,13 +715,6 @@ function Calibrator({
                 className={`max-w-xs truncate text-xs ${gtSave.ok ? "text-send" : "text-danger"}`}
               >
                 {gtSave.message}
-              </span>
-            )}
-            {!gtMode && relayStatus && (
-              <span
-                className={`max-w-xs truncate text-xs ${relayStatus.ok ? "text-send" : "text-danger"}`}
-              >
-                {relayStatus.message}
               </span>
             )}
             {!gtMode && (
@@ -867,15 +821,14 @@ function Calibrator({
     );
   }
 
-  // running / posting / preview return earlier, so only "saving" is busy here.
+  // running / preview return earlier, so only "saving" is busy here.
   const busy = phase === "saving";
   const phaseLabel: Record<RunPhase, string> = {
     idle: "",
     saving: "Saving setup…",
     running: "Running detection…",
-    posting: "Posting run…",
     preview: "",
-    done: "Saved + run posted",
+    done: "Setup saved",
     error: phaseError ?? "Error",
   };
 

@@ -1,7 +1,9 @@
 # Calibration Flow Split (No Scored Run)
 
-Status: ready-for-agent
+Status: done
 Type: AFK
+Branch: issue-07-calibration-flow-split
+Merged: 65ef423
 
 ## Parent
 
@@ -13,10 +15,10 @@ Restructure the harness so **calibration authors ground truth and posts no score
 
 ## Acceptance criteria
 
-- [ ] Completing calibration writes setup + ground truth (+ metadata) and creates no `*_pose.json` run in the bundle.
-- [ ] The scaffold detection still drives the editor but is not persisted as a run.
-- [ ] The corpus run count does not increment on calibration.
-- [ ] Existing setup save/reload still works; covered by tests.
+- [x] Completing calibration writes setup + ground truth (+ metadata) and creates no `*_pose.json` run in the bundle.
+- [x] The scaffold detection still drives the editor but is not persisted as a run.
+- [x] The corpus run count does not increment on calibration.
+- [x] Existing setup save/reload still works; covered by tests.
 
 ## Blocked by
 
