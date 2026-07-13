@@ -20,6 +20,7 @@ import { getTopology } from "@/utils/poseConstants";
 import {
   jointDrift,
   moveJoint,
+  removeJoint,
   setJoint,
   translateJoints,
   type DriftReadout,
@@ -218,22 +219,58 @@ export default function LandmarkEditor({
     return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) };
   }, []);
 
-  const applyZoom = useCallback(
-    (next: number) => {
-      const z = clamp(next, ZOOM_MIN, ZOOM_MAX);
-      setZoom(z);
-      setPan((p) => (z === 1 ? { x: 0, y: 0 } : clampPan(p, z)));
+  /**
+   * Zoom to `next`, keeping the content under (clientX, clientY) fixed on screen.
+   * With `transform-origin: center`, screen = C + pan + z·(local − C); solving for
+   * a fixed cursor point gives pan' = d·(1 − z'/z) + (z'/z)·pan, d = cursor − C.
+   * Omitting the cursor zooms about the centre (the toolbar buttons).
+   */
+  const zoomAt = useCallback(
+    (next: number, clientX?: number, clientY?: number) => {
+      const z2 = clamp(next, ZOOM_MIN, ZOOM_MAX);
+      const rect = viewportRef.current?.getBoundingClientRect();
+      if (!rect) {
+        setZoom(z2);
+        return;
+      }
+      if (z2 === 1) {
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+        return;
+      }
+      const r = z2 / zoom;
+      const dx = clientX != null ? clientX - rect.left - rect.width / 2 : 0;
+      const dy = clientY != null ? clientY - rect.top - rect.height / 2 : 0;
+      setZoom(z2);
+      setPan(clampPan({ x: dx * (1 - r) + r * pan.x, y: dy * (1 - r) + r * pan.y }, z2));
     },
-    [clampPan],
+    [zoom, pan, clampPan],
   );
 
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Wheel-to-zoom toward the cursor, via a non-passive listener so the page /
+  // scroll container never scrolls while zooming. Held in a ref so the listener
+  // attaches once but always calls the latest closure.
+  const zoomAtRef = useRef(zoomAt);
+  const zoomRef = useRef(zoom);
+  useEffect(() => {
+    zoomAtRef.current = zoomAt;
+    zoomRef.current = zoom;
+  }, [zoomAt, zoom]);
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
       if (e.deltaY === 0) return;
-      applyZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
-    },
-    [zoom, applyZoom],
-  );
+      e.preventDefault();
+      zoomAtRef.current(
+        zoomRef.current + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP),
+        e.clientX,
+        e.clientY,
+      );
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, []);
 
   // ── Pointer interaction ─────────────────────────────────────────────────
   const dragRef = useRef<
@@ -348,6 +385,19 @@ export default function LandmarkEditor({
     setActiveJoint(null);
   }, []);
 
+  // Right-click a joint to delete it (a mis-placed point, or one to drop).
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      const name = hitJoint(toNorm(e.clientX, e.clientY));
+      if (!name) return;
+      e.preventDefault();
+      onEditJoints(removeJoint(jointsRef.current, name));
+      setActiveJoint(null);
+      setPlacing(null);
+    },
+    [hitJoint, toNorm, onEditJoints],
+  );
+
   const absent = frame.state !== "present" || !hasJoints;
   const unplaced = CORE_JOINT_NAMES.filter((n) => !frame.joints[n]);
 
@@ -356,8 +406,8 @@ export default function LandmarkEditor({
     : absent
       ? "This frame has no core joints. Pick a joint below, then click on the video to place it — or Accept as-is if the climber is off-screen."
       : unplaced.length > 0
-        ? "Drag a joint to correct it. Missing joints are outlined below — pick one, then click on the video."
-        : "Drag any joint to correct it, or translate the whole pose.";
+        ? "Drag a joint to correct it; right-click a joint to delete it. Missing joints are outlined below — pick one, then click on the video. Scroll to zoom, drag the background to pan."
+        : "Drag a joint to correct it; right-click to delete. Scroll to zoom toward the cursor, drag the background to pan.";
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)}>
@@ -388,7 +438,7 @@ export default function LandmarkEditor({
         <div className="flex items-center gap-1 rounded-md bg-surface-alt px-1.5 py-1">
           <button
             type="button"
-            onClick={() => applyZoom(zoom - ZOOM_STEP)}
+            onClick={() => zoomAt(zoom - ZOOM_STEP)}
             disabled={zoom <= ZOOM_MIN}
             className="h-6 w-6 rounded text-sm font-semibold text-fg disabled:opacity-40"
             aria-label="Zoom out"
@@ -400,7 +450,7 @@ export default function LandmarkEditor({
           </span>
           <button
             type="button"
-            onClick={() => applyZoom(zoom + ZOOM_STEP)}
+            onClick={() => zoomAt(zoom + ZOOM_STEP)}
             disabled={zoom >= ZOOM_MAX}
             className="h-6 w-6 rounded text-sm font-semibold text-fg disabled:opacity-40"
             aria-label="Zoom in"
@@ -410,7 +460,7 @@ export default function LandmarkEditor({
           {(zoom !== 1 || pan.x !== 0 || pan.y !== 0) && (
             <button
               type="button"
-              onClick={() => applyZoom(1)}
+              onClick={() => zoomAt(1)}
               className="ml-1 rounded px-1.5 text-xs text-fg-muted hover:text-fg"
             >
               reset
@@ -463,7 +513,7 @@ export default function LandmarkEditor({
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        onWheel={onWheel}
+        onContextMenu={onContextMenu}
         className={cn(
           "relative mx-auto flex min-h-0 select-none items-center justify-center overflow-hidden rounded-lg border border-edge/40 bg-surface-alt",
           placing ? "cursor-copy" : translateMode ? "cursor-move" : "cursor-crosshair",

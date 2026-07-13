@@ -128,6 +128,17 @@ export function setJoint(
   return { ...joints, [name]: { x: clamp01(x), y: clamp01(y), occluded } };
 }
 
+/** Remove a joint — for one placed by accident, or an occluded point to drop. */
+export function removeJoint(
+  joints: Record<string, GroundTruthJoint>,
+  name: string,
+): Record<string, GroundTruthJoint> {
+  if (!(name in joints)) return joints;
+  const out = { ...joints };
+  delete out[name];
+  return out;
+}
+
 /** Move one joint to an absolute normalised position (clamped to the frame). */
 export function moveJoint(
   joints: Record<string, GroundTruthJoint>,

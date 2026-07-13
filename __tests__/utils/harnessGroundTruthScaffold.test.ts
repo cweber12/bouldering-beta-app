@@ -6,6 +6,7 @@ import {
   buildGroundTruthScaffold,
   moveJoint,
   setJoint,
+  removeJoint,
   translateJoints,
   jointDrift,
   OCCLUSION_SEED_SCORE,
@@ -145,6 +146,23 @@ describe("setJoint", () => {
   it("replaces an existing joint and can seed it occluded", () => {
     const out = setJoint({ nose: { x: 0.1, y: 0.1, occluded: false } }, "nose", 0.5, 0.5, true);
     expect(out.nose).toEqual({ x: 0.5, y: 0.5, occluded: true });
+  });
+});
+
+describe("removeJoint", () => {
+  it("removes a placed joint, leaving others untouched", () => {
+    const joints: Record<string, GroundTruthJoint> = {
+      nose: { x: 0.5, y: 0.2, occluded: false },
+      left_wrist: { x: 0.4, y: 0.6, occluded: false },
+    };
+    const out = removeJoint(joints, "nose");
+    expect(Object.keys(out)).toEqual(["left_wrist"]);
+    expect(joints.nose).toBeDefined(); // input not mutated
+  });
+
+  it("returns the same object when the joint is absent", () => {
+    const joints = { nose: { x: 0.5, y: 0.2, occluded: false } };
+    expect(removeJoint(joints, "right_ankle")).toBe(joints);
   });
 });
 
