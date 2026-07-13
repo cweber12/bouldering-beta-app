@@ -114,6 +114,20 @@ export function buildGroundTruthScaffold(
 // Editor geometry — the drag / translate maths the canvas editor drives.
 // ---------------------------------------------------------------------------
 
+/**
+ * Add or replace a core joint at an absolute normalised position — used to place
+ * a joint the scaffold never detected (missing joint, or a whole absent frame).
+ */
+export function setJoint(
+  joints: Record<string, GroundTruthJoint>,
+  name: string,
+  x: number,
+  y: number,
+  occluded = false,
+): Record<string, GroundTruthJoint> {
+  return { ...joints, [name]: { x: clamp01(x), y: clamp01(y), occluded } };
+}
+
 /** Move one joint to an absolute normalised position (clamped to the frame). */
 export function moveJoint(
   joints: Record<string, GroundTruthJoint>,

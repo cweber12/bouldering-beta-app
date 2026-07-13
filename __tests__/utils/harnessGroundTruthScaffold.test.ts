@@ -5,6 +5,7 @@ import {
   contextKeypointsAt,
   buildGroundTruthScaffold,
   moveJoint,
+  setJoint,
   translateJoints,
   jointDrift,
   OCCLUSION_SEED_SCORE,
@@ -128,6 +129,22 @@ describe("moveJoint / translateJoints", () => {
     const out = translateJoints(joints, 0.7, -0.1);
     expect(out.nose).toEqual({ x: 1, y: 0.1, occluded: false }); // 0.5+0.7 clamps to 1
     expect(out.left_wrist).toEqual({ x: 1, y: 0.5, occluded: true }); // 0.4+0.7 clamps to 1
+  });
+});
+
+describe("setJoint", () => {
+  it("places a missing joint, clamped, without touching others", () => {
+    const joints: Record<string, GroundTruthJoint> = {
+      nose: { x: 0.5, y: 0.2, occluded: false },
+    };
+    const out = setJoint(joints, "left_wrist", 1.2, 0.4);
+    expect(out.left_wrist).toEqual({ x: 1, y: 0.4, occluded: false });
+    expect(out.nose).toBe(joints.nose);
+  });
+
+  it("replaces an existing joint and can seed it occluded", () => {
+    const out = setJoint({ nose: { x: 0.1, y: 0.1, occluded: false } }, "nose", 0.5, 0.5, true);
+    expect(out.nose).toEqual({ x: 0.5, y: 0.5, occluded: true });
   });
 });
 

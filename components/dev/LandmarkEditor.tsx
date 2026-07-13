@@ -4,12 +4,13 @@
  * Dev-only Ground Truth landmark-correction editor.
  *
  * Renders one Detection Frame paused from the video and lets the author drag the
- * **core body joints** into place, translate the whole skeleton when the pose is
- * right but offset, or accept the frame as-is. Non-core BlazePose points draw
- * faintly for context and are not editable. Any edit (drag / translate / accept)
- * marks the frame verified; the parent persists to `ground-truth.json`. A live
- * drag-distance readout gives authoring feedback — it is not a score. See
- * docs/adr/0018 and issue 04. Rendered only in the development harness.
+ * **core body joints** into place, place a joint the scaffold missed (or seed a
+ * whole absent frame), translate the whole skeleton when the pose is right but
+ * offset, or accept the frame as-is. Non-core BlazePose points draw faintly for
+ * context and are not editable. Any edit marks the frame verified; the parent
+ * persists to `ground-truth.json`. A zoom/pan viewport keeps small joints
+ * grabbable in portrait video, and every status line renders outside the frame.
+ * See docs/adr/0018 and issue 04. Rendered only in the development harness.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,10 +20,15 @@ import { getTopology } from "@/utils/poseConstants";
 import {
   jointDrift,
   moveJoint,
+  setJoint,
   translateJoints,
   type DriftReadout,
 } from "@/utils/harnessGroundTruthScaffold";
-import type { GroundTruthFrame, GroundTruthJoint } from "@/utils/harnessGroundTruth";
+import {
+  CORE_JOINT_NAMES,
+  type GroundTruthFrame,
+  type GroundTruthJoint,
+} from "@/utils/harnessGroundTruth";
 
 type Pos = { x: number; y: number };
 
@@ -37,9 +43,9 @@ export interface LandmarkEditorProps {
   seedJoints: Record<string, GroundTruthJoint>;
   /** Non-core scaffold keypoints (video-normalised) drawn faintly for context. */
   contextKeypoints: Record<string, Pos>;
-  /** Called with the frame's new joints after a drag / translate (marks verified). */
+  /** Called with the frame's new joints after a drag / place / translate (marks verified). */
   onEditJoints: (joints: Record<string, GroundTruthJoint>) => void;
-  /** Accept the frame's landmarks as-is (marks verified without dragging). */
+  /** Accept the frame's landmarks as-is (marks verified without editing). */
   onAccept: () => void;
   className?: string;
 }
@@ -47,8 +53,20 @@ export interface LandmarkEditorProps {
 const { keypointNames, skeletonEdges } = getTopology("mediapipe");
 const NAME_BY_INDEX = keypointNames;
 
-/** Hit radius (display px) for grabbing a joint. */
+/** Hit radius (screen px) for grabbing a joint. */
 const HIT_RADIUS_PX = 20;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+const ZOOM_STEP = 0.5;
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/** Compact joint label: "left_shoulder" → "L shoulder". */
+function shortLabel(name: string): string {
+  return name.replace(/^left_/, "L ").replace(/^right_/, "R ").replace(/_/g, " ");
+}
 
 export default function LandmarkEditor({
   videoSrc,
@@ -63,10 +81,13 @@ export default function LandmarkEditor({
 }: LandmarkEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const frameReadyRef = useRef(false);
   const [translateMode, setTranslateMode] = useState(false);
   const [activeJoint, setActiveJoint] = useState<string | null>(null);
+  const [placing, setPlacing] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState<Pos>({ x: 0, y: 0 });
 
   // Latest joints/context for the draw + pointer maths without stale closures.
   // Synced in effects (never during render) so pointer handlers read fresh values.
@@ -83,6 +104,8 @@ export default function LandmarkEditor({
     () => jointDrift(seedJoints, frame.joints),
     [seedJoints, frame.joints],
   );
+  const placedNames = Object.keys(frame.joints);
+  const hasJoints = placedNames.length > 0;
 
   /** Merged position lookup: an edited joint overrides the context point. */
   const posOf = useCallback((name: string): Pos | null => {
@@ -142,7 +165,7 @@ export default function LandmarkEditor({
     ctx.restore();
 
     // Editable core joints.
-    const rHandle = Math.max(5, unit * 0.011);
+    const rHandle = Math.max(5, unit * 0.012);
     for (const name of Object.keys(jointsRef.current)) {
       const j = jointsRef.current[name];
       const p = px(j);
@@ -186,15 +209,43 @@ export default function LandmarkEditor({
     draw();
   }, [draw, frame.joints, contextKeypoints]);
 
-  // ── Pointer interaction ──────────────────────────────────────────────────
+  // ── Zoom / pan ────────────────────────────────────────────────────────────
+  const clampPan = useCallback((p: Pos, z: number): Pos => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect) return p;
+    const maxX = (rect.width * (z - 1)) / 2;
+    const maxY = (rect.height * (z - 1)) / 2;
+    return { x: clamp(p.x, -maxX, maxX), y: clamp(p.y, -maxY, maxY) };
+  }, []);
+
+  const applyZoom = useCallback(
+    (next: number) => {
+      const z = clamp(next, ZOOM_MIN, ZOOM_MAX);
+      setZoom(z);
+      setPan((p) => (z === 1 ? { x: 0, y: 0 } : clampPan(p, z)));
+    },
+    [clampPan],
+  );
+
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (e.deltaY === 0) return;
+      applyZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
+    },
+    [zoom, applyZoom],
+  );
+
+  // ── Pointer interaction ─────────────────────────────────────────────────
   const dragRef = useRef<
     | { mode: "joint"; name: string }
     | { mode: "translate"; startX: number; startY: number; joints: Record<string, GroundTruthJoint> }
+    | { mode: "pan"; startX: number; startY: number; panX: number; panY: number }
     | null
   >(null);
 
+  /** Client px → normalised video coords, using the (possibly zoomed) canvas rect. */
   const toNorm = useCallback((clientX: number, clientY: number): Pos => {
-    const rect = containerRef.current?.getBoundingClientRect();
+    const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect || rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
     return {
       x: (clientX - rect.left) / rect.width,
@@ -202,9 +253,9 @@ export default function LandmarkEditor({
     };
   }, []);
 
-  /** Nearest core joint within the hit radius (display px), or null. */
+  /** Nearest core joint within the hit radius (screen px), or null. */
   const hitJoint = useCallback((norm: Pos): string | null => {
-    const rect = containerRef.current?.getBoundingClientRect();
+    const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return null;
     let best: string | null = null;
     let bestDist = HIT_RADIUS_PX;
@@ -223,9 +274,20 @@ export default function LandmarkEditor({
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (Object.keys(jointsRef.current).length === 0) return;
       const norm = toNorm(e.clientX, e.clientY);
-      if (translateMode) {
+
+      // Placing a missing joint: drop it here, then drag to fine-tune.
+      if (placing) {
+        onEditJoints(setJoint(jointsRef.current, placing, norm.x, norm.y));
+        dragRef.current = { mode: "joint", name: placing };
+        setActiveJoint(placing);
+        setPlacing(null);
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        return;
+      }
+
+      if (translateMode && Object.keys(jointsRef.current).length > 0) {
         dragRef.current = {
           mode: "translate",
           startX: norm.x,
@@ -233,22 +295,44 @@ export default function LandmarkEditor({
           joints: jointsRef.current,
         };
         setActiveJoint(null);
-      } else {
-        const name = hitJoint(norm);
-        if (!name) return;
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        return;
+      }
+
+      const name = hitJoint(norm);
+      if (name) {
         dragRef.current = { mode: "joint", name };
         setActiveJoint(name);
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+        return;
       }
-      (e.target as Element).setPointerCapture?.(e.pointerId);
-      e.preventDefault();
+
+      // Empty grab while zoomed → pan the viewport.
+      if (zoom > 1) {
+        dragRef.current = {
+          mode: "pan",
+          startX: e.clientX,
+          startY: e.clientY,
+          panX: pan.x,
+          panY: pan.y,
+        };
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        e.preventDefault();
+      }
     },
-    [toNorm, hitJoint, translateMode],
+    [toNorm, hitJoint, placing, translateMode, zoom, pan, onEditJoints],
   );
 
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       const drag = dragRef.current;
       if (!drag) return;
+      if (drag.mode === "pan") {
+        setPan(clampPan({ x: drag.panX + (e.clientX - drag.startX), y: drag.panY + (e.clientY - drag.startY) }, zoom));
+        return;
+      }
       const norm = toNorm(e.clientX, e.clientY);
       if (drag.mode === "joint") {
         onEditJoints(moveJoint(jointsRef.current, drag.name, norm.x, norm.y));
@@ -256,7 +340,7 @@ export default function LandmarkEditor({
         onEditJoints(translateJoints(drag.joints, norm.x - drag.startX, norm.y - drag.startY));
       }
     },
-    [toNorm, onEditJoints],
+    [toNorm, onEditJoints, clampPan, zoom],
   );
 
   const endDrag = useCallback(() => {
@@ -264,15 +348,28 @@ export default function LandmarkEditor({
     setActiveJoint(null);
   }, []);
 
-  const editable = frame.state === "present" && Object.keys(frame.joints).length > 0;
+  const absent = frame.state !== "present" || !hasJoints;
+  const unplaced = CORE_JOINT_NAMES.filter((n) => !frame.joints[n]);
+
+  const hint = placing
+    ? `Click on the video to place ${shortLabel(placing).trim()}.`
+    : absent
+      ? "This frame has no core joints. Pick a joint below, then click on the video to place it — or Accept as-is if the climber is off-screen."
+      : unplaced.length > 0
+        ? "Drag a joint to correct it. Missing joints are outlined below — pick one, then click on the video."
+        : "Drag any joint to correct it, or translate the whole pose.";
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)}>
+      {/* Toolbar — always outside the frame. */}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => setTranslateMode((v) => !v)}
-          disabled={!editable}
+          onClick={() => {
+            setTranslateMode((v) => !v);
+            setPlacing(null);
+          }}
+          disabled={!hasJoints}
           className={cn(
             "rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
             translateMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg",
@@ -287,6 +384,40 @@ export default function LandmarkEditor({
         >
           Accept as-is
         </button>
+
+        <div className="flex items-center gap-1 rounded-md bg-surface-alt px-1.5 py-1">
+          <button
+            type="button"
+            onClick={() => applyZoom(zoom - ZOOM_STEP)}
+            disabled={zoom <= ZOOM_MIN}
+            className="h-6 w-6 rounded text-sm font-semibold text-fg disabled:opacity-40"
+            aria-label="Zoom out"
+          >
+            −
+          </button>
+          <span className="w-10 text-center text-xs tabular-nums text-fg-muted">
+            {zoom.toFixed(1)}×
+          </span>
+          <button
+            type="button"
+            onClick={() => applyZoom(zoom + ZOOM_STEP)}
+            disabled={zoom >= ZOOM_MAX}
+            className="h-6 w-6 rounded text-sm font-semibold text-fg disabled:opacity-40"
+            aria-label="Zoom in"
+          >
+            +
+          </button>
+          {(zoom !== 1 || pan.x !== 0 || pan.y !== 0) && (
+            <button
+              type="button"
+              onClick={() => applyZoom(1)}
+              className="ml-1 rounded px-1.5 text-xs text-fg-muted hover:text-fg"
+            >
+              reset
+            </button>
+          )}
+        </div>
+
         <div className="ml-auto flex items-center gap-3 text-xs tabular-nums text-fg-muted">
           {frame.verified && <span className="text-send">verified</span>}
           <span>
@@ -296,29 +427,62 @@ export default function LandmarkEditor({
         </div>
       </div>
 
+      {/* Joint palette — placed joints are filled; missing joints are outlined. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {CORE_JOINT_NAMES.map((name) => {
+          const isPlaced = !!frame.joints[name];
+          const isPlacing = placing === name;
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setPlacing((p) => (p === name ? null : name))}
+              className={cn(
+                "rounded px-2 py-0.5 text-xs transition",
+                isPlacing
+                  ? "bg-accent text-fg-inverse ring-2 ring-accent/60"
+                  : isPlaced
+                    ? "bg-send-surface text-send"
+                    : "border border-edge/60 text-fg-muted hover:text-fg",
+              )}
+              title={isPlaced ? `Re-place ${name}` : `Place ${name}`}
+            >
+              {shortLabel(name).trim()}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Hint — outside the frame so it never sits over the video. */}
+      <p className="min-h-5 text-xs text-fg-secondary">{hint}</p>
+
+      {/* Viewport: clips the zoomed canvas; height-limited to the screen. */}
       <div
-        ref={containerRef}
-        onPointerDown={editable ? onPointerDown : undefined}
-        onPointerMove={editable ? onPointerMove : undefined}
+        ref={viewportRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
+        onWheel={onWheel}
         className={cn(
-          "relative mx-auto min-h-0 select-none overflow-hidden rounded-lg border border-edge/40 bg-surface-alt",
-          editable ? (translateMode ? "cursor-move" : "cursor-crosshair") : "cursor-default",
+          "relative mx-auto flex min-h-0 select-none items-center justify-center overflow-hidden rounded-lg border border-edge/40 bg-surface-alt",
+          placing ? "cursor-copy" : translateMode ? "cursor-move" : "cursor-crosshair",
         )}
         style={{
           aspectRatio: `${videoWidth || 16} / ${videoHeight || 9}`,
-          maxHeight: "calc(100dvh - var(--nav-h) - 12rem)",
+          maxHeight: "calc(100dvh - var(--nav-h) - 15rem)",
           touchAction: "none",
         }}
       >
-        <canvas ref={canvasRef} className="block h-full w-full object-contain" />
+        <canvas
+          ref={canvasRef}
+          className="block h-full w-full object-contain"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: "center center",
+          }}
+        />
         <video ref={videoRef} src={videoSrc} muted playsInline preload="auto" className="hidden" />
-        {!editable && (
-          <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-fg-muted">
-            This frame is marked absent — no core joints to correct. Use Accept as-is to verify it.
-          </div>
-        )}
       </div>
     </div>
   );
