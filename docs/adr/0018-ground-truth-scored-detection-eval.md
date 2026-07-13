@@ -47,14 +47,24 @@ manual inputs, and the bundle is the corpus of record.
    ones.
 
 2. **Errors are derived, not tagged.** A scored run compares its pose to Ground
-   Truth per scored frame (skip excluded) in fixed precedence —
-   **missing > wrong > extreme > drift > good**: no accepted pose over a present
-   frame is `missing`; a pose far from GT (or any pose over an `absent` frame) is
-   `wrong`; an anatomically implausible pose (bone-length deviation, ADR 0015) is
-   `extreme`; otherwise per-joint displacement over non-occluded core joints is
-   `drift`, carrying its magnitude. All distances are normalised by GT **body
-   scale** (torso diagonal) so thresholds are resolution- and scale-free.
-   Verified frames are the true reference; unverified frames are a weaker signal.
+   Truth per scored frame (skip excluded) into **one per-frame verdict** carrying
+   embedded per-joint drift magnitudes. The verdict resolves in fixed precedence,
+   keyed off the **max** displacement over non-occluded core joints —
+   **missing > unscored > extreme > wrong > drift > good**: no accepted pose (or a
+   partial pose below a joint-coverage floor) over a present frame is `missing`; a
+   frame whose GT torso is too degraded to yield a body scale is `unscored`
+   (measured coverage denominator, no drift verdict); an anatomically implausible
+   pose (bone-length deviation, ADR 0015) is `extreme`; a pose far from GT (or any
+   pose over an `absent` frame) is `wrong`; otherwise displacement over
+   non-occluded core joints is `drift`, carrying its magnitude. All distances are
+   normalised by GT **body scale** — the mean of the resolvable torso segments
+   (shoulder-width, hip-width, the two shoulder↔hip sides), which degrades
+   gracefully when a torso joint is occluded — so thresholds are resolution- and
+   scale-free. Verified frames are the true reference; unverified frames are a
+   weaker signal, scored identically but flagged so downstream analysis (not the
+   scoring module) sets the trust policy. Threshold constants (`DRIFT_MIN`,
+   `WRONG_MAX`, `MIN_JOINT_COVERAGE`) are named starters, tuned against the corpus
+   drift histogram.
 
 3. **Flow splits into calibrate vs score.** Calibration mode authors Ground Truth
    - crops + metadata and posts nothing. A separate **headless scoring pass** (the
