@@ -225,6 +225,17 @@ Fix TypeScript errors before proceeding. Do not disable tsc checks.
 **The agent MUST run `npx tsc --noEmit`, `npx eslint .`, targeted `npx vitest run ...`,
 and `git add .` + `git commit` after every code change session without waiting to be asked.**
 
+### Issue tracking
+
+- When implementing a `.scratch/` issue, follow the **PRD lifecycle loop** in
+  `docs/agents/issue-tracker.md`: one issue per branch, sequenced by number,
+  each branched off `main`, merged with `git merge --no-ff`, and closed by
+  setting `Status: done` + writing a `Merged: <sha>` line in the same step.
+- An issue is never `done` until its code is merged, and merged code never lands
+  without moving its issue to `done` — the two happen together.
+- Before ending a PRD work session, run `node scripts/audit-issues.mjs` and
+  resolve any drift it reports (implemented-but-not-closed, or closed-but-unmerged).
+
 ### README maintenance
 
 - When a code change adds, removes, or renames user-visible features, pages,

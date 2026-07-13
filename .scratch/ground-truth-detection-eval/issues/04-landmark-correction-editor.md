@@ -1,6 +1,8 @@
 # Landmark-Correction Editor
 
-Status: ready-for-human
+Status: done
+Branch: main
+Merged: 9750b1c
 Type: HITL
 
 ## Parent

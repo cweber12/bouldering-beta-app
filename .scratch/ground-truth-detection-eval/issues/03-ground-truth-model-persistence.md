@@ -1,6 +1,8 @@
 # Ground Truth Model and Bundle Persistence
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: ee15f57
 Type: AFK
 
 ## Parent

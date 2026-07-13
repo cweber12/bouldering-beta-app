@@ -1,6 +1,8 @@
 # Editable Video Metadata (analysis_inputs)
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 886f106
 Type: AFK
 
 ## Parent
