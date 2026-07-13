@@ -26,7 +26,18 @@ import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/Frame
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
+import LandmarkEditor from "@/components/dev/LandmarkEditor";
 import Modal from "@/components/ui/Modal";
+import {
+  buildGroundTruthScaffold,
+  contextKeypointsAt,
+} from "@/utils/harnessGroundTruthScaffold";
+import {
+  loadGroundTruth,
+  saveGroundTruth,
+  type GroundTruthFrame,
+  type GroundTruthInput,
+} from "@/utils/harnessGroundTruth";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
@@ -301,6 +312,16 @@ function Calibrator({
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
+  // Ground Truth authoring (issue 04): the pure scaffold seed (drift baseline),
+  // the working GT being edited, and any previously-saved GT preserved across a
+  // re-scan. `gtMode` swaps the Detection Preview for the landmark editor.
+  const existingGtRef = useRef<GroundTruthInput | null>(null);
+  const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
+  const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
+  const [gtMode, setGtMode] = useState(false);
+  const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
+  const [gtSaving, setGtSaving] = useState(false);
+
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
     [modelVariant, maxPoses],
@@ -332,7 +353,9 @@ function Calibrator({
   }, [phase, previewFrames]);
 
   useEffect(() => {
-    if (phase !== "preview" || previewFrames.length === 0) return;
+    // In GT edit mode the FramePlayer is unmounted; the stepper drives the index
+    // directly, so skip the player-time sync (which would force the index to 0).
+    if (phase !== "preview" || gtMode || previewFrames.length === 0) return;
     let raf = 0;
 
     const syncCurrentFrame = () => {
@@ -344,7 +367,7 @@ function Calibrator({
 
     raf = requestAnimationFrame(syncCurrentFrame);
     return () => cancelAnimationFrame(raf);
-  }, [phase, previewFrames]);
+  }, [phase, gtMode, previewFrames]);
 
   const handlePreviewSeek = useCallback(
     (index: number) => {
@@ -402,6 +425,14 @@ function Calibrator({
           if (typeof setup.qualityTier === "string")
             handleTierChange(setup.qualityTier as QualityTier);
           wallTouchedRef.current = true; // preserve the saved wall crop across a re-tap
+        }
+
+        // Any previously-authored Ground Truth is preserved across the next scan.
+        try {
+          const gt = await loadGroundTruth(item.key);
+          if (!revoked) existingGtRef.current = gt;
+        } catch {
+          if (!revoked) existingGtRef.current = null;
         }
       } catch (err) {
         if (!revoked) setLoadError(err instanceof Error ? err.message : String(err));
@@ -561,12 +592,57 @@ function Calibrator({
     })();
   }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage, item.videoPath]);
 
+  // On entering the preview, seed Ground Truth from the scaffold detection: a pure
+  // scaffold (the drift baseline) and a working copy that preserves any previously
+  // authored GT. Both key one record per Detection Frame.
+  useEffect(() => {
+    if (phase !== "preview" || !previewAttempt) return;
+    const pureScaffold = buildGroundTruthScaffold(previewFrames, previewAttempt.frames, null);
+    const working = buildGroundTruthScaffold(
+      previewFrames,
+      previewAttempt.frames,
+      existingGtRef.current,
+    );
+    setGtSeed(pureScaffold);
+    setGtInput(working);
+    setGtSave(null);
+  }, [phase, previewAttempt, previewFrames]);
+
+  // Update the current Detection Frame's Ground Truth (marks it verified).
+  const editGtFrame = useCallback((index: number, patch: Partial<GroundTruthFrame>) => {
+    setGtInput((prev) => {
+      if (!prev) return prev;
+      return {
+        frames: prev.frames.map((f) =>
+          f.frameIndex === index ? { ...f, ...patch, verified: true } : f,
+        ),
+      };
+    });
+    setGtSave(null);
+  }, []);
+
+  const handleSaveGt = useCallback(async () => {
+    if (!gtInput) return;
+    setGtSaving(true);
+    setGtSave(null);
+    try {
+      await saveGroundTruth(item.key, gtInput);
+      existingGtRef.current = gtInput;
+      setGtSave({ ok: true, message: "Ground Truth saved." });
+    } catch (err) {
+      setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setGtSaving(false);
+    }
+  }, [gtInput, item.key]);
+
   // Return to calibration from the preview, keeping the current Setup in place.
   function handleRescan() {
     setRelayStatus(null);
     setPreviewAttempt(null);
     setPreviewDiag(null);
     setPhaseError(null);
+    setGtMode(false);
     setPhase("idle");
   }
 
@@ -662,6 +738,8 @@ function Calibrator({
       keypointNames: topo.keypointNames,
     };
     const orbKeypoints = previewAttempt?.orbFeatures?.keypoints.map((kp) => kp.pt);
+    const gtFrame = gtInput?.frames.find((f) => f.frameIndex === previewFrameIndex) ?? null;
+    const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === previewFrameIndex) ?? null;
 
     return (
       <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
@@ -671,22 +749,51 @@ function Calibrator({
             <div className="truncate font-mono text-xs text-fg-muted">{item.videoKey}</div>
           </div>
           <div className="flex items-center gap-2">
-            {relayStatus && (
+            {gtMode && gtSave && (
+              <span
+                className={`max-w-xs truncate text-xs ${gtSave.ok ? "text-send" : "text-danger"}`}
+              >
+                {gtSave.message}
+              </span>
+            )}
+            {!gtMode && relayStatus && (
               <span
                 className={`max-w-xs truncate text-xs ${relayStatus.ok ? "text-send" : "text-danger"}`}
               >
                 {relayStatus.message}
               </span>
             )}
-            <label className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
-              <input
-                type="checkbox"
-                checked={showCrops}
-                onChange={(e) => setShowCrops(e.target.checked)}
-                className="accent-accent"
-              />
-              Crops
-            </label>
+            {!gtMode && (
+              <label className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
+                <input
+                  type="checkbox"
+                  checked={showCrops}
+                  onChange={(e) => setShowCrops(e.target.checked)}
+                  className="accent-accent"
+                />
+                Crops
+              </label>
+            )}
+            <button
+              type="button"
+              onClick={() => setGtMode((v) => !v)}
+              disabled={!gtInput}
+              className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+                gtMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg"
+              }`}
+            >
+              {gtMode ? "Editing GT" : "Edit Ground Truth"}
+            </button>
+            {gtMode && (
+              <button
+                type="button"
+                onClick={() => void handleSaveGt()}
+                disabled={gtSaving || !gtInput}
+                className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
+              >
+                {gtSaving ? "Saving…" : "Save Ground Truth"}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRescan}
@@ -713,31 +820,48 @@ function Calibrator({
             isPlaying={previewPlaying}
             className="shrink-0"
           />
-          <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
-            {firstFrameFile && skel ? (
-              <FramePlayer
-                ref={previewPlayerRef}
-                imageFile={firstFrameFile}
+          {gtMode && gtFrame && previewAttempt ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">
+              <LandmarkEditor
                 videoSrc={videoUrl}
-                videoTimeOffset={skel.startOffsetSec}
-                layers={[{ frames: skel.frames, style: topoStyle }]}
-                duration={skel.duration}
-                autoPlay
-                hidePlayButton
-                orbKeypoints={orbKeypoints}
-                cropTrace={showCrops ? cropTrace : undefined}
-                fit="contain"
-                bare
-                className="min-h-0 flex-1 rounded-none"
+                videoWidth={previewAttempt.videoMeta.width}
+                videoHeight={previewAttempt.videoMeta.height}
+                frame={gtFrame}
+                seedJoints={gtSeedFrame?.joints ?? {}}
+                contextKeypoints={contextKeypointsAt(previewAttempt.frames, gtFrame.timestamp)}
+                onEditJoints={(joints) =>
+                  editGtFrame(gtFrame.frameIndex, { joints, state: "present" })
+                }
+                onAccept={() => editGtFrame(gtFrame.frameIndex, {})}
               />
-            ) : (
-              <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
-                No climber detected — the Detection Preview has nothing to show. See the diagnostics
-                for why.
-              </div>
-            )}
-            <DiagnosticsPanel record={previewDiag} defaultOpen />
-          </div>
+            </div>
+          ) : (
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
+              {firstFrameFile && skel ? (
+                <FramePlayer
+                  ref={previewPlayerRef}
+                  imageFile={firstFrameFile}
+                  videoSrc={videoUrl}
+                  videoTimeOffset={skel.startOffsetSec}
+                  layers={[{ frames: skel.frames, style: topoStyle }]}
+                  duration={skel.duration}
+                  autoPlay
+                  hidePlayButton
+                  orbKeypoints={orbKeypoints}
+                  cropTrace={showCrops ? cropTrace : undefined}
+                  fit="contain"
+                  bare
+                  className="min-h-0 flex-1 rounded-none"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
+                  No climber detected — the Detection Preview has nothing to show. See the
+                  diagnostics for why.
+                </div>
+              )}
+              <DiagnosticsPanel record={previewDiag} defaultOpen />
+            </div>
+          )}
         </div>
       </div>
     );
