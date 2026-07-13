@@ -25,6 +25,8 @@ import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
+import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
+import Modal from "@/components/ui/Modal";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
@@ -294,6 +296,10 @@ function Calibrator({
   const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
   const [panning, setPanning] = useState(false);
   const wallTouchedRef = useRef(false);
+
+  // Editable video metadata (analysis_inputs) — seeded from the corpus passthrough.
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
@@ -764,6 +770,13 @@ function Calibrator({
           )}
           <button
             type="button"
+            onClick={() => setMetadataOpen(true)}
+            className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
+          >
+            Metadata
+          </button>
+          <button
+            type="button"
             onClick={() => void handleSaveOnly()}
             disabled={busy}
             className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
@@ -772,6 +785,20 @@ function Calibrator({
           </button>
         </div>
       </div>
+
+      <Modal
+        open={metadataOpen}
+        onClose={() => setMetadataOpen(false)}
+        ariaLabel="Edit video metadata"
+        panelClassName=""
+      >
+        <MetadataEditorPanel
+          bundleKey={item.key}
+          initial={analysisInputs}
+          onClose={() => setMetadataOpen(false)}
+          onSaved={setAnalysisInputs}
+        />
+      </Modal>
 
       <div className="min-h-0 flex-1">
         <StepSetDetection
