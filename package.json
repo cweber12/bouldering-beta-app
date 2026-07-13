@@ -50,7 +50,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9",
-    "eslint-config-next": "^16.2.7",
+    "eslint-config-next": "^16.2.10",
     "eslint-config-prettier": "^10.1.8",
     "jsdom": "^29.0.1",
     "prettier": "^3.8.1",
