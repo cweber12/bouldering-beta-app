@@ -10,6 +10,11 @@ run; this ADR removes that — calibration now authors per-video **Ground Truth*
 its detection pass is a discarded scaffold, and scored runs come only from a
 separate headless pass.
 
+Amended by ADR 0019: §1's scaffold *poses* now come from ViTPose++ run on the
+downloader (MediaPipe still defines the Detection Frame set); the human stays the
+truth authority. §Considered-Options #4's circularity premise is superseded —
+seeding from a different model breaks the self-reference on unverified frames.
+
 ## Context
 
 ADR 0017 gave us a labelled corpus and a self-contained **Scan Diagnostics**

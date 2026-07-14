@@ -78,11 +78,18 @@ export function contextKeypointsAt(
 }
 
 /**
- * Seed a Ground Truth from the scan's scaffold, one record per Detection Frame:
- * a `missing` frame (or one with no matching pose) is `absent`; every other frame
- * is `present`, its core joints seeded from the scaffold detection. Any frame the
- * human already authored in `existing` (matched by `frameIndex`) is preserved
- * verbatim — re-scanning never clobbers verified corrections.
+ * Seed a Ground Truth from the scaffold poses, one record per Detection Frame:
+ * a frame is `present` when a scaffold pose matches its timestamp (core joints
+ * seeded from it), `absent` when none does. State keys off whether the
+ * **scaffold** found a pose, not the detector-under-test's own `status` — a
+ * frame MediaPipe missed but the ViTPose scaffold posed is `present` (the
+ * Climber is there), so the seed no longer inherits MediaPipe's misses (ADR
+ * 0019). Any frame the human already authored in `existing` (matched by
+ * `frameIndex`) is preserved verbatim — re-scanning never clobbers verified
+ * corrections.
+ *
+ * `detectionFrames` supplies the frame grid + timestamps (established by the
+ * MediaPipe pass); `poseFrames` supplies the landmarks (the ViTPose scaffold).
  */
 export function buildGroundTruthScaffold(
   detectionFrames: readonly { timestamp: number; status: string }[],
@@ -96,7 +103,7 @@ export function buildGroundTruthScaffold(
     const prior = priorByIndex.get(frameIndex);
     if (prior) return prior;
 
-    const pose = df.status === "missing" ? null : poseAt(poseFrames, df.timestamp);
+    const pose = poseAt(poseFrames, df.timestamp);
     const joints = pose ? coreJointsFromKeypoints(pose.keypoints) : {};
     return {
       frameIndex,

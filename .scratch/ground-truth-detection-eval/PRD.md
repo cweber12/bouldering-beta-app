@@ -13,7 +13,9 @@ Calibration authors per-video **Ground Truth** once, by correcting a throwaway d
 
 ## Slices
 
-01 stepper+filmstrip · 02 auto per-frame conditions · 03 GT model+proxy · 04 landmark editor (HITL) · 05 frame states+occluded · 06 editable metadata · 07 calibration flow split · 08 headless scoring · 09 batch GT gate.
+01 stepper+filmstrip · 02 auto per-frame conditions · 03 GT model+proxy · 04 landmark editor (HITL) · 05 frame states+occluded · 06 editable metadata · 07 calibration flow split · 08 headless scoring · 09 batch GT gate · 10 ViTPose scaffold (ADR 0019).
+
+ADR 0019 amends the authoring side: the draggable scaffold poses now come from a stronger reference model (ViTPose++, run on the downloader) instead of the MediaPipe detector under test — the human stays the truth authority. Scoring (08) is unchanged.
 
 ## Out of scope
 

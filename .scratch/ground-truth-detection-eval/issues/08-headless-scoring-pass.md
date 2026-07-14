@@ -3,6 +3,10 @@
 Status: ready-for-agent
 Type: AFK
 
+> Unaffected by ADR 0019 / issue 10. The ViTPose scaffold change is entirely on
+> the authoring side: it reads `ground-truth.json` exactly as before, with the
+> same per-Detection-Frame schema and scoring contract.
+
 ## Parent
 
 - `.scratch/ground-truth-detection-eval/PRD.md`

@@ -9,7 +9,7 @@ Type: AFK
 
 ## What to build
 
-Per-frame GT state controls and per-joint occlusion in the editor: set each Detection Frame to **present** / **absent** / **skip**, and toggle individual core joints **occluded**. Pre-seed occluded from MediaPipe visibility/presence on the scaffold pose (joints below a visibility threshold start occluded); pre-seed state to `present` when a pose was accepted. Downstream scoring excludes occluded joints and skip frames; `absent` frames mean "no climber here" (GT empty), so a detected pose there is a false positive. Persist state + occluded flags into `ground-truth.json`, and reflect state on the filmstrip (absent / skip visually distinct from present).
+Per-frame GT state controls and per-joint occlusion in the editor: set each Detection Frame to **present** / **absent** / **skip**, and toggle individual core joints **occluded**. Pre-seed occluded from the **scaffold model's per-keypoint confidence** (ADR 0019 — the scaffold is now the ViTPose reference model, so confidence, not MediaPipe visibility, drives the seed; joints below the threshold start occluded); pre-seed state to `present` when the scaffold posed the frame. Downstream scoring excludes occluded joints and skip frames; `absent` frames mean "no climber here" (GT empty), so a detected pose there is a false positive. Persist state + occluded flags into `ground-truth.json`, and reflect state on the filmstrip (absent / skip visually distinct from present).
 
 ## Acceptance criteria
 

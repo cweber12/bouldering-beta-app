@@ -67,19 +67,21 @@ describe("buildGroundTruthScaffold", () => {
   ];
   const poseFrames = [
     { timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1), kp("left_wrist", 0.4, 0.6)] },
+    // ViTPose posed a frame MediaPipe reported "missing" — the Climber is there.
+    { timestamp: 0.5, keypoints: [kp("nose", 0.5, 0.15)] },
     { timestamp: 1.0, keypoints: [kp("nose", 0.5, 0.2)] },
   ];
 
-  it("seeds present frames from the scaffold and absent for missing frames", () => {
+  it("keys present/absent off the scaffold pose, not the detector status", () => {
     const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, null);
     expect(gt.frames).toHaveLength(3);
 
     expect(gt.frames[0]).toMatchObject({ frameIndex: 0, state: "present", verified: false });
     expect(Object.keys(gt.frames[0].joints).sort()).toEqual(["left_wrist", "nose"]);
 
-    // Missing status → absent, no joints, even if a pose existed nearby.
-    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "absent" });
-    expect(gt.frames[1].joints).toEqual({});
+    // Status "missing" but the ViTPose scaffold posed it → present (ADR 0019).
+    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "present" });
+    expect(Object.keys(gt.frames[1].joints)).toEqual(["nose"]);
 
     // Weak but detected → present with whatever joints exist.
     expect(gt.frames[2]).toMatchObject({ frameIndex: 2, state: "present" });
