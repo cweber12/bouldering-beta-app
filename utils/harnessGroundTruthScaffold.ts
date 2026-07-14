@@ -14,6 +14,7 @@ import {
   type GroundTruthFrame,
   type GroundTruthInput,
   type GroundTruthJoint,
+  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
@@ -144,6 +145,34 @@ export function removeJoint(
   const out = { ...joints };
   delete out[name];
   return out;
+}
+
+/**
+ * Flip one joint's `occluded` flag — the human override on the confidence seed.
+ * Occluded joints keep their position (so the author can un-occlude later) but
+ * are excluded from scoring downstream. A no-op for an unplaced joint.
+ */
+export function toggleJointOccluded(
+  joints: Record<string, GroundTruthJoint>,
+  name: string,
+): Record<string, GroundTruthJoint> {
+  const prev = joints[name];
+  if (!prev) return joints;
+  return { ...joints, [name]: { ...prev, occluded: !prev.occluded } };
+}
+
+/**
+ * Apply a per-frame GT state change. `absent` means "no Climber here", so the
+ * pose is cleared (a detected pose there is a false positive); `present` and
+ * `skip` keep the authored joints. Any state change is a human decision, so it
+ * leaves the caller to mark the frame verified.
+ */
+export function applyFrameState(
+  frame: GroundTruthFrame,
+  state: GroundTruthState,
+): GroundTruthFrame {
+  if (state === "absent") return { ...frame, state, joints: {} };
+  return { ...frame, state };
 }
 
 /** Move one joint to an absolute normalised position (clamped to the frame). */

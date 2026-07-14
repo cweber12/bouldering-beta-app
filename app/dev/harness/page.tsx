@@ -31,14 +31,17 @@ import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import LandmarkEditor from "@/components/dev/LandmarkEditor";
 import Modal from "@/components/ui/Modal";
 import {
+  applyFrameState,
   buildGroundTruthScaffold,
   contextKeypointsAt,
+  toggleJointOccluded,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
   saveGroundTruth,
   type GroundTruthFrame,
   type GroundTruthInput,
+  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import {
   requestViTPoseScaffold,
@@ -699,6 +702,42 @@ function Calibrator({
     setGtSave(null);
   }, []);
 
+  // Set a Detection Frame's state (present / absent / skip). Absent clears the
+  // pose; the change marks the frame verified.
+  const setGtFrameState = useCallback((index: number, state: GroundTruthState) => {
+    setGtInput((prev) => {
+      if (!prev) return prev;
+      return {
+        frames: prev.frames.map((f) =>
+          f.frameIndex === index ? { ...applyFrameState(f, state), verified: true } : f,
+        ),
+      };
+    });
+    setGtSave(null);
+  }, []);
+
+  // Toggle one core joint's occluded flag on a Detection Frame (marks verified).
+  const toggleGtOccluded = useCallback((index: number, name: string) => {
+    setGtInput((prev) => {
+      if (!prev) return prev;
+      return {
+        frames: prev.frames.map((f) =>
+          f.frameIndex === index
+            ? { ...f, joints: toggleJointOccluded(f.joints, name), verified: true }
+            : f,
+        ),
+      };
+    });
+    setGtSave(null);
+  }, []);
+
+  // GT state per Detection Frame index, for the filmstrip (absent / skip marks).
+  const gtStateByIndex = useMemo(() => {
+    const byIndex = new Map<number, GroundTruthState>();
+    for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, f.state);
+    return previewFrames.map((_, i) => byIndex.get(i));
+  }, [gtInput, previewFrames]);
+
   const handleSaveGt = useCallback(async () => {
     if (!gtInput) return;
     setGtSaving(true);
@@ -900,6 +939,7 @@ function Calibrator({
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
           <DetectionFrameStepper
             frames={previewFrames}
+            frameStates={gtStateByIndex}
             currentIndex={previewFrameIndex}
             onSeek={handlePreviewSeek}
             onTogglePlay={handlePreviewTogglePlay}
@@ -916,8 +956,13 @@ function Calibrator({
                 seedJoints={gtSeedFrame?.joints ?? {}}
                 contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
                 onEditJoints={(joints) =>
-                  editGtFrame(gtFrame.frameIndex, { joints, state: "present" })
+                  editGtFrame(gtFrame.frameIndex, {
+                    joints,
+                    state: gtFrame.state === "absent" ? "present" : gtFrame.state,
+                  })
                 }
+                onSetState={(state) => setGtFrameState(gtFrame.frameIndex, state)}
+                onToggleOccluded={(name) => toggleGtOccluded(gtFrame.frameIndex, name)}
                 onAccept={() => editGtFrame(gtFrame.frameIndex, {})}
               />
             </div>

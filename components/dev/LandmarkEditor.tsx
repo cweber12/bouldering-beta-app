@@ -29,6 +29,7 @@ import {
   CORE_JOINT_NAMES,
   type GroundTruthFrame,
   type GroundTruthJoint,
+  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 
 type Pos = { x: number; y: number };
@@ -46,10 +47,20 @@ export interface LandmarkEditorProps {
   contextKeypoints: Record<string, Pos>;
   /** Called with the frame's new joints after a drag / place / translate (marks verified). */
   onEditJoints: (joints: Record<string, GroundTruthJoint>) => void;
+  /** Set the frame's GT state (present / absent / skip); marks verified. */
+  onSetState: (state: GroundTruthState) => void;
+  /** Toggle one core joint's `occluded` flag (marks verified). */
+  onToggleOccluded: (name: string) => void;
   /** Accept the frame's landmarks as-is (marks verified without editing). */
   onAccept: () => void;
   className?: string;
 }
+
+const STATE_OPTIONS: readonly { value: GroundTruthState; label: string; hint: string }[] = [
+  { value: "present", label: "Present", hint: "Climber is here — pose scored" },
+  { value: "absent", label: "Absent", hint: "No climber — a detected pose here is a false positive" },
+  { value: "skip", label: "Skip", hint: "Exclude this frame from scoring" },
+];
 
 const { keypointNames, skeletonEdges } = getTopology("mediapipe");
 const NAME_BY_INDEX = keypointNames;
@@ -77,6 +88,8 @@ export default function LandmarkEditor({
   seedJoints,
   contextKeypoints,
   onEditJoints,
+  onSetState,
+  onToggleOccluded,
   onAccept,
   className,
 }: LandmarkEditorProps) {
@@ -313,6 +326,16 @@ export default function LandmarkEditor({
     (e: React.PointerEvent) => {
       const norm = toNorm(e.clientX, e.clientY);
 
+      // Shift-click a joint to toggle its occluded flag (no drag).
+      if (e.shiftKey) {
+        const name = hitJoint(norm);
+        if (name) {
+          e.preventDefault();
+          onToggleOccluded(name);
+          return;
+        }
+      }
+
       // Placing a missing joint: drop it here, then drag to fine-tune.
       if (placing) {
         onEditJoints(setJoint(jointsRef.current, placing, norm.x, norm.y));
@@ -359,7 +382,7 @@ export default function LandmarkEditor({
         e.preventDefault();
       }
     },
-    [toNorm, hitJoint, placing, translateMode, zoom, pan, onEditJoints],
+    [toNorm, hitJoint, placing, translateMode, zoom, pan, onEditJoints, onToggleOccluded],
   );
 
   const onPointerMove = useCallback(
@@ -398,28 +421,64 @@ export default function LandmarkEditor({
     [hitJoint, toNorm, onEditJoints],
   );
 
-  const absent = frame.state !== "present" || !hasJoints;
+  const empty = frame.state === "absent" || !hasJoints;
   const unplaced = CORE_JOINT_NAMES.filter((n) => !frame.joints[n]);
+  const occludedCount = Object.values(frame.joints).filter((j) => j.occluded).length;
 
-  const hint = placing
-    ? `Click on the video to place ${shortLabel(placing).trim()}.`
-    : absent
-      ? "This frame has no core joints. Pick a joint below, then click on the video to place it — or Accept as-is if the climber is off-screen."
-      : unplaced.length > 0
-        ? "Drag a joint to correct it; right-click a joint to delete it. Missing joints are outlined below — pick one, then click on the video. Scroll to zoom, drag the background to pan."
-        : "Drag a joint to correct it; right-click to delete. Scroll to zoom toward the cursor, drag the background to pan.";
+  const hint =
+    frame.state === "absent"
+      ? "Marked absent — no climber here, so a detected pose scores as a false positive. Set Present to author joints."
+      : frame.state === "skip"
+        ? "Marked skip — this frame is excluded from scoring. Set Present to include it."
+        : placing
+          ? `Click on the video to place ${shortLabel(placing).trim()}.`
+          : empty
+            ? "This frame has no core joints. Pick a joint below, then click on the video to place it — or mark it Absent if the climber is off-screen."
+            : unplaced.length > 0
+              ? "Drag to correct; shift-click a joint to toggle occluded; right-click to delete. Missing joints are outlined below — pick one, then click on the video. Scroll to zoom."
+              : "Drag to correct; shift-click a joint to toggle occluded; right-click to delete. Scroll to zoom toward the cursor, drag the background to pan.";
 
   return (
     <div className={cn("flex min-h-0 flex-col gap-2", className)}>
       {/* Toolbar — always outside the frame. */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Per-frame GT state — present / absent / skip. */}
+        <div
+          role="group"
+          aria-label="Frame state"
+          className="flex items-center gap-0.5 rounded-md bg-surface-alt p-0.5"
+        >
+          {STATE_OPTIONS.map((opt) => {
+            const active = frame.state === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                aria-pressed={active}
+                title={opt.hint}
+                onClick={() => {
+                  setPlacing(null);
+                  setTranslateMode(false);
+                  onSetState(opt.value);
+                }}
+                className={cn(
+                  "rounded px-2.5 py-1 text-xs font-medium transition",
+                  active ? "bg-accent text-fg-inverse" : "text-fg-muted hover:text-fg",
+                )}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
         <button
           type="button"
           onClick={() => {
             setTranslateMode((v) => !v);
             setPlacing(null);
           }}
-          disabled={!hasJoints}
+          disabled={!hasJoints || frame.state !== "present"}
           className={cn(
             "rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50",
             translateMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg",
@@ -474,30 +533,42 @@ export default function LandmarkEditor({
             drift max {(drift.maxDist * 100).toFixed(1)}% · mean {(drift.meanDist * 100).toFixed(1)}%
           </span>
           <span>{drift.movedJoints} moved</span>
+          {occludedCount > 0 && <span className="text-caution">{occludedCount} occluded</span>}
         </div>
       </div>
 
       {/* Joint palette — placed joints are filled; missing joints are outlined. */}
       <div className="flex flex-wrap items-center gap-1.5">
         {CORE_JOINT_NAMES.map((name) => {
-          const isPlaced = !!frame.joints[name];
+          const placed = frame.joints[name];
+          const isPlaced = !!placed;
+          const isOccluded = !!placed?.occluded;
           const isPlacing = placing === name;
           return (
             <button
               key={name}
               type="button"
-              onClick={() => setPlacing((p) => (p === name ? null : name))}
+              onClick={() =>
+                isPlaced ? onToggleOccluded(name) : setPlacing((p) => (p === name ? null : name))
+              }
               className={cn(
                 "rounded px-2 py-0.5 text-xs transition",
                 isPlacing
                   ? "bg-accent text-fg-inverse ring-2 ring-accent/60"
-                  : isPlaced
-                    ? "bg-send-surface text-send"
-                    : "border border-edge/60 text-fg-muted hover:text-fg",
+                  : isOccluded
+                    ? "bg-caution-surface text-caution"
+                    : isPlaced
+                      ? "bg-send-surface text-send"
+                      : "border border-edge/60 text-fg-muted hover:text-fg",
               )}
-              title={isPlaced ? `Re-place ${name}` : `Place ${name}`}
+              title={
+                isPlaced
+                  ? `Toggle ${name} ${isOccluded ? "visible" : "occluded"}`
+                  : `Place ${name}`
+              }
             >
               {shortLabel(name).trim()}
+              {isOccluded && " ∅"}
             </button>
           );
         })}

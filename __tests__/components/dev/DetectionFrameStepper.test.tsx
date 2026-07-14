@@ -31,6 +31,29 @@ describe("DetectionFrameStepper", () => {
     expect(onSeek).toHaveBeenCalledWith(4);
   });
 
+  it("reflects Ground Truth state on the filmstrip (absent / skip distinct)", () => {
+    render(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0, status: "detected" },
+          { timestamp: 1, status: "detected" },
+          { timestamp: 2, status: "missing" },
+        ]}
+        frameStates={["present", "skip", "absent"]}
+        currentIndex={0}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    // Only the non-present frames carry a state marker.
+    const markers = screen.getAllByTestId("frame-state-marker");
+    expect(markers).toHaveLength(2);
+    expect(markers.map((m) => m.getAttribute("data-state"))).toEqual(["skip", "absent"]);
+
+    // State is surfaced in the bar title for authoring feedback.
+    expect(screen.getByTitle("0:02 · missing · absent")).toBeTruthy();
+  });
+
   it("steps with the keyboard and jumps to the next flagged stretch", () => {
     const onSeek = vi.fn();
     const onTogglePlay = vi.fn();
