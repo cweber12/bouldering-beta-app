@@ -391,6 +391,13 @@ function Calibrator({
   const [showCrops, setShowCrops] = useState(true);
   const previewFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
 
+  // The Detection Preview skeleton is re-based to start at the first detected
+  // frame, so the FramePlayer's playback clock is offset from the Detection Frame
+  // grid by this many seconds. The stepper works in absolute video time, so seek
+  // / sync convert across the two bases with `previewStartOffset`.
+  const previewSkel = useMemo(() => buildFirstFrameSkeleton(previewAttempt), [previewAttempt]);
+  const previewStartOffset = previewSkel?.startOffsetSec ?? 0;
+
   useEffect(() => {
     if (phase !== "preview") return;
     setPreviewPlaying(true);
@@ -404,15 +411,16 @@ function Calibrator({
     let raf = 0;
 
     const syncCurrentFrame = () => {
+      // Player time is re-based to the first detection; the grid is absolute.
       const playerTime = previewPlayerRef.current?.getCurrentTime() ?? 0;
-      const nextIndex = findFrameIndexByTime(previewFrames, playerTime);
+      const nextIndex = findFrameIndexByTime(previewFrames, playerTime + previewStartOffset);
       setPreviewFrameIndex((prev) => (prev === nextIndex ? prev : nextIndex));
       raf = requestAnimationFrame(syncCurrentFrame);
     };
 
     raf = requestAnimationFrame(syncCurrentFrame);
     return () => cancelAnimationFrame(raf);
-  }, [phase, gtMode, previewFrames]);
+  }, [phase, gtMode, previewFrames, previewStartOffset]);
 
   const handlePreviewSeek = useCallback(
     (index: number) => {
@@ -421,9 +429,11 @@ function Calibrator({
       setPreviewPlaying(false);
       setPreviewFrameIndex(index);
       previewPlayerRef.current?.pause();
-      previewPlayerRef.current?.seek(frame.timestamp);
+      // The stepper timestamp is absolute video time; the player seeks in its
+      // re-based clock, so subtract the first-detection offset.
+      previewPlayerRef.current?.seek(frame.timestamp - previewStartOffset);
     },
-    [previewFrames],
+    [previewFrames, previewStartOffset],
   );
 
   const handlePreviewTogglePlay = useCallback(() => {
@@ -863,7 +873,7 @@ function Calibrator({
 
   // ── Post-scan Detection Preview (review only; the run is already posted) ──
   if (phase === "preview") {
-    const skel = buildFirstFrameSkeleton(previewAttempt);
+    const skel = previewSkel;
     const topo = getTopology(previewAttempt?.poseBackend ?? "mediapipe");
     const topoStyle: SkeletonStyle = {
       skeletonEdges: topo.skeletonEdges,

@@ -611,6 +611,21 @@ const FramePlayer = forwardRef<FramePlayerHandle, FramePlayerProps>(function Fra
     };
   }, [playing, duration, loop, drawFrame, useVideoBackdrop, videoReady]);
 
+  // Redraw once a paused seek settles. Setting `video.currentTime` decodes the
+  // new frame asynchronously, so the immediate draw in seek()/handleSeek()
+  // composites the skeleton over the *previous* video frame — the pose appears
+  // to float off the climber while stepping. Redraw when the frame is ready.
+  useEffect(() => {
+    if (!useVideoBackdrop || !videoReady) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const onSeeked = () => {
+      if (!playingRef.current) drawFrame(timeRef.current);
+    };
+    video.addEventListener("seeked", onSeeked);
+    return () => video.removeEventListener("seeked", onSeeked);
+  }, [useVideoBackdrop, videoReady, drawFrame]);
+
   // Draw the first frame when the backdrop is ready; auto-play if requested.
   useEffect(() => {
     if (!ready) return;
