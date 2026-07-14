@@ -109,6 +109,11 @@ a stronger reference model.
 - **Scaffold quality now depends on the tracker.** If the tracker follows a
   **Bystander**, the seed is wrong on those frames — caught by the human in the
   stepper, since ViTPose is only a scaffold. A lost track just means more dragging.
+- **ViTPose is not a hard dependency.** If the ViTPose job fails or no downloader
+  is configured, calibration falls back to seeding the scaffold from the MediaPipe
+  pass, so Ground Truth authoring still works (with the weaker, self-referential
+  seed) while the downloader endpoint is being built. ViTPose only ever *improves*
+  the seed.
 - **Circularity is broken for unverified frames.** Unverified Ground Truth is a
   ViTPose guess, so a scored MediaPipe run there measures divergence from an
   independent model rather than from itself — still soft, but no longer

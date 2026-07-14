@@ -272,7 +272,8 @@ export default function HarnessPage() {
 // author the Scan Setup, and on confirm saves it, kicks off the downloader's
 // ViTPose scaffold job (ADR 0019), and runs one throwaway MediaPipe pass to
 // establish the Detection Frame grid. The ViTPose poses seed the draggable
-// Ground Truth; no scored run is posted.
+// Ground Truth; if that job fails or no downloader is configured, the MediaPipe
+// poses seed it instead (a weaker fallback). No scored run is posted.
 // ---------------------------------------------------------------------------
 
 type RunPhase = "idle" | "saving" | "running" | "preview" | "done" | "error";
@@ -341,6 +342,25 @@ function Calibrator({
   const vitposePoseFrames = useMemo(
     () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
     [vitpose],
+  );
+
+  // Which poses seed the draggable Ground Truth: ViTPose when it lands, else the
+  // MediaPipe scaffold as a fallback once the ViTPose job has failed (or no
+  // downloader is configured) — so authoring never hard-depends on the external
+  // ViTPose endpoint. ViTPose is only ever a *better* seed, not a requirement.
+  const seedSource: "vitpose" | "mediapipe" | null = vitpose
+    ? "vitpose"
+    : vitposeStatus === "failed" && previewAttempt
+      ? "mediapipe"
+      : null;
+  const seedPoseFrames = useMemo(
+    () =>
+      seedSource === "vitpose"
+        ? vitposePoseFrames
+        : seedSource === "mediapipe" && previewAttempt
+          ? previewAttempt.frames
+          : [],
+    [seedSource, vitposePoseFrames, previewAttempt],
   );
 
   const poseModelConfig = useMemo(
@@ -653,22 +673,18 @@ function Calibrator({
     };
   }, [vitposeStatus, item.key]);
 
-  // Seed Ground Truth from the ViTPose scaffold once both the Detection Frame
-  // grid (MediaPipe pass) and the ViTPose poses are ready: a pure scaffold (the
-  // drift baseline) and a working copy that preserves any previously authored GT.
-  // Both key one record per Detection Frame.
+  // Seed Ground Truth once the Detection Frame grid and a seed source (ViTPose,
+  // or the MediaPipe fallback) are both ready: a pure scaffold (the drift
+  // baseline) and a working copy that preserves any previously authored GT. Both
+  // key one record per Detection Frame.
   useEffect(() => {
-    if (phase !== "preview" || vitpose === null || previewFrames.length === 0) return;
-    const pureScaffold = buildGroundTruthScaffold(previewFrames, vitposePoseFrames, null);
-    const working = buildGroundTruthScaffold(
-      previewFrames,
-      vitposePoseFrames,
-      existingGtRef.current,
-    );
+    if (phase !== "preview" || seedPoseFrames.length === 0 || previewFrames.length === 0) return;
+    const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, null);
+    const working = buildGroundTruthScaffold(previewFrames, seedPoseFrames, existingGtRef.current);
     setGtSeed(pureScaffold);
     setGtInput(working);
     setGtSave(null);
-  }, [phase, vitpose, vitposePoseFrames, previewFrames]);
+  }, [phase, seedPoseFrames, previewFrames]);
 
   // Update the current Detection Frame's Ground Truth (marks it verified).
   const editGtFrame = useCallback((index: number, patch: Partial<GroundTruthFrame>) => {
@@ -836,9 +852,12 @@ function Calibrator({
               (vitposeStatus === "requesting" || vitposeStatus === "polling") && (
                 <span className="shrink-0 text-xs text-fg-muted">Building ViTPose scaffold…</span>
               )}
-            {vitposeStatus === "failed" && (
-              <span className="max-w-xs shrink-0 truncate text-xs text-danger">
-                ViTPose failed{vitposeError ? `: ${vitposeError}` : ""}
+            {seedSource === "mediapipe" && (
+              <span
+                className="max-w-xs shrink-0 truncate text-xs text-caution"
+                title={vitposeError ?? undefined}
+              >
+                ViTPose unavailable — MediaPipe seed
               </span>
             )}
             <button
@@ -895,7 +914,7 @@ function Calibrator({
                 videoHeight={previewAttempt.videoMeta.height}
                 frame={gtFrame}
                 seedJoints={gtSeedFrame?.joints ?? {}}
-                contextKeypoints={contextKeypointsAt(vitposePoseFrames, gtFrame.timestamp)}
+                contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
                 onEditJoints={(joints) =>
                   editGtFrame(gtFrame.frameIndex, { joints, state: "present" })
                 }

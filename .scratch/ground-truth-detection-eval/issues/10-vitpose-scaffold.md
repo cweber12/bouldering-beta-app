@@ -28,7 +28,9 @@ Two halves:
   `vitpose.json` (null while the job runs, 422 if malformed).
 - `app/dev/harness/page.tsx` — on confirm, kick off the ViTPose job (async), poll
   for the artifact, and seed the draggable Ground Truth from the ViTPose poses.
-  MediaPipe still runs to establish the Detection Frame grid.
+  MediaPipe still runs to establish the Detection Frame grid, and **falls back to
+  seeding the scaffold** when the ViTPose job fails or no downloader is configured
+  — so 05/08/09 and authoring are not blocked on the external endpoint.
 - `utils/harnessGroundTruthScaffold.ts` — `buildGroundTruthScaffold` now keys
   present/absent off whether the scaffold posed the frame, not MediaPipe's status;
   `occluded` seeds from ViTPose confidence via the existing `kp.score` path.
