@@ -344,6 +344,10 @@ function Calibrator({
     "idle" | "requesting" | "polling" | "ready" | "failed"
   >("idle");
   const [vitposeError, setVitposeError] = useState<string | null>(null);
+  // The Detection Frame grid a ViTPose job has already been kicked off for. Keyed
+  // on the grid's array identity so each new scan re-requests, but our own status
+  // transitions never re-fire (and cancel) the request mid-flight.
+  const vitposeRequestedRef = useRef<{ timestamp: number }[] | null>(null);
   const vitposePoseFrames = useMemo(
     () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
     [vitpose],
@@ -626,8 +630,16 @@ function Calibrator({
   // exactly those frames. The downloader echoes their timestamps, so the seed
   // aligns frame-for-frame — the ViTPose run is not a denser grid (ADR 0019).
   useEffect(() => {
-    if (phase !== "preview" || vitposeStatus !== "idle" || previewFrames.length === 0) return;
-    let cancelled = false;
+    if (phase !== "preview" || previewFrames.length === 0) return;
+    // Fire exactly once per Detection Frame grid. Staleness is judged by the ref,
+    // not a per-invocation `cancelled` flag: `vitposeStatus` is deliberately NOT a
+    // dependency (setting it to "requesting" would re-run this effect), and under
+    // StrictMode's mount/cleanup/mount the ref survives while a `cancelled` flag
+    // would strand the one POST that ran. Advance to "polling" only while this
+    // grid is still the active request; a superseded or reset grid is ignored.
+    if (vitposeRequestedRef.current === previewFrames) return;
+    const grid = previewFrames;
+    vitposeRequestedRef.current = grid;
     setVitpose(null);
     setVitposeError(null);
     setVitposeStatus("requesting");
@@ -639,21 +651,17 @@ function Calibrator({
           climberCrop,
           wallCrop,
           panning,
-          frames: previewFrames.map((f) => ({ timestamp: f.timestamp })),
+          frames: grid.map((f) => ({ timestamp: f.timestamp })),
         });
-        if (!cancelled) setVitposeStatus("polling");
+        if (vitposeRequestedRef.current === grid) setVitposeStatus("polling");
       } catch (err) {
-        if (cancelled) return;
+        if (vitposeRequestedRef.current !== grid) return;
         setVitposeStatus("failed");
         setVitposeError(err instanceof Error ? err.message : String(err));
       }
     })();
-    return () => {
-      cancelled = true;
-    };
   }, [
     phase,
-    vitposeStatus,
     previewFrames,
     item.key,
     item.videoPath,
@@ -795,6 +803,7 @@ function Calibrator({
     setVitpose(null);
     setVitposeStatus("idle");
     setVitposeError(null);
+    vitposeRequestedRef.current = null;
     setPhase("idle");
   }
 
@@ -804,6 +813,7 @@ function Calibrator({
     setPhaseError(null);
     setVitposeStatus("idle");
     setVitposeError(null);
+    vitposeRequestedRef.current = null;
     setPhase("idle");
   }
 
