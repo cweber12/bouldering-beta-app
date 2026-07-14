@@ -36,12 +36,14 @@ Two halves:
 ### Downloader side (external — the open dependency)
 
 - A `POST /api/vitpose` endpoint accepting `{ video_path, route_folder,
-  video_key, climber_point, climber_crop, wall_crop, panning }` that runs an async
-  job: person detect + **track** (hold Climber Identity from `climber_point`, e.g.
-  ByteTrack), ViTPose++ top-down on the selected Climber track's box per Detection
-  Frame, writing `vitpose.json` (per-frame Climber keypoints + per-keypoint
-  confidence, video-normalized, MediaPipe-compatible core-joint names) into the
-  bundle.
+  video_key, climber_point, climber_crop, wall_crop, panning, frames }` that runs
+  an async job: person detect + **track** (hold Climber Identity from
+  `climber_point`, e.g. ByteTrack), ViTPose++ top-down on the selected Climber
+  track's box for **each requested `frames[].timestamp`**, writing `vitpose.json`
+  (one frame per requested timestamp, **echoing that timestamp verbatim**, with
+  per-keypoint confidence, coords video-normalized `[0,1]`, MediaPipe-compatible
+  core-joint names) into the bundle.
+- **Full handoff spec:** `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`.
 
 ## Acceptance criteria
 

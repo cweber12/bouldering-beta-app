@@ -512,36 +512,19 @@ function Calibrator({
     }
   }
 
-  // Confirm: save the Setup, then run one throwaway detection scaffold (the
-  // effect below hands the result to the Ground Truth editor once the pipeline
-  // finishes). Nothing is posted as a scored run.
+  // Confirm: save the Setup, then run one throwaway MediaPipe pass to establish
+  // the Detection Frame grid. The effects below kick off the ViTPose job for
+  // exactly those frames and hand the result to the Ground Truth editor. Nothing
+  // is posted as a scored run.
   async function handleConfirmAndRun() {
     if (!videoFile || !model || !cv) return;
     setPhase("saving");
     setPhaseError(null);
+    setVitpose(null);
+    setVitposeError(null);
+    setVitposeStatus("idle");
     try {
       await saveSetup();
-
-      // Kick off the downloader's ViTPose job with the frozen Climber selection.
-      // It runs async on the downloader; we poll for its `vitpose.json` while the
-      // MediaPipe pass below establishes the Detection Frame grid.
-      setVitpose(null);
-      setVitposeError(null);
-      setVitposeStatus("requesting");
-      try {
-        await requestViTPoseScaffold(item.key, {
-          videoPath: item.videoPath,
-          climberPoint: climberPoint ?? undefined,
-          climberCrop,
-          wallCrop,
-          panning,
-        });
-        setVitposeStatus("polling");
-      } catch (err) {
-        setVitposeStatus("failed");
-        setVitposeError(err instanceof Error ? err.message : String(err));
-      }
-
       setPhase("running");
       const cfg = getTierConfig(tier);
       await process(
@@ -597,6 +580,47 @@ function Calibrator({
     setPreviewDiag(scanDiagnostics);
     setPhase("preview");
   }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
+
+  // Once the Detection Frame grid exists (preview), kick off the ViTPose job for
+  // exactly those frames. The downloader echoes their timestamps, so the seed
+  // aligns frame-for-frame — the ViTPose run is not a denser grid (ADR 0019).
+  useEffect(() => {
+    if (phase !== "preview" || vitposeStatus !== "idle" || previewFrames.length === 0) return;
+    let cancelled = false;
+    setVitpose(null);
+    setVitposeError(null);
+    setVitposeStatus("requesting");
+    void (async () => {
+      try {
+        await requestViTPoseScaffold(item.key, {
+          videoPath: item.videoPath,
+          climberPoint: climberPoint ?? undefined,
+          climberCrop,
+          wallCrop,
+          panning,
+          frames: previewFrames.map((f) => ({ timestamp: f.timestamp })),
+        });
+        if (!cancelled) setVitposeStatus("polling");
+      } catch (err) {
+        if (cancelled) return;
+        setVitposeStatus("failed");
+        setVitposeError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    phase,
+    vitposeStatus,
+    previewFrames,
+    item.key,
+    item.videoPath,
+    climberPoint,
+    climberCrop,
+    wallCrop,
+    panning,
+  ]);
 
   // Poll the bundle for the ViTPose artifact once the job has been accepted, and
   // convert it to the seed poses once it lands.

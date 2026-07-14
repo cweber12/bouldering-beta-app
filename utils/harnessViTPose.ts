@@ -66,6 +66,13 @@ export interface ViTPoseRequest {
   wallCrop: CropFraction;
   /** Fixed vs Panning Capture flag. */
   panning: boolean;
+  /**
+   * The exact Detection Frame timestamps (seconds) to pose. The downloader must
+   * emit one `vitpose.json` frame per entry, **echoing the same timestamp value**
+   * so beta-scanner matches the seed frame-for-frame (ADR 0019). Not a denser
+   * grid — one ViTPose frame per Detection Frame.
+   */
+  frames: { timestamp: number }[];
 }
 
 /**

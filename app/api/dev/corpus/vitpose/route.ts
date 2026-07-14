@@ -73,6 +73,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (typeof b.videoPath !== "string" || b.videoPath.length === 0) {
     return NextResponse.json({ error: "videoPath is required." }, { status: 422 });
   }
+  if (!Array.isArray(b.frames) || b.frames.length === 0) {
+    return NextResponse.json({ error: "frames (non-empty) is required." }, { status: 422 });
+  }
 
   try {
     const res = await fetch(`${base}/api/vitpose`, {
@@ -86,6 +89,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         climber_crop: b.climberCrop,
         wall_crop: b.wallCrop,
         panning: b.panning,
+        frames: b.frames,
       }),
     });
     // Pass the downloader's response straight through (202 accepted / 4xx).

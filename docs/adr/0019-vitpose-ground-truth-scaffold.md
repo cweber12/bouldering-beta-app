@@ -98,7 +98,11 @@ a stronger reference model.
   Climber from the seed tap and run ViTPose per track box, exposed as an async
   job endpoint that writes `vitpose.json`. That work lives in the downloader
   program, not beta-scanner; this ADR fixes only the contract (request = Climber
-  selection + video path; artifact = `vitpose.json`).
+  selection + video path + the exact Detection Frame timestamps to pose; artifact
+  = `vitpose.json`, one frame per requested timestamp, **echoing that timestamp
+  verbatim** so beta-scanner's 1 ms seed-match aligns frame-for-frame — the
+  ViTPose run is not a denser grid). Full handoff spec:
+  `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`.
 - **Calibration runs two models.** MediaPipe (to define Detection Frames) and
   ViTPose (to seed poses). Acceptable: calibration is the dev-only heavy step
   already, and the payoff is far less manual dragging.

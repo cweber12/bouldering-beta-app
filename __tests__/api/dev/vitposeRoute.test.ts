@@ -19,6 +19,7 @@ const validRequest = {
   climberCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   wallCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   panning: false,
+  frames: [{ timestamp: 0 }, { timestamp: 0.5 }],
 };
 
 beforeAll(async () => {
@@ -105,6 +106,14 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     expect(res.status).toBe(422);
   });
 
+  it("POST 422s when frames is missing or empty", async () => {
+    const { POST } = await importRoute("development", "http://localhost:9999");
+    const { frames: _frames, ...noFrames } = validRequest;
+    void _frames;
+    expect((await POST(makeRequest(BUNDLE_KEY, noFrames))).status).toBe(422);
+    expect((await POST(makeRequest(BUNDLE_KEY, { ...noFrames, frames: [] }))).status).toBe(422);
+  });
+
   it("POST relays the Climber selection to the downloader and passes its status through", async () => {
     const fetchMock = vi.fn(
       async (_url: string | URL, _init?: RequestInit) =>
@@ -125,6 +134,7 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
       video_key: "vid_1",
       climber_point: validRequest.climberPoint,
       panning: false,
+      frames: validRequest.frames,
     });
   });
 });
