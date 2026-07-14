@@ -52,7 +52,7 @@ Two halves:
 - [x] `vitpose.json` contract + remap + validator, unit-tested.
 - [x] Dev proxy `GET`/`POST` with path-safety, non-dev 404, GET-null-while-pending, malformed-422; tested.
 - [x] Harness seeds Ground Truth from ViTPose poses; occluded pre-seeded from confidence; issue 07 no-scored-run invariant preserved.
-- [ ] Downloader `POST /api/vitpose` job writes `vitpose.json` for a real bundle (external repo).
+- [x] Downloader `POST /api/vitpose` job writes `vitpose.json` for a real bundle (external repo).
 - [ ] End-to-end: calibrate a video, drag ViTPose-seeded landmarks, save `ground-truth.json` (one record per Detection Frame).
 
 ## Blocked by
