@@ -100,6 +100,16 @@ export function viTPoseToPoseFrames(scaffold: ViTPoseScaffold): PoseFrame[] {
   }));
 }
 
+/**
+ * True when the scaffold posed at least one frame — i.e. the downloader's
+ * tracker actually found the Climber. An all-empty scaffold is a tracker miss,
+ * not 48 genuinely-absent frames, so the harness treats it as no seed and falls
+ * back to MediaPipe rather than seeding every Detection Frame "absent".
+ */
+export function scaffoldHasPose(scaffold: ViTPoseScaffold): boolean {
+  return scaffold.frames.some((f) => f.keypoints.length > 0);
+}
+
 // ---------------------------------------------------------------------------
 // Validation — the proxy trusts nothing it reads back from the bundle file.
 // ---------------------------------------------------------------------------

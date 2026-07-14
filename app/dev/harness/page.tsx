@@ -47,6 +47,7 @@ import {
   requestViTPoseScaffold,
   loadViTPose,
   viTPoseToPoseFrames,
+  scaffoldHasPose,
   VITPOSE_POLL_TIMEOUT_MS,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
@@ -345,6 +346,12 @@ function Calibrator({
   const [vitposeError, setVitposeError] = useState<string | null>(null);
   const vitposePoseFrames = useMemo(
     () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
+    [vitpose],
+  );
+  // How many Detection Frames the ViTPose seed actually posed (vs. tracked-empty),
+  // surfaced in the preview so the seed source and its coverage are visible.
+  const vitposePosedCount = useMemo(
+    () => (vitpose ? vitpose.frames.filter((f) => f.keypoints.length > 0).length : 0),
     [vitpose],
   );
 
@@ -676,6 +683,10 @@ function Calibrator({
         const { scaffold, error } = await loadViTPose(item.key);
         if (cancelled) return;
         if (scaffold) {
+          // A scaffold with no posed frames means the tracker never found the
+          // Climber — a weaker seed than MediaPipe, so fall back rather than seed
+          // every Detection Frame "absent".
+          if (!scaffoldHasPose(scaffold)) return fail("ViTPose tracked no climber.");
           setVitpose(scaffold);
           setVitposeStatus("ready");
           return;
@@ -919,6 +930,14 @@ function Calibrator({
                 title={vitposeError ?? undefined}
               >
                 ViTPose unavailable — MediaPipe seed
+              </span>
+            )}
+            {seedSource === "vitpose" && (
+              <span
+                className="shrink-0 text-xs text-send"
+                title="Ground Truth seeded from the ViTPose reference model"
+              >
+                ViTPose seed · {vitposePosedCount}/{vitpose?.frames.length ?? 0} posed
               </span>
             )}
             <button

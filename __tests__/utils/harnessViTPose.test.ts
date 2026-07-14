@@ -3,6 +3,7 @@ import {
   viTPoseToPoseFrames,
   parseViTPoseScaffold,
   loadViTPose,
+  scaffoldHasPose,
   VITPOSE_TO_MP_NAME,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
@@ -42,6 +43,24 @@ describe("viTPoseToPoseFrames", () => {
       frames: [{ timestamp: 0, keypoints: [{ name: "nose", x: 0.5, y: 0.1, score: 0.9 }] }],
     });
     expect(frames[0].keypoints[0].name).toBe("nose");
+  });
+});
+
+describe("scaffoldHasPose", () => {
+  it("is true when any frame posed the Climber", () => {
+    expect(scaffoldHasPose(scaffold)).toBe(true);
+  });
+
+  it("is false when every frame is tracker-empty (a missed Climber)", () => {
+    expect(
+      scaffoldHasPose({
+        version: 1,
+        frames: [
+          { timestamp: 0, keypoints: [] },
+          { timestamp: 1, keypoints: [] },
+        ],
+      }),
+    ).toBe(false);
   });
 });
 
