@@ -1,8 +1,17 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, access } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { NextRequest } from "next/server";
+
+async function fileExists(p: string): Promise<boolean> {
+  try {
+    await access(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 let root: string;
 let bundleDir: string;
@@ -87,6 +96,62 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify({ frames: "bad" }));
     expect((await GET(makeRequest(BUNDLE_KEY))).status).toBe(422);
     await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+  });
+
+  it("GET surfaces a terminal job error from the status sidecar when no artifact exists", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "j1", status: "error", error: "boom" }),
+    );
+    const res = await GET(makeRequest(BUNDLE_KEY));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.vitpose).toBeNull();
+    expect(body.error).toBe("boom");
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("GET reports no error while the job is still running (non-error status)", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "j1", status: "running" }),
+    );
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toBeNull();
+    expect(body.error).toBeNull();
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("GET ignores a stale error sidecar once the artifact exists", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "old", status: "error", error: "stale" }),
+    );
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toEqual(validScaffold);
+    expect(body.error).toBeUndefined();
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("POST clears a stale status sidecar before relaying the job", async () => {
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "old", status: "error", error: "stale" }),
+    );
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ jobId: "j2" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await importRoute("development", "http://localhost:9999");
+
+    const res = await POST(makeRequest(BUNDLE_KEY, validRequest));
+    expect(res.status).toBe(202);
+    expect(await fileExists(path.join(bundleDir, "vitpose.status.json"))).toBe(false);
   });
 
   it("GET/POST 400 on an unsafe bundle key", async () => {

@@ -47,6 +47,7 @@ import {
   requestViTPoseScaffold,
   loadViTPose,
   viTPoseToPoseFrames,
+  VITPOSE_POLL_TIMEOUT_MS,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
@@ -646,26 +647,37 @@ function Calibrator({
   ]);
 
   // Poll the bundle for the ViTPose artifact once the job has been accepted, and
-  // convert it to the seed poses once it lands.
+  // convert it to the seed poses once it lands. Failing over to the MediaPipe
+  // seed on a reported job error or a timeout keeps authoring off the critical
+  // path of the external endpoint — ViTPose is only ever a better seed.
   useEffect(() => {
     if (vitposeStatus !== "polling") return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = Date.now() + VITPOSE_POLL_TIMEOUT_MS;
+
+    const fail = (message: string) => {
+      setVitposeStatus("failed");
+      setVitposeError(message);
+    };
 
     const poll = async () => {
       try {
-        const scaffold = await loadViTPose(item.key);
+        const { scaffold, error } = await loadViTPose(item.key);
         if (cancelled) return;
         if (scaffold) {
           setVitpose(scaffold);
           setVitposeStatus("ready");
           return;
         }
+        // The job died after acceptance (no artifact will ever land).
+        if (error) return fail(error);
+        // Downloader hung without writing an error sidecar — bail eventually.
+        if (Date.now() >= deadline) return fail("The ViTPose job timed out.");
         timer = setTimeout(poll, 2000);
       } catch (err) {
         if (cancelled) return;
-        setVitposeStatus("failed");
-        setVitposeError(err instanceof Error ? err.message : String(err));
+        fail(err instanceof Error ? err.message : String(err));
       }
     };
 

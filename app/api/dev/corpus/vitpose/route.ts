@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import {
   HARNESS_ENABLED,
@@ -19,6 +19,29 @@ import {
   resolveBundleDir,
 } from "@/app/api/dev/shared";
 import { parseViTPoseScaffold } from "@/utils/harnessViTPose";
+
+/** The status sidecar the downloader writes alongside (or instead of) the artifact. */
+const STATUS_FILE = "vitpose.status.json";
+
+/**
+ * Read a terminal job failure from the status sidecar, or null. The downloader
+ * writes `vitpose.status.json` with `status: "error"` (and a message) when a job
+ * dies *after* being accepted — the only failure signal the poller would
+ * otherwise never see, since no `vitpose.json` is ever written (ADR 0019).
+ */
+async function readJobError(dir: string): Promise<string | null> {
+  try {
+    const raw = await readFile(path.join(dir, STATUS_FILE), "utf8");
+    const status = JSON.parse(raw) as Record<string, unknown>;
+    if (status.status !== "error") return null;
+    return typeof status.error === "string" && status.error
+      ? status.error
+      : "The ViTPose job failed.";
+  } catch {
+    // No status sidecar / unreadable → treat as still running.
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!HARNESS_ENABLED) {
@@ -36,10 +59,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (!scaffold) {
       return NextResponse.json({ error: "Malformed vitpose.json." }, { status: 422 });
     }
+    // A written artifact supersedes any stale status from an earlier run.
     return NextResponse.json({ vitpose: scaffold });
   } catch {
-    // No artifact yet (job still running, or never started) — not an error.
-    return NextResponse.json({ vitpose: null });
+    // No artifact yet — either the job is still running, or it failed after
+    // being accepted. Surface a terminal error so the poller can fall back.
+    const jobError = await readJobError(dir);
+    return NextResponse.json({ vitpose: null, error: jobError });
   }
 }
 
@@ -50,7 +76,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const key = request.nextUrl.searchParams.get("key") ?? "";
   const parsed = parseBundleKey(key);
-  if (!parsed || !resolveBundleDir(key)) {
+  const dir = resolveBundleDir(key);
+  if (!parsed || !dir) {
     return NextResponse.json({ error: "Invalid bundle key." }, { status: 400 });
   }
 
@@ -76,6 +103,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (!Array.isArray(b.frames) || b.frames.length === 0) {
     return NextResponse.json({ error: "frames (non-empty) is required." }, { status: 422 });
   }
+
+  // Clear any prior run's terminal status so the poller can't read a stale
+  // failure before the fresh job overwrites its sidecar (best-effort).
+  await rm(path.join(dir, STATUS_FILE), { force: true }).catch(() => {});
 
   try {
     const res = await fetch(`${base}/api/vitpose`, {

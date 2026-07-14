@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import {
   viTPoseToPoseFrames,
   parseViTPoseScaffold,
+  loadViTPose,
   VITPOSE_TO_MP_NAME,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
@@ -41,6 +42,37 @@ describe("viTPoseToPoseFrames", () => {
       frames: [{ timestamp: 0, keypoints: [{ name: "nose", x: 0.5, y: 0.1, score: 0.9 }] }],
     });
     expect(frames[0].keypoints[0].name).toBe("nose");
+  });
+});
+
+describe("loadViTPose", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubResponse(body: unknown, ok = true) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok, json: async () => body }) as unknown as Response),
+    );
+  }
+
+  it("returns the scaffold once the artifact lands", async () => {
+    stubResponse({ vitpose: scaffold });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold, error: null });
+  });
+
+  it("returns pending (both null) while the job is still running", async () => {
+    stubResponse({ vitpose: null, error: null });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold: null, error: null });
+  });
+
+  it("surfaces a terminal job error from the proxy", async () => {
+    stubResponse({ vitpose: null, error: "boom" });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold: null, error: "boom" });
+  });
+
+  it("throws when the proxy request fails", async () => {
+    stubResponse({}, false);
+    await expect(loadViTPose("route-x/vid_1")).rejects.toThrow();
   });
 });
 

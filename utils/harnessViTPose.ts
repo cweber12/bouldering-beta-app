@@ -175,12 +175,32 @@ export async function requestViTPoseScaffold(
 }
 
 /**
- * Read back the bundle's ViTPose scaffold, or null while the job is still
- * running (the file does not exist yet). Callers poll until it is non-null.
+ * How long the harness polls for the artifact before giving up. A generous
+ * backstop for a downloader that dies silently *without* writing an error
+ * sidecar; a reported failure short-circuits well before this (ADR 0019).
  */
-export async function loadViTPose(bundleKey: string): Promise<ViTPoseScaffold | null> {
+export const VITPOSE_POLL_TIMEOUT_MS = 10 * 60_000;
+
+/** One poll of the bundle: the artifact once written, or a terminal job error. */
+export interface ViTPosePollResult {
+  /** The scaffold once the job has written it; null while pending or failed. */
+  scaffold: ViTPoseScaffold | null;
+  /** Non-null when the downloader reported the job failed after acceptance. */
+  error: string | null;
+}
+
+/**
+ * Read back the bundle's ViTPose scaffold. `scaffold` is null while the job is
+ * still running (no artifact yet); `error` is non-null when the downloader
+ * reported a terminal failure via its status sidecar. Callers poll until one of
+ * the two is set (or the {@link VITPOSE_POLL_TIMEOUT_MS} backstop fires).
+ */
+export async function loadViTPose(bundleKey: string): Promise<ViTPosePollResult> {
   const res = await fetch(`/api/dev/corpus/vitpose?key=${encodeURIComponent(bundleKey)}`);
   if (!res.ok) throw new Error("Failed to load the ViTPose scaffold.");
   const body = await res.json();
-  return (body.vitpose as ViTPoseScaffold | null) ?? null;
+  return {
+    scaffold: (body.vitpose as ViTPoseScaffold | null) ?? null,
+    error: (body.error as string | null) ?? null,
+  };
 }
