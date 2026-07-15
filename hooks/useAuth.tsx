@@ -34,18 +34,33 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/** POST the Firebase ID token to the session endpoint to create an HTTP-only cookie. */
+/** Error thrown when the `/api/auth/session` exchange returns a non-ok status. */
+class SessionExchangeError extends Error {
+  constructor(public readonly status: number) {
+    super(`Session exchange failed (${status}).`);
+    this.name = "SessionExchangeError";
+  }
+}
+
+/**
+ * POST the Firebase ID token to the session endpoint to create an HTTP-only
+ * cookie. Throws {@link SessionExchangeError} when the endpoint does not return
+ * a 2xx — a failure here means no `__session` cookie was set, so the caller must
+ * treat it as a login failure rather than silently reporting success.
+ */
 async function createServerSession(idToken: string): Promise<void> {
-  await fetch("/api/auth/session", {
+  const res = await fetch("/api/auth/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idToken }),
   });
+  if (!res.ok) throw new SessionExchangeError(res.status);
 }
 
-/** DELETE the server session cookie. */
+/** DELETE the server session cookie. Throws on a non-ok status. */
 async function deleteServerSession(): Promise<void> {
-  await fetch("/api/auth/session", { method: "DELETE" });
+  const res = await fetch("/api/auth/session", { method: "DELETE" });
+  if (!res.ok) throw new SessionExchangeError(res.status);
 }
 
 // ---------------------------------------------------------------------------
@@ -68,21 +83,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
+    const auth = getFirebaseAuth();
     try {
-      const auth = getFirebaseAuth();
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await credential.user.getIdToken();
       await createServerSession(idToken);
       return null;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return msg;
+      // A failed session exchange leaves the Firebase client authenticated but
+      // with no server cookie — sign back out so client and server agree, then
+      // surface a clear error instead of a silent redirect loop.
+      if (err instanceof SessionExchangeError) {
+        await firebaseSignOut(auth).catch(() => {});
+        return "Could not establish a session. Please try again.";
+      }
+      return err instanceof Error ? err.message : String(err);
     }
   }, []);
 
   const signUp = useCallback(async (email: string, password: string): Promise<string | null> => {
+    const auth = getFirebaseAuth();
     try {
-      const auth = getFirebaseAuth();
       const credential = await createUserWithEmailAndPassword(auth, email, password);
       // Send email verification — non-blocking; failure is non-fatal.
       sendEmailVerification(credential.user).catch((e) =>
@@ -92,15 +113,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await createServerSession(idToken);
       return null;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return msg;
+      // See signIn: undo the half-authenticated client state on a session-
+      // exchange failure so the account isn't left in a broken logged-in limbo.
+      if (err instanceof SessionExchangeError) {
+        await firebaseSignOut(auth).catch(() => {});
+        return "Could not establish a session. Please try again.";
+      }
+      return err instanceof Error ? err.message : String(err);
     }
   }, []);
 
   const signOut = useCallback(async () => {
     const auth = getFirebaseAuth();
     await firebaseSignOut(auth);
-    await deleteServerSession();
+    // Clear the server cookie best-effort — a failed DELETE must not block the
+    // local sign-out, or the user gets stuck in a logged-in UI they can't exit.
+    await deleteServerSession().catch((e) => console.warn("[auth] deleteServerSession failed:", e));
     setUser(null);
   }, []);
 
