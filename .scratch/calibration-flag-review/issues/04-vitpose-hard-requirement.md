@@ -1,7 +1,9 @@
 # ViTPose Hard Requirement for Ground Truth Authoring
 
-Status: ready-for-agent
+Status: done
 Type: AFK
+Branch: issue-04-vitpose-hard-requirement
+Merged: 5b0cb1d
 
 ## Parent
 

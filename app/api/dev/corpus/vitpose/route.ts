@@ -63,7 +63,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ vitpose: scaffold });
   } catch {
     // No artifact yet — either the job is still running, or it failed after
-    // being accepted. Surface a terminal error so the poller can fall back.
+    // being accepted. Surface a terminal error so authoring can be gated.
     const jobError = await readJobError(dir);
     return NextResponse.json({ vitpose: null, error: jobError });
   }
