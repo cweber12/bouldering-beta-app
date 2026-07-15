@@ -1,7 +1,8 @@
 # Docs Alignment: ADR Amendments and Drift Audit
 
-Status: in-progress
+Status: done
 Branch: docs/cfr-07-docs-alignment
+Merged: 684eb81
 Type: AFK
 
 ## Parent
