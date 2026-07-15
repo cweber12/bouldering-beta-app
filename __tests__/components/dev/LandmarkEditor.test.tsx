@@ -8,6 +8,7 @@ function frame(overrides: Partial<GroundTruthFrame> = {}): GroundTruthFrame {
     frameIndex: 0,
     timestamp: 1.0,
     state: "present",
+    review: "auto",
     verified: false,
     joints: {
       nose: { x: 0.5, y: 0.2, occluded: false },

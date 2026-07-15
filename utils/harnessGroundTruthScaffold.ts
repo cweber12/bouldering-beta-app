@@ -111,11 +111,12 @@ export function buildGroundTruthScaffold(
       timestamp: df.timestamp,
       state: pose && Object.keys(joints).length > 0 ? "present" : "absent",
       joints,
+      review: "auto",
       verified: false,
     };
   });
 
-  return { frames };
+  return { frames, setupHash: existing?.setupHash ?? "" };
 }
 
 // ---------------------------------------------------------------------------

@@ -7,8 +7,10 @@
  * Only a **core body-joint set** (~13: shoulders, elbows, wrists, hips, knees,
  * ankles, a head anchor) is authored and scored — never the full 33 BlazePose
  * points. Each Detection Frame carries a state (present / absent / skip), the
- * core-joint positions (video-normalized), a per-joint `occluded` flag, and a
- * `verified` flag.
+ * core-joint positions (video-normalized), a per-joint `occluded` flag, a
+ * `review` provenance value, and a `verified` flag. The file also carries the
+ * top-level `setupHash` of the Scan Setup its seed was built from, so the
+ * harness refuses to compare truth against runs from a different setup.
  *
  * Framework-agnostic — no React imports. Used by the calibration page (client),
  * the dev proxy (server), and the headless scoring pass, so it must produce a
@@ -50,6 +52,22 @@ const CORE_JOINT_NAME_SET = new Set(CORE_JOINT_NAMES);
 export type GroundTruthState = "present" | "absent" | "skip";
 const GT_STATES: readonly GroundTruthState[] = ["present", "absent", "skip"];
 
+/**
+ * Per-frame provenance (harness data contract, Phase 3). `"auto"` — seeded and
+ * nobody objected. `"human-flagged-wrong"` — climber present but the seed
+ * skeleton is bad (`state` stays `present`, joints kept as known-bad).
+ * `"human-flagged-absent"` — no climber (`state` must be `absent`, joints
+ * cleared). `"human"` — accepted for forward-compat; never emitted by the
+ * scanner. Legacy files without a `review` read as all-`"auto"`.
+ */
+export type GroundTruthReview = "auto" | "human-flagged-wrong" | "human-flagged-absent" | "human";
+const GT_REVIEWS: readonly GroundTruthReview[] = [
+  "auto",
+  "human-flagged-wrong",
+  "human-flagged-absent",
+  "human",
+];
+
 /** One core joint's ground-truth position, video-normalized, with occlusion. */
 export interface GroundTruthJoint {
   /** X position normalized to [0, 1] relative to the frame width. */
@@ -74,13 +92,28 @@ export interface GroundTruthFrame {
    * may omit joints the author never touched.
    */
   joints: Record<string, GroundTruthJoint>;
-  /** True once a human has corrected or accepted this frame. */
+  /**
+   * Provenance of this frame's truth (see {@link GroundTruthReview}). Splits
+   * auto-accepted evidence from human-attested evidence so the harness never
+   * grades the seed model against itself.
+   */
+  review: GroundTruthReview;
+  /**
+   * "Nobody objected" — written `true` on every frame at save. Retained in the
+   * schema alongside `review` for back-compat with the harness read path.
+   */
   verified: boolean;
 }
 
 /** The authored Ground Truth content — the pre-image for the hash. */
 export interface GroundTruthInput {
   frames: GroundTruthFrame[];
+  /**
+   * The `setupHash` of the Scan Setup this Ground Truth was seeded from. Pairs
+   * truth to a setup so the harness refuses cross-setup comparisons; part of
+   * the canonical pre-image so a re-pairing yields a new `groundTruthHash`.
+   */
+  setupHash: string;
 }
 
 /** A persisted Ground Truth: the content plus its joint set, hash, timestamp. */
@@ -121,12 +154,14 @@ export function canonicalGroundTruthInput(input: GroundTruthInput): string {
       i: f.frameIndex,
       t: round6(f.timestamp),
       s: f.state,
+      r: f.review,
       v: !!f.verified,
       j: canonJoints(f.joints),
     }));
   return JSON.stringify({
     v: GROUND_TRUTH_VERSION,
     jointSet: CORE_JOINT_NAMES,
+    setupHash: input.setupHash,
     frames,
   });
 }
@@ -172,7 +207,17 @@ function parseJoints(v: unknown): Record<string, GroundTruthJoint> | null {
   return out;
 }
 
-function parseFrame(v: unknown): GroundTruthFrame | null {
+/**
+ * Options for {@link parseGroundTruthInput}. In `legacy` mode (reading an
+ * already-persisted file that may predate the contract) a missing per-frame
+ * `review` defaults to `"auto"` and a missing top-level `setupHash` is
+ * tolerated as `""`; the strict write path (default) rejects both.
+ */
+export interface ParseGroundTruthOptions {
+  legacy?: boolean;
+}
+
+function parseFrame(v: unknown, legacy: boolean): GroundTruthFrame | null {
   if (typeof v !== "object" || v === null) return null;
   const f = v as Record<string, unknown>;
 
@@ -180,6 +225,18 @@ function parseFrame(v: unknown): GroundTruthFrame | null {
   if (!isFiniteNumber(f.timestamp) || f.timestamp < 0) return null;
   if (typeof f.state !== "string" || !GT_STATES.includes(f.state as GroundTruthState)) return null;
   if (typeof f.verified !== "boolean") return null;
+
+  let review: GroundTruthReview;
+  if (f.review === undefined && legacy) {
+    review = "auto"; // legacy files predate the contract — read as auto-accepted
+  } else if (typeof f.review === "string" && GT_REVIEWS.includes(f.review as GroundTruthReview)) {
+    review = f.review as GroundTruthReview;
+  } else {
+    return null; // missing on write, or an unknown value
+  }
+
+  // A flagged-absent frame must actually be absent; the joints are cleared.
+  if (review === "human-flagged-absent" && f.state !== "absent") return null;
 
   const joints = parseJoints(f.joints ?? {});
   if (!joints) return null;
@@ -189,6 +246,7 @@ function parseFrame(v: unknown): GroundTruthFrame | null {
     timestamp: f.timestamp,
     state: f.state as GroundTruthState,
     joints,
+    review,
     verified: f.verified,
   };
 }
@@ -196,24 +254,38 @@ function parseFrame(v: unknown): GroundTruthFrame | null {
 /**
  * Validate an untrusted request body into a {@link GroundTruthInput}, or null
  * when malformed. A missing/undefined `joints` on a frame is accepted as empty.
+ * The write path requires a per-frame `review` and a top-level `setupHash`;
+ * pass `{ legacy: true }` to read a stored file that may lack them.
  */
-export function parseGroundTruthInput(body: unknown): GroundTruthInput | null {
+export function parseGroundTruthInput(
+  body: unknown,
+  { legacy = false }: ParseGroundTruthOptions = {},
+): GroundTruthInput | null {
   if (typeof body !== "object" || body === null) return null;
   const b = body as Record<string, unknown>;
 
   if (!Array.isArray(b.frames) || b.frames.length > MAX_FRAMES) return null;
 
+  let setupHash: string;
+  if (typeof b.setupHash === "string" && b.setupHash.length > 0) {
+    setupHash = b.setupHash;
+  } else if (b.setupHash === undefined && legacy) {
+    setupHash = ""; // legacy truth without a setupHash — carry-forward starts clean
+  } else {
+    return null;
+  }
+
   const frames: GroundTruthFrame[] = [];
   const seen = new Set<number>();
   for (const raw of b.frames) {
-    const frame = parseFrame(raw);
+    const frame = parseFrame(raw, legacy);
     if (!frame) return null;
     if (seen.has(frame.frameIndex)) return null; // one record per Detection Frame
     seen.add(frame.frameIndex);
     frames.push(frame);
   }
 
-  return { frames };
+  return { frames, setupHash };
 }
 
 // ---------------------------------------------------------------------------
