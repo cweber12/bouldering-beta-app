@@ -1,6 +1,8 @@
 # Auto-Accept Scaffold and Flag Helpers
 
-Status: ready-for-agent
+Status: done
+Branch: feat/cfr-02-auto-accept-scaffold-helpers
+Merged: c4514e9
 Type: AFK
 
 ## Parent
