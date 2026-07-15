@@ -4,22 +4,15 @@ import {
   keypointsToPositions,
   contextKeypointsAt,
   buildGroundTruthScaffold,
-  moveJoint,
-  setJoint,
-  removeJoint,
-  toggleJointOccluded,
-  applyFrameState,
   applyReviewFlag,
   reviewToFlag,
   priorTruthIsStale,
   countSeedCoverage,
   seedGateDecision,
-  translateJoints,
-  jointDrift,
   OCCLUSION_SEED_SCORE,
 } from "@/utils/harnessGroundTruthScaffold";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
-import type { GroundTruthFrame, GroundTruthInput, GroundTruthJoint } from "@/utils/harnessGroundTruth";
+import type { GroundTruthFrame, GroundTruthInput } from "@/utils/harnessGroundTruth";
 
 function kp(name: string, x: number, y: number, score = 0.9): Keypoint {
   return { name, x, y, score };
@@ -302,132 +295,3 @@ describe("seedGateDecision", () => {
   });
 });
 
-describe("moveJoint / translateJoints", () => {
-  const joints: Record<string, GroundTruthJoint> = {
-    nose: { x: 0.5, y: 0.2, occluded: false },
-    left_wrist: { x: 0.4, y: 0.6, occluded: true },
-  };
-
-  it("moves one joint and clamps, leaving others untouched", () => {
-    const out = moveJoint(joints, "nose", 1.5, 0.3);
-    expect(out.nose).toEqual({ x: 1, y: 0.3, occluded: false });
-    expect(out.left_wrist).toBe(joints.left_wrist);
-  });
-
-  it("ignores a move for an absent joint", () => {
-    expect(moveJoint(joints, "right_ankle", 0.1, 0.1)).toBe(joints);
-  });
-
-  it("translates every joint, preserving occluded flags and clamping", () => {
-    const out = translateJoints(joints, 0.7, -0.1);
-    expect(out.nose).toEqual({ x: 1, y: 0.1, occluded: false }); // 0.5+0.7 clamps to 1
-    expect(out.left_wrist).toEqual({ x: 1, y: 0.5, occluded: true }); // 0.4+0.7 clamps to 1
-  });
-});
-
-describe("setJoint", () => {
-  it("places a missing joint, clamped, without touching others", () => {
-    const joints: Record<string, GroundTruthJoint> = {
-      nose: { x: 0.5, y: 0.2, occluded: false },
-    };
-    const out = setJoint(joints, "left_wrist", 1.2, 0.4);
-    expect(out.left_wrist).toEqual({ x: 1, y: 0.4, occluded: false });
-    expect(out.nose).toBe(joints.nose);
-  });
-
-  it("replaces an existing joint and can seed it occluded", () => {
-    const out = setJoint({ nose: { x: 0.1, y: 0.1, occluded: false } }, "nose", 0.5, 0.5, true);
-    expect(out.nose).toEqual({ x: 0.5, y: 0.5, occluded: true });
-  });
-});
-
-describe("removeJoint", () => {
-  it("removes a placed joint, leaving others untouched", () => {
-    const joints: Record<string, GroundTruthJoint> = {
-      nose: { x: 0.5, y: 0.2, occluded: false },
-      left_wrist: { x: 0.4, y: 0.6, occluded: false },
-    };
-    const out = removeJoint(joints, "nose");
-    expect(Object.keys(out)).toEqual(["left_wrist"]);
-    expect(joints.nose).toBeDefined(); // input not mutated
-  });
-
-  it("returns the same object when the joint is absent", () => {
-    const joints = { nose: { x: 0.5, y: 0.2, occluded: false } };
-    expect(removeJoint(joints, "right_ankle")).toBe(joints);
-  });
-});
-
-describe("toggleJointOccluded", () => {
-  const joints: Record<string, GroundTruthJoint> = {
-    nose: { x: 0.5, y: 0.2, occluded: false },
-    left_wrist: { x: 0.4, y: 0.6, occluded: true },
-  };
-
-  it("flips a joint's occluded flag, preserving its position and others", () => {
-    const out = toggleJointOccluded(joints, "nose");
-    expect(out.nose).toEqual({ x: 0.5, y: 0.2, occluded: true });
-    expect(out.left_wrist).toBe(joints.left_wrist);
-    expect(joints.nose.occluded).toBe(false); // input not mutated
-  });
-
-  it("un-occludes an occluded joint", () => {
-    expect(toggleJointOccluded(joints, "left_wrist").left_wrist.occluded).toBe(false);
-  });
-
-  it("is a no-op for an unplaced joint", () => {
-    expect(toggleJointOccluded(joints, "right_ankle")).toBe(joints);
-  });
-});
-
-describe("applyFrameState", () => {
-  const frame: GroundTruthFrame = {
-    frameIndex: 2,
-    timestamp: 1.5,
-    state: "present",
-    review: "auto",
-    verified: true,
-    joints: { nose: { x: 0.5, y: 0.2, occluded: false } },
-  };
-
-  it("clears the pose when marked absent", () => {
-    const out = applyFrameState(frame, "absent");
-    expect(out.state).toBe("absent");
-    expect(out.joints).toEqual({});
-    expect(frame.joints.nose).toBeDefined(); // input not mutated
-  });
-
-  it("keeps the pose when marked skip", () => {
-    const out = applyFrameState(frame, "skip");
-    expect(out.state).toBe("skip");
-    expect(out.joints).toBe(frame.joints);
-  });
-
-  it("keeps the pose when marked present", () => {
-    const absent: GroundTruthFrame = { ...frame, state: "absent", joints: {} };
-    const out = applyFrameState(absent, "present");
-    expect(out).toMatchObject({ state: "present", joints: {} });
-  });
-});
-
-describe("jointDrift", () => {
-  it("reports max, mean, and moved count against the seed", () => {
-    const seed: Record<string, GroundTruthJoint> = {
-      nose: { x: 0.5, y: 0.5, occluded: false },
-      left_wrist: { x: 0.5, y: 0.5, occluded: false },
-    };
-    const current: Record<string, GroundTruthJoint> = {
-      nose: { x: 0.5, y: 0.5, occluded: false }, // unmoved
-      left_wrist: { x: 0.8, y: 0.5, occluded: false }, // moved 0.3
-    };
-    const drift = jointDrift(seed, current);
-    expect(drift.maxDist).toBeCloseTo(0.3, 6);
-    expect(drift.meanDist).toBeCloseTo(0.15, 6);
-    expect(drift.movedJoints).toBe(1);
-  });
-
-  it("ignores joints missing from the seed", () => {
-    const drift = jointDrift({}, { nose: { x: 0.1, y: 0.1, occluded: false } });
-    expect(drift).toEqual({ maxDist: 0, meanDist: 0, movedJoints: 0 });
-  });
-});

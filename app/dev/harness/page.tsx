@@ -28,18 +28,16 @@ import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/Frame
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
-import LandmarkEditor from "@/components/dev/LandmarkEditor";
+import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import Modal from "@/components/ui/Modal";
 import {
-  applyFrameState,
+  applyReviewFlag,
   buildGroundTruthScaffold,
   contextKeypointsAt,
-  toggleJointOccluded,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
   saveGroundTruth,
-  type GroundTruthFrame,
   type GroundTruthInput,
   type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
@@ -325,15 +323,16 @@ function Calibrator({
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
-  // Ground Truth authoring (issue 04): the pure scaffold seed (drift baseline),
-  // the working GT being edited, and any previously-saved GT preserved across a
-  // re-scan. `gtMode` swaps the Detection Preview for the landmark editor.
+  // Ground Truth review: the pure scaffold seed, the working flag review, and
+  // any previously-saved GT preserved across a re-scan. `gtMode` swaps the
+  // Detection Preview for a read-only seed reviewer.
   const existingGtRef = useRef<GroundTruthInput | null>(null);
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
   const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
   const [gtMode, setGtMode] = useState(false);
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
+  const [currentSetupHash, setCurrentSetupHash] = useState("");
 
   // ViTPose scaffold (ADR 0019): the downloader runs a stronger reference model
   // that seeds the draggable Ground Truth landmarks. Kicked off on confirm and
@@ -488,6 +487,7 @@ function Calibrator({
           setWallCrop(setup.wallCrop ?? DEFAULT_CROP);
           setClimberPoint(setup.climberPoint ?? null);
           setPanning(!!setup.panning);
+          if (typeof setup.setupHash === "string") setCurrentSetupHash(setup.setupHash);
           if (typeof setup.qualityTier === "string")
             handleTierChange(setup.qualityTier as QualityTier);
           wallTouchedRef.current = true; // preserve the saved wall crop across a re-tap
@@ -540,7 +540,9 @@ function Calibrator({
     });
     const body = await res.json();
     if (!res.ok) throw new Error(body.error ?? "Failed to save setup.");
-    return body.setup?.setupHash ?? null;
+    const setupHash = typeof body.setup?.setupHash === "string" ? body.setup.setupHash : null;
+    setCurrentSetupHash(setupHash ?? "");
+    return setupHash;
   }, [item.key, climberCrop, wallCrop, climberPoint, panning, tier]);
 
   // Save the Setup only, without a baseline run (quick calibration).
@@ -718,12 +720,12 @@ function Calibrator({
   }, [vitposeStatus, item.key]);
 
   // Seed Ground Truth once the Detection Frame grid and a seed source (ViTPose,
-  // or the MediaPipe fallback) are both ready: a pure scaffold (the drift
-  // baseline) and a working copy that preserves any previously authored GT. Both
-  // key one record per Detection Frame.
+  // or the MediaPipe fallback) are both ready: a pure scaffold and a working
+  // copy that preserves any previously authored flags. Both key one record per
+  // Detection Frame.
   useEffect(() => {
     if (phase !== "preview" || seedPoseFrames.length === 0 || previewFrames.length === 0) return;
-    const seedHash = existingGtRef.current?.setupHash ?? "";
+    const seedHash = vitpose?.setupHash || currentSetupHash;
     const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, seedHash, null);
     const working = buildGroundTruthScaffold(
       previewFrames,
@@ -734,52 +736,22 @@ function Calibrator({
     setGtSeed(pureScaffold);
     setGtInput(working);
     setGtSave(null);
-  }, [phase, seedPoseFrames, previewFrames]);
+  }, [phase, seedPoseFrames, previewFrames, currentSetupHash, vitpose]);
 
-  // Update the current Detection Frame's Ground Truth (marks it verified).
-  const editGtFrame = useCallback((index: number, patch: Partial<GroundTruthFrame>) => {
+  // Apply the current Detection Frame's Auto / Wrong / Absent review flag. The
+  // immutable seed frame is always the source of truth so unflagging restores it.
+  const setGtFrameFlag = useCallback((index: number, flag: "auto" | "wrong" | "absent") => {
     setGtInput((prev) => {
       if (!prev) return prev;
+      const seedFrame = gtSeed?.frames.find((f) => f.frameIndex === index);
+      if (!seedFrame) return prev;
       return {
         ...prev,
-        frames: prev.frames.map((f) =>
-          f.frameIndex === index ? { ...f, ...patch, verified: true } : f,
-        ),
+        frames: prev.frames.map((f) => (f.frameIndex === index ? applyReviewFlag(seedFrame, flag) : f)),
       };
     });
     setGtSave(null);
-  }, []);
-
-  // Set a Detection Frame's state (present / absent / skip). Absent clears the
-  // pose; the change marks the frame verified.
-  const setGtFrameState = useCallback((index: number, state: GroundTruthState) => {
-    setGtInput((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        frames: prev.frames.map((f) =>
-          f.frameIndex === index ? { ...applyFrameState(f, state), verified: true } : f,
-        ),
-      };
-    });
-    setGtSave(null);
-  }, []);
-
-  // Toggle one core joint's occluded flag on a Detection Frame (marks verified).
-  const toggleGtOccluded = useCallback((index: number, name: string) => {
-    setGtInput((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        frames: prev.frames.map((f) =>
-          f.frameIndex === index
-            ? { ...f, joints: toggleJointOccluded(f.joints, name), verified: true }
-            : f,
-        ),
-      };
-    });
-    setGtSave(null);
-  }, []);
+  }, [gtSeed]);
 
   // GT state per Detection Frame index, for the filmstrip (absent / skip marks).
   const gtStateByIndex = useMemo(() => {
@@ -793,15 +765,23 @@ function Calibrator({
     setGtSaving(true);
     setGtSave(null);
     try {
-      await saveGroundTruth(item.key, gtInput);
-      existingGtRef.current = gtInput;
+      const setupHash = gtInput.setupHash || vitpose?.setupHash || currentSetupHash;
+      const input: GroundTruthInput = {
+        ...gtInput,
+        setupHash,
+        frames: gtInput.frames.map((f) => ({ ...f, verified: true })),
+      };
+      const saved = await saveGroundTruth(item.key, input);
+      const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
+      existingGtRef.current = savedInput;
+      setGtInput(savedInput);
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
       setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
     } finally {
       setGtSaving(false);
     }
-  }, [gtInput, item.key]);
+  }, [gtInput, item.key, currentSetupHash, vitpose]);
 
   // Return to calibration from the preview, keeping the current Setup in place.
   function handleRescan() {
@@ -967,7 +947,7 @@ function Calibrator({
                 gtMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg"
               }`}
             >
-              {gtMode ? "Editing GT" : "Edit Ground Truth"}
+              {gtMode ? "Reviewing GT" : "Edit Ground Truth"}
             </button>
             {gtMode && (
               <button
@@ -976,7 +956,7 @@ function Calibrator({
                 disabled={gtSaving || !gtInput}
                 className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
               >
-                {gtSaving ? "Saving…" : "Save Ground Truth"}
+                {gtSaving ? "Saving…" : "Accept & save Ground Truth"}
               </button>
             )}
             <button
@@ -1006,24 +986,16 @@ function Calibrator({
             isPlaying={previewPlaying}
             className="shrink-0"
           />
-          {gtMode && gtFrame && previewAttempt ? (
+          {gtMode && gtFrame && gtSeedFrame && previewAttempt ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">
-              <LandmarkEditor
+              <GroundTruthReviewer
                 videoSrc={videoUrl}
                 videoWidth={previewAttempt.videoMeta.width}
                 videoHeight={previewAttempt.videoMeta.height}
                 frame={gtFrame}
-                seedJoints={gtSeedFrame?.joints ?? {}}
+                seedFrame={gtSeedFrame}
                 contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
-                onEditJoints={(joints) =>
-                  editGtFrame(gtFrame.frameIndex, {
-                    joints,
-                    state: gtFrame.state === "absent" ? "present" : gtFrame.state,
-                  })
-                }
-                onSetState={(state) => setGtFrameState(gtFrame.frameIndex, state)}
-                onToggleOccluded={(name) => toggleGtOccluded(gtFrame.frameIndex, name)}
-                onAccept={() => editGtFrame(gtFrame.frameIndex, {})}
+                onFlagChange={(flag) => setGtFrameFlag(gtFrame.frameIndex, flag)}
               />
             </div>
           ) : (

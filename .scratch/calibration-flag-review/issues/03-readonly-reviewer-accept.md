@@ -1,6 +1,7 @@
 # Read-Only Reviewer and One-Button Accept
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/cfr-03-readonly-reviewer-accept
 Type: AFK
 
 ## Parent
