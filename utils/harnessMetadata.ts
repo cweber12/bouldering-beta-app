@@ -1,15 +1,14 @@
 /**
- * Editable video metadata — the `analysis_inputs` block of the downloader-owned
- * `metadata.json` (see docs/adr/0018 §4). Calibration corrects these video-level
- * condition labels and writes them back with a **field-level strict merge**: only
- * the edited `analysis_inputs.<field>` values are overwritten; every other key of
- * `metadata.json` (including `route_folder` / `imported_from`, which the
- * downloader owns) and every un-edited `analysis_inputs` field is preserved
- * verbatim.
+ * Manual condition labels — the video-level `analysis_inputs` the harness reads
+ * from `setup.json.analysisInputs` (see the scanner data contract and PRD
+ * `.scratch/calibration-flag-review`). Calibration corrects these labels through
+ * the merging Scan Setup write; the old label-write path into the
+ * downloader-owned `metadata.json` has been retired.
  *
- * Framework-agnostic — no React imports. The parse + merge helpers run in the dev
- * proxy (server) and are unit-tested in isolation; the load/save helpers are the
- * client seam over that proxy.
+ * This module owns only the label vocabulary and pure normalise/parse/merge
+ * helpers. Framework-agnostic — no React imports. The parse + merge helpers run
+ * in the setup route (server) and are unit-tested in isolation; the client save
+ * seam lives in `utils/harnessSetup` alongside the rest of the setup write.
  */
 
 /** Amount labels — the ordinal `unknown/none/low/medium/high` scale fields. */
@@ -104,47 +103,23 @@ export function parseAnalysisInputsEdit(body: unknown): AnalysisInputsEdit | nul
 }
 
 /**
- * Field-level strict merge of an edit into an existing `metadata.json` object:
- * overwrite only the edited `analysis_inputs.<field>` values, preserving every
- * other top-level key and every un-edited `analysis_inputs` field verbatim.
+ * Field-level strict merge of an edit into an existing `analysisInputs` block:
+ * overwrite only the edited `<field>` values, carrying every un-edited label
+ * (including off-scale amounts the harness may have written) forward verbatim.
+ * Non-string existing values and the structural `route_folder` key are dropped —
+ * `analysisInputs` holds only the harness-owned condition labels.
  */
-export function mergeMetadataAnalysisInputs(
-  existing: Record<string, unknown>,
+export function mergeAnalysisInputs(
+  existing: unknown,
   edit: AnalysisInputsEdit,
-): Record<string, unknown> {
+): Record<string, string> {
   const prev =
-    typeof existing.analysis_inputs === "object" && existing.analysis_inputs !== null
-      ? (existing.analysis_inputs as Record<string, unknown>)
+    typeof existing === "object" && existing !== null
+      ? (existing as Record<string, unknown>)
       : {};
-  return {
-    ...existing,
-    analysis_inputs: { ...prev, ...edit },
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Client seam over the dev proxy (mirrors utils/harnessGroundTruth).
-// ---------------------------------------------------------------------------
-
-/** Load a bundle's `analysis_inputs` block (raw, or null when absent). */
-export async function loadAnalysisInputs(bundleKey: string): Promise<unknown> {
-  const res = await fetch(`/api/dev/corpus/metadata?key=${encodeURIComponent(bundleKey)}`);
-  if (!res.ok) throw new Error("Failed to load metadata.");
-  const body = await res.json();
-  return body.analysisInputs ?? null;
-}
-
-/** Persist a metadata edit; returns the merged `analysis_inputs` block. */
-export async function saveAnalysisInputs(
-  bundleKey: string,
-  edit: AnalysisInputsEdit,
-): Promise<unknown> {
-  const res = await fetch(`/api/dev/corpus/metadata?key=${encodeURIComponent(bundleKey)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ analysisInputs: edit }),
-  });
-  const body = await res.json();
-  if (!res.ok) throw new Error(body.error ?? "Failed to save metadata.");
-  return body.analysisInputs ?? null;
+  const out: Record<string, string> = {};
+  for (const [key, val] of Object.entries(prev)) {
+    if (key !== "route_folder" && typeof val === "string") out[key] = val;
+  }
+  return { ...out, ...edit };
 }

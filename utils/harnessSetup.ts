@@ -10,9 +10,13 @@
  */
 
 import type { CropFraction } from "@/utils/cropFraction";
+import { parseAnalysisInputsEdit, type AnalysisInputsEdit } from "@/utils/harnessMetadata";
 
 /** Bumped only on a breaking change to the Scan Setup shape. */
 export const SETUP_VERSION = 1;
+
+/** Snake-case condition labels the harness reads from `setup.json.analysisInputs`. */
+export type AnalysisInputs = Record<string, string>;
 
 /** The manual scan inputs a User would supply interactively, frozen for replay. */
 export interface ScanSetupInput {
@@ -33,6 +37,12 @@ export interface ScanSetup extends ScanSetupInput {
   version: number;
   /** SHA-256 over the canonicalised inputs — stamped onto every replayed run. */
   setupHash: string;
+  /**
+   * Manual condition labels (snake_case). Deliberately excluded from
+   * {@link canonicalSetupInput} so a label edit never changes `setupHash` — and
+   * so it can never orphan saved Ground Truth or prior runs.
+   */
+  analysisInputs?: AnalysisInputs;
   /** ISO timestamp, stamped server-side on write. */
   updatedAt: string;
 }
@@ -122,3 +132,62 @@ export function parseScanSetupInput(body: unknown): ScanSetupInput | null {
     qualityTier: b.qualityTier,
   };
 }
+
+/** The keys that make a write a scan-input (crop) save rather than labels-only. */
+const SCAN_INPUT_KEYS = [
+  "climberCrop",
+  "wallCrop",
+  "climberPoint",
+  "panning",
+  "qualityTier",
+] as const;
+
+/**
+ * True when the body carries any scan-affecting field, so the setup route knows
+ * to parse (and re-hash) fresh crops instead of inheriting the saved ones. A
+ * labels-only body (`{ analysisInputs }`) has none, and preserves the crops.
+ */
+export function bodyHasScanInputs(body: unknown): boolean {
+  if (typeof body !== "object" || body === null) return false;
+  const b = body as Record<string, unknown>;
+  return SCAN_INPUT_KEYS.some((k) => k in b);
+}
+
+/** Pull only the scan-input fields off a persisted setup, for re-hashing on merge. */
+export function pickScanInput(setup: ScanSetup): ScanSetupInput {
+  return {
+    climberCrop: setup.climberCrop,
+    wallCrop: setup.wallCrop,
+    climberPoint: setup.climberPoint,
+    panning: setup.panning,
+    qualityTier: setup.qualityTier,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Client seam over the dev proxy (mirrors utils/harnessGroundTruth).
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist a condition-label edit through the merging setup write; returns the
+ * merged `analysisInputs` block. Scan-affecting fields and `setupHash` are left
+ * untouched server-side. Re-exports the label edit type for the caller's use.
+ */
+export type { AnalysisInputsEdit };
+
+export async function saveSetupLabels(
+  bundleKey: string,
+  edit: AnalysisInputsEdit,
+): Promise<unknown> {
+  const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(bundleKey)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ analysisInputs: edit }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Failed to save labels.");
+  return body.setup?.analysisInputs ?? null;
+}
+
+// Re-exported so the setup route validates label edits without a second import.
+export { parseAnalysisInputsEdit };

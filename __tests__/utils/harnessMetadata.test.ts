@@ -3,7 +3,7 @@ import {
   amountOptions,
   normalizeAnalysisInputs,
   parseAnalysisInputsEdit,
-  mergeMetadataAnalysisInputs,
+  mergeAnalysisInputs,
 } from "@/utils/harnessMetadata";
 
 describe("normalizeAnalysisInputs", () => {
@@ -73,41 +73,37 @@ describe("parseAnalysisInputsEdit", () => {
   });
 });
 
-describe("mergeMetadataAnalysisInputs", () => {
-  it("overwrites only edited fields and preserves everything else", () => {
+describe("mergeAnalysisInputs", () => {
+  it("overwrites only edited fields and carries the rest forward", () => {
     const existing = {
-      route_folder: "route-x",
-      imported_from: "downloader",
-      source_title: "clip",
-      analysis_inputs: {
-        shadows: "low",
-        occlusion: "none",
-        camera_angle: "low-angle",
-        extra_field: "keep-me",
-      },
+      shadows: "low",
+      occlusion: "none",
+      camera_angle: "low-angle",
+      motion_blur: "extreme", // off-scale label preserved
     };
 
-    const merged = mergeMetadataAnalysisInputs(existing, { shadows: "high", notes: "backlit" });
+    const merged = mergeAnalysisInputs(existing, { shadows: "high", notes: "backlit" });
 
-    // Top-level downloader-owned keys untouched.
-    expect(merged.route_folder).toBe("route-x");
-    expect(merged.imported_from).toBe("downloader");
-    expect(merged.source_title).toBe("clip");
-
-    const inputs = merged.analysis_inputs as Record<string, unknown>;
-    expect(inputs.shadows).toBe("high"); // edited
-    expect(inputs.notes).toBe("backlit"); // added
-    expect(inputs.occlusion).toBe("none"); // preserved
-    expect(inputs.camera_angle).toBe("low-angle"); // preserved
-    expect(inputs.extra_field).toBe("keep-me"); // unknown key preserved
+    expect(merged.shadows).toBe("high"); // edited
+    expect(merged.notes).toBe("backlit"); // added
+    expect(merged.occlusion).toBe("none"); // preserved
+    expect(merged.camera_angle).toBe("low-angle"); // preserved
+    expect(merged.motion_blur).toBe("extreme"); // off-scale preserved
 
     // The original object is not mutated.
-    expect((existing.analysis_inputs as Record<string, unknown>).shadows).toBe("low");
+    expect(existing.shadows).toBe("low");
   });
 
-  it("creates analysis_inputs when the metadata has none", () => {
-    const merged = mergeMetadataAnalysisInputs({ route_folder: "r" }, { shadows: "medium" });
-    expect(merged.route_folder).toBe("r");
-    expect(merged.analysis_inputs).toEqual({ shadows: "medium" });
+  it("builds a block from an empty base", () => {
+    expect(mergeAnalysisInputs(null, { shadows: "medium" })).toEqual({ shadows: "medium" });
+    expect(mergeAnalysisInputs(undefined, {})).toEqual({});
+  });
+
+  it("drops non-string and structural values from the existing block", () => {
+    const merged = mergeAnalysisInputs(
+      { shadows: "low", route_folder: "route-x", stray: 3 as unknown as string },
+      {},
+    );
+    expect(merged).toEqual({ shadows: "low" });
   });
 });

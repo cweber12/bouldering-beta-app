@@ -325,7 +325,8 @@ function Calibrator({
   const [panning, setPanning] = useState(false);
   const wallTouchedRef = useRef(false);
 
-  // Editable video metadata (analysis_inputs) — seeded from the corpus passthrough.
+  // Editable condition labels — seeded from the legacy metadata.json passthrough
+  // at mount, then overridden by setup.json.analysisInputs once the Setup loads.
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
@@ -490,6 +491,9 @@ function Calibrator({
           if (typeof setup.setupHash === "string") setCurrentSetupHash(setup.setupHash);
           if (typeof setup.qualityTier === "string")
             handleTierChange(setup.qualityTier as QualityTier);
+          // Labels now live in the Setup; prefer them over the legacy
+          // metadata.json passthrough seeded at mount.
+          if (setup.analysisInputs) setAnalysisInputs(setup.analysisInputs);
           wallTouchedRef.current = true; // preserve the saved wall crop across a re-tap
         }
 
