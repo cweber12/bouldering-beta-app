@@ -1,6 +1,7 @@
 # Review Affordances: Filmstrip Marks, Counts, Staleness Notice
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/cfr-05-review-affordances
 Type: AFK
 
 ## Parent

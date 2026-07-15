@@ -8,6 +8,7 @@ import {
   reviewToFlag,
   priorTruthIsStale,
   countSeedCoverage,
+  frameReviewMark,
   seedGateDecision,
   OCCLUSION_SEED_SCORE,
 } from "@/utils/harnessGroundTruthScaffold";
@@ -261,6 +262,27 @@ describe("countSeedCoverage", () => {
       { frameIndex: 3, timestamp: 3, state: "skip", review: "auto", verified: true, joints: {} },
     ];
     expect(countSeedCoverage(frames)).toEqual({ posed: 2, seededAbsent: 1 });
+  });
+});
+
+describe("frameReviewMark", () => {
+  function frame(review: GroundTruthFrame["review"], state: GroundTruthFrame["state"]): GroundTruthFrame {
+    return { frameIndex: 0, timestamp: 0, state, review, verified: true, joints: {} };
+  }
+
+  it("maps human flags to their own marks, regardless of state", () => {
+    expect(frameReviewMark(frame("human-flagged-wrong", "present"))).toBe("flagged-wrong");
+    expect(frameReviewMark(frame("human-flagged-absent", "absent"))).toBe("flagged-absent");
+  });
+
+  it("marks an auto frame the seed left untracked as seeded-absent", () => {
+    expect(frameReviewMark(frame("auto", "absent"))).toBe("seeded-absent");
+  });
+
+  it("gives an ordinary auto pose no distinguishing mark", () => {
+    expect(frameReviewMark(frame("auto", "present"))).toBe("auto");
+    // Legacy skip frames read as auto — the new flow never produces them.
+    expect(frameReviewMark(frame("auto", "skip"))).toBe("auto");
   });
 });
 

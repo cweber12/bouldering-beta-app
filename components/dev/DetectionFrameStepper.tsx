@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { useMemo } from "react";
 import { cn } from "@/utils/cn";
-import type { GroundTruthState } from "@/utils/harnessGroundTruth";
+import type { FrameReviewMark } from "@/utils/harnessGroundTruthScaffold";
 
 export type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
@@ -15,11 +15,12 @@ export interface DetectionFrame {
 export interface DetectionFrameStepperProps {
   frames: DetectionFrame[];
   /**
-   * Optional per-frame Ground Truth state, parallel to `frames`. When present,
-   * absent / skip frames render a marker under the bar (skip is also dimmed) so
-   * the filmstrip reflects authoring state, not just detection status.
+   * Optional per-frame Ground Truth review mark, parallel to `frames`. When
+   * present, human-flagged (Wrong / Absent) and seeded-absent frames render a
+   * distinct marker under the bar so the author can jump straight to the frames
+   * worth a second look; ordinary auto frames show none.
    */
-  frameStates?: (GroundTruthState | undefined)[];
+  frameMarks?: (FrameReviewMark | undefined)[];
   currentIndex: number;
   onSeek: (index: number) => void;
   onAnnotate?: (index: number) => void;
@@ -28,11 +29,20 @@ export interface DetectionFrameStepperProps {
   className?: string;
 }
 
-/** Marker colour under each bar for its GT state (present shows no marker). */
-const GT_STATE_MARKER: Record<GroundTruthState, string | null> = {
-  present: null,
-  absent: "bg-danger",
-  skip: "bg-fg-muted",
+/** Marker colour under each bar for its review mark (auto shows no marker). */
+const MARK_TONE: Record<FrameReviewMark, string | null> = {
+  auto: null,
+  "seeded-absent": "bg-fg-muted",
+  "flagged-wrong": "bg-caution",
+  "flagged-absent": "bg-danger",
+};
+
+/** Short label appended to the bar title for authoring feedback. */
+const MARK_LABEL: Record<FrameReviewMark, string | null> = {
+  auto: null,
+  "seeded-absent": "seeded absent",
+  "flagged-wrong": "flagged wrong",
+  "flagged-absent": "flagged absent",
 };
 
 interface Stretch {
@@ -95,7 +105,7 @@ function findNextStretch(stretches: Stretch[], currentIndex: number): Stretch | 
 
 export default function DetectionFrameStepper({
   frames,
-  frameStates,
+  frameMarks,
   currentIndex,
   onSeek,
   onAnnotate,
@@ -202,10 +212,11 @@ export default function DetectionFrameStepper({
           <div className="relative flex items-end gap-0.5 py-1">
             {frames.map((frame, index) => {
               const active = index === currentIndex;
-              const gtState = frameStates?.[index];
-              const marker = gtState ? GT_STATE_MARKER[gtState] : null;
-              const label = gtState
-                ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${gtState}`
+              const mark = frameMarks?.[index];
+              const marker = mark ? MARK_TONE[mark] : null;
+              const markLabel = mark ? MARK_LABEL[mark] : null;
+              const label = markLabel
+                ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${markLabel}`
                 : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`;
               return (
                 <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
@@ -217,15 +228,14 @@ export default function DetectionFrameStepper({
                     className={cn(
                       "h-8 w-2 rounded-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
                       STATUS_TONE[frame.status],
-                      gtState === "skip" && "opacity-30",
                       active && "scale-y-125 ring-2 ring-fg ring-offset-1 ring-offset-surface",
                     )}
                   />
-                  {/* Fixed-height slot keeps bar bottoms aligned; coloured per GT state. */}
+                  {/* Fixed-height slot keeps bar bottoms aligned; coloured per review mark. */}
                   <span
                     aria-hidden="true"
-                    data-testid={marker ? "frame-state-marker" : undefined}
-                    data-state={gtState}
+                    data-testid={marker ? "frame-mark-marker" : undefined}
+                    data-mark={mark}
                     className={cn("h-1 w-2 rounded-full", marker ?? "bg-transparent")}
                   />
                 </div>
