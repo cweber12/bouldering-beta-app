@@ -1,7 +1,8 @@
 # Read-Only Reviewer and One-Button Accept
 
-Status: in-progress
+Status: done
 Branch: feat/cfr-03-readonly-reviewer-accept
+Merged: eb4c07c
 Type: AFK
 
 ## Parent
