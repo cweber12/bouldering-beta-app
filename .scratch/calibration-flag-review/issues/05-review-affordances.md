@@ -1,7 +1,8 @@
 # Review Affordances: Filmstrip Marks, Counts, Staleness Notice
 
-Status: in-progress
+Status: done
 Branch: feat/cfr-05-review-affordances
+Merged: 8f1257c
 Type: AFK
 
 ## Parent
