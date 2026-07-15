@@ -1,7 +1,8 @@
 # Ground Truth Frame States and Occlusion
 
-Status: ready-for-agent
+Status: done
 Type: AFK
+Merged: 0453740
 
 ## Parent
 
@@ -13,10 +14,10 @@ Per-frame GT state controls and per-joint occlusion in the editor: set each Dete
 
 ## Acceptance criteria
 
-- [ ] Each frame can be set present / absent / skip; absent clears the pose, skip excludes the frame.
-- [ ] Individual core joints can be toggled occluded, pre-seeded from visibility.
-- [ ] States + occluded flags persist and reload; the filmstrip reflects state.
-- [ ] Covered by tests.
+- [x] Each frame can be set present / absent / skip; absent clears the pose, skip excludes the frame.
+- [x] Individual core joints can be toggled occluded, pre-seeded from visibility.
+- [x] States + occluded flags persist and reload; the filmstrip reflects state.
+- [x] Covered by tests.
 
 ## Blocked by
 

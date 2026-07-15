@@ -1,7 +1,8 @@
 # ViTPose++ Ground Truth Scaffold
 
-Status: in-progress
+Status: done
 Type: AFK + external
+Merged: 0453740
 
 ## Parent
 
