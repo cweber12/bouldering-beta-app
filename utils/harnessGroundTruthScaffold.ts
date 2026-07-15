@@ -190,6 +190,30 @@ export function priorTruthIsStale(
   return existing.setupHash !== setupHash;
 }
 
+/**
+ * How a Detection Frame should read on the review filmstrip. `auto` (an
+ * unflagged, posed seed) needs no second look; `seeded-absent` (the seed tracked
+ * no climber) and the two human flags each mark a frame worth jumping to. Legacy
+ * `skip` frames read as `auto` — the new flow never produces them.
+ */
+export type FrameReviewMark = "auto" | "seeded-absent" | "flagged-wrong" | "flagged-absent";
+
+/**
+ * Classify a Ground Truth frame for the filmstrip: human flags are distinguished
+ * by kind (Wrong vs. Absent), an auto frame the seed left untracked reads as
+ * `seeded-absent`, and an ordinary auto-accepted pose reads as `auto`.
+ */
+export function frameReviewMark(frame: GroundTruthFrame): FrameReviewMark {
+  switch (frame.review) {
+    case "human-flagged-wrong":
+      return "flagged-wrong";
+    case "human-flagged-absent":
+      return "flagged-absent";
+    default:
+      return frame.state === "absent" ? "seeded-absent" : "auto";
+  }
+}
+
 /** Seed coverage over the current frames: how many are posed vs. seeded absent. */
 export interface SeedCoverage {
   /** Frames whose truth is `present` (a posed climber). */

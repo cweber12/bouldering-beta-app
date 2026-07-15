@@ -35,13 +35,16 @@ import {
   applyReviewFlag,
   buildGroundTruthScaffold,
   contextKeypointsAt,
+  countSeedCoverage,
+  frameReviewMark,
+  priorTruthIsStale,
   seedGateDecision,
+  type FrameReviewMark,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
   saveGroundTruth,
   type GroundTruthInput,
-  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import {
   requestViTPoseScaffold,
@@ -336,6 +339,9 @@ function Calibrator({
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
   const [currentSetupHash, setCurrentSetupHash] = useState("");
+  // True when prior saved truth was dropped rather than carried onto the fresh
+  // seed because the Scan Setup changed (or the prior truth predated hashes).
+  const [gtPriorDiscarded, setGtPriorDiscarded] = useState(false);
 
   // ViTPose scaffold (ADR 0019): the downloader runs a stronger reference model
   // that seeds the draggable Ground Truth landmarks. Kicked off on confirm and
@@ -747,6 +753,7 @@ function Calibrator({
     );
     setGtSeed(pureScaffold);
     setGtInput(working);
+    setGtPriorDiscarded(priorTruthIsStale(existingGtRef.current, seedHash));
     setGtSave(null);
   }, [phase, vitposeStatus, seedPoseFrames, previewFrames, currentSetupHash, vitpose]);
 
@@ -769,12 +776,20 @@ function Calibrator({
     setGtSave(null);
   }, [gtSeed]);
 
-  // GT state per Detection Frame index, for the filmstrip (absent / skip marks).
-  const gtStateByIndex = useMemo(() => {
-    const byIndex = new Map<number, GroundTruthState>();
-    for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, f.state);
+  // Review mark per Detection Frame index, for the filmstrip (flagged / seeded
+  // absent distinct from ordinary auto frames).
+  const gtMarkByIndex = useMemo(() => {
+    const byIndex = new Map<number, FrameReviewMark>();
+    for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, frameReviewMark(f));
     return previewFrames.map((_, i) => byIndex.get(i));
   }, [gtInput, previewFrames]);
+
+  // Seed coverage surfaced beside the accept button — posed vs. seeded-absent,
+  // updating as flags move presence truth. Surfaced only, never blocks accept.
+  const seedCoverage = useMemo(
+    () => countSeedCoverage(gtInput?.frames ?? []),
+    [gtInput],
+  );
 
   const handleSaveGt = useCallback(async () => {
     if (!gtInput) return;
@@ -791,6 +806,7 @@ function Calibrator({
       const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
       existingGtRef.current = savedInput;
       setGtInput(savedInput);
+      setGtPriorDiscarded(false);
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
       setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
@@ -956,6 +972,14 @@ function Calibrator({
               {gtMode ? "Reviewing GT" : "Edit Ground Truth"}
             </button>
             {gtMode && (
+              <span
+                className="shrink-0 text-xs tabular-nums text-fg-muted"
+                title="Seed coverage: posed frames vs. frames seeded absent"
+              >
+                {seedCoverage.posed} posed · {seedCoverage.seededAbsent} seeded absent
+              </span>
+            )}
+            {gtMode && (
               <button
                 type="button"
                 onClick={() => void handleSaveGt()}
@@ -985,7 +1009,7 @@ function Calibrator({
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
           <DetectionFrameStepper
             frames={previewFrames}
-            frameStates={gtStateByIndex}
+            frameMarks={gtMarkByIndex}
             currentIndex={previewFrameIndex}
             onSeek={handlePreviewSeek}
             onTogglePlay={handlePreviewTogglePlay}
@@ -1000,6 +1024,15 @@ function Calibrator({
               onRetry={handleRetryViTPose}
               className="shrink-0"
             />
+          )}
+          {gtMode && gtGate.authoring === "ready" && gtPriorDiscarded && (
+            <div
+              role="status"
+              className="shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+            >
+              Prior Ground Truth discarded (setup changed) — this review starts from a fresh
+              seed.
+            </div>
           )}
           {gtMode && gtGate.authoring === "ready" && gtFrame && gtSeedFrame && previewAttempt ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">

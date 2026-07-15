@@ -31,27 +31,33 @@ describe("DetectionFrameStepper", () => {
     expect(onSeek).toHaveBeenCalledWith(4);
   });
 
-  it("reflects Ground Truth state on the filmstrip (absent / skip distinct)", () => {
+  it("marks flagged and seeded-absent frames distinctly from auto on the filmstrip", () => {
     render(
       <DetectionFrameStepper
         frames={[
           { timestamp: 0, status: "detected" },
           { timestamp: 1, status: "detected" },
-          { timestamp: 2, status: "missing" },
+          { timestamp: 2, status: "detected" },
+          { timestamp: 3, status: "missing" },
         ]}
-        frameStates={["present", "skip", "absent"]}
+        frameMarks={["auto", "flagged-wrong", "flagged-absent", "seeded-absent"]}
         currentIndex={0}
         onSeek={vi.fn()}
       />,
     );
 
-    // Only the non-present frames carry a state marker.
-    const markers = screen.getAllByTestId("frame-state-marker");
-    expect(markers).toHaveLength(2);
-    expect(markers.map((m) => m.getAttribute("data-state"))).toEqual(["skip", "absent"]);
+    // Only the non-auto frames carry a review-mark marker, each with its own kind.
+    const markers = screen.getAllByTestId("frame-mark-marker");
+    expect(markers).toHaveLength(3);
+    expect(markers.map((m) => m.getAttribute("data-mark"))).toEqual([
+      "flagged-wrong",
+      "flagged-absent",
+      "seeded-absent",
+    ]);
 
-    // State is surfaced in the bar title for authoring feedback.
-    expect(screen.getByTitle("0:02 · missing · absent")).toBeTruthy();
+    // The mark is surfaced in the bar title for authoring feedback.
+    expect(screen.getByTitle("0:01 · detected · flagged wrong")).toBeTruthy();
+    expect(screen.getByTitle("0:03 · missing · seeded absent")).toBeTruthy();
   });
 
   it("steps with the keyboard and jumps to the next flagged stretch", () => {
