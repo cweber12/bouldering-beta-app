@@ -1,7 +1,8 @@
 # Fail login loudly when the session exchange fails
 
-Status: in-progress
+Status: done
 Branch: fix/alr-01-fail-login-loudly
+Merged: 46ba194
 Type: AFK
 
 ## Parent
@@ -26,16 +27,16 @@ back to `/login` in an invisible loop.
 
 ## Acceptance criteria
 
-- [ ] A non-ok `POST /api/auth/session` makes `signIn` / `signUp` return a non-null
+- [x] A non-ok `POST /api/auth/session` makes `signIn` / `signUp` return a non-null
       error string (not `null`).
-- [ ] On a session-exchange failure the Firebase client is signed back out
+- [x] On a session-exchange failure the Firebase client is signed back out
       (`firebaseSignOut` called), leaving no half-authenticated client state.
-- [ ] A successful (200) exchange still returns `null` and sets the user.
-- [ ] The login page shows the error string on failure (verified, existing render
+- [x] A successful (200) exchange still returns `null` and sets the user.
+- [x] The login page shows the error string on failure (verified, existing render
       path).
-- [ ] Regression tests in `__tests__/hooks/useAuth.test.tsx` (mock `fetch` + Firebase
+- [x] Regression tests in `__tests__/hooks/useAuth.test.tsx` (mock `fetch` + Firebase
       auth) cover: 404 → error + sign-out, 500 → error + sign-out, 200 → success.
-- [ ] `npx tsc --noEmit`, `npx eslint .`, and the targeted `npx vitest run` pass.
+- [x] `npx tsc --noEmit`, `npx eslint .`, and the targeted `npx vitest run` pass.
 
 ## Blocked by
 
