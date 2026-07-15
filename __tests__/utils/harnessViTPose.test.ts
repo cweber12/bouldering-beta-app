@@ -100,10 +100,18 @@ describe("parseViTPoseScaffold", () => {
     expect(parseViTPoseScaffold(scaffold)).toEqual(scaffold);
   });
 
+  it("accepts an optional setupHash on newer artifacts", () => {
+    expect(parseViTPoseScaffold({ ...scaffold, setupHash: "setup-123" })).toEqual({
+      ...scaffold,
+      setupHash: "setup-123",
+    });
+  });
+
   it("rejects a non-object, a missing version, and a non-array frames", () => {
     expect(parseViTPoseScaffold(null)).toBeNull();
     expect(parseViTPoseScaffold({ frames: [] })).toBeNull();
     expect(parseViTPoseScaffold({ version: 1, frames: {} })).toBeNull();
+    expect(parseViTPoseScaffold({ version: 1, setupHash: 123, frames: [] })).toBeNull();
   });
 
   it("rejects a malformed keypoint or frame", () => {

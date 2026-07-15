@@ -1,12 +1,10 @@
 /**
- * Ground Truth authoring helpers — seed a throwaway scaffold from the scan's
- * scaffold detection, and the pure geometry the landmark-correction editor drives
- * (translate a whole pose, measure per-joint drift from the scaffold). See
- * docs/adr/0018 §2 and issue 04.
+ * Ground Truth authoring helpers — seed an auto-accepted scaffold from the
+ * reference-model poses and apply the flag-only review model. See docs/adr/0018
+ * §2 and the calibration flag-review PRD.
  *
- * Framework-agnostic — no React imports. The editor component (client) and the
- * tests both build on these; keeping them here makes the drag/translate maths
- * unit-testable without a canvas.
+ * Framework-agnostic — no React imports. The reviewer component (client) and
+ * the tests both build on these.
  */
 
 import {
@@ -15,7 +13,6 @@ import {
   type GroundTruthInput,
   type GroundTruthJoint,
   type GroundTruthReview,
-  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
@@ -258,125 +255,3 @@ export function seedGateDecision({
   }
 }
 
-// ---------------------------------------------------------------------------
-// Editor geometry — the drag / translate maths the canvas editor drives.
-// ---------------------------------------------------------------------------
-
-/**
- * Add or replace a core joint at an absolute normalised position — used to place
- * a joint the scaffold never detected (missing joint, or a whole absent frame).
- */
-export function setJoint(
-  joints: Record<string, GroundTruthJoint>,
-  name: string,
-  x: number,
-  y: number,
-  occluded = false,
-): Record<string, GroundTruthJoint> {
-  return { ...joints, [name]: { x: clamp01(x), y: clamp01(y), occluded } };
-}
-
-/** Remove a joint — for one placed by accident, or an occluded point to drop. */
-export function removeJoint(
-  joints: Record<string, GroundTruthJoint>,
-  name: string,
-): Record<string, GroundTruthJoint> {
-  if (!(name in joints)) return joints;
-  const out = { ...joints };
-  delete out[name];
-  return out;
-}
-
-/**
- * Flip one joint's `occluded` flag — the human override on the confidence seed.
- * Occluded joints keep their position (so the author can un-occlude later) but
- * are excluded from scoring downstream. A no-op for an unplaced joint.
- */
-export function toggleJointOccluded(
-  joints: Record<string, GroundTruthJoint>,
-  name: string,
-): Record<string, GroundTruthJoint> {
-  const prev = joints[name];
-  if (!prev) return joints;
-  return { ...joints, [name]: { ...prev, occluded: !prev.occluded } };
-}
-
-/**
- * Apply a per-frame GT state change. `absent` means "no Climber here", so the
- * pose is cleared (a detected pose there is a false positive); `present` and
- * `skip` keep the authored joints. Any state change is a human decision, so it
- * leaves the caller to mark the frame verified.
- */
-export function applyFrameState(
-  frame: GroundTruthFrame,
-  state: GroundTruthState,
-): GroundTruthFrame {
-  if (state === "absent") return { ...frame, state, joints: {} };
-  return { ...frame, state };
-}
-
-/** Move one joint to an absolute normalised position (clamped to the frame). */
-export function moveJoint(
-  joints: Record<string, GroundTruthJoint>,
-  name: string,
-  x: number,
-  y: number,
-): Record<string, GroundTruthJoint> {
-  const prev = joints[name];
-  if (!prev) return joints;
-  return { ...joints, [name]: { ...prev, x: clamp01(x), y: clamp01(y) } };
-}
-
-/**
- * Translate every joint by (dx, dy) in normalised space — used when the pose
- * shape is right but the whole skeleton is offset. Positions clamp to the frame.
- */
-export function translateJoints(
-  joints: Record<string, GroundTruthJoint>,
-  dx: number,
-  dy: number,
-): Record<string, GroundTruthJoint> {
-  const out: Record<string, GroundTruthJoint> = {};
-  for (const name of Object.keys(joints)) {
-    const j = joints[name];
-    out[name] = { ...j, x: clamp01(j.x + dx), y: clamp01(j.y + dy) };
-  }
-  return out;
-}
-
-export interface DriftReadout {
-  /** Largest single-joint move from the scaffold, normalised [0, 1]. */
-  maxDist: number;
-  /** Mean move across joints present in both, normalised [0, 1]. */
-  meanDist: number;
-  /** How many joints moved a visible amount from the scaffold. */
-  movedJoints: number;
-}
-
-/** A joint that moved less than this (normalised) counts as untouched. */
-const DRIFT_EPSILON = 1e-4;
-
-/**
- * How far the current joints have moved from their scaffold seed — the live
- * authoring readout (not a score). Compares joints present in both sets.
- */
-export function jointDrift(
-  seed: Record<string, GroundTruthJoint>,
-  current: Record<string, GroundTruthJoint>,
-): DriftReadout {
-  let maxDist = 0;
-  let total = 0;
-  let count = 0;
-  let moved = 0;
-  for (const name of Object.keys(current)) {
-    const s = seed[name];
-    if (!s) continue;
-    const c = current[name];
-    const dist = Math.hypot(c.x - s.x, c.y - s.y);
-    if (dist > maxDist) maxDist = dist;
-    if (dist > DRIFT_EPSILON) moved += 1;
-    total += dist;
-    count += 1;
-  }
-  return { maxDist, meanDist: count > 0 ? total / count : 0, movedJoints: moved };
-}

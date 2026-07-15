@@ -46,6 +46,11 @@ export interface ViTPoseFrame {
 /** The `vitpose.json` bundle artifact the downloader writes (ADR 0019). */
 export interface ViTPoseScaffold {
   version: number;
+  /**
+   * Scan Setup hash the downloader seeded this scaffold from. Legacy artifacts
+   * may omit it; the harness then falls back to the setup save response.
+   */
+  setupHash?: string;
   frames: ViTPoseFrame[];
 }
 
@@ -151,6 +156,7 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
   if (typeof body !== "object" || body === null) return null;
   const b = body as Record<string, unknown>;
   if (!Number.isInteger(b.version)) return null;
+  if (b.setupHash !== undefined && typeof b.setupHash !== "string") return null;
   if (!Array.isArray(b.frames) || b.frames.length > MAX_FRAMES) return null;
   const frames: ViTPoseFrame[] = [];
   for (const raw of b.frames) {
@@ -158,7 +164,13 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
     if (!frame) return null;
     frames.push(frame);
   }
-  return { version: b.version as number, frames };
+  return {
+    version: b.version as number,
+    ...(typeof b.setupHash === "string" && b.setupHash.length > 0
+      ? { setupHash: b.setupHash }
+      : {}),
+    frames,
+  };
 }
 
 // ---------------------------------------------------------------------------
