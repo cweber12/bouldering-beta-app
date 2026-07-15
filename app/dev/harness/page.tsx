@@ -31,15 +31,26 @@ import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import LandmarkEditor from "@/components/dev/LandmarkEditor";
 import Modal from "@/components/ui/Modal";
 import {
+  applyFrameState,
   buildGroundTruthScaffold,
   contextKeypointsAt,
+  toggleJointOccluded,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
   saveGroundTruth,
   type GroundTruthFrame,
   type GroundTruthInput,
+  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
+import {
+  requestViTPoseScaffold,
+  loadViTPose,
+  viTPoseToPoseFrames,
+  scaffoldHasPose,
+  VITPOSE_POLL_TIMEOUT_MS,
+  type ViTPoseScaffold,
+} from "@/utils/harnessViTPose";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
@@ -263,8 +274,11 @@ export default function HarnessPage() {
 
 // ---------------------------------------------------------------------------
 // Calibrator — loads a Test Video + its Setup, reuses StepSetDetection to
-// author the Scan Setup, and on confirm saves it and runs one throwaway
-// detection scaffold used only to author Ground Truth. No scored run is posted.
+// author the Scan Setup, and on confirm saves it, kicks off the downloader's
+// ViTPose scaffold job (ADR 0019), and runs one throwaway MediaPipe pass to
+// establish the Detection Frame grid. The ViTPose poses seed the draggable
+// Ground Truth; if that job fails or no downloader is configured, the MediaPipe
+// poses seed it instead (a weaker fallback). No scored run is posted.
 // ---------------------------------------------------------------------------
 
 type RunPhase = "idle" | "saving" | "running" | "preview" | "done" | "error";
@@ -321,6 +335,49 @@ function Calibrator({
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
 
+  // ViTPose scaffold (ADR 0019): the downloader runs a stronger reference model
+  // that seeds the draggable Ground Truth landmarks. Kicked off on confirm and
+  // polled until `vitpose.json` lands in the bundle. MediaPipe still defines the
+  // Detection Frame grid; ViTPose only supplies the seed poses.
+  const [vitpose, setVitpose] = useState<ViTPoseScaffold | null>(null);
+  const [vitposeStatus, setVitposeStatus] = useState<
+    "idle" | "requesting" | "polling" | "ready" | "failed"
+  >("idle");
+  const [vitposeError, setVitposeError] = useState<string | null>(null);
+  // The Detection Frame grid a ViTPose job has already been kicked off for. Keyed
+  // on the grid's array identity so each new scan re-requests, but our own status
+  // transitions never re-fire (and cancel) the request mid-flight.
+  const vitposeRequestedRef = useRef<{ timestamp: number }[] | null>(null);
+  const vitposePoseFrames = useMemo(
+    () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
+    [vitpose],
+  );
+  // How many Detection Frames the ViTPose seed actually posed (vs. tracked-empty),
+  // surfaced in the preview so the seed source and its coverage are visible.
+  const vitposePosedCount = useMemo(
+    () => (vitpose ? vitpose.frames.filter((f) => f.keypoints.length > 0).length : 0),
+    [vitpose],
+  );
+
+  // Which poses seed the draggable Ground Truth: ViTPose when it lands, else the
+  // MediaPipe scaffold as a fallback once the ViTPose job has failed (or no
+  // downloader is configured) — so authoring never hard-depends on the external
+  // ViTPose endpoint. ViTPose is only ever a *better* seed, not a requirement.
+  const seedSource: "vitpose" | "mediapipe" | null = vitpose
+    ? "vitpose"
+    : vitposeStatus === "failed" && previewAttempt
+      ? "mediapipe"
+      : null;
+  const seedPoseFrames = useMemo(
+    () =>
+      seedSource === "vitpose"
+        ? vitposePoseFrames
+        : seedSource === "mediapipe" && previewAttempt
+          ? previewAttempt.frames
+          : [],
+    [seedSource, vitposePoseFrames, previewAttempt],
+  );
+
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
     [modelVariant, maxPoses],
@@ -345,6 +402,13 @@ function Calibrator({
   const [showCrops, setShowCrops] = useState(true);
   const previewFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
 
+  // The Detection Preview skeleton is re-based to start at the first detected
+  // frame, so the FramePlayer's playback clock is offset from the Detection Frame
+  // grid by this many seconds. The stepper works in absolute video time, so seek
+  // / sync convert across the two bases with `previewStartOffset`.
+  const previewSkel = useMemo(() => buildFirstFrameSkeleton(previewAttempt), [previewAttempt]);
+  const previewStartOffset = previewSkel?.startOffsetSec ?? 0;
+
   useEffect(() => {
     if (phase !== "preview") return;
     setPreviewPlaying(true);
@@ -358,15 +422,16 @@ function Calibrator({
     let raf = 0;
 
     const syncCurrentFrame = () => {
+      // Player time is re-based to the first detection; the grid is absolute.
       const playerTime = previewPlayerRef.current?.getCurrentTime() ?? 0;
-      const nextIndex = findFrameIndexByTime(previewFrames, playerTime);
+      const nextIndex = findFrameIndexByTime(previewFrames, playerTime + previewStartOffset);
       setPreviewFrameIndex((prev) => (prev === nextIndex ? prev : nextIndex));
       raf = requestAnimationFrame(syncCurrentFrame);
     };
 
     raf = requestAnimationFrame(syncCurrentFrame);
     return () => cancelAnimationFrame(raf);
-  }, [phase, gtMode, previewFrames]);
+  }, [phase, gtMode, previewFrames, previewStartOffset]);
 
   const handlePreviewSeek = useCallback(
     (index: number) => {
@@ -375,9 +440,11 @@ function Calibrator({
       setPreviewPlaying(false);
       setPreviewFrameIndex(index);
       previewPlayerRef.current?.pause();
-      previewPlayerRef.current?.seek(frame.timestamp);
+      // The stepper timestamp is absolute video time; the player seeks in its
+      // re-based clock, so subtract the first-detection offset.
+      previewPlayerRef.current?.seek(frame.timestamp - previewStartOffset);
     },
-    [previewFrames],
+    [previewFrames, previewStartOffset],
   );
 
   const handlePreviewTogglePlay = useCallback(() => {
@@ -490,13 +557,17 @@ function Calibrator({
     }
   }
 
-  // Confirm: save the Setup, then run one throwaway detection scaffold (the
-  // effect below hands the result to the Ground Truth editor once the pipeline
-  // finishes). Nothing is posted as a scored run.
+  // Confirm: save the Setup, then run one throwaway MediaPipe pass to establish
+  // the Detection Frame grid. The effects below kick off the ViTPose job for
+  // exactly those frames and hand the result to the Ground Truth editor. Nothing
+  // is posted as a scored run.
   async function handleConfirmAndRun() {
     if (!videoFile || !model || !cv) return;
     setPhase("saving");
     setPhaseError(null);
+    setVitpose(null);
+    setVitposeError(null);
+    setVitposeStatus("idle");
     try {
       await saveSetup();
       setPhase("running");
@@ -555,21 +626,109 @@ function Calibrator({
     setPhase("preview");
   }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
 
-  // On entering the preview, seed Ground Truth from the scaffold detection: a pure
-  // scaffold (the drift baseline) and a working copy that preserves any previously
-  // authored GT. Both key one record per Detection Frame.
+  // Once the Detection Frame grid exists (preview), kick off the ViTPose job for
+  // exactly those frames. The downloader echoes their timestamps, so the seed
+  // aligns frame-for-frame — the ViTPose run is not a denser grid (ADR 0019).
   useEffect(() => {
-    if (phase !== "preview" || !previewAttempt) return;
-    const pureScaffold = buildGroundTruthScaffold(previewFrames, previewAttempt.frames, null);
-    const working = buildGroundTruthScaffold(
-      previewFrames,
-      previewAttempt.frames,
-      existingGtRef.current,
-    );
+    if (phase !== "preview" || previewFrames.length === 0) return;
+    // Fire exactly once per Detection Frame grid. Staleness is judged by the ref,
+    // not a per-invocation `cancelled` flag: `vitposeStatus` is deliberately NOT a
+    // dependency (setting it to "requesting" would re-run this effect), and under
+    // StrictMode's mount/cleanup/mount the ref survives while a `cancelled` flag
+    // would strand the one POST that ran. Advance to "polling" only while this
+    // grid is still the active request; a superseded or reset grid is ignored.
+    if (vitposeRequestedRef.current === previewFrames) return;
+    const grid = previewFrames;
+    vitposeRequestedRef.current = grid;
+    setVitpose(null);
+    setVitposeError(null);
+    setVitposeStatus("requesting");
+    void (async () => {
+      try {
+        await requestViTPoseScaffold(item.key, {
+          videoPath: item.videoPath,
+          climberPoint: climberPoint ?? undefined,
+          climberCrop,
+          wallCrop,
+          panning,
+          frames: grid.map((f) => ({ timestamp: f.timestamp })),
+        });
+        if (vitposeRequestedRef.current === grid) setVitposeStatus("polling");
+      } catch (err) {
+        if (vitposeRequestedRef.current !== grid) return;
+        setVitposeStatus("failed");
+        setVitposeError(err instanceof Error ? err.message : String(err));
+      }
+    })();
+  }, [
+    phase,
+    previewFrames,
+    item.key,
+    item.videoPath,
+    climberPoint,
+    climberCrop,
+    wallCrop,
+    panning,
+  ]);
+
+  // Poll the bundle for the ViTPose artifact once the job has been accepted, and
+  // convert it to the seed poses once it lands. Failing over to the MediaPipe
+  // seed on a reported job error or a timeout keeps authoring off the critical
+  // path of the external endpoint — ViTPose is only ever a better seed.
+  useEffect(() => {
+    if (vitposeStatus !== "polling") return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = Date.now() + VITPOSE_POLL_TIMEOUT_MS;
+
+    const fail = (message: string) => {
+      setVitposeStatus("failed");
+      setVitposeError(message);
+    };
+
+    const poll = async () => {
+      try {
+        const { scaffold, error } = await loadViTPose(item.key);
+        if (cancelled) return;
+        if (scaffold) {
+          // A scaffold with no posed frames means the tracker never found the
+          // Climber — a weaker seed than MediaPipe, so fall back rather than seed
+          // every Detection Frame "absent".
+          if (!scaffoldHasPose(scaffold)) return fail("ViTPose tracked no climber.");
+          setVitpose(scaffold);
+          setVitposeStatus("ready");
+          return;
+        }
+        // The job died after acceptance (no artifact will ever land).
+        if (error) return fail(error);
+        // Downloader hung without writing an error sidecar — bail eventually.
+        if (Date.now() >= deadline) return fail("The ViTPose job timed out.");
+        timer = setTimeout(poll, 2000);
+      } catch (err) {
+        if (cancelled) return;
+        fail(err instanceof Error ? err.message : String(err));
+      }
+    };
+
+    void poll();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [vitposeStatus, item.key]);
+
+  // Seed Ground Truth once the Detection Frame grid and a seed source (ViTPose,
+  // or the MediaPipe fallback) are both ready: a pure scaffold (the drift
+  // baseline) and a working copy that preserves any previously authored GT. Both
+  // key one record per Detection Frame.
+  useEffect(() => {
+    if (phase !== "preview" || seedPoseFrames.length === 0 || previewFrames.length === 0) return;
+    const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, null);
+    const working = buildGroundTruthScaffold(previewFrames, seedPoseFrames, existingGtRef.current);
     setGtSeed(pureScaffold);
     setGtInput(working);
     setGtSave(null);
-  }, [phase, previewAttempt, previewFrames]);
+  }, [phase, seedPoseFrames, previewFrames]);
 
   // Update the current Detection Frame's Ground Truth (marks it verified).
   const editGtFrame = useCallback((index: number, patch: Partial<GroundTruthFrame>) => {
@@ -583,6 +742,42 @@ function Calibrator({
     });
     setGtSave(null);
   }, []);
+
+  // Set a Detection Frame's state (present / absent / skip). Absent clears the
+  // pose; the change marks the frame verified.
+  const setGtFrameState = useCallback((index: number, state: GroundTruthState) => {
+    setGtInput((prev) => {
+      if (!prev) return prev;
+      return {
+        frames: prev.frames.map((f) =>
+          f.frameIndex === index ? { ...applyFrameState(f, state), verified: true } : f,
+        ),
+      };
+    });
+    setGtSave(null);
+  }, []);
+
+  // Toggle one core joint's occluded flag on a Detection Frame (marks verified).
+  const toggleGtOccluded = useCallback((index: number, name: string) => {
+    setGtInput((prev) => {
+      if (!prev) return prev;
+      return {
+        frames: prev.frames.map((f) =>
+          f.frameIndex === index
+            ? { ...f, joints: toggleJointOccluded(f.joints, name), verified: true }
+            : f,
+        ),
+      };
+    });
+    setGtSave(null);
+  }, []);
+
+  // GT state per Detection Frame index, for the filmstrip (absent / skip marks).
+  const gtStateByIndex = useMemo(() => {
+    const byIndex = new Map<number, GroundTruthState>();
+    for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, f.state);
+    return previewFrames.map((_, i) => byIndex.get(i));
+  }, [gtInput, previewFrames]);
 
   const handleSaveGt = useCallback(async () => {
     if (!gtInput) return;
@@ -605,6 +800,10 @@ function Calibrator({
     setPreviewDiag(null);
     setPhaseError(null);
     setGtMode(false);
+    setVitpose(null);
+    setVitposeStatus("idle");
+    setVitposeError(null);
+    vitposeRequestedRef.current = null;
     setPhase("idle");
   }
 
@@ -612,6 +811,9 @@ function Calibrator({
   function handleCancelRun() {
     resetProcessor();
     setPhaseError(null);
+    setVitposeStatus("idle");
+    setVitposeError(null);
+    vitposeRequestedRef.current = null;
     setPhase("idle");
   }
 
@@ -692,7 +894,7 @@ function Calibrator({
 
   // ── Post-scan Detection Preview (review only; the run is already posted) ──
   if (phase === "preview") {
-    const skel = buildFirstFrameSkeleton(previewAttempt);
+    const skel = previewSkel;
     const topo = getTopology(previewAttempt?.poseBackend ?? "mediapipe");
     const topoStyle: SkeletonStyle = {
       skeletonEdges: topo.skeletonEdges,
@@ -727,6 +929,26 @@ function Calibrator({
                 />
                 Crops
               </label>
+            )}
+            {!gtInput &&
+              (vitposeStatus === "requesting" || vitposeStatus === "polling") && (
+                <span className="shrink-0 text-xs text-fg-muted">Building ViTPose scaffold…</span>
+              )}
+            {seedSource === "mediapipe" && (
+              <span
+                className="max-w-xs shrink-0 truncate text-xs text-caution"
+                title={vitposeError ?? undefined}
+              >
+                ViTPose unavailable — MediaPipe seed
+              </span>
+            )}
+            {seedSource === "vitpose" && (
+              <span
+                className="shrink-0 text-xs text-send"
+                title="Ground Truth seeded from the ViTPose reference model"
+              >
+                ViTPose seed · {vitposePosedCount}/{vitpose?.frames.length ?? 0} posed
+              </span>
             )}
             <button
               type="button"
@@ -768,6 +990,7 @@ function Calibrator({
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
           <DetectionFrameStepper
             frames={previewFrames}
+            frameStates={gtStateByIndex}
             currentIndex={previewFrameIndex}
             onSeek={handlePreviewSeek}
             onTogglePlay={handlePreviewTogglePlay}
@@ -782,10 +1005,15 @@ function Calibrator({
                 videoHeight={previewAttempt.videoMeta.height}
                 frame={gtFrame}
                 seedJoints={gtSeedFrame?.joints ?? {}}
-                contextKeypoints={contextKeypointsAt(previewAttempt.frames, gtFrame.timestamp)}
+                contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
                 onEditJoints={(joints) =>
-                  editGtFrame(gtFrame.frameIndex, { joints, state: "present" })
+                  editGtFrame(gtFrame.frameIndex, {
+                    joints,
+                    state: gtFrame.state === "absent" ? "present" : gtFrame.state,
+                  })
                 }
+                onSetState={(state) => setGtFrameState(gtFrame.frameIndex, state)}
+                onToggleOccluded={(name) => toggleGtOccluded(gtFrame.frameIndex, name)}
                 onAccept={() => editGtFrame(gtFrame.frameIndex, {})}
               />
             </div>

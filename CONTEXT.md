@@ -287,13 +287,16 @@ _Avoid_: frame stats (too generic).
 **Ground Truth** (Landmarks):
 The per-video reference pose the detection-eval harness scores runs against: the
 correct **Climber** landmarks on each **Detection Frame**, authored once in the
-calibration pass by running a throwaway detection scaffold and dragging the wrong
-landmarks into place (or marking a frame as having no Climber). Frozen alongside
-the video's crops and metadata as calibration output; never re-entered. Each
-frame is **verified** (a human corrected or confirmed it) or **unverified** (left
-as the scaffold's detection); scoring treats verified frames as true reference and
-unverified ones as a weaker signal. The scaffold run that seeds it is discarded —
-only the Ground Truth persists, not a scored run.
+calibration pass by dragging the wrong landmarks of a throwaway detection scaffold
+into place (or marking a frame as having no Climber). The scaffold's landmarks are
+seeded from a **stronger reference model** (ViTPose++, run on the downloader — ADR
+0019), _not_ from the detector under test, so the human starts from a better guess
+and an untouched frame is not the detector grading itself. Frozen alongside the
+video's crops and metadata as calibration output; never re-entered. Each frame is
+**verified** (a human corrected or confirmed it) or **unverified** (left as the
+reference model's guess); scoring treats verified frames as true reference and
+unverified ones as a weaker signal. The scaffold that seeds it is discarded — only
+the Ground Truth persists, not a scored run.
 _Avoid_: ground-truth run (it is not a **Run** — it yields no scored result);
 labels (those are the video-level metadata, a different thing).
 
@@ -327,7 +330,9 @@ The frozen set of manual scan inputs attached to a **Test Video** so its scan ca
 be replayed headlessly with no **User**: the **Climber Crop**, the **Wall Crop**,
 the Climber tap (`climberPoint`), the **Fixed**/**Panning Capture** flag, and the
 **Quality Tier**. Set once in a manual calibration pass — which now also authors
-the video's **Ground Truth** by correcting a throwaway detection scaffold, and lets
+the video's **Ground Truth** by correcting a throwaway detection scaffold (the
+Climber selection, `climberPoint` + **Climber Crop**, also drives the downloader's
+ViTPose++ scaffold pass — ADR 0019), and lets
 the User edit the video-level metadata (`analysis_inputs`) — and reused verbatim by
 every later headless re-run, so a quality change between runs is attributable to
 detection-logic changes, not setup drift. The scaffold run is discarded; calibration

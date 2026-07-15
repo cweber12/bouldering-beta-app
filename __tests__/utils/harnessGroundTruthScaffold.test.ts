@@ -7,12 +7,14 @@ import {
   moveJoint,
   setJoint,
   removeJoint,
+  toggleJointOccluded,
+  applyFrameState,
   translateJoints,
   jointDrift,
   OCCLUSION_SEED_SCORE,
 } from "@/utils/harnessGroundTruthScaffold";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
-import type { GroundTruthInput, GroundTruthJoint } from "@/utils/harnessGroundTruth";
+import type { GroundTruthFrame, GroundTruthInput, GroundTruthJoint } from "@/utils/harnessGroundTruth";
 
 function kp(name: string, x: number, y: number, score = 0.9): Keypoint {
   return { name, x, y, score };
@@ -67,19 +69,21 @@ describe("buildGroundTruthScaffold", () => {
   ];
   const poseFrames = [
     { timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1), kp("left_wrist", 0.4, 0.6)] },
+    // ViTPose posed a frame MediaPipe reported "missing" — the Climber is there.
+    { timestamp: 0.5, keypoints: [kp("nose", 0.5, 0.15)] },
     { timestamp: 1.0, keypoints: [kp("nose", 0.5, 0.2)] },
   ];
 
-  it("seeds present frames from the scaffold and absent for missing frames", () => {
+  it("keys present/absent off the scaffold pose, not the detector status", () => {
     const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, null);
     expect(gt.frames).toHaveLength(3);
 
     expect(gt.frames[0]).toMatchObject({ frameIndex: 0, state: "present", verified: false });
     expect(Object.keys(gt.frames[0].joints).sort()).toEqual(["left_wrist", "nose"]);
 
-    // Missing status → absent, no joints, even if a pose existed nearby.
-    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "absent" });
-    expect(gt.frames[1].joints).toEqual({});
+    // Status "missing" but the ViTPose scaffold posed it → present (ADR 0019).
+    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "present" });
+    expect(Object.keys(gt.frames[1].joints)).toEqual(["nose"]);
 
     // Weak but detected → present with whatever joints exist.
     expect(gt.frames[2]).toMatchObject({ frameIndex: 2, state: "present" });
@@ -163,6 +167,57 @@ describe("removeJoint", () => {
   it("returns the same object when the joint is absent", () => {
     const joints = { nose: { x: 0.5, y: 0.2, occluded: false } };
     expect(removeJoint(joints, "right_ankle")).toBe(joints);
+  });
+});
+
+describe("toggleJointOccluded", () => {
+  const joints: Record<string, GroundTruthJoint> = {
+    nose: { x: 0.5, y: 0.2, occluded: false },
+    left_wrist: { x: 0.4, y: 0.6, occluded: true },
+  };
+
+  it("flips a joint's occluded flag, preserving its position and others", () => {
+    const out = toggleJointOccluded(joints, "nose");
+    expect(out.nose).toEqual({ x: 0.5, y: 0.2, occluded: true });
+    expect(out.left_wrist).toBe(joints.left_wrist);
+    expect(joints.nose.occluded).toBe(false); // input not mutated
+  });
+
+  it("un-occludes an occluded joint", () => {
+    expect(toggleJointOccluded(joints, "left_wrist").left_wrist.occluded).toBe(false);
+  });
+
+  it("is a no-op for an unplaced joint", () => {
+    expect(toggleJointOccluded(joints, "right_ankle")).toBe(joints);
+  });
+});
+
+describe("applyFrameState", () => {
+  const frame: GroundTruthFrame = {
+    frameIndex: 2,
+    timestamp: 1.5,
+    state: "present",
+    verified: true,
+    joints: { nose: { x: 0.5, y: 0.2, occluded: false } },
+  };
+
+  it("clears the pose when marked absent", () => {
+    const out = applyFrameState(frame, "absent");
+    expect(out.state).toBe("absent");
+    expect(out.joints).toEqual({});
+    expect(frame.joints.nose).toBeDefined(); // input not mutated
+  });
+
+  it("keeps the pose when marked skip", () => {
+    const out = applyFrameState(frame, "skip");
+    expect(out.state).toBe("skip");
+    expect(out.joints).toBe(frame.joints);
+  });
+
+  it("keeps the pose when marked present", () => {
+    const absent: GroundTruthFrame = { ...frame, state: "absent", joints: {} };
+    const out = applyFrameState(absent, "present");
+    expect(out).toMatchObject({ state: "present", joints: {} });
   });
 });
 

@@ -5,6 +5,10 @@ Branch: main
 Merged: 9750b1c
 Type: HITL
 
+> Amended by ADR 0019 / issue 10: the draggable scaffold poses now come from the
+> ViTPose reference model (`vitpose.json`), not the MediaPipe scaffold. The editor
+> geometry is unchanged — only the seed source differs.
+
 ## Parent
 
 - `.scratch/ground-truth-detection-eval/PRD.md`

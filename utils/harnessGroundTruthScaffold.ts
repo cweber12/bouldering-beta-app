@@ -14,6 +14,7 @@ import {
   type GroundTruthFrame,
   type GroundTruthInput,
   type GroundTruthJoint,
+  type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 
@@ -78,11 +79,18 @@ export function contextKeypointsAt(
 }
 
 /**
- * Seed a Ground Truth from the scan's scaffold, one record per Detection Frame:
- * a `missing` frame (or one with no matching pose) is `absent`; every other frame
- * is `present`, its core joints seeded from the scaffold detection. Any frame the
- * human already authored in `existing` (matched by `frameIndex`) is preserved
- * verbatim — re-scanning never clobbers verified corrections.
+ * Seed a Ground Truth from the scaffold poses, one record per Detection Frame:
+ * a frame is `present` when a scaffold pose matches its timestamp (core joints
+ * seeded from it), `absent` when none does. State keys off whether the
+ * **scaffold** found a pose, not the detector-under-test's own `status` — a
+ * frame MediaPipe missed but the ViTPose scaffold posed is `present` (the
+ * Climber is there), so the seed no longer inherits MediaPipe's misses (ADR
+ * 0019). Any frame the human already authored in `existing` (matched by
+ * `frameIndex`) is preserved verbatim — re-scanning never clobbers verified
+ * corrections.
+ *
+ * `detectionFrames` supplies the frame grid + timestamps (established by the
+ * MediaPipe pass); `poseFrames` supplies the landmarks (the ViTPose scaffold).
  */
 export function buildGroundTruthScaffold(
   detectionFrames: readonly { timestamp: number; status: string }[],
@@ -96,7 +104,7 @@ export function buildGroundTruthScaffold(
     const prior = priorByIndex.get(frameIndex);
     if (prior) return prior;
 
-    const pose = df.status === "missing" ? null : poseAt(poseFrames, df.timestamp);
+    const pose = poseAt(poseFrames, df.timestamp);
     const joints = pose ? coreJointsFromKeypoints(pose.keypoints) : {};
     return {
       frameIndex,
@@ -137,6 +145,34 @@ export function removeJoint(
   const out = { ...joints };
   delete out[name];
   return out;
+}
+
+/**
+ * Flip one joint's `occluded` flag — the human override on the confidence seed.
+ * Occluded joints keep their position (so the author can un-occlude later) but
+ * are excluded from scoring downstream. A no-op for an unplaced joint.
+ */
+export function toggleJointOccluded(
+  joints: Record<string, GroundTruthJoint>,
+  name: string,
+): Record<string, GroundTruthJoint> {
+  const prev = joints[name];
+  if (!prev) return joints;
+  return { ...joints, [name]: { ...prev, occluded: !prev.occluded } };
+}
+
+/**
+ * Apply a per-frame GT state change. `absent` means "no Climber here", so the
+ * pose is cleared (a detected pose there is a false positive); `present` and
+ * `skip` keep the authored joints. Any state change is a human decision, so it
+ * leaves the caller to mark the frame verified.
+ */
+export function applyFrameState(
+  frame: GroundTruthFrame,
+  state: GroundTruthState,
+): GroundTruthFrame {
+  if (state === "absent") return { ...frame, state, joints: {} };
+  return { ...frame, state };
 }
 
 /** Move one joint to an absolute normalised position (clamped to the frame). */

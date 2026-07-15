@@ -56,7 +56,7 @@ export interface GroundTruthJoint {
   x: number;
   /** Y position normalized to [0, 1] relative to the frame height. */
   y: number;
-  /** True when the joint is hidden (pre-seeded from MediaPipe visibility). */
+  /** True when the joint is hidden (pre-seeded from the scaffold model's confidence). */
   occluded: boolean;
 }
 

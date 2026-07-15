@@ -3,6 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { useMemo } from "react";
 import { cn } from "@/utils/cn";
+import type { GroundTruthState } from "@/utils/harnessGroundTruth";
 
 export type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
@@ -13,6 +14,12 @@ export interface DetectionFrame {
 
 export interface DetectionFrameStepperProps {
   frames: DetectionFrame[];
+  /**
+   * Optional per-frame Ground Truth state, parallel to `frames`. When present,
+   * absent / skip frames render a marker under the bar (skip is also dimmed) so
+   * the filmstrip reflects authoring state, not just detection status.
+   */
+  frameStates?: (GroundTruthState | undefined)[];
   currentIndex: number;
   onSeek: (index: number) => void;
   onAnnotate?: (index: number) => void;
@@ -20,6 +27,13 @@ export interface DetectionFrameStepperProps {
   isPlaying?: boolean;
   className?: string;
 }
+
+/** Marker colour under each bar for its GT state (present shows no marker). */
+const GT_STATE_MARKER: Record<GroundTruthState, string | null> = {
+  present: null,
+  absent: "bg-danger",
+  skip: "bg-fg-muted",
+};
 
 interface Stretch {
   start: number;
@@ -81,6 +95,7 @@ function findNextStretch(stretches: Stretch[], currentIndex: number): Stretch | 
 
 export default function DetectionFrameStepper({
   frames,
+  frameStates,
   currentIndex,
   onSeek,
   onAnnotate,
@@ -187,19 +202,33 @@ export default function DetectionFrameStepper({
           <div className="relative flex items-end gap-0.5 py-1">
             {frames.map((frame, index) => {
               const active = index === currentIndex;
+              const gtState = frameStates?.[index];
+              const marker = gtState ? GT_STATE_MARKER[gtState] : null;
+              const label = gtState
+                ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${gtState}`
+                : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`;
               return (
-                <button
-                  key={`${frame.timestamp}-${index}`}
-                  type="button"
-                  title={`${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`}
-                  aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[frame.status]})`}
-                  onClick={() => seekIndex(index)}
-                  className={cn(
-                    "h-8 w-2 rounded-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-                    STATUS_TONE[frame.status],
-                    active && "scale-y-125 ring-2 ring-fg ring-offset-1 ring-offset-surface",
-                  )}
-                />
+                <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
+                  <button
+                    type="button"
+                    title={label}
+                    aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[frame.status]})`}
+                    onClick={() => seekIndex(index)}
+                    className={cn(
+                      "h-8 w-2 rounded-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+                      STATUS_TONE[frame.status],
+                      gtState === "skip" && "opacity-30",
+                      active && "scale-y-125 ring-2 ring-fg ring-offset-1 ring-offset-surface",
+                    )}
+                  />
+                  {/* Fixed-height slot keeps bar bottoms aligned; coloured per GT state. */}
+                  <span
+                    aria-hidden="true"
+                    data-testid={marker ? "frame-state-marker" : undefined}
+                    data-state={gtState}
+                    className={cn("h-1 w-2 rounded-full", marker ?? "bg-transparent")}
+                  />
+                </div>
               );
             })}
           </div>
