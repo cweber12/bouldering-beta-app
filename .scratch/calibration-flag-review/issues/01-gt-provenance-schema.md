@@ -1,7 +1,8 @@
 # Ground Truth Provenance Schema
 
-Status: in-progress
+Status: done
 Branch: feat/cfr-01-gt-provenance-schema
+Merged: dc76f36
 Type: AFK
 
 ## Parent
