@@ -9,6 +9,11 @@ import {
   removeJoint,
   toggleJointOccluded,
   applyFrameState,
+  applyReviewFlag,
+  reviewToFlag,
+  priorTruthIsStale,
+  countSeedCoverage,
+  seedGateDecision,
   translateJoints,
   jointDrift,
   OCCLUSION_SEED_SCORE,
@@ -74,31 +79,50 @@ describe("buildGroundTruthScaffold", () => {
     { timestamp: 1.0, keypoints: [kp("nose", 0.5, 0.2)] },
   ];
 
-  it("keys present/absent off the scaffold pose, not the detector status", () => {
-    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, null);
+  it("seeds every frame auto-accepted, keying present/absent off the scaffold pose", () => {
+    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-1", null);
     expect(gt.frames).toHaveLength(3);
+    expect(gt.setupHash).toBe("setup-1");
 
-    expect(gt.frames[0]).toMatchObject({ frameIndex: 0, state: "present", verified: false });
+    expect(gt.frames[0]).toMatchObject({
+      frameIndex: 0,
+      state: "present",
+      review: "auto",
+      verified: false,
+    });
     expect(Object.keys(gt.frames[0].joints).sort()).toEqual(["left_wrist", "nose"]);
 
     // Status "missing" but the ViTPose scaffold posed it → present (ADR 0019).
-    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "present" });
+    expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "present", review: "auto" });
     expect(Object.keys(gt.frames[1].joints)).toEqual(["nose"]);
 
     // Weak but detected → present with whatever joints exist.
-    expect(gt.frames[2]).toMatchObject({ frameIndex: 2, state: "present" });
+    expect(gt.frames[2]).toMatchObject({ frameIndex: 2, state: "present", review: "auto" });
   });
 
-  it("marks a frame absent when no scaffold pose matches its timestamp", () => {
-    const gt = buildGroundTruthScaffold([{ timestamp: 9.0, status: "detected" }], poseFrames, null);
-    expect(gt.frames[0]).toMatchObject({ state: "absent" });
+  it("seeds occluded flags from the scaffold confidence, kept on the seed", () => {
+    const frames = [{ timestamp: 0.0, status: "detected" }];
+    const poses = [{ timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] }];
+    const gt = buildGroundTruthScaffold(frames, poses, "setup-1", null);
+    expect(gt.frames[0].joints.nose.occluded).toBe(true);
+  });
+
+  it("marks a frame seeded-absent when no scaffold pose matches its timestamp", () => {
+    const gt = buildGroundTruthScaffold(
+      [{ timestamp: 9.0, status: "detected" }],
+      poseFrames,
+      "setup-1",
+      null,
+    );
+    expect(gt.frames[0]).toMatchObject({ state: "absent", review: "auto" });
     expect(gt.frames[0].joints).toEqual({});
   });
 
-  it("preserves previously-authored frames across a re-scan", () => {
+  it("carries prior human flags onto the fresh seed when the setupHash matches", () => {
     const existing: GroundTruthInput = {
       setupHash: "setup-1",
       frames: [
+        // Wrong flag carries; joints come from the new seed, not the old file.
         {
           frameIndex: 0,
           timestamp: 0.0,
@@ -107,12 +131,174 @@ describe("buildGroundTruthScaffold", () => {
           verified: true,
           joints: { nose: { x: 0.9, y: 0.9, occluded: false } },
         },
+        // Absent flag carries and clears joints.
+        {
+          frameIndex: 1,
+          timestamp: 0.5,
+          state: "absent",
+          review: "human-flagged-absent",
+          verified: true,
+          joints: {},
+        },
       ],
     };
-    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, existing);
-    // Frame 0 kept verbatim from the human's prior edit; others re-seeded.
-    expect(gt.frames[0]).toEqual(existing.frames[0]);
-    expect(gt.frames[1].verified).toBe(false);
+    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-1", existing);
+
+    expect(gt.frames[0].review).toBe("human-flagged-wrong");
+    expect(gt.frames[0].state).toBe("present");
+    // Joints re-seeded from the new poses, not the stale 0.9/0.9 from the old file.
+    expect(gt.frames[0].joints).toEqual(coreJointsFromKeypoints(poseFrames[0].keypoints));
+
+    expect(gt.frames[1]).toMatchObject({ review: "human-flagged-absent", state: "absent" });
+    expect(gt.frames[1].joints).toEqual({});
+
+    // Unflagged frame re-seeds clean as auto.
+    expect(gt.frames[2]).toMatchObject({ review: "auto", state: "present" });
+  });
+
+  it("discards prior truth and starts clean when the setupHash changed", () => {
+    const existing: GroundTruthInput = {
+      setupHash: "setup-OLD",
+      frames: [
+        {
+          frameIndex: 0,
+          timestamp: 0.0,
+          state: "absent",
+          review: "human-flagged-absent",
+          verified: true,
+          joints: {},
+        },
+      ],
+    };
+    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-NEW", existing);
+    // Prior flag dropped — frame 0 re-seeds as auto/present from the new seed.
+    expect(gt.frames[0]).toMatchObject({ review: "auto", state: "present" });
+    expect(gt.setupHash).toBe("setup-NEW");
+  });
+});
+
+describe("reviewToFlag", () => {
+  it("maps persisted review values to UI flags, legacy human as auto", () => {
+    expect(reviewToFlag("auto")).toBe("auto");
+    expect(reviewToFlag("human-flagged-wrong")).toBe("wrong");
+    expect(reviewToFlag("human-flagged-absent")).toBe("absent");
+    expect(reviewToFlag("human")).toBe("auto");
+  });
+});
+
+describe("applyReviewFlag", () => {
+  const seedPresent: GroundTruthFrame = {
+    frameIndex: 1,
+    timestamp: 0.5,
+    state: "present",
+    review: "auto",
+    verified: false,
+    joints: { nose: { x: 0.5, y: 0.2, occluded: false } },
+  };
+  const seedAbsent: GroundTruthFrame = {
+    frameIndex: 2,
+    timestamp: 1.0,
+    state: "absent",
+    review: "auto",
+    verified: false,
+    joints: {},
+  };
+
+  it("restores the seed verbatim when unflagged back to auto", () => {
+    const wrong = applyReviewFlag(seedPresent, "wrong");
+    expect(applyReviewFlag(wrong, "auto")).toMatchObject({ review: "auto", state: "present" });
+    expect(applyReviewFlag(seedPresent, "auto").joints).toEqual(seedPresent.joints);
+  });
+
+  it("flags Wrong as present, keeping the seed joints as known-bad", () => {
+    const out = applyReviewFlag(seedPresent, "wrong");
+    expect(out).toMatchObject({ review: "human-flagged-wrong", state: "present" });
+    expect(out.joints).toEqual(seedPresent.joints);
+  });
+
+  it("flips a seeded-absent frame flagged Wrong to present with empty joints", () => {
+    const out = applyReviewFlag(seedAbsent, "wrong");
+    expect(out).toMatchObject({ review: "human-flagged-wrong", state: "present" });
+    expect(out.joints).toEqual({});
+  });
+
+  it("flags Absent as absent, clearing the joints", () => {
+    const out = applyReviewFlag(seedPresent, "absent");
+    expect(out).toMatchObject({ review: "human-flagged-absent", state: "absent" });
+    expect(out.joints).toEqual({});
+    expect(seedPresent.joints.nose).toBeDefined(); // input not mutated
+  });
+});
+
+describe("priorTruthIsStale", () => {
+  const frame: GroundTruthFrame = {
+    frameIndex: 0,
+    timestamp: 0,
+    state: "present",
+    review: "auto",
+    verified: true,
+    joints: {},
+  };
+
+  it("is not stale on a clean first authoring (no prior frames)", () => {
+    expect(priorTruthIsStale(null, "setup-1")).toBe(false);
+    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [] }, "setup-1")).toBe(false);
+  });
+
+  it("is not stale when the prior setupHash matches", () => {
+    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [frame] }, "setup-1")).toBe(false);
+  });
+
+  it("is stale on a setupHash mismatch", () => {
+    expect(priorTruthIsStale({ setupHash: "setup-OLD", frames: [frame] }, "setup-NEW")).toBe(true);
+  });
+
+  it("is stale when either hash is empty (legacy hash-less truth)", () => {
+    expect(priorTruthIsStale({ setupHash: "", frames: [frame] }, "setup-1")).toBe(true);
+    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [frame] }, "")).toBe(true);
+  });
+});
+
+describe("countSeedCoverage", () => {
+  it("counts posed and seeded-absent frames, ignoring legacy skip", () => {
+    const frames: GroundTruthFrame[] = [
+      { frameIndex: 0, timestamp: 0, state: "present", review: "auto", verified: true, joints: {} },
+      { frameIndex: 1, timestamp: 1, state: "absent", review: "auto", verified: true, joints: {} },
+      { frameIndex: 2, timestamp: 2, state: "present", review: "auto", verified: true, joints: {} },
+      { frameIndex: 3, timestamp: 3, state: "skip", review: "auto", verified: true, joints: {} },
+    ];
+    expect(countSeedCoverage(frames)).toEqual({ posed: 2, seededAbsent: 1 });
+  });
+});
+
+describe("seedGateDecision", () => {
+  it("enables authoring once ViTPose lands with a posed frame", () => {
+    expect(
+      seedGateDecision({ vitposeStatus: "ready", vitposeError: null, seedHasPose: true }),
+    ).toEqual({ authoring: "ready" });
+  });
+
+  it("disables authoring when ViTPose landed but tracked no climber", () => {
+    expect(
+      seedGateDecision({ vitposeStatus: "ready", vitposeError: null, seedHasPose: false }),
+    ).toEqual({ authoring: "disabled", reason: "ViTPose tracked no climber." });
+  });
+
+  it("disables authoring with the error on ViTPose failure", () => {
+    expect(
+      seedGateDecision({ vitposeStatus: "failed", vitposeError: "job timed out", seedHasPose: false }),
+    ).toEqual({ authoring: "disabled", reason: "job timed out" });
+    expect(
+      seedGateDecision({ vitposeStatus: "failed", vitposeError: null, seedHasPose: false }),
+    ).toEqual({ authoring: "disabled", reason: "ViTPose scaffold failed." });
+  });
+
+  it("is pending while the job is idle, requesting, or polling", () => {
+    for (const vitposeStatus of ["idle", "requesting", "polling"] as const) {
+      expect(seedGateDecision({ vitposeStatus, vitposeError: null, seedHasPose: false })).toEqual({
+        authoring: "pending",
+      });
+    }
   });
 });
 
