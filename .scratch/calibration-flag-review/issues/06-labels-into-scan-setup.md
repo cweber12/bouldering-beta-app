@@ -1,6 +1,7 @@
 # Condition Labels into the Scan Setup
 
-Status: ready-for-agent
+Status: done
+Branch: feat/cfr-06-labels-into-scan-setup
 Type: AFK
 
 ## Parent

@@ -7,9 +7,10 @@
  * calibration flow: amount fields (`shadows`, `climber_contrast`,
  * `wall_contrast`, `motion_blur`, `occlusion`) as `unknown/none/low/medium/high`
  * selects; `camera_stability`, `route_orientation`, `camera_angle` as free-text
- * combos seeded with the current value; `notes` as a textarea. Saving applies a
- * field-level strict merge into the downloader-owned `metadata.json` via
- * /api/dev/corpus/metadata. Rendered only in development. See docs/adr/0018 §4.
+ * combos seeded with the current value; `notes` as a textarea. Saving persists
+ * the labels into `setup.json.analysisInputs` through the merging setup write
+ * (/api/dev/corpus/setup), which never re-hashes the Scan Setup. Rendered only
+ * in development. See the calibration-flag-review PRD.
  */
 
 import { useMemo, useState } from "react";
@@ -19,10 +20,10 @@ import {
   SELECT_FIELDS,
   amountOptions,
   normalizeAnalysisInputs,
-  saveAnalysisInputs,
   type AnalysisInputsValues,
   type EditableField,
 } from "@/utils/harnessMetadata";
+import { saveSetupLabels } from "@/utils/harnessSetup";
 
 /** Human labels for the editable fields. */
 const FIELD_LABELS: Record<EditableField, string> = {
@@ -75,7 +76,7 @@ export default function MetadataEditorPanel({
     setState("saving");
     setError(null);
     try {
-      const merged = await saveAnalysisInputs(bundleKey, values);
+      const merged = await saveSetupLabels(bundleKey, values);
       setValues(normalizeAnalysisInputs(merged));
       setState("saved");
       onSaved?.(merged);
@@ -149,7 +150,7 @@ export default function MetadataEditorPanel({
           className={`min-w-0 truncate text-xs ${state === "error" ? "text-danger" : "text-fg-muted"}`}
         >
           {state === "saving" && "Saving…"}
-          {state === "saved" && "Saved to metadata.json"}
+          {state === "saved" && "Saved to setup.json"}
           {state === "error" && error}
         </span>
         <button
