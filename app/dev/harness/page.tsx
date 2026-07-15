@@ -29,11 +29,13 @@ import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
+import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
 import Modal from "@/components/ui/Modal";
 import {
   applyReviewFlag,
   buildGroundTruthScaffold,
   contextKeypointsAt,
+  seedGateDecision,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
@@ -275,8 +277,9 @@ export default function HarnessPage() {
 // author the Scan Setup, and on confirm saves it, kicks off the downloader's
 // ViTPose scaffold job (ADR 0019), and runs one throwaway MediaPipe pass to
 // establish the Detection Frame grid. The ViTPose poses seed the draggable
-// Ground Truth; if that job fails or no downloader is configured, the MediaPipe
-// poses seed it instead (a weaker fallback). No scored run is posted.
+// Ground Truth. If that job fails or no downloader is configured, Ground Truth
+// authoring is gated until the ViTPose job is retried successfully. No scored
+// run is posted.
 // ---------------------------------------------------------------------------
 
 type RunPhase = "idle" | "saving" | "running" | "preview" | "done" | "error";
@@ -358,24 +361,15 @@ function Calibrator({
     [vitpose],
   );
 
-  // Which poses seed the draggable Ground Truth: ViTPose when it lands, else the
-  // MediaPipe scaffold as a fallback once the ViTPose job has failed (or no
-  // downloader is configured) — so authoring never hard-depends on the external
-  // ViTPose endpoint. ViTPose is only ever a *better* seed, not a requirement.
-  const seedSource: "vitpose" | "mediapipe" | null = vitpose
-    ? "vitpose"
-    : vitposeStatus === "failed" && previewAttempt
-      ? "mediapipe"
-      : null;
   const seedPoseFrames = useMemo(
-    () =>
-      seedSource === "vitpose"
-        ? vitposePoseFrames
-        : seedSource === "mediapipe" && previewAttempt
-          ? previewAttempt.frames
-          : [],
-    [seedSource, vitposePoseFrames, previewAttempt],
+    () => (vitposeStatus === "ready" ? vitposePoseFrames : []),
+    [vitposeStatus, vitposePoseFrames],
   );
+  const gtGate = seedGateDecision({
+    vitposeStatus,
+    vitposeError,
+    seedHasPose: vitpose ? scaffoldHasPose(vitpose) : false,
+  });
 
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
@@ -570,6 +564,11 @@ function Calibrator({
     setVitpose(null);
     setVitposeError(null);
     setVitposeStatus("idle");
+    setGtMode(false);
+    setGtSeed(null);
+    setGtInput(null);
+    setGtSave(null);
+    vitposeRequestedRef.current = null;
     try {
       await saveSetup();
       setPhase("running");
@@ -628,6 +627,38 @@ function Calibrator({
     setPhase("preview");
   }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
 
+  const requestViTPoseForGrid = useCallback(
+    (grid: { timestamp: number }[]) => {
+      if (grid.length === 0) return;
+      vitposeRequestedRef.current = grid;
+      setVitpose(null);
+      setVitposeError(null);
+      setGtMode(false);
+      setGtSeed(null);
+      setGtInput(null);
+      setGtSave(null);
+      setVitposeStatus("requesting");
+      void (async () => {
+        try {
+          await requestViTPoseScaffold(item.key, {
+            videoPath: item.videoPath,
+            climberPoint: climberPoint ?? undefined,
+            climberCrop,
+            wallCrop,
+            panning,
+            frames: grid.map((f) => ({ timestamp: f.timestamp })),
+          });
+          if (vitposeRequestedRef.current === grid) setVitposeStatus("polling");
+        } catch (err) {
+          if (vitposeRequestedRef.current !== grid) return;
+          setVitposeStatus("failed");
+          setVitposeError(err instanceof Error ? err.message : String(err));
+        }
+      })();
+    },
+    [item.key, item.videoPath, climberPoint, climberCrop, wallCrop, panning],
+  );
+
   // Once the Detection Frame grid exists (preview), kick off the ViTPose job for
   // exactly those frames. The downloader echoes their timestamps, so the seed
   // aligns frame-for-frame — the ViTPose run is not a denser grid (ADR 0019).
@@ -640,43 +671,13 @@ function Calibrator({
     // would strand the one POST that ran. Advance to "polling" only while this
     // grid is still the active request; a superseded or reset grid is ignored.
     if (vitposeRequestedRef.current === previewFrames) return;
-    const grid = previewFrames;
-    vitposeRequestedRef.current = grid;
-    setVitpose(null);
-    setVitposeError(null);
-    setVitposeStatus("requesting");
-    void (async () => {
-      try {
-        await requestViTPoseScaffold(item.key, {
-          videoPath: item.videoPath,
-          climberPoint: climberPoint ?? undefined,
-          climberCrop,
-          wallCrop,
-          panning,
-          frames: grid.map((f) => ({ timestamp: f.timestamp })),
-        });
-        if (vitposeRequestedRef.current === grid) setVitposeStatus("polling");
-      } catch (err) {
-        if (vitposeRequestedRef.current !== grid) return;
-        setVitposeStatus("failed");
-        setVitposeError(err instanceof Error ? err.message : String(err));
-      }
-    })();
-  }, [
-    phase,
-    previewFrames,
-    item.key,
-    item.videoPath,
-    climberPoint,
-    climberCrop,
-    wallCrop,
-    panning,
-  ]);
+    requestViTPoseForGrid(previewFrames);
+  }, [phase, previewFrames, requestViTPoseForGrid]);
 
   // Poll the bundle for the ViTPose artifact once the job has been accepted, and
-  // convert it to the seed poses once it lands. Failing over to the MediaPipe
-  // seed on a reported job error or a timeout keeps authoring off the critical
-  // path of the external endpoint — ViTPose is only ever a better seed.
+  // convert it to the seed poses once it lands. Reported job errors, empty
+  // Climber tracks, and timeouts disable only Ground Truth authoring; Detection
+  // Preview and diagnostics remain usable.
   useEffect(() => {
     if (vitposeStatus !== "polling") return;
     let cancelled = false;
@@ -686,6 +687,11 @@ function Calibrator({
     const fail = (message: string) => {
       setVitposeStatus("failed");
       setVitposeError(message);
+      setVitpose(null);
+      setGtMode(false);
+      setGtSeed(null);
+      setGtInput(null);
+      setGtSave(null);
     };
 
     const poll = async () => {
@@ -694,8 +700,8 @@ function Calibrator({
         if (cancelled) return;
         if (scaffold) {
           // A scaffold with no posed frames means the tracker never found the
-          // Climber — a weaker seed than MediaPipe, so fall back rather than seed
-          // every Detection Frame "absent".
+          // Climber — disable authoring rather than seed every Detection Frame
+          // "absent".
           if (!scaffoldHasPose(scaffold)) return fail("ViTPose tracked no climber.");
           setVitpose(scaffold);
           setVitposeStatus("ready");
@@ -719,12 +725,18 @@ function Calibrator({
     };
   }, [vitposeStatus, item.key]);
 
-  // Seed Ground Truth once the Detection Frame grid and a seed source (ViTPose,
-  // or the MediaPipe fallback) are both ready: a pure scaffold and a working
-  // copy that preserves any previously authored flags. Both key one record per
-  // Detection Frame.
+  // Seed Ground Truth once the Detection Frame grid and the ViTPose seed are
+  // both ready: a pure scaffold and a working copy that preserves any previously
+  // authored flags. Both key one record per Detection Frame.
   useEffect(() => {
-    if (phase !== "preview" || seedPoseFrames.length === 0 || previewFrames.length === 0) return;
+    if (
+      phase !== "preview" ||
+      vitposeStatus !== "ready" ||
+      seedPoseFrames.length === 0 ||
+      previewFrames.length === 0
+    ) {
+      return;
+    }
     const seedHash = vitpose?.setupHash || currentSetupHash;
     const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, seedHash, null);
     const working = buildGroundTruthScaffold(
@@ -736,7 +748,11 @@ function Calibrator({
     setGtSeed(pureScaffold);
     setGtInput(working);
     setGtSave(null);
-  }, [phase, seedPoseFrames, previewFrames, currentSetupHash, vitpose]);
+  }, [phase, vitposeStatus, seedPoseFrames, previewFrames, currentSetupHash, vitpose]);
+
+  const handleRetryViTPose = useCallback(() => {
+    requestViTPoseForGrid(previewFrames);
+  }, [previewFrames, requestViTPoseForGrid]);
 
   // Apply the current Detection Frame's Auto / Wrong / Absent review flag. The
   // immutable seed frame is always the source of truth so unflagging restores it.
@@ -919,30 +935,20 @@ function Calibrator({
                 Crops
               </label>
             )}
-            {!gtInput &&
-              (vitposeStatus === "requesting" || vitposeStatus === "polling") && (
-                <span className="shrink-0 text-xs text-fg-muted">Building ViTPose scaffold…</span>
-              )}
-            {seedSource === "mediapipe" && (
-              <span
-                className="max-w-xs shrink-0 truncate text-xs text-caution"
-                title={vitposeError ?? undefined}
-              >
-                ViTPose unavailable — MediaPipe seed
-              </span>
-            )}
-            {seedSource === "vitpose" && (
-              <span
-                className="shrink-0 text-xs text-send"
-                title="Ground Truth seeded from the ViTPose reference model"
-              >
-                ViTPose seed · {vitposePosedCount}/{vitpose?.frames.length ?? 0} posed
-              </span>
+            {gtGate.authoring === "ready" && (
+              <GroundTruthSeedStatus
+                gate={gtGate}
+                posedCount={vitposePosedCount}
+                frameCount={vitpose?.frames.length ?? 0}
+                onRetry={handleRetryViTPose}
+              />
             )}
             <button
               type="button"
-              onClick={() => setGtMode((v) => !v)}
-              disabled={!gtInput}
+              onClick={() => {
+                if (gtGate.authoring === "ready") setGtMode((v) => !v);
+              }}
+              disabled={gtGate.authoring !== "ready" || !gtInput}
               className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
                 gtMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg"
               }`}
@@ -953,7 +959,7 @@ function Calibrator({
               <button
                 type="button"
                 onClick={() => void handleSaveGt()}
-                disabled={gtSaving || !gtInput}
+                disabled={gtSaving || gtGate.authoring !== "ready" || !gtInput}
                 className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
               >
                 {gtSaving ? "Saving…" : "Accept & save Ground Truth"}
@@ -986,7 +992,16 @@ function Calibrator({
             isPlaying={previewPlaying}
             className="shrink-0"
           />
-          {gtMode && gtFrame && gtSeedFrame && previewAttempt ? (
+          {gtGate.authoring !== "ready" && (
+            <GroundTruthSeedStatus
+              gate={gtGate}
+              posedCount={vitposePosedCount}
+              frameCount={vitpose?.frames.length ?? 0}
+              onRetry={handleRetryViTPose}
+              className="shrink-0"
+            />
+          )}
+          {gtMode && gtGate.authoring === "ready" && gtFrame && gtSeedFrame && previewAttempt ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">
               <GroundTruthReviewer
                 videoSrc={videoUrl}
