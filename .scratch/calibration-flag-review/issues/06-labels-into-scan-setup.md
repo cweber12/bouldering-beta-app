@@ -2,6 +2,7 @@
 
 Status: done
 Branch: feat/cfr-06-labels-into-scan-setup
+Merged: 5d5002c
 Type: AFK
 
 ## Parent
