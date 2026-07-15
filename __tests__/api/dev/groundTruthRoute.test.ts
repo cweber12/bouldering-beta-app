@@ -43,15 +43,17 @@ function makeRequest(key: string, body?: unknown): NextRequest {
 }
 
 const validInput = {
+  setupHash: "setup-abc",
   frames: [
     {
       frameIndex: 0,
       timestamp: 0,
       state: "present",
+      review: "auto",
       verified: true,
       joints: { nose: { x: 0.5, y: 0.2, occluded: false } },
     },
-    { frameIndex: 3, timestamp: 0.3, state: "absent", verified: false },
+    { frameIndex: 3, timestamp: 0.3, state: "absent", review: "human-flagged-absent", verified: true },
   ],
 };
 
@@ -77,6 +79,8 @@ describe("dev GET/PUT /api/dev/corpus/ground-truth", () => {
     const saved = (await putRes.json()).groundTruth;
     expect(saved.version).toBe(1);
     expect(saved.jointSet).toContain("nose");
+    expect(saved.setupHash).toBe("setup-abc");
+    expect(saved.frames[0].review).toBe("auto");
     expect(saved.groundTruthHash).toMatch(/^[0-9a-f]{64}$/);
     expect(typeof saved.updatedAt).toBe("string");
 
@@ -101,6 +105,19 @@ describe("dev GET/PUT /api/dev/corpus/ground-truth", () => {
     const { PUT } = await importRoute("development");
     const res = await PUT(makeRequest(BUNDLE_KEY, { frames: [{ frameIndex: -1 }] }));
     expect(res.status).toBe(422);
+  });
+
+  it("422s a write missing the required setupHash or per-frame review", async () => {
+    const { PUT } = await importRoute("development");
+
+    const noSetupHash = { frames: validInput.frames };
+    expect((await PUT(makeRequest(BUNDLE_KEY, noSetupHash))).status).toBe(422);
+
+    const noReview = {
+      setupHash: "setup-abc",
+      frames: [{ frameIndex: 0, timestamp: 0, state: "present", verified: true }],
+    };
+    expect((await PUT(makeRequest(BUNDLE_KEY, noReview))).status).toBe(422);
   });
 
   it("400s on an unsafe / malformed bundle key", async () => {

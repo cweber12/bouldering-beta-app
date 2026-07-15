@@ -735,6 +735,7 @@ function Calibrator({
     setGtInput((prev) => {
       if (!prev) return prev;
       return {
+        ...prev,
         frames: prev.frames.map((f) =>
           f.frameIndex === index ? { ...f, ...patch, verified: true } : f,
         ),
@@ -749,6 +750,7 @@ function Calibrator({
     setGtInput((prev) => {
       if (!prev) return prev;
       return {
+        ...prev,
         frames: prev.frames.map((f) =>
           f.frameIndex === index ? { ...applyFrameState(f, state), verified: true } : f,
         ),
@@ -762,6 +764,7 @@ function Calibrator({
     setGtInput((prev) => {
       if (!prev) return prev;
       return {
+        ...prev,
         frames: prev.frames.map((f) =>
           f.frameIndex === index
             ? { ...f, joints: toggleJointOccluded(f.joints, name), verified: true }

@@ -97,11 +97,13 @@ describe("buildGroundTruthScaffold", () => {
 
   it("preserves previously-authored frames across a re-scan", () => {
     const existing: GroundTruthInput = {
+      setupHash: "setup-1",
       frames: [
         {
           frameIndex: 0,
           timestamp: 0.0,
           state: "present",
+          review: "human-flagged-wrong",
           verified: true,
           joints: { nose: { x: 0.9, y: 0.9, occluded: false } },
         },
@@ -197,6 +199,7 @@ describe("applyFrameState", () => {
     frameIndex: 2,
     timestamp: 1.5,
     state: "present",
+    review: "auto",
     verified: true,
     joints: { nose: { x: 0.5, y: 0.2, occluded: false } },
   };
