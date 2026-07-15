@@ -14,6 +14,7 @@ import {
   type GroundTruthFrame,
   type GroundTruthInput,
   type GroundTruthJoint,
+  type GroundTruthReview,
   type GroundTruthState,
 } from "@/utils/harnessGroundTruth";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
@@ -79,44 +80,182 @@ export function contextKeypointsAt(
 }
 
 /**
- * Seed a Ground Truth from the scaffold poses, one record per Detection Frame:
- * a frame is `present` when a scaffold pose matches its timestamp (core joints
- * seeded from it), `absent` when none does. State keys off whether the
- * **scaffold** found a pose, not the detector-under-test's own `status` — a
- * frame MediaPipe missed but the ViTPose scaffold posed is `present` (the
- * Climber is there), so the seed no longer inherits MediaPipe's misses (ADR
- * 0019). Any frame the human already authored in `existing` (matched by
- * `frameIndex`) is preserved verbatim — re-scanning never clobbers verified
- * corrections.
+ * Seed an auto-accepted Ground Truth from the scaffold poses, one record per
+ * Detection Frame: a frame is `present` when a scaffold pose matches its
+ * timestamp (core joints seeded from it, with their confidence-seeded `occluded`
+ * flags), `absent` when none does. State keys off whether the **scaffold** found
+ * a pose, not the detector-under-test's own `status` — a frame MediaPipe missed
+ * but the ViTPose scaffold posed is `present` (the Climber is there), so the
+ * seed no longer inherits MediaPipe's misses (ADR 0019). Every frame arrives
+ * `review: "auto"` (nobody has objected yet) and `verified: false`; the human's
+ * job is only to flag exceptions.
+ *
+ * Carry-forward is keyed on `setupHash`: when prior `existing` truth was seeded
+ * from the same Scan Setup, its human *flags* (Wrong / Absent) re-apply onto the
+ * fresh seed — joints always come from the new seed, never the old file. When the
+ * setup changed, or the prior truth predates hashes, nothing carries and the
+ * caller can detect the discard via {@link priorTruthIsStale}. `"auto"` frames
+ * carry nothing (the fresh seed already is auto).
  *
  * `detectionFrames` supplies the frame grid + timestamps (established by the
- * MediaPipe pass); `poseFrames` supplies the landmarks (the ViTPose scaffold).
+ * MediaPipe pass); `poseFrames` supplies the landmarks (the ViTPose scaffold);
+ * `setupHash` is the seed's Scan Setup hash, stamped onto the result.
  */
 export function buildGroundTruthScaffold(
   detectionFrames: readonly { timestamp: number; status: string }[],
   poseFrames: readonly { timestamp: number; keypoints: Keypoint[] }[],
+  setupHash: string,
   existing: GroundTruthInput | null,
 ): GroundTruthInput {
-  const priorByIndex = new Map<number, GroundTruthFrame>();
-  for (const f of existing?.frames ?? []) priorByIndex.set(f.frameIndex, f);
+  const carryFlags = !priorTruthIsStale(existing, setupHash);
+  const priorFlagByIndex = new Map<number, ReviewFlag>();
+  if (carryFlags && existing) {
+    for (const f of existing.frames) priorFlagByIndex.set(f.frameIndex, reviewToFlag(f.review));
+  }
 
   const frames: GroundTruthFrame[] = detectionFrames.map((df, frameIndex) => {
-    const prior = priorByIndex.get(frameIndex);
-    if (prior) return prior;
-
     const pose = poseAt(poseFrames, df.timestamp);
     const joints = pose ? coreJointsFromKeypoints(pose.keypoints) : {};
-    return {
+    const seedFrame: GroundTruthFrame = {
       frameIndex,
       timestamp: df.timestamp,
-      state: pose && Object.keys(joints).length > 0 ? "present" : "absent",
+      state: Object.keys(joints).length > 0 ? "present" : "absent",
       joints,
       review: "auto",
       verified: false,
     };
+
+    const flag = priorFlagByIndex.get(frameIndex);
+    return flag && flag !== "auto" ? applyReviewFlag(seedFrame, flag) : seedFrame;
   });
 
-  return { frames, setupHash: existing?.setupHash ?? "" };
+  return { frames, setupHash };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-accept review model — the flag-only authoring the reviewer drives.
+// ---------------------------------------------------------------------------
+
+/**
+ * The three-way review control the author drives per Detection Frame:
+ * `"auto"` (unflagged — accept the seed as-is), `"wrong"` (climber present but
+ * the seed skeleton is bad), `"absent"` (no climber here). Maps to the persisted
+ * {@link GroundTruthReview} provenance values.
+ */
+export type ReviewFlag = "auto" | "wrong" | "absent";
+
+/** The UI flag a persisted `review` value corresponds to (legacy `"human"` → auto). */
+export function reviewToFlag(review: GroundTruthReview): ReviewFlag {
+  switch (review) {
+    case "human-flagged-wrong":
+      return "wrong";
+    case "human-flagged-absent":
+      return "absent";
+    default:
+      return "auto";
+  }
+}
+
+/**
+ * Apply the three-way review toggle to a **seeded** frame (the auto-accepted
+ * scaffold record). `auto` restores the seed verbatim (state and joints as
+ * seeded); `wrong` keeps the climber present with the seed's joints as known-bad
+ * (flagging a seeded-absent frame Wrong flips it to present with empty joints);
+ * `absent` marks no-climber and clears the joints. `verified` is inherited from
+ * the seed — it is stamped `true` for the whole file at save. Pure: pass the
+ * seed frame so unflagging back to auto can always recover the original truth.
+ */
+export function applyReviewFlag(seed: GroundTruthFrame, flag: ReviewFlag): GroundTruthFrame {
+  switch (flag) {
+    case "wrong":
+      return { ...seed, review: "human-flagged-wrong", state: "present", joints: seed.joints };
+    case "absent":
+      return { ...seed, review: "human-flagged-absent", state: "absent", joints: {} };
+    case "auto":
+    default:
+      return { ...seed, review: "auto" };
+  }
+}
+
+/**
+ * Whether prior saved truth must be discarded rather than carried onto a fresh
+ * seed. True when `existing` holds frames but was seeded from a different Scan
+ * Setup (`setupHash` mismatch) or predates hashes (either hash empty) — the
+ * staleness rule that stops truth authored against different crops from silently
+ * pairing with new scans. A clean first authoring (no prior frames) is not stale.
+ */
+export function priorTruthIsStale(
+  existing: GroundTruthInput | null,
+  setupHash: string,
+): boolean {
+  if (!existing || existing.frames.length === 0) return false;
+  if (!existing.setupHash || !setupHash) return true;
+  return existing.setupHash !== setupHash;
+}
+
+/** Seed coverage over the current frames: how many are posed vs. seeded absent. */
+export interface SeedCoverage {
+  /** Frames whose truth is `present` (a posed climber). */
+  posed: number;
+  /** Frames whose truth is `absent` (the seed tracked no climber, or flagged absent). */
+  seededAbsent: number;
+}
+
+/**
+ * Count posed vs. absent frames for the accept-button coverage readout — surfaced
+ * so the author notices when the seed left much of the video untracked, never
+ * blocking. Reflects the current truth, so flipping presence via a flag moves the
+ * counts. Legacy `skip` frames count as neither.
+ */
+export function countSeedCoverage(frames: readonly GroundTruthFrame[]): SeedCoverage {
+  let posed = 0;
+  let seededAbsent = 0;
+  for (const f of frames) {
+    if (f.state === "present") posed += 1;
+    else if (f.state === "absent") seededAbsent += 1;
+  }
+  return { posed, seededAbsent };
+}
+
+/**
+ * The Ground Truth authoring gate. Under the ViTPose hard requirement (ADR 0019)
+ * an auto-accepted seed is only trustworthy when it comes from the reference
+ * model, never the detector under test — so authoring is `ready` only once
+ * ViTPose has landed with at least one posed frame, `pending` while the job runs,
+ * and `disabled` (with a reason) on failure or an empty track. Detection Preview
+ * and diagnostics stay available regardless; only truth authoring is gated.
+ */
+export type GroundTruthGate =
+  | { authoring: "ready" }
+  | { authoring: "pending" }
+  | { authoring: "disabled"; reason: string };
+
+export interface SeedGateInput {
+  vitposeStatus: "idle" | "requesting" | "polling" | "ready" | "failed";
+  vitposeError: string | null;
+  /** Whether the landed scaffold posed at least one Detection Frame. */
+  seedHasPose: boolean;
+}
+
+/** Decide whether Ground Truth authoring is enabled, pending, or disabled. */
+export function seedGateDecision({
+  vitposeStatus,
+  vitposeError,
+  seedHasPose,
+}: SeedGateInput): GroundTruthGate {
+  switch (vitposeStatus) {
+    case "ready":
+      return seedHasPose
+        ? { authoring: "ready" }
+        : { authoring: "disabled", reason: "ViTPose tracked no climber." };
+    case "failed":
+      return { authoring: "disabled", reason: vitposeError ?? "ViTPose scaffold failed." };
+    case "requesting":
+    case "polling":
+    case "idle":
+    default:
+      return { authoring: "pending" };
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -723,8 +723,14 @@ function Calibrator({
   // key one record per Detection Frame.
   useEffect(() => {
     if (phase !== "preview" || seedPoseFrames.length === 0 || previewFrames.length === 0) return;
-    const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, null);
-    const working = buildGroundTruthScaffold(previewFrames, seedPoseFrames, existingGtRef.current);
+    const seedHash = existingGtRef.current?.setupHash ?? "";
+    const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, seedHash, null);
+    const working = buildGroundTruthScaffold(
+      previewFrames,
+      seedPoseFrames,
+      seedHash,
+      existingGtRef.current,
+    );
     setGtSeed(pureScaffold);
     setGtInput(working);
     setGtSave(null);
