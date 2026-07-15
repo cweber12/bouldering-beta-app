@@ -125,8 +125,9 @@ drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off). The dev harness stores accepted detected frames without
 interpolating them, skips the animated scan-loading x-ray, and its Detection
-Preview adds a detection-frame filmstrip and stepper for jumping through sampled
-frames and flagged stretches.
+Preview adds a detection-frame filmstrip and stepper — a scrolling row of frame
+thumbnails, each bordered by its detection status (detected / weak / missing /
+flip) — for jumping through sampled frames and flagged stretches.
 
 ### Adaptive overlay contrast
 

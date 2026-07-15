@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOpenCV } from "@/hooks/useOpenCV";
 import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
 import { useVideoProcessor } from "@/hooks/useVideoProcessor";
+import { useDetectionThumbnails } from "@/hooks/useDetectionThumbnails";
 import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
 import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
@@ -401,6 +402,14 @@ function Calibrator({
   // Detection Preview: show the per-frame Adaptive Crop overlay (default on).
   const [showCrops, setShowCrops] = useState(true);
   const previewFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
+
+  // Film-strip thumbnails for the stepper — generated lazily off the recorded
+  // video only while the Detection Preview is on screen.
+  const previewThumbnails = useDetectionThumbnails(
+    videoUrl,
+    previewFrames,
+    phase === "preview",
+  );
 
   // The Detection Preview skeleton is re-based to start at the first detected
   // frame, so the FramePlayer's playback clock is offset from the Detection Frame
@@ -1013,6 +1022,7 @@ function Calibrator({
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
           <DetectionFrameStepper
             frames={previewFrames}
+            thumbnails={previewThumbnails}
             frameMarks={gtMarkByIndex}
             currentIndex={previewFrameIndex}
             onSeek={handlePreviewSeek}

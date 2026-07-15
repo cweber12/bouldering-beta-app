@@ -31,6 +31,47 @@ describe("DetectionFrameStepper", () => {
     expect(onSeek).toHaveBeenCalledWith(4);
   });
 
+  it("renders thumbnails when supplied and a status placeholder otherwise", () => {
+    render(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0, status: "detected" },
+          { timestamp: 1, status: "missing" },
+        ]}
+        thumbnails={["data:image/png;base64,AAAA", undefined]}
+        currentIndex={0}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    // Frame 0 has a thumbnail → an <img>; its cell carries the detected border.
+    const detectedCell = screen.getByLabelText("Seek to 0:00 (detected)");
+    const img = detectedCell.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+    expect(detectedCell.className).toContain("border-send");
+
+    // Frame 1 has no thumbnail → a status-colored placeholder, missing border.
+    const missingCell = screen.getByLabelText("Seek to 0:01 (missing)");
+    expect(missingCell.querySelector("img")).toBeNull();
+    expect(missingCell.className).toContain("border-danger");
+  });
+
+  it("rings the active frame's cell", () => {
+    render(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0, status: "detected" },
+          { timestamp: 1, status: "detected" },
+        ]}
+        currentIndex={1}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Seek to 0:00 (detected)").className).not.toContain("ring-fg");
+    expect(screen.getByLabelText("Seek to 0:01 (detected)").className).toContain("ring-fg");
+  });
+
   it("marks flagged and seeded-absent frames distinctly from auto on the filmstrip", () => {
     render(
       <DetectionFrameStepper

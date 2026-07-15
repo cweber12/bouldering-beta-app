@@ -1,7 +1,7 @@
 "use client";
 
 import type { KeyboardEvent } from "react";
-import { useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import type { FrameReviewMark } from "@/utils/harnessGroundTruthScaffold";
 
@@ -15,10 +15,18 @@ export interface DetectionFrame {
 export interface DetectionFrameStepperProps {
   frames: DetectionFrame[];
   /**
+   * Optional per-frame thumbnail (data/object URL), parallel to `frames`. When a
+   * frame's thumbnail is present it fills the film-strip cell as a still; while
+   * it is `undefined` the cell shows a status-colored placeholder that resolves
+   * to the still once ready. Generation lives outside this component (see
+   * `useDetectionThumbnails`) so it stays presentational and reusable.
+   */
+  thumbnails?: (string | undefined)[];
+  /**
    * Optional per-frame Ground Truth review mark, parallel to `frames`. When
    * present, human-flagged (Wrong / Absent) and seeded-absent frames render a
-   * distinct marker under the bar so the author can jump straight to the frames
-   * worth a second look; ordinary auto frames show none.
+   * distinct marker under the thumbnail so the author can jump straight to the
+   * frames worth a second look; ordinary auto frames show none.
    */
   frameMarks?: (FrameReviewMark | undefined)[];
   currentIndex: number;
@@ -50,11 +58,28 @@ interface Stretch {
   end: number;
 }
 
-const STATUS_TONE: Record<DetectionFrameStatus, string> = {
-  detected: "bg-send",
-  weak: "bg-caution",
-  missing: "bg-danger",
-  flip: "bg-surface-alt border border-edge",
+/**
+ * Film-strip cell height (px). Each thumbnail fills this height; its width
+ * follows the frame's aspect ratio, so the strip reads like real film. Cell
+ * widths are therefore dynamic, so the flagged-run rule is measured from the
+ * live cell offsets rather than computed from a fixed step.
+ */
+const CELL_HEIGHT = 72;
+
+/** Status-colored 2px border framing each thumbnail. */
+const STATUS_BORDER: Record<DetectionFrameStatus, string> = {
+  detected: "border-2 border-send",
+  weak: "border-2 border-caution",
+  missing: "border-2 border-danger",
+  flip: "border-2 border-dashed border-edge",
+};
+
+/** Fill for a cell whose thumbnail has not been generated yet (graceful fallback). */
+const STATUS_PLACEHOLDER: Record<DetectionFrameStatus, string> = {
+  detected: "bg-send/40",
+  weak: "bg-caution/40",
+  missing: "bg-danger/40",
+  flip: "bg-surface-alt",
 };
 
 const STATUS_LABEL: Record<DetectionFrameStatus, string> = {
@@ -105,6 +130,7 @@ function findNextStretch(stretches: Stretch[], currentIndex: number): Stretch | 
 
 export default function DetectionFrameStepper({
   frames,
+  thumbnails,
   frameMarks,
   currentIndex,
   onSeek,
@@ -118,8 +144,40 @@ export default function DetectionFrameStepper({
     () => findNextStretch(stretches, currentIndex),
     [stretches, currentIndex],
   );
-  const stepPx = 13;
-  const trackWidth = frames.length > 0 ? frames.length * stepPx - 4 : 0;
+
+  // Cell widths are aspect-driven (dynamic), so the flagged-run rule can't be
+  // laid out by fixed pixel math. Measure each flagged stretch from the live cell
+  // offsets and re-measure whenever thumbnails load (widths change) or the track
+  // resizes.
+  const trackRef = useRef<HTMLDivElement>(null);
+  const cellRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [ruleRects, setRuleRects] = useState<{ key: string; left: number; width: number }[]>([]);
+
+  const measureStretches = useCallback(() => {
+    const rects = stretches
+      .map((stretch) => {
+        const startCell = cellRefs.current[stretch.start];
+        const endCell = cellRefs.current[stretch.end];
+        if (!startCell || !endCell) return null;
+        const left = startCell.offsetLeft;
+        const width = endCell.offsetLeft + endCell.offsetWidth - left;
+        return { key: `${stretch.start}-${stretch.end}`, left, width };
+      })
+      .filter((rect): rect is { key: string; left: number; width: number } => rect !== null);
+    setRuleRects(rects);
+  }, [stretches]);
+
+  useLayoutEffect(() => {
+    measureStretches();
+  }, [measureStretches, thumbnails, frames]);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => measureStretches());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measureStretches]);
 
   function seekIndex(index: number) {
     if (index < 0 || index >= frames.length) return;
@@ -194,54 +252,76 @@ export default function DetectionFrameStepper({
       </div>
 
       <div className="overflow-x-auto pb-1">
-        <div className="relative" style={{ width: `${trackWidth}px`, minWidth: "100%" }}>
-          {stretches.map((stretch) => {
-            const left = stretch.start * stepPx;
-            const width = Math.max(6, (stretch.end - stretch.start + 1) * stepPx - 2);
+        {/* pt-2 reserves the top strip for the flagged-run rule; the row is the
+            positioned ancestor the measured rule offsets are relative to. */}
+        <div ref={trackRef} className="relative flex w-max min-w-full items-start gap-0.5 pt-2">
+          {ruleRects.map((rect) => (
+            <div
+              key={rect.key}
+              aria-hidden="true"
+              data-testid="flagged-stretch"
+              className="absolute top-0 h-1 rounded-full bg-caution"
+              style={{ left: rect.left, width: rect.width }}
+            />
+          ))}
+
+          {frames.map((frame, index) => {
+            const active = index === currentIndex;
+            const thumbnail = thumbnails?.[index];
+            const mark = frameMarks?.[index];
+            const marker = mark ? MARK_TONE[mark] : null;
+            const markLabel = mark ? MARK_LABEL[mark] : null;
+            const label = markLabel
+              ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${markLabel}`
+              : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`;
             return (
-              <div
-                key={`${stretch.start}-${stretch.end}`}
-                aria-hidden="true"
-                data-testid="flagged-stretch"
-                className="absolute inset-y-1 rounded-md border border-caution-border bg-caution-surface/40"
-                style={{ left, width }}
-              />
+              <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
+                <button
+                  ref={(el) => {
+                    cellRefs.current[index] = el;
+                  }}
+                  type="button"
+                  title={label}
+                  aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[frame.status]})`}
+                  onClick={() => seekIndex(index)}
+                  style={{ height: CELL_HEIGHT }}
+                  className={cn(
+                    "block w-fit shrink-0 overflow-hidden rounded-sm bg-surface-alt p-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
+                    STATUS_BORDER[frame.status],
+                    active && "ring-2 ring-fg ring-offset-1 ring-offset-surface",
+                  )}
+                >
+                  {thumbnail ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumbnail}
+                      alt=""
+                      aria-hidden="true"
+                      onLoad={measureStretches}
+                      className="block h-full w-auto"
+                    />
+                  ) : (
+                    // Aspect-ratio placeholder (portrait ascent) so the strip has
+                    // structure before thumbnails decode.
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "block h-full w-auto aspect-9/16",
+                        STATUS_PLACEHOLDER[frame.status],
+                      )}
+                    />
+                  )}
+                </button>
+                {/* Fixed-height slot keeps cells aligned; coloured per review mark. */}
+                <span
+                  aria-hidden="true"
+                  data-testid={marker ? "frame-mark-marker" : undefined}
+                  data-mark={mark}
+                  className={cn("h-1 w-2 rounded-full", marker ?? "bg-transparent")}
+                />
+              </div>
             );
           })}
-
-          <div className="relative flex items-end gap-0.5 py-1">
-            {frames.map((frame, index) => {
-              const active = index === currentIndex;
-              const mark = frameMarks?.[index];
-              const marker = mark ? MARK_TONE[mark] : null;
-              const markLabel = mark ? MARK_LABEL[mark] : null;
-              const label = markLabel
-                ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${markLabel}`
-                : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`;
-              return (
-                <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
-                  <button
-                    type="button"
-                    title={label}
-                    aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[frame.status]})`}
-                    onClick={() => seekIndex(index)}
-                    className={cn(
-                      "h-8 w-2 rounded-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-                      STATUS_TONE[frame.status],
-                      active && "scale-y-125 ring-2 ring-fg ring-offset-1 ring-offset-surface",
-                    )}
-                  />
-                  {/* Fixed-height slot keeps bar bottoms aligned; coloured per review mark. */}
-                  <span
-                    aria-hidden="true"
-                    data-testid={marker ? "frame-mark-marker" : undefined}
-                    data-mark={mark}
-                    className={cn("h-1 w-2 rounded-full", marker ?? "bg-transparent")}
-                  />
-                </div>
-              );
-            })}
-          </div>
         </div>
       </div>
     </section>
