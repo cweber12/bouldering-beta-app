@@ -15,6 +15,22 @@ downloader (MediaPipe still defines the Detection Frame set); the human stays th
 truth authority. §Considered-Options #4's circularity premise is superseded —
 seeding from a different model breaks the self-reference on unverified frames.
 
+Amended by the calibration flag-only review change
+(`.scratch/calibration-flag-review/PRD.md`): authoring is inverted from *dragging
+every joint* to a *flag-only review* pass. Every **Detection Frame** arrives
+**auto-accepted** from the ViTPose seed (`review: "auto"`); the human's only input
+is a per-frame three-way flag (Auto / Wrong / Absent), and one **Accept & save
+Ground Truth** button persists the file. Landmark dragging, whole-skeleton
+translate, per-joint occlusion toggling, and the per-frame accept-as-is button are
+removed; the reviewer is read-only over the seed. `verified` is redefined as
+"nobody objected" (written `true` on every frame at save). ViTPose becomes a
+**hard requirement** — the MediaPipe seed fallback (ADR 0019 §Consequences) is
+removed, because auto-accepting a MediaPipe seed would grade MediaPipe against
+itself. `ground-truth.json` gains a required per-frame **`review`** and a top-level
+**`setupHash`**, both in the hash pre-image; condition labels move from
+`metadata.json` into `setup.json.analysisInputs`. §1, §4, §5, and the amended
+Considered-Options / Consequences notes below reflect the shipped model.
+
 ## Context
 
 ADR 0017 gave us a labelled corpus and a self-contained **Scan Diagnostics**
@@ -38,18 +54,31 @@ manual inputs, and the bundle is the corpus of record.
 
 ## Decision
 
-1. **Calibration authors per-video Ground Truth.** The calibration pass runs a
-   **throwaway detection scaffold** purely so the **User** has landmarks to drag
-   into place. Only per-video data persists — the scaffold run is discarded, and
-   calibration saves **no scored run**. The User corrects a **core body-joint
-   set** (~13: shoulders, elbows, wrists, hips, knees, ankles, a head anchor) via
-   drag + whole-skeleton translate + accept-as-is; the full 33 BlazePose points
-   are neither authored nor scored. Each **Detection Frame** carries a GT state —
-   **present** / **absent** / **skip** — with a per-joint **occluded** flag
-   (pre-seeded from MediaPipe visibility) and a **verified** / **unverified** flag
-   (verified once a human touches or accepts it). Authoring is sparse-by-effort:
-   every frame's landmarks are GT by default; the human touches only the wrong
-   ones.
+1. **Calibration authors per-video Ground Truth by flag-only review.** The
+   calibration pass seeds every **Detection Frame** from the ViTPose scaffold
+   (ADR 0019) **auto-accepted** — `review: "auto"`, state as seeded (present, or
+   absent when ViTPose tracked nothing). Only per-video data persists — the
+   scaffold run is discarded, and calibration saves **no scored run**. The
+   **User**'s only job is a fast review pass that *flags exceptions* via a
+   per-frame three-way control:
+   - **Auto** (unflagged) — keep the seed as-is.
+   - **Wrong** (`review: "human-flagged-wrong"`) — the seed skeleton is bad; the
+     frame stays `state: "present"` and keeps its seeded joints as known-bad (kept
+     as presence truth, excluded from joint metrics). Flagging a seeded-absent
+     frame Wrong flips it to present with empty joints.
+   - **Absent** (`review: "human-flagged-absent"`) — no Climber here; `state:
+     "absent"`, joints cleared.
+
+   One **Accept & save Ground Truth** button persists the whole file and stays on
+   the page for further flagging. The full 33 BlazePose points are neither authored
+   nor scored — the scaffold carries a **core body-joint set** (~13: shoulders,
+   elbows, wrists, hips, knees, ankles, a head anchor). Each frame keeps a
+   per-joint **occluded** flag (seeded from ViTPose confidence, display-only in the
+   read-only reviewer) and a **verified** flag redefined as "nobody objected" —
+   written `true` on every frame at save. Landmark dragging, whole-skeleton
+   translate, per-joint occlusion toggling, and the per-frame accept-as-is button
+   are gone. The legacy `skip` state stays parseable for old files, but the UI no
+   longer produces it.
 
 2. **Errors are derived, not tagged.** A scored run compares its pose to Ground
    Truth per scored frame (skip excluded) into **one per-frame verdict** carrying
@@ -82,24 +111,45 @@ manual inputs, and the bundle is the corpus of record.
      version it was measured against. The scoring pass skips any video without a
      `ground-truth.json`. `ScanDiagnostics` still rides along, GT-free.
 
-4. **Video metadata is edited in place.** The `analysis_inputs` block (the
-   video-level condition labels — `shadows`, `climber_contrast`, `wall_contrast`,
-   `motion_blur`, `occlusion`, `camera_stability`, `route_orientation`,
-   `camera_angle`, `notes`) is editable in calibration via a **field-level strict
-   merge** into the downloader-owned `metadata.json`: only the changed fields are
-   overwritten, every other key (including `route_folder` / `imported_from`,
-   which the downloader owns and is migrating to a separate file) is preserved
-   verbatim. This crosses ADR 0017's "downloader owns its bundle" line
-   deliberately — the corrections are the video's canonical labels and belong in
-   the canonical file. Amount fields use an `unknown/none/low/medium/high` scale;
-   the editor always keeps an existing off-scale value rather than dropping it.
+4. **Video condition labels live in the Scan Setup.** The condition labels
+   (`route_orientation`, `camera_angle`, `shadows`, `climber_contrast`,
+   `wall_contrast`, `motion_blur`, `occlusion`, `camera_stability`, `notes`) are
+   edited in calibration through the metadata modal, but persist to
+   **`setup.json.analysisInputs`** (snake_case inner keys, `"unknown"` for
+   undecided) via a **merging setup write**: a labels-only save preserves the
+   crops/point/panning/tier, and a crops-only save preserves the labels. This is
+   where the harness now reads them (its `LABEL_KEYS` mapping), so there is no
+   second read path. `setupHash` covers only the scan-affecting inputs (crops,
+   point, panning, tier) — never the labels — so a label edit never re-hashes the
+   Setup or orphans saved Ground Truth or prior runs. The old field-level merge
+   into the downloader-owned `metadata.json` is retired; `route_folder` stays
+   structural and harness-owned and is never written by this path. Amount fields
+   use an `unknown/none/low/medium/high` scale; the editor keeps an existing
+   off-scale value rather than dropping it.
 
-5. **Storage layout.** Calibration writes two beta-scanner-owned files into the
-   bundle — `setup.json` (detection inputs, unchanged from ADR 0017) and a new
-   sibling **`ground-truth.json`** (the eval reference: per-Detection-Frame state,
-   core-joint positions, occluded flags, verified flag) — plus the in-place
-   `analysis_inputs` edit. Ground Truth is kept separate from Setup because they
-   are different kinds of thing (reference vs input) with very different sizes.
+5. **Storage layout and provenance.** Calibration writes two beta-scanner-owned
+   files into the bundle — `setup.json` (detection inputs from ADR 0017, plus the
+   `analysisInputs` condition labels per §4) and the sibling **`ground-truth.json`**
+   (the eval reference: per-Detection-Frame state, core-joint positions, occluded
+   flags, verified flag). Ground Truth is kept separate from Setup because they are
+   different kinds of thing (reference vs input) with very different sizes.
+
+   `ground-truth.json` carries a required per-frame **`review`** (`"auto"` /
+   `"human-flagged-wrong"` / `"human-flagged-absent"`; the parser also accepts the
+   contract's `"human"`) and a required top-level **`setupHash`** copied from the
+   `vitpose.json` it was seeded from (legacy ViTPose artifacts without one fall back
+   to the hash returned by the setup save in the same flow). Both join the canonical
+   hash pre-image, so a flag edit produces a new `groundTruthHash` instead of
+   overwriting history. `GROUND_TRUTH_VERSION` stays 1 — the harness reads legacy
+   files without `review` as all-auto, so the shape change is back-compatible. The
+   server recomputes both hashes on write, requires `review`, and enforces
+   flagged-absent ⇒ `state: "absent"`.
+
+   **Staleness rule.** On re-calibration, prior human flags carry forward onto the
+   fresh seed only when the saved truth's `setupHash` matches the new one; joints
+   always come from the new seed. On mismatch — or legacy truth without a
+   `setupHash` — the review starts clean and the UI shows a "prior truth discarded
+   (setup changed)" notice.
 
 ## Considered options
 
@@ -111,30 +161,36 @@ manual inputs, and the bundle is the corpus of record.
    precision nothing scores on; the core body joints carry the signal.
 4. **Score during calibration for instant feedback** — rejected: scoring the
    scaffold-seeded run against Ground Truth derived from that same run is circular
-   and flatters the numbers. A live _edit_ readout (drag distance) is authoring
-   feedback, not a score.
-5. **Write metadata edits to a harness-owned override file** — rejected: keeps
-   `metadata.json` pristine but forks the source of truth, so the downloader's own
-   consumers never see the corrections. The intent is to correct the canonical
-   labels.
+   and flatters the numbers. This circularity is now also why ViTPose is a **hard
+   requirement** (§1, ADR 0019): an auto-accepted MediaPipe seed would grade
+   MediaPipe against itself.
+5. **Write condition labels to a downloader-owned file** — the labels now live in
+   `setup.json.analysisInputs`, a beta-scanner-owned file the harness reads
+   directly (§4), superseding the earlier plan of a field-level merge into the
+   downloader's `metadata.json`. The Setup is the canonical home for every manual
+   calibration input, so labels and crops travel together and the downloader's
+   bundle stays its own.
 
 ## Consequences
 
-- **Calibration is now the heavy step.** Authoring Ground Truth per video is real
-  work; the payoff is that every subsequent re-run is free and human-free. The
+- **Calibration is now a fast review, not heavy authoring.** With auto-accept
+  inversion the per-video cost collapses from dragging every joint to a
+  flag-exceptions pass, and every subsequent re-run stays free and human-free. The
   corpus is only as good as its Ground Truth, as it was only as good as its
   Setups under ADR 0017.
-- **Unverified frames are soft truth.** On frames the human never touched, Ground
-  Truth is just the scaffold's own detection, so a score there measures run-to-run
-  drift, not run-to-truth. The verified flag lets scoring weight or filter to true
-  reference; trend analysis should lead with verified coverage.
-- **Ground Truth can be re-edited, so scores carry `groundTruthHash`.** Re-editing
+- **Auto frames are soft truth.** On frames the human never flagged (`review:
+  "auto"`), Ground Truth is the ViTPose seed, so a score there measures divergence
+  from an independent model, not from human-attested truth. The `review` field
+  lets scoring split agreement-tier (auto) from accuracy-tier (human-flagged)
+  evidence; trend analysis should lead with human-reviewed coverage.
+- **Ground Truth can be re-flagged, so scores carry `groundTruthHash`.** Re-flagging
   GT does not silently invalidate old numbers — a score names the GT version it
-  used, and stale scores are detectable rather than misleading.
-- **beta-scanner now mutates `metadata.json`.** A re-download of a video would
-  clobber the human's `analysis_inputs` edits; acceptable because the downloader
-  writes the file once and only a deliberate re-download rewrites it, and the
-  whole path stays `NODE_ENV`-gated dev-only.
+  used (over content that now includes `review` + `setupHash`), and stale scores
+  are detectable rather than misleading.
+- **Condition labels live in `setup.json`, not `metadata.json`.** beta-scanner no
+  longer mutates the downloader-owned `metadata.json`; the labels persist to
+  `setup.json.analysisInputs` through the merging setup write, so a re-download can
+  never clobber them. The whole calibration path stays `NODE_ENV`-gated dev-only.
 - **The batch runner gains a Ground-Truth gate.** `harness:batch` now skips videos
   without `ground-truth.json` (not just without `setup.json`) and must load GT and
   score in the browser before posting.

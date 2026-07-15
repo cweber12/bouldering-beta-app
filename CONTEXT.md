@@ -287,18 +287,23 @@ _Avoid_: frame stats (too generic).
 **Ground Truth** (Landmarks):
 The per-video reference pose the detection-eval harness scores runs against: the
 correct **Climber** landmarks on each **Detection Frame**, authored once in the
-calibration pass by dragging the wrong landmarks of a throwaway detection scaffold
-into place (or marking a frame as having no Climber). The scaffold's landmarks are
-seeded from a **stronger reference model** (ViTPose++, run on the downloader — ADR
-0019), _not_ from the detector under test, so the human starts from a better guess
-and an untouched frame is not the detector grading itself. Frozen alongside the
-video's crops and metadata as calibration output; never re-entered. Each frame is
-**verified** (a human corrected or confirmed it) or **unverified** (left as the
-reference model's guess); scoring treats verified frames as true reference and
-unverified ones as a weaker signal. The scaffold that seeds it is discarded — only
-the Ground Truth persists, not a scored run.
+calibration pass by a **flag-only review** of an auto-accepted seed. Every
+Detection Frame starts **accepted** from a **stronger reference model** (ViTPose++,
+run on the downloader — ADR 0019, a hard requirement), _not_ from the detector
+under test; the human's only job is to _flag exceptions_ — **Wrong** (bad seed
+skeleton, kept as presence truth with its joints excluded from scoring) or
+**Absent** (no Climber here) — then press one **Accept & save** button. Landmark
+dragging and per-joint editing are gone. Each frame carries a `review` value:
+**auto** ("nobody objected", left as the seed) or **human-flagged-wrong** /
+**human-flagged-absent**; scoring splits auto (agreement-tier) from human-flagged
+(accuracy-tier) evidence. Paired to its **Scan Setup** by a stored `setupHash` —
+prior flags carry forward on re-calibration only when it matches, else the truth is
+discarded as stale. Frozen alongside the video's crops as calibration output; the
+scaffold that seeds it is discarded — only the Ground Truth persists, not a scored
+run.
 _Avoid_: ground-truth run (it is not a **Run** — it yields no scored result);
-labels (those are the video-level metadata, a different thing).
+labels (those are the video-level condition metadata, a different thing);
+dragging / editing landmarks (superseded — authoring is flag-only review).
 
 **Detection Error**:
 A per-run, per-**Detection Frame** discrepancy between a headless run's detected
@@ -330,14 +335,17 @@ The frozen set of manual scan inputs attached to a **Test Video** so its scan ca
 be replayed headlessly with no **User**: the **Climber Crop**, the **Wall Crop**,
 the Climber tap (`climberPoint`), the **Fixed**/**Panning Capture** flag, and the
 **Quality Tier**. Set once in a manual calibration pass — which now also authors
-the video's **Ground Truth** by correcting a throwaway detection scaffold (the
-Climber selection, `climberPoint` + **Climber Crop**, also drives the downloader's
-ViTPose++ scaffold pass — ADR 0019), and lets
-the User edit the video-level metadata (`analysis_inputs`) — and reused verbatim by
-every later headless re-run, so a quality change between runs is attributable to
-detection-logic changes, not setup drift. The scaffold run is discarded; calibration
-saves no scored run. Stored as `setup.json` in the Test Video's bundle, beside the
-`ground-truth.json` **Ground Truth**.
+the video's **Ground Truth** by a flag-only review of the auto-accepted ViTPose
+seed (the Climber selection, `climberPoint` + **Climber Crop**, also drives the
+downloader's ViTPose++ scaffold pass — ADR 0019), and lets the User edit the
+video-level condition labels — and reused verbatim by every later headless re-run,
+so a quality change between runs is attributable to detection-logic changes, not
+setup drift. The condition labels are stored inside the Setup itself, under
+`setup.json.analysisInputs` (snake_case keys) where the harness reads them; the
+`setupHash` covers only the scan-affecting inputs (crops, point, panning, tier), so
+editing a label never re-hashes the Setup or orphans saved Ground Truth. The
+scaffold run is discarded; calibration saves no scored run. Stored as `setup.json`
+in the Test Video's bundle, beside the `ground-truth.json` **Ground Truth**.
 _Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
 Setup), config, calibration, fixture.
 
