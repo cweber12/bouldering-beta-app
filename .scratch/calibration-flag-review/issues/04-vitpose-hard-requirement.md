@@ -19,10 +19,10 @@ Remove the MediaPipe Ground-Truth-seed fallback. Under auto-accept, a MediaPipe-
 
 ## Acceptance criteria
 
-- [ ] No code path seeds Ground Truth from MediaPipe poses.
-- [ ] On ViTPose failure, review mode is disabled with a message and a working retry; preview and diagnostics still work.
-- [ ] A successful retry enables review with a fresh ViTPose seed for the same frame grid.
-- [ ] Covered by tests at the scaffold-helper seam (gating) and reviewer/page-adjacent component seams as applicable.
+- [x] No code path seeds Ground Truth from MediaPipe poses.
+- [x] On ViTPose failure, review mode is disabled with a message and a working retry; preview and diagnostics still work.
+- [x] A successful retry enables review with a fresh ViTPose seed for the same frame grid.
+- [x] Covered by tests at the scaffold-helper seam (gating) and reviewer/page-adjacent component seams as applicable.
 
 ## Blocked by
 
