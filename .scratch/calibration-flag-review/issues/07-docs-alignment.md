@@ -1,6 +1,7 @@
 # Docs Alignment: ADR Amendments and Drift Audit
 
-Status: ready-for-agent
+Status: in-progress
+Branch: docs/cfr-07-docs-alignment
 Type: AFK
 
 ## Parent

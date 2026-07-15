@@ -11,6 +11,18 @@ supersedes ADR 0018 §Considered-Options #4's premise about circularity. The res
 of ADR 0018 — human-authored Ground Truth, per-Detection-Frame records, the
 headless scoring pass, `groundTruthHash` stamping — is unchanged.
 
+Amended by the calibration flag-only review change
+(`.scratch/calibration-flag-review/PRD.md`): the authoring interaction is now a
+flag-only review (Auto / Wrong / Absent) over an **auto-accepted** ViTPose seed,
+not landmark dragging — so ViTPose's role shifts from *seed that reduces dragging*
+to *the truth being attested*. Consequently the "**ViTPose is not a hard
+dependency**" consequence below is **reversed**: with auto-accept, an untouched
+frame *is* the seed, so a MediaPipe seed fallback would grade MediaPipe against
+itself. ViTPose becomes a **hard requirement** for Ground Truth authoring; on its
+failure the reviewer is disabled with a message + retry, while Detection Preview
+and diagnostics keep working. §2's "verified"/"unverified" wording is superseded
+by the `review` vocabulary — `verified` now means "nobody objected" (ADR 0018 §1).
+
 ## Context
 
 Under ADR 0018 the **User** authors per-video **Ground Truth** by dragging the
@@ -45,12 +57,15 @@ a stronger reference model.
    video-normalized. beta-scanner polls for that file, then seeds the draggable
    scaffold from it.
 
-2. **ViTPose is a scaffold, not the truth.** The human remains the truth
-   authority; `verified` still means a human corrected or confirmed the frame.
-   "Unverified" now means "left as a ViTPose guess" — a stronger soft-truth than
-   MediaPipe's, and crucially from a *different* model than the one under test, so
-   an unverified frame no longer measures MediaPipe grading itself. Ground Truth's
-   quality ceiling is the human's review, not ViTPose's accuracy on hard poses.
+2. **ViTPose is the truth the human attests, not just a scaffold.** The human
+   remains the truth authority, but reviews rather than authors: every frame starts
+   **auto-accepted** (`review: "auto"`) and the human *flags exceptions*. A frame
+   left unflagged is a ViTPose guess — a stronger soft-truth than MediaPipe's, and
+   crucially from a *different* model than the one under test, so it no longer
+   measures MediaPipe grading itself. `verified` is redefined as "nobody objected"
+   (ADR 0018 §1); the accuracy tier comes only from `human-flagged-*` frames.
+   Ground Truth's quality ceiling is the human's review, not ViTPose's accuracy on
+   hard poses.
 
 3. **MediaPipe still defines the Detection Frame set.** Calibration keeps running
    the MediaPipe pass to establish which frames are **Detection Frames** (base
@@ -108,15 +123,18 @@ a stronger reference model.
   already, and the payoff is far less manual dragging.
 - **Scaffold quality now depends on the tracker.** If the tracker follows a
   **Bystander**, the seed is wrong on those frames — caught by the human in the
-  stepper, since ViTPose is only a scaffold. A lost track just means more dragging.
-- **ViTPose is not a hard dependency.** If the ViTPose job fails or no downloader
-  is configured, calibration falls back to seeding the scaffold from the MediaPipe
-  pass, so Ground Truth authoring still works (with the weaker, self-referential
-  seed) while the downloader endpoint is being built. ViTPose only ever *improves*
-  the seed.
-- **Circularity is broken for unverified frames.** Unverified Ground Truth is a
+  stepper flagging them **Wrong**, since ViTPose is only a scaffold. A lost track
+  just means more frames to flag.
+- **ViTPose is a hard requirement for authoring** (reversed by the flag-only
+  review change). The earlier MediaPipe seed fallback is removed: under auto-accept
+  an untouched frame *is* the seed, so falling back to MediaPipe would let an
+  auto-accepted frame grade MediaPipe against itself. On ViTPose failure (job
+  error, timeout, no climber tracked, downloader absent) the review mode is
+  disabled with a message and a retry affordance, while Detection Preview and
+  diagnostics stay available so crop/tier calibration is never blocked.
+- **Circularity is broken for auto (unflagged) frames.** Auto Ground Truth is a
   ViTPose guess, so a scored MediaPipe run there measures divergence from an
   independent model rather than from itself — still soft, but no longer
-  self-referential.
+  self-referential; the hard requirement above is what keeps it that way.
 - **No change downstream.** Issue 03's GT schema, issue 08's scoring, the
   `groundTruthHash` stamp, and the prod / S3 pipeline are untouched.
