@@ -1,6 +1,7 @@
 # Uniform grid seeds calibration — MediaPipe scan removed
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/uniform-grid-calibration
 Type: AFK
 
 ## Parent

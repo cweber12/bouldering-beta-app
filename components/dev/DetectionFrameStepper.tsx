@@ -9,7 +9,13 @@ export type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
 export interface DetectionFrame {
   timestamp: number;
-  status: DetectionFrameStatus;
+  /**
+   * The detector's verdict for this frame, when a detection run produced one.
+   * Omitted on a bare Detection Frame grid (calibration reviews the ViTPose seed
+   * over the uniform grid, where no detector has run), which renders neutral
+   * cells and no flagged stretches.
+   */
+  status?: DetectionFrameStatus;
 }
 
 export interface DetectionFrameStepperProps {
@@ -66,27 +72,37 @@ interface Stretch {
  */
 const CELL_HEIGHT = 72;
 
+/** Lookup key for a frame with no detector verdict (a bare grid frame). */
+type StatusKey = DetectionFrameStatus | "none";
+
+function statusKey(frame: DetectionFrame): StatusKey {
+  return frame.status ?? "none";
+}
+
 /** Status-colored 2px border framing each thumbnail. */
-const STATUS_BORDER: Record<DetectionFrameStatus, string> = {
+const STATUS_BORDER: Record<StatusKey, string> = {
   detected: "border-2 border-send",
   weak: "border-2 border-caution",
   missing: "border-2 border-danger",
   flip: "border-2 border-dashed border-edge",
+  none: "border-2 border-edge",
 };
 
 /** Fill for a cell whose thumbnail has not been generated yet (graceful fallback). */
-const STATUS_PLACEHOLDER: Record<DetectionFrameStatus, string> = {
+const STATUS_PLACEHOLDER: Record<StatusKey, string> = {
   detected: "bg-send/40",
   weak: "bg-caution/40",
   missing: "bg-danger/40",
   flip: "bg-surface-alt",
+  none: "bg-surface-alt",
 };
 
-const STATUS_LABEL: Record<DetectionFrameStatus, string> = {
+const STATUS_LABEL: Record<StatusKey, string> = {
   detected: "detected",
   weak: "weak",
   missing: "missing",
   flip: "flip",
+  none: "not analyzed",
 };
 
 function formatTime(seconds: number): string {
@@ -271,9 +287,10 @@ export default function DetectionFrameStepper({
             const mark = frameMarks?.[index];
             const marker = mark ? MARK_TONE[mark] : null;
             const markLabel = mark ? MARK_LABEL[mark] : null;
+            const key = statusKey(frame);
             const label = markLabel
-              ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]} · ${markLabel}`
-              : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[frame.status]}`;
+              ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]} · ${markLabel}`
+              : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]}`;
             return (
               <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
                 <button
@@ -282,12 +299,12 @@ export default function DetectionFrameStepper({
                   }}
                   type="button"
                   title={label}
-                  aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[frame.status]})`}
+                  aria-label={`Seek to ${formatTime(frame.timestamp)} (${STATUS_LABEL[key]})`}
                   onClick={() => seekIndex(index)}
                   style={{ height: CELL_HEIGHT }}
                   className={cn(
                     "block w-fit shrink-0 overflow-hidden rounded-sm bg-surface-alt p-0 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70",
-                    STATUS_BORDER[frame.status],
+                    STATUS_BORDER[key],
                     active && "ring-2 ring-fg ring-offset-1 ring-offset-surface",
                   )}
                 >
@@ -307,7 +324,7 @@ export default function DetectionFrameStepper({
                       aria-hidden="true"
                       className={cn(
                         "block h-full w-auto aspect-9/16",
-                        STATUS_PLACEHOLDER[frame.status],
+                        STATUS_PLACEHOLDER[key],
                       )}
                     />
                   )}
