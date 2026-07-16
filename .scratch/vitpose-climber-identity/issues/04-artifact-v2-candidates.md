@@ -3,6 +3,13 @@
 Status: needs-triage
 Gated on: issue 03 outcome (Phase B)
 
+> Sequencing note (2026-07-16): if activated, land after
+> `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md` —
+> Phase B touches the same scaffold/carry-forward logic that issue re-keys from
+> setupHash to timestamps. Writing against the old semantics would need rework.
+> Side benefit: video-keyed GT makes re-calibration rare, shrinking the accepted
+> "swaps don't survive re-calibration" loss.
+
 ## Context
 
 To make a wrong selection recoverable without re-running the job, the artifact

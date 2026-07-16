@@ -3,6 +3,10 @@
 Status: needs-triage
 Gated on: issue 03 outcome (Phase B); depends on issue 05
 
+> Sequencing note (2026-07-16): if activated, land after
+> `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
+> (see the note on issue 04 — shared carry-forward semantics).
+
 ## Context
 
 Mid-clip hijacks span dozens of Detection Frames; per-frame clicking doesn't

@@ -3,6 +3,10 @@
 Status: needs-triage
 Gated on: issue 03 outcome (Phase B); depends on issue 04
 
+> Sequencing note (2026-07-16): if activated, land after
+> `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
+> (see the note on issue 04 — shared carry-forward semantics).
+
 ## Context
 
 First tracer slice of the swap UI: per-frame swap only (propagation is issue 06).

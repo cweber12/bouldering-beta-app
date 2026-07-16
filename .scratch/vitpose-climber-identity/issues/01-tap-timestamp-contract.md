@@ -1,6 +1,7 @@
 # 01 — Carry the tap timestamp through Scan Setup and the ViTPose request
 
-Status: ready-for-agent
+Status: done
+Merged: defe7ed
 
 ## Context
 
@@ -32,3 +33,11 @@ searches the whole clip (PRD problem 1).
   when `t` is added; parser accepts `{x,y}`, `{x,y,t}`, rejects non-finite `t`.
 - Calibrating in `/dev/harness` after a tap saves `setup.json` with
   `climberPoint.t` and the ViTPose POST body carries it.
+
+## Comments
+
+Closed retroactively (2026-07-16): the scope landed as direct commits on main
+without a branch or status update — `defe7ed` (tap timestamp through setup and
+ViTPose contract, including the conditional canonical-hash inclusion) and
+`29ddca9` (seed warnings + legacy-tap flag in the harness). Verified against
+`utils/harnessSetup.ts` before closing.
