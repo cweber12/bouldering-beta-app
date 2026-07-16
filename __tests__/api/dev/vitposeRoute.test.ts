@@ -24,7 +24,7 @@ const validScaffold = {
 
 const validRequest = {
   videoPath: "analysis/route-x/vid_1/vid_1.mp4",
-  climberPoint: { x: 0.5, y: 0.4 },
+  climberPoint: { x: 0.5, y: 0.4, t: 2.33 },
   climberCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   wallCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   panning: false,

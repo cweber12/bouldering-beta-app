@@ -50,6 +50,24 @@ describe("hashSetupInput", () => {
     expect(a).not.toBe(c);
     expect(a).toMatch(/^[0-9a-f]{64}$/);
   });
+
+  it("keeps the hash unchanged when climberPoint has no t", async () => {
+    const withoutT = await hashSetupInput(base);
+    const withUndefinedT = await hashSetupInput({
+      ...base,
+      climberPoint: { x: 0.5, y: 0.42, t: undefined },
+    });
+    expect(withoutT).toBe(withUndefinedT);
+  });
+
+  it("changes the hash when climberPoint.t is added", async () => {
+    const withoutT = await hashSetupInput(base);
+    const withT = await hashSetupInput({
+      ...base,
+      climberPoint: { x: 0.5, y: 0.42, t: 2.33 },
+    });
+    expect(withoutT).not.toBe(withT);
+  });
 });
 
 describe("parseScanSetupInput", () => {
@@ -58,6 +76,15 @@ describe("parseScanSetupInput", () => {
     void _omit;
     expect(parseScanSetupInput(noTap)).toEqual({ ...noTap, climberPoint: null });
     expect(parseScanSetupInput(base)).toEqual(base);
+    expect(
+      parseScanSetupInput({
+        ...base,
+        climberPoint: { x: 0.5, y: 0.42, t: 2.33 },
+      }),
+    ).toEqual({
+      ...base,
+      climberPoint: { x: 0.5, y: 0.42, t: 2.33 },
+    });
   });
 
   it("rejects malformed bodies", () => {
@@ -66,6 +93,8 @@ describe("parseScanSetupInput", () => {
     expect(parseScanSetupInput({ ...base, panning: "no" })).toBeNull();
     expect(parseScanSetupInput({ ...base, qualityTier: "" })).toBeNull();
     expect(parseScanSetupInput({ ...base, climberPoint: { x: "a", y: 1 } })).toBeNull();
+    expect(parseScanSetupInput({ ...base, climberPoint: { x: 0.5, y: 0.42, t: Infinity } })).toBeNull();
+    expect(parseScanSetupInput({ ...base, climberPoint: { x: 0.5, y: 0.42, t: -1 } })).toBeNull();
     expect(parseScanSetupInput({ ...base, climberCrop: { x: 0, y: 0, w: NaN, h: 1 } })).toBeNull();
   });
 });

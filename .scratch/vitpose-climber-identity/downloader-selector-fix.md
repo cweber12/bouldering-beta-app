@@ -15,8 +15,9 @@ beta-scanner side (tap timestamp plumbing) is issue 01 in
 "climber_point": { "x": 0.5, "y": 0.4, "t": 2.33 } | { "x": 0.5, "y": 0.4 } | null
 ```
 
-`t` is seconds, the video time of the frame the user tapped on. Legacy requests
-(and setups saved before the change) omit it.
+`t` is optional, finite, and `>= 0` (seconds in source-video time) for the
+frame the user tapped on. Legacy requests (and setups saved before the change)
+omit it.
 
 ## Changes (all in `vitpose_job.py`, unit-test via the existing stub seams)
 

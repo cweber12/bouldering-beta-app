@@ -261,8 +261,8 @@ export interface StepSetDetectionProps {
   onClimberCropChange?: (c: CropFraction) => void;
   onWallCropChange?: (c: CropFraction) => void;
   /** Normalised point [0,1] the user tapped to identify the climber, if any. */
-  climberPoint?: { x: number; y: number } | null;
-  onClimberPointChange?: (p: { x: number; y: number } | null) => void;
+  climberPoint?: { x: number; y: number; t?: number } | null;
+  onClimberPointChange?: (p: { x: number; y: number; t?: number } | null) => void;
   /**
    * Landmark-derive the Climber crop from the tapped frame. Given the displayed
    * frame, the tap point, and the frame's video time, it sets the Climber crop
@@ -361,8 +361,13 @@ export default function StepSetDetection({
   function handleClimberTap(p: { x: number; y: number }) {
     setScanNudged(false);
     setHintMinimized(false);
-    onClimberPointChange?.(p);
     const video = videoFullscreen ? fullscreenVideoRef.current : cropVideoRef.current;
+    const tappedTime = video?.currentTime;
+    const pointWithTime =
+      typeof tappedTime === "number" && Number.isFinite(tappedTime) && tappedTime >= 0
+        ? { ...p, t: tappedTime }
+        : p;
+    onClimberPointChange?.(pointWithTime);
     const frame = captureFrame(video);
     if (frame && onClimberTapDetect) {
       const found = onClimberTapDetect(frame, p, video?.currentTime ?? 0);

@@ -18,6 +18,13 @@ export const SETUP_VERSION = 1;
 /** Snake-case condition labels the harness reads from `setup.json.analysisInputs`. */
 export type AnalysisInputs = Record<string, string>;
 
+/** Tap point that may include the tapped frame's video time in seconds. */
+export interface ClimberPoint {
+  x: number;
+  y: number;
+  t?: number;
+}
+
 /** The manual scan inputs a User would supply interactively, frozen for replay. */
 export interface ScanSetupInput {
   /** Seed box for the Climber (MediaPipe acquisition + lighting region). */
@@ -25,7 +32,7 @@ export interface ScanSetupInput {
   /** ORB wall region. */
   wallCrop: CropFraction;
   /** Tap that disambiguates which person is the Climber, or null. */
-  climberPoint: { x: number; y: number } | null;
+  climberPoint: ClimberPoint | null;
   /** Fixed (false) vs Panning Capture (true). */
   panning: boolean;
   /** Quality Tier id (pinned per Setup so re-runs stay comparable). */
@@ -61,13 +68,19 @@ function canonCrop(c: CropFraction) {
  * numbers) — the pre-image for {@link hashSetupInput}.
  */
 export function canonicalSetupInput(input: ScanSetupInput): string {
+  const canonicalPoint = input.climberPoint
+    ? {
+        x: round6(input.climberPoint.x),
+        y: round6(input.climberPoint.y),
+        ...(input.climberPoint.t !== undefined ? { t: round6(input.climberPoint.t) } : {}),
+      }
+    : null;
+
   return JSON.stringify({
     v: SETUP_VERSION,
     climberCrop: canonCrop(input.climberCrop),
     wallCrop: canonCrop(input.wallCrop),
-    climberPoint: input.climberPoint
-      ? { x: round6(input.climberPoint.x), y: round6(input.climberPoint.y) }
-      : null,
+    climberPoint: canonicalPoint,
     panning: !!input.panning,
     qualityTier: input.qualityTier,
   });
@@ -94,9 +107,12 @@ function isCrop(v: unknown): v is CropFraction {
   );
 }
 
-function isPoint(v: unknown): v is { x: number; y: number } {
+function isPoint(v: unknown): v is ClimberPoint {
   if (typeof v !== "object" || v === null) return false;
   const p = v as Record<string, unknown>;
+  if (p.t !== undefined && (typeof p.t !== "number" || !Number.isFinite(p.t) || p.t < 0)) {
+    return false;
+  }
   return (
     typeof p.x === "number" &&
     typeof p.y === "number" &&

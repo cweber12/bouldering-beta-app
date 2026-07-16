@@ -246,7 +246,9 @@ function ScanPageInner() {
   // clobber their framing with the auto climber-expanded region.
   const wallTouchedRef = useRef(false);
   // Normalised point the user tapped to identify the climber (seeds tracking).
-  const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
+  const [climberPoint, setClimberPoint] = useState<
+    { x: number; y: number; t?: number } | null
+  >(null);
   // Panning Capture (long route): align per keyframe instead of a single frame-0
   // homography. Opt-in at scan setup; does not replace Fixed Capture.
   const [panning, setPanning] = useState(false);
@@ -596,10 +598,13 @@ function ScanPageInner() {
   }, []);
 
   // Re-tap (point → null) clears the auto-wall lock so the next tap re-derives it.
-  const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
+  const handleClimberPointChange = useCallback(
+    (p: { x: number; y: number; t?: number } | null) => {
     if (p === null) wallTouchedRef.current = false;
     setClimberPoint(p);
-  }, []);
+    },
+    [],
+  );
 
   function handleScan(startTime: number) {
     if (!pendingFile || !model || !cv) return;

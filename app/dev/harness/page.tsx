@@ -322,7 +322,9 @@ function Calibrator({
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
-  const [climberPoint, setClimberPoint] = useState<{ x: number; y: number } | null>(null);
+  const [climberPoint, setClimberPoint] = useState<
+    { x: number; y: number; t?: number } | null
+  >(null);
   const [panning, setPanning] = useState(false);
   const wallTouchedRef = useRef(false);
 
@@ -534,10 +536,13 @@ function Calibrator({
     [model],
   );
 
-  const handleClimberPointChange = useCallback((p: { x: number; y: number } | null) => {
+  const handleClimberPointChange = useCallback(
+    (p: { x: number; y: number; t?: number } | null) => {
     if (p === null) wallTouchedRef.current = false;
     setClimberPoint(p);
-  }, []);
+    },
+    [],
+  );
 
   const handleWallCropChange = useCallback((c: CropFraction) => {
     wallTouchedRef.current = true;

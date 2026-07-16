@@ -64,7 +64,7 @@ export interface ViTPoseRequest {
   /** External-API relative path to the Test Video (from `relativeVideoPath`). */
   videoPath: string;
   /** Tap that seeds Climber Identity, video-normalized; may be absent. */
-  climberPoint?: { x: number; y: number };
+  climberPoint?: { x: number; y: number; t?: number };
   /** Climber Crop — the first-acquisition search region. */
   climberCrop: CropFraction;
   /** Wall Crop — carried for parity with Scan Setup, unused by pose. */
