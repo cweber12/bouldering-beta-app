@@ -1,7 +1,8 @@
 # Video-keyed Ground Truth — setup edits never touch accepted truth
 
-Status: in-progress
+Status: done
 Branch: feat/video-keyed-ground-truth
+Merged: 0f2a9e1
 Type: AFK
 
 ## Parent
