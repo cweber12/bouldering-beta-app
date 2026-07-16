@@ -89,6 +89,21 @@ describe("canonicalGroundTruthInput", () => {
   it("folds the setupHash into the pre-image", () => {
     expect(canonicalGroundTruthInput(base)).toContain("abc123");
   });
+
+  // Ground Truth is video-keyed as *semantics*: `setupHash` demoted to seed
+  // provenance, staleness-discard gone, carry-forward re-keyed to timestamps —
+  // none of which may touch a stored byte. Pin the exact pre-image so any change
+  // to the shape (which would silently re-hash the whole corpus and stale every
+  // score) has to be a deliberate edit here.
+  it("pins the exact canonical pre-image — the schema is frozen", () => {
+    expect(canonicalGroundTruthInput(base)).toBe(
+      `{"v":1,"jointSet":${JSON.stringify(CORE_JOINT_NAMES)},"setupHash":"abc123","frames":[` +
+        `{"i":0,"t":0,"s":"present","r":"auto","v":true,"j":[` +
+        `{"n":"left_shoulder","x":0.4,"y":0.3,"o":false},` +
+        `{"n":"right_shoulder","x":0.6,"y":0.3,"o":true}]},` +
+        `{"i":5,"t":0.5,"s":"absent","r":"human-flagged-absent","v":true,"j":[]}]}`,
+    );
+  });
 });
 
 describe("hashGroundTruthInput", () => {
@@ -324,5 +339,11 @@ describe("GROUND_TRUTH_VERSION", () => {
   it("is a positive integer", () => {
     expect(Number.isInteger(GROUND_TRUTH_VERSION)).toBe(true);
     expect(GROUND_TRUTH_VERSION).toBeGreaterThan(0);
+  });
+
+  // Video-keying changed no shape, so no stored file is rewritten and no
+  // migration runs. Bumping this is what would break that promise.
+  it("is still 1 — video-keying needed no migration", () => {
+    expect(GROUND_TRUTH_VERSION).toBe(1);
   });
 });

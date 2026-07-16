@@ -1,6 +1,7 @@
 # Video-keyed Ground Truth — setup edits never touch accepted truth
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/video-keyed-ground-truth
 Type: AFK
 
 ## Parent
@@ -13,12 +14,12 @@ Accepted Ground Truth becomes keyed to the Test Video, not the Scan Setup. The s
 
 ## Acceptance criteria
 
-- [ ] Editing the Scan Setup on a video with accepted Ground Truth triggers no ViTPose request and leaves the truth file untouched.
-- [ ] Carry-forward is timestamp-keyed: flags survive setup changes and grid densification; no discard path remains in the scaffold util.
-- [ ] An explicit re-seed action re-runs ViTPose on the uniform grid and carries prior flags forward by timestamp.
-- [ ] Schema tests pin that hash pre-image, `setupHash` field, and `GROUND_TRUTH_VERSION` are unchanged — video-keying is semantics only.
-- [ ] Legacy sparse-grid truth files load and carry forward without migration.
-- [ ] Type-check, lint, and targeted tests pass.
+- [x] Editing the Scan Setup on a video with accepted Ground Truth triggers no ViTPose request and leaves the truth file untouched.
+- [x] Carry-forward is timestamp-keyed: flags survive setup changes and grid densification; no discard path remains in the scaffold util.
+- [x] An explicit re-seed action re-runs ViTPose on the uniform grid and carries prior flags forward by timestamp.
+- [x] Schema tests pin that hash pre-image, `setupHash` field, and `GROUND_TRUTH_VERSION` are unchanged — video-keying is semantics only.
+- [x] Legacy sparse-grid truth files load and carry forward without migration.
+- [x] Type-check, lint, and targeted tests pass.
 
 ## Blocked by
 

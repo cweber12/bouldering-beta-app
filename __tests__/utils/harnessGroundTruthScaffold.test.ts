@@ -6,7 +6,7 @@ import {
   buildGroundTruthScaffold,
   applyReviewFlag,
   reviewToFlag,
-  priorTruthIsStale,
+  hasAcceptedGroundTruth,
   countSeedCoverage,
   frameReviewMark,
   seedGateDecision,
@@ -106,7 +106,7 @@ describe("buildGroundTruthScaffold", () => {
     expect(gt.frames[0].joints).toEqual({});
   });
 
-  it("carries prior human flags onto the fresh seed when the setupHash matches", () => {
+  it("carries prior human flags onto the fresh seed by timestamp", () => {
     const existing: GroundTruthInput = {
       setupHash: "setup-1",
       frames: [
@@ -144,7 +144,7 @@ describe("buildGroundTruthScaffold", () => {
     expect(gt.frames[2]).toMatchObject({ review: "auto", state: "present" });
   });
 
-  it("discards prior truth and starts clean when the setupHash changed", () => {
+  it("carries flags across a Scan Setup change — truth is video-keyed, not setup-keyed", () => {
     const existing: GroundTruthInput = {
       setupHash: "setup-OLD",
       frames: [
@@ -159,9 +159,61 @@ describe("buildGroundTruthScaffold", () => {
       ],
     };
     const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-NEW", existing);
-    // Prior flag dropped — frame 0 re-seeds as auto/present from the new seed.
-    expect(gt.frames[0]).toMatchObject({ review: "auto", state: "present" });
+    // The setup changed, but a crop edit cannot invalidate full-frame truth.
+    expect(gt.frames[0]).toMatchObject({ review: "human-flagged-absent", state: "absent" });
+    // setupHash rides along as seed provenance only.
     expect(gt.setupHash).toBe("setup-NEW");
+  });
+
+  it("carries flags from legacy hash-less truth", () => {
+    const existing: GroundTruthInput = {
+      setupHash: "",
+      frames: [
+        {
+          frameIndex: 0,
+          timestamp: 0.0,
+          state: "present",
+          review: "human-flagged-wrong",
+          verified: true,
+          joints: {},
+        },
+      ],
+    };
+    const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-1", existing);
+    expect(gt.frames[0].review).toBe("human-flagged-wrong");
+  });
+
+  it("densifies a sparse legacy grid, matching flags by timestamp not frame index", () => {
+    // Legacy truth on a 500 ms grid: index 1 is t=0.5. The fresh 100 ms grid puts
+    // t=0.5 at index 5, so index-keyed carry-forward would land the flag on t=0.1.
+    const existing: GroundTruthInput = {
+      setupHash: "setup-1",
+      frames: [
+        {
+          frameIndex: 0,
+          timestamp: 0.0,
+          state: "present",
+          review: "auto",
+          verified: true,
+          joints: {},
+        },
+        {
+          frameIndex: 1,
+          timestamp: 0.5,
+          state: "absent",
+          review: "human-flagged-absent",
+          verified: true,
+          joints: {},
+        },
+      ],
+    };
+    const dense = Array.from({ length: 11 }, (_, i) => ({ timestamp: i * 0.1 }));
+    const gt = buildGroundTruthScaffold(dense, poseFrames, "setup-1", existing);
+
+    expect(gt.frames).toHaveLength(11);
+    expect(gt.frames[5]).toMatchObject({ timestamp: 0.5, review: "human-flagged-absent" });
+    // Frames the sparse grid never held arrive auto-accepted.
+    expect(gt.frames[1]).toMatchObject({ timestamp: 0.1, review: "auto" });
   });
 });
 
@@ -218,7 +270,7 @@ describe("applyReviewFlag", () => {
   });
 });
 
-describe("priorTruthIsStale", () => {
+describe("hasAcceptedGroundTruth", () => {
   const frame: GroundTruthFrame = {
     frameIndex: 0,
     timestamp: 0,
@@ -228,22 +280,15 @@ describe("priorTruthIsStale", () => {
     joints: {},
   };
 
-  it("is not stale on a clean first authoring (no prior frames)", () => {
-    expect(priorTruthIsStale(null, "setup-1")).toBe(false);
-    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [] }, "setup-1")).toBe(false);
+  it("is false with no truth at all, or truth holding no frames", () => {
+    expect(hasAcceptedGroundTruth(null)).toBe(false);
+    expect(hasAcceptedGroundTruth({ setupHash: "setup-1", frames: [] })).toBe(false);
   });
 
-  it("is not stale when the prior setupHash matches", () => {
-    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [frame] }, "setup-1")).toBe(false);
-  });
-
-  it("is stale on a setupHash mismatch", () => {
-    expect(priorTruthIsStale({ setupHash: "setup-OLD", frames: [frame] }, "setup-NEW")).toBe(true);
-  });
-
-  it("is stale when either hash is empty (legacy hash-less truth)", () => {
-    expect(priorTruthIsStale({ setupHash: "", frames: [frame] }, "setup-1")).toBe(true);
-    expect(priorTruthIsStale({ setupHash: "setup-1", frames: [frame] }, "")).toBe(true);
+  it("is true for saved truth holding frames, whatever setup seeded it", () => {
+    expect(hasAcceptedGroundTruth({ setupHash: "setup-OLD", frames: [frame] })).toBe(true);
+    // Legacy hash-less truth counts too — accepted truth is keyed to the video.
+    expect(hasAcceptedGroundTruth({ setupHash: "", frames: [frame] })).toBe(true);
   });
 });
 

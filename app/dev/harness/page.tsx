@@ -8,9 +8,12 @@
  * panning, Quality Tier — by reusing the production StepSetDetection UI.
  * Confirming saves setup.json and immediately requests the downloader's ViTPose
  * job over the uniform Detection Frame grid, then opens the flag-only Ground
- * Truth review on the seed once it lands. Calibration runs no detection at all:
- * it authors truth, and nothing else. Detection output lives in the separate
- * Analyze step. "Save setup only" persists the Setup without seeding.
+ * Truth review on the seed once it lands. Ground Truth is video-keyed: once it
+ * is accepted, confirming an edited Setup only saves it — the seed and the review
+ * are skipped, and "Re-seed Ground Truth" is the explicit way back in.
+ * Calibration runs no detection at all: it authors truth, and nothing else.
+ * Detection output lives in the separate Analyze step. "Save setup only"
+ * persists the Setup without seeding.
  * Rendered only in development. See docs/adr/0017, 0018 and 0019.
  */
 
@@ -29,7 +32,7 @@ import {
   contextKeypointsAt,
   countSeedCoverage,
   frameReviewMark,
-  priorTruthIsStale,
+  hasAcceptedGroundTruth,
   seedGateDecision,
   type FrameReviewMark,
 } from "@/utils/harnessGroundTruthScaffold";
@@ -279,16 +282,17 @@ function Calibrator({
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
   // Ground Truth review: the pure scaffold seed, the working flag review, and
-  // any previously-saved GT preserved across a re-seed.
+  // any previously-saved GT carried onto a re-seed by timestamp. The ref is what
+  // seeding reads (so saving truth never re-triggers the seed effect); the flag
+  // mirrors it for render — accepted truth is what makes setup edits skip the
+  // seed entirely.
   const existingGtRef = useRef<GroundTruthInput | null>(null);
+  const [truthAccepted, setTruthAccepted] = useState(false);
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
   const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
   const [currentSetupHash, setCurrentSetupHash] = useState("");
-  // True when prior saved truth was dropped rather than carried onto the fresh
-  // seed because the Scan Setup changed (or the prior truth predated hashes).
-  const [gtPriorDiscarded, setGtPriorDiscarded] = useState(false);
 
   // ViTPose scaffold (ADR 0019): the downloader runs a stronger reference model
   // that seeds the Ground Truth landmarks. Kicked off the moment the Setup is
@@ -391,9 +395,13 @@ function Calibrator({
         // Any previously-authored Ground Truth is carried onto the next seed.
         try {
           const gt = await loadGroundTruth(item.key);
-          if (!revoked) existingGtRef.current = gt;
+          if (revoked) return;
+          existingGtRef.current = gt;
+          setTruthAccepted(hasAcceptedGroundTruth(gt));
         } catch {
-          if (!revoked) existingGtRef.current = null;
+          if (revoked) return;
+          existingGtRef.current = null;
+          setTruthAccepted(false);
         }
       } catch (err) {
         if (!revoked) setLoadError(err instanceof Error ? err.message : String(err));
@@ -486,11 +494,11 @@ function Calibrator({
     [item.key, item.videoPath, climberPoint, climberCrop, wallCrop, panning],
   );
 
-  // Confirm: save the Scan Setup, then immediately ask the downloader to pose the
-  // Detection Frame grid. The review opens straight away and shows the seed's
-  // progress; no detection runs here at all (ADR 0018). The downloader echoes the
-  // grid's timestamps, so the seed aligns frame-for-frame (ADR 0019).
-  async function handleConfirmAndSeed() {
+  // Save the Scan Setup, then ask the downloader to pose the Detection Frame
+  // grid. The review opens straight away and shows the seed's progress; no
+  // detection runs here at all (ADR 0018). The downloader echoes the grid's
+  // timestamps, so the seed aligns frame-for-frame (ADR 0019).
+  const saveAndSeed = useCallback(async () => {
     if (gridFrames.length === 0) return;
     setPhase("saving");
     setPhaseError(null);
@@ -504,6 +512,15 @@ function Calibrator({
     setGtFrameIndex(0);
     setPhase("review");
     requestViTPoseForGrid(gridFrames);
+  }, [gridFrames, saveSetup, requestViTPoseForGrid]);
+
+  // Confirm: Ground Truth is video-keyed, so on a video that already has accepted
+  // truth this only saves the edited Scan Setup — no ViTPose job, no review, and
+  // the truth file is left untouched (re-seeding is an explicit act). Without
+  // truth yet, confirming is what seeds it.
+  async function handleConfirm() {
+    if (truthAccepted) return handleSaveOnly();
+    await saveAndSeed();
   }
 
   // Poll the bundle for the ViTPose artifact once the job has been accepted, and
@@ -580,7 +597,6 @@ function Calibrator({
     );
     setGtSeed(pureScaffold);
     setGtInput(working);
-    setGtPriorDiscarded(priorTruthIsStale(existingGtRef.current, seedHash));
     setGtSave(null);
   }, [phase, vitposeStatus, seedPoseFrames, gridFrames, currentSetupHash, vitpose]);
 
@@ -632,8 +648,8 @@ function Calibrator({
       const saved = await saveGroundTruth(item.key, input);
       const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
       existingGtRef.current = savedInput;
+      setTruthAccepted(hasAcceptedGroundTruth(savedInput));
       setGtInput(savedInput);
-      setGtPriorDiscarded(false);
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
       setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
@@ -749,15 +765,6 @@ function Calibrator({
               className="shrink-0"
             />
           )}
-          {gtPriorDiscarded && reviewing && (
-            <div
-              role="status"
-              className="shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
-            >
-              Prior Ground Truth discarded (setup changed) — this review starts from a fresh
-              seed.
-            </div>
-          )}
           {vitposeWarnings.length > 0 && (
             <div
               role="status"
@@ -855,6 +862,17 @@ function Calibrator({
           >
             Save setup only
           </button>
+          {truthAccepted && (
+            <button
+              type="button"
+              onClick={() => void saveAndSeed()}
+              disabled={busy || gridFrames.length === 0}
+              className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
+              title="Re-run ViTPose over the Detection Frame grid, carrying your flags forward by timestamp"
+            >
+              Re-seed Ground Truth
+            </button>
+          )}
         </div>
       </div>
 
@@ -872,6 +890,16 @@ function Calibrator({
         />
       </Modal>
 
+      {truthAccepted && (
+        <div
+          role="status"
+          className="mx-4 mt-2 shrink-0 rounded-md border border-edge/30 bg-surface-alt px-3 py-2 text-xs text-fg-muted"
+        >
+          This video has accepted Ground Truth, which is keyed to the video — not to this
+          Setup. Confirming saves the Setup only: no ViTPose job runs and the truth is left
+          untouched. Use Re-seed Ground Truth to re-run the seed, carrying your flags forward.
+        </div>
+      )}
       {legacyTapNoTimestamp && (
         <div
           role="status"
@@ -900,7 +928,7 @@ function Calibrator({
           panning={panning}
           onPanningChange={setPanning}
           canScan={gridFrames.length > 0 && !busy}
-          onScan={() => void handleConfirmAndSeed()}
+          onScan={() => void handleConfirm()}
           onBack={onBack}
         />
       </div>
