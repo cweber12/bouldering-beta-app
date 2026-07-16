@@ -24,6 +24,16 @@ export const OCCLUSION_SEED_SCORE = 0.5;
 /** Two frame timestamps within this many seconds are treated as the same frame. */
 const TIMESTAMP_EPSILON = 1e-3;
 
+/**
+ * The identity a frame's timestamp carries for matching: milliseconds, rounded.
+ * Every Detection Frame timestamp is a 100 ms multiple by construction (the
+ * uniform grid), so this collapses float noise without ever merging two grid
+ * frames — the 1 ms resolution of {@link TIMESTAMP_EPSILON}, as an exact key.
+ */
+function timestampKey(timestamp: number): number {
+  return Math.round(timestamp / TIMESTAMP_EPSILON);
+}
+
 /** Clamp to the normalised [0, 1] range a joint position must stay within. */
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
@@ -86,17 +96,20 @@ export function contextKeypointsAt(
  * `review: "auto"` (nobody has objected yet) and `verified: false`; the human's
  * job is only to flag exceptions.
  *
- * Carry-forward is keyed on `setupHash`: when prior `existing` truth was seeded
- * from the same Scan Setup, its human *flags* (Wrong / Absent) re-apply onto the
- * fresh seed — joints always come from the new seed, never the old file. When the
- * setup changed, or the prior truth predates hashes, nothing carries and the
- * caller can detect the discard via {@link priorTruthIsStale}. `"auto"` frames
- * carry nothing (the fresh seed already is auto).
+ * Carry-forward is keyed on **timestamp**: Ground Truth is video-keyed, so a
+ * prior frame's human *flags* (Wrong / Absent) re-apply onto whichever fresh
+ * grid frame shares its timestamp, regardless of what the Scan Setup has done
+ * since — crops, tap, tier and panning cannot geometrically invalidate truth
+ * whose landmarks are full-frame normalised. Grid frames the prior truth never
+ * held (a sparse legacy grid densifying onto the 100 ms grid) arrive
+ * auto-accepted, and there is no discard path. Joints always come from the new
+ * seed, never the old file; `"auto"` frames carry nothing (the fresh seed
+ * already is auto).
  *
  * `detectionFrames` supplies the frame grid + timestamps (the uniform 100 ms
  * grid from `buildDetectionGrid`); `poseFrames` supplies the landmarks (the
  * ViTPose scaffold); `setupHash` is the seed's Scan Setup hash, stamped onto the
- * result.
+ * result as seed provenance only — it pairs nothing.
  */
 export function buildGroundTruthScaffold(
   detectionFrames: readonly { timestamp: number }[],
@@ -104,10 +117,9 @@ export function buildGroundTruthScaffold(
   setupHash: string,
   existing: GroundTruthInput | null,
 ): GroundTruthInput {
-  const carryFlags = !priorTruthIsStale(existing, setupHash);
-  const priorFlagByIndex = new Map<number, ReviewFlag>();
-  if (carryFlags && existing) {
-    for (const f of existing.frames) priorFlagByIndex.set(f.frameIndex, reviewToFlag(f.review));
+  const priorFlagByTimestamp = new Map<number, ReviewFlag>();
+  for (const f of existing?.frames ?? []) {
+    priorFlagByTimestamp.set(timestampKey(f.timestamp), reviewToFlag(f.review));
   }
 
   const frames: GroundTruthFrame[] = detectionFrames.map((df, frameIndex) => {
@@ -122,7 +134,7 @@ export function buildGroundTruthScaffold(
       verified: false,
     };
 
-    const flag = priorFlagByIndex.get(frameIndex);
+    const flag = priorFlagByTimestamp.get(timestampKey(df.timestamp));
     return flag && flag !== "auto" ? applyReviewFlag(seedFrame, flag) : seedFrame;
   });
 
@@ -175,19 +187,15 @@ export function applyReviewFlag(seed: GroundTruthFrame, flag: ReviewFlag): Groun
 }
 
 /**
- * Whether prior saved truth must be discarded rather than carried onto a fresh
- * seed. True when `existing` holds frames but was seeded from a different Scan
- * Setup (`setupHash` mismatch) or predates hashes (either hash empty) — the
- * staleness rule that stops truth authored against different crops from silently
- * pairing with new scans. A clean first authoring (no prior frames) is not stale.
+ * Whether a video already has accepted Ground Truth — any saved truth holding at
+ * least one frame. Accepted truth is video-keyed: it survives every Scan Setup
+ * edit, so editing crops / tap / tier / panning must skip the ViTPose seed and
+ * the review entirely, leaving the truth file untouched until the author asks for
+ * a re-seed. (This replaces the old `setupHash`-mismatch staleness rule, which
+ * discarded truth that a crop change could never have invalidated.)
  */
-export function priorTruthIsStale(
-  existing: GroundTruthInput | null,
-  setupHash: string,
-): boolean {
-  if (!existing || existing.frames.length === 0) return false;
-  if (!existing.setupHash || !setupHash) return true;
-  return existing.setupHash !== setupHash;
+export function hasAcceptedGroundTruth(existing: GroundTruthInput | null): boolean {
+  return !!existing && existing.frames.length > 0;
 }
 
 /**
