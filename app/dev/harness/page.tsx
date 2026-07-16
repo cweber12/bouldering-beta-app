@@ -6,32 +6,23 @@
  * Lists the external downloader's Test Video corpus (via /api/dev/corpus) and
  * lets you calibrate each video's Scan Setup — Climber Crop, Wall Crop, tap,
  * panning, Quality Tier — by reusing the production StepSetDetection UI.
- * Confirming (Scan) saves setup.json AND runs one throwaway detection scaffold
- * for authoring Ground Truth, then shows a Detection Preview (the same
- * FramePlayer skeleton overlay + DiagnosticsPanel as the scan flow) to review
- * detection quality and correct landmarks. The scaffold run stays in memory only
- * — calibration never posts a scored run to the downloader (that comes from the
- * separate scoring pass, issue 08). "Save setup only" persists the Setup without
- * running. Dev views (ORB feature points, diagnostics) are open by default here,
- * without touching the app-wide Developer-view preference. Rendered only in
- * development. See docs/adr/0017 and docs/adr/0018.
+ * Confirming saves setup.json and immediately requests the downloader's ViTPose
+ * job over the uniform Detection Frame grid, then opens the flag-only Ground
+ * Truth review on the seed once it lands. Calibration runs no detection at all:
+ * it authors truth, and nothing else. Detection output lives in the separate
+ * Analyze step. "Save setup only" persists the Setup without seeding.
+ * Rendered only in development. See docs/adr/0017, 0018 and 0019.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOpenCV } from "@/hooks/useOpenCV";
-import { usePoseModel, type MediaPipeVariant } from "@/hooks/usePoseModel";
-import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { useDetectionThumbnails } from "@/hooks/useDetectionThumbnails";
-import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import StepSetDetection from "@/components/scan/process-flow/StepSetDetection";
-import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
-import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
-import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
 import Modal from "@/components/ui/Modal";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
   applyReviewFlag,
   buildGroundTruthScaffold,
@@ -55,14 +46,11 @@ import {
   VITPOSE_POLL_TIMEOUT_MS,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
+import { buildDetectionGrid, type DetectionGridFrame } from "@/utils/harnessDetectionGrid";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
-import { deriveTapCrop } from "@/pipeline/tracking/tapCropDetection";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
-import { getTopology } from "@/utils/poseConstants";
-import { type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
-import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
-import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
+import type { MediaPipeVariant } from "@/hooks/usePoseModel";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
@@ -78,76 +66,45 @@ interface CorpusItem {
   analysisInputs: unknown;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CV = any;
-
-function clamp01(n: number): number {
-  return Math.max(0, Math.min(1, n));
-}
-
-interface FirstFrameSkeleton {
-  frames: RenderedSkeletonFrame[];
+/** Native video dimensions + duration, read from the loaded video element. */
+interface VideoMeta {
+  width: number;
+  height: number;
   duration: number;
-  fps: number;
-  startOffsetSec: number;
 }
 
 /**
- * Build the video-space skeleton animation for the Detection Preview, mirroring
- * the app/scan firstFrameSkeletonData memo: start playback at the first detected
- * frame and map normalised keypoints into video-pixel space.
+ * Read a video blob's duration and native dimensions without decoding frames.
+ * The duration is the sole input to the Detection Frame grid, and the dimensions
+ * size the reviewer canvas — both previously came from the throwaway scan.
  */
-function buildFirstFrameSkeleton(attempt: RouteAttempt | null): FirstFrameSkeleton | null {
-  if (!attempt) return null;
-  const { frames, videoMeta } = attempt;
-  if (!frames.length) return null;
-  const sorted = [...frames].sort((a, b) => a.timestamp - b.timestamp);
-  const firstDetected = sorted.find((f) => f.keypoints.length > 0);
-  if (!firstDetected) return null;
-  const firstTs = firstDetected.timestamp;
-  const lastTs = sorted[sorted.length - 1].timestamp;
-  const duration = Math.max(lastTs - firstTs, 0.1);
-  const rendered: RenderedSkeletonFrame[] = sorted
-    .filter((f) => f.timestamp >= firstTs)
-    .map((f) => ({
-      timestamp: f.timestamp - firstTs,
-      keypoints: Object.fromEntries(
-        f.keypoints.map((kp) => [
-          kp.name,
-          { x: kp.x * videoMeta.width, y: kp.y * videoMeta.height },
-        ]),
-      ),
-    }));
-  return { frames: rendered, duration, fps: videoMeta.fps ?? 30, startOffsetSec: firstTs };
-}
-
-/** Soft fallback Climber box centred on the tap when no pose is found. */
-function defaultClimberBox(point: { x: number; y: number }): CropFraction {
-  const w = 0.25;
-  const h = 0.55;
-  return {
-    x: clamp01(point.x - w / 2),
-    y: clamp01(point.y - h / 2),
-    w: Math.min(w, 1 - clamp01(point.x - w / 2)),
-    h: Math.min(h, 1 - clamp01(point.y - h / 2)),
-  };
-}
-
-function findFrameIndexByTime(frames: { timestamp: number }[], time: number): number {
-  if (frames.length === 0) return 0;
-  let lo = 0;
-  let hi = frames.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >> 1;
-    if (frames[mid].timestamp <= time) lo = mid;
-    else hi = mid - 1;
-  }
-  return frames[lo].timestamp <= time ? lo : 0;
+function probeVideoMeta(url: string): Promise<VideoMeta> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    const cleanup = () => {
+      video.removeAttribute("src");
+      video.load();
+    };
+    video.onloadedmetadata = () => {
+      const meta = {
+        width: video.videoWidth,
+        height: video.videoHeight,
+        duration: video.duration,
+      };
+      cleanup();
+      resolve(meta);
+    };
+    video.onerror = () => {
+      cleanup();
+      reject(new Error("Failed to read the video's duration."));
+    };
+    video.src = url;
+  });
 }
 
 export default function HarnessPage() {
-  const { cv } = useOpenCV();
-
   const [items, setItems] = useState<CorpusItem[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<CorpusItem | null>(null);
@@ -183,8 +140,6 @@ export default function HarnessPage() {
     return (
       <Calibrator
         item={selected}
-        cv={cv}
-        cvReady={!!cv}
         onBack={() => setSelected(null)}
         onDone={async () => {
           await refreshList();
@@ -278,47 +233,37 @@ export default function HarnessPage() {
 
 // ---------------------------------------------------------------------------
 // Calibrator — loads a Test Video + its Setup, reuses StepSetDetection to
-// author the Scan Setup, and on confirm saves it, kicks off the downloader's
-// ViTPose scaffold job (ADR 0019), and runs one throwaway MediaPipe pass to
-// establish the Detection Frame grid. The ViTPose poses seed the draggable
-// Ground Truth. If that job fails or no downloader is configured, Ground Truth
-// authoring is gated until the ViTPose job is retried successfully. No scored
-// run is posted.
+// author the Scan Setup, and on confirm saves it and kicks off the downloader's
+// ViTPose scaffold job (ADR 0019) over the uniform Detection Frame grid computed
+// from the video's duration. The ViTPose poses seed the flag-only Ground Truth
+// review. If that job fails or no downloader is configured, review is gated
+// until it is retried successfully — the Setup save stands regardless.
 // ---------------------------------------------------------------------------
 
-type RunPhase = "idle" | "saving" | "running" | "preview" | "done" | "error";
+type RunPhase = "idle" | "saving" | "review" | "done" | "error";
 
 function Calibrator({
   item,
-  cv,
-  cvReady,
   onBack,
   onDone,
 }: {
   item: CorpusItem;
-  cv: CV;
-  cvReady: boolean;
   onBack: () => void;
   onDone: () => void | Promise<void>;
 }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoMeta, setVideoMeta] = useState<VideoMeta | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [phase, setPhase] = useState<RunPhase>("idle");
   const [phaseError, setPhaseError] = useState<string | null>(null);
 
-  // Post-scan review state (Detection Preview).
-  const [previewAttempt, setPreviewAttempt] = useState<RouteAttempt | null>(null);
-  const [previewDiag, setPreviewDiag] = useState<ScanDiagnostics | null>(null);
-  const previewPlayerRef = useRef<FramePlayerHandle>(null);
-  const [previewPlaying, setPreviewPlaying] = useState(true);
-  const [previewFrameIndex, setPreviewFrameIndex] = useState(0);
+  /** The Detection Frame the reviewer is attesting. */
+  const [gtFrameIndex, setGtFrameIndex] = useState(0);
 
   const [tier, setTier] = useState<QualityTier>(DEFAULT_TIER);
   const [modelVariant, setModelVariant] = useState<MediaPipeVariant>(
     getTierConfig(DEFAULT_TIER).variant,
   );
-  const [maxPoses, setMaxPoses] = useState(getTierConfig(DEFAULT_TIER).maxPoses);
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
@@ -334,12 +279,10 @@ function Calibrator({
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
 
   // Ground Truth review: the pure scaffold seed, the working flag review, and
-  // any previously-saved GT preserved across a re-scan. `gtMode` swaps the
-  // Detection Preview for a read-only seed reviewer.
+  // any previously-saved GT preserved across a re-seed.
   const existingGtRef = useRef<GroundTruthInput | null>(null);
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
   const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
-  const [gtMode, setGtMode] = useState(false);
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
   const [currentSetupHash, setCurrentSetupHash] = useState("");
@@ -348,27 +291,28 @@ function Calibrator({
   const [gtPriorDiscarded, setGtPriorDiscarded] = useState(false);
 
   // ViTPose scaffold (ADR 0019): the downloader runs a stronger reference model
-  // that seeds the draggable Ground Truth landmarks. Kicked off on confirm and
-  // polled until `vitpose.json` lands in the bundle. MediaPipe still defines the
-  // Detection Frame grid; ViTPose only supplies the seed poses.
+  // that seeds the Ground Truth landmarks. Kicked off the moment the Setup is
+  // confirmed and polled until `vitpose.json` lands in the bundle. The Detection
+  // Frame grid is pure arithmetic over the video's duration; ViTPose supplies the
+  // poses on it.
   const [vitpose, setVitpose] = useState<ViTPoseScaffold | null>(null);
   const [vitposeStatus, setVitposeStatus] = useState<
     "idle" | "requesting" | "polling" | "ready" | "failed"
   >("idle");
   const [vitposeError, setVitposeError] = useState<string | null>(null);
   // Non-fatal advisories the downloader attaches to a completed run (legacy tap
-  // without a timestamp, ambiguous t=0 tap). Surfaced as a caution in the preview.
+  // without a timestamp, ambiguous t=0 tap). Surfaced as a caution in the review.
   const [vitposeWarnings, setVitposeWarnings] = useState<string[]>([]);
-  // The Detection Frame grid a ViTPose job has already been kicked off for. Keyed
-  // on the grid's array identity so each new scan re-requests, but our own status
-  // transitions never re-fire (and cancel) the request mid-flight.
-  const vitposeRequestedRef = useRef<{ timestamp: number }[] | null>(null);
+  // The Detection Frame grid a ViTPose job has already been kicked off for. Held
+  // so a superseded request's async completion can be ignored rather than
+  // overwriting the live one's status.
+  const vitposeRequestedRef = useRef<DetectionGridFrame[] | null>(null);
   const vitposePoseFrames = useMemo(
     () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
     [vitpose],
   );
   // How many Detection Frames the ViTPose seed actually posed (vs. tracked-empty),
-  // surfaced in the preview so the seed source and its coverage are visible.
+  // surfaced in the review so the seed source and its coverage are visible.
   const vitposePosedCount = useMemo(
     () => (vitpose ? vitpose.frames.filter((f) => f.keypoints.length > 0).length : 0),
     [vitpose],
@@ -389,98 +333,22 @@ function Calibrator({
   // ever crosses that spot. Re-tapping the Climber writes `t` and fixes it.
   const legacyTapNoTimestamp = climberPoint != null && climberPoint.t === undefined;
 
-  const poseModelConfig = useMemo(
-    () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
-    [modelVariant, maxPoses],
-  );
-  const { model } = usePoseModel(poseModelConfig);
-  const {
-    process,
-    reset: resetProcessor,
-    status,
-    orbStatus,
-    scanDiagnostics,
-    attemptId,
-    errorMessage,
-    firstFrameFile,
-    currentFrame,
-    totalFrames,
-    cropTrace,
-    detectionFrames,
-  } = useVideoProcessor(100);
-
-  // Detection Preview: show the per-frame Adaptive Crop overlay (default on).
-  const [showCrops, setShowCrops] = useState(true);
-  const previewFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
-
-  // Film-strip thumbnails for the stepper — generated lazily off the recorded
-  // video only while the Detection Preview is on screen.
-  const previewThumbnails = useDetectionThumbnails(
-    videoUrl,
-    previewFrames,
-    phase === "preview",
+  // The Detection Frame grid: uniform 100 ms stride over the video's duration,
+  // independent of the Setup, the tier, and any detector (ADR 0018).
+  const gridFrames = useMemo(
+    () => (videoMeta ? buildDetectionGrid(videoMeta.duration) : []),
+    [videoMeta],
   );
 
-  // The Detection Preview skeleton is re-based to start at the first detected
-  // frame, so the FramePlayer's playback clock is offset from the Detection Frame
-  // grid by this many seconds. The stepper works in absolute video time, so seek
-  // / sync convert across the two bases with `previewStartOffset`.
-  const previewSkel = useMemo(() => buildFirstFrameSkeleton(previewAttempt), [previewAttempt]);
-  const previewStartOffset = previewSkel?.startOffsetSec ?? 0;
-
-  useEffect(() => {
-    if (phase !== "preview") return;
-    setPreviewPlaying(true);
-    setPreviewFrameIndex(0);
-  }, [phase, previewFrames]);
-
-  useEffect(() => {
-    // In GT edit mode the FramePlayer is unmounted; the stepper drives the index
-    // directly, so skip the player-time sync (which would force the index to 0).
-    if (phase !== "preview" || gtMode || previewFrames.length === 0) return;
-    let raf = 0;
-
-    const syncCurrentFrame = () => {
-      // Player time is re-based to the first detection; the grid is absolute.
-      const playerTime = previewPlayerRef.current?.getCurrentTime() ?? 0;
-      const nextIndex = findFrameIndexByTime(previewFrames, playerTime + previewStartOffset);
-      setPreviewFrameIndex((prev) => (prev === nextIndex ? prev : nextIndex));
-      raf = requestAnimationFrame(syncCurrentFrame);
-    };
-
-    raf = requestAnimationFrame(syncCurrentFrame);
-    return () => cancelAnimationFrame(raf);
-  }, [phase, gtMode, previewFrames, previewStartOffset]);
-
-  const handlePreviewSeek = useCallback(
-    (index: number) => {
-      const frame = previewFrames[index];
-      if (!frame) return;
-      setPreviewPlaying(false);
-      setPreviewFrameIndex(index);
-      previewPlayerRef.current?.pause();
-      // The stepper timestamp is absolute video time; the player seeks in its
-      // re-based clock, so subtract the first-detection offset.
-      previewPlayerRef.current?.seek(frame.timestamp - previewStartOffset);
-    },
-    [previewFrames, previewStartOffset],
-  );
-
-  const handlePreviewTogglePlay = useCallback(() => {
-    setPreviewPlaying((playing) => {
-      const next = !playing;
-      if (next) previewPlayerRef.current?.play();
-      else previewPlayerRef.current?.pause();
-      return next;
-    });
-  }, []);
+  // Film-strip thumbnails for the stepper — generated lazily off the video only
+  // while the review is on screen.
+  const gridThumbnails = useDetectionThumbnails(videoUrl, gridFrames, phase === "review");
 
   function handleTierChange(t: QualityTier) {
     setTier(t);
     const cfg = getTierConfig(t);
     setModelVariant(cfg.variant);
     setFrameStep(cfg.frameStep);
-    setMaxPoses(cfg.maxPoses);
   }
 
   // Load the video bytes + any existing Scan Setup for this bundle.
@@ -499,7 +367,11 @@ function Calibrator({
         url = URL.createObjectURL(blob);
         if (revoked) return;
         setVideoUrl(url);
-        setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
+        // The duration is what the Detection Frame grid is built from, so the
+        // calibrator is not usable until the metadata has been read.
+        const meta = await probeVideoMeta(url);
+        if (revoked) return;
+        setVideoMeta(meta);
 
         const { setup } = await setupRes.json();
         if (setup && !revoked) {
@@ -516,7 +388,7 @@ function Calibrator({
           wallTouchedRef.current = true; // preserve the saved wall crop across a re-tap
         }
 
-        // Any previously-authored Ground Truth is preserved across the next scan.
+        // Any previously-authored Ground Truth is carried onto the next seed.
         try {
           const gt = await loadGroundTruth(item.key);
           if (!revoked) existingGtRef.current = gt;
@@ -531,18 +403,15 @@ function Calibrator({
       revoked = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [item.key, item.videoKey]);
+  }, [item.key]);
 
-  const handleClimberTapDetect = useCallback(
-    (frame: ImageData, point: { x: number; y: number }, timestampSec: number): boolean => {
-      const derived = model ? deriveTapCrop(model, frame, point, timestampSec) : null;
-      const climber = derived ?? defaultClimberBox(point);
-      setClimberCrop(climber);
-      setWallCrop((prev) => (wallTouchedRef.current ? prev : defaultRouteAroundClimber(climber)));
-      return derived != null;
-    },
-    [model],
-  );
+  // The Climber Crop is drawn by hand here: the calibrator loads no pose model,
+  // so there is nothing to derive a box from the tap with. The Wall Crop still
+  // auto-follows the Climber Crop until the author moves it themselves.
+  const handleClimberCropChange = useCallback((c: CropFraction) => {
+    setClimberCrop(c);
+    setWallCrop((prev) => (wallTouchedRef.current ? prev : defaultRouteAroundClimber(c)));
+  }, []);
 
   const handleClimberPointChange = useCallback(
     (p: { x: number; y: number; t?: number } | null) => {
@@ -585,88 +454,13 @@ function Calibrator({
     }
   }
 
-  // Confirm: save the Setup, then run one throwaway MediaPipe pass to establish
-  // the Detection Frame grid. The effects below kick off the ViTPose job for
-  // exactly those frames and hand the result to the Ground Truth editor. Nothing
-  // is posted as a scored run.
-  async function handleConfirmAndRun() {
-    if (!videoFile || !model || !cv) return;
-    setPhase("saving");
-    setPhaseError(null);
-    setVitpose(null);
-    setVitposeError(null);
-    setVitposeStatus("idle");
-    setGtMode(false);
-    setGtSeed(null);
-    setGtInput(null);
-    setGtSave(null);
-    vitposeRequestedRef.current = null;
-    try {
-      await saveSetup();
-      setPhase("running");
-      const cfg = getTierConfig(tier);
-      await process(
-        videoFile,
-        model,
-        cv,
-        frameStep,
-        { state: "", area: "", route: item.routeFolder },
-        { climberCrop, wallCrop, climberPoint: climberPoint ?? undefined, panning },
-        0,
-        "mediapipe",
-        {
-          maxRecoveryFrames: cfg.maxRecoveryFrames,
-          filterTolerance: cfg.filterTolerance,
-          motionThreshold: cfg.motionThreshold,
-          refineStride: cfg.refineStride,
-        },
-        {
-          emitLivePreview: false,
-          frameOutput: "detected",
-          detectHolds: false,
-          generateThumbnail: false,
-        },
-      );
-    } catch (err) {
-      setPhase("error");
-      setPhaseError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  // Hand the scaffold run to the Detection Preview once the pipeline has produced
-  // diagnostics (assembled only after ORB extraction completes). The run lives in
-  // memory for Ground Truth authoring; calibration never posts a scored run.
-  useEffect(() => {
-    if (phase !== "running") return;
-    if (status === "error") {
-      setPhase("error");
-      setPhaseError(errorMessage ?? "Detection failed.");
-      return;
-    }
-    if (status !== "done") return;
-    if (!scanDiagnostics) {
-      // "done" fires before ORB/diagnostics; only treat as failure once ORB has.
-      if (orbStatus === "failed") {
-        setPhase("error");
-        setPhaseError("ORB extraction failed — no diagnostics produced.");
-      }
-      return;
-    }
-
-    const attempt = attemptId ? (getAttempt(attemptId) ?? null) : null;
-    setPreviewAttempt(attempt);
-    setPreviewDiag(scanDiagnostics);
-    setPhase("preview");
-  }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
-
   const requestViTPoseForGrid = useCallback(
-    (grid: { timestamp: number }[]) => {
+    (grid: DetectionGridFrame[]) => {
       if (grid.length === 0) return;
       vitposeRequestedRef.current = grid;
       setVitpose(null);
       setVitposeError(null);
       setVitposeWarnings([]);
-      setGtMode(false);
       setGtSeed(null);
       setGtInput(null);
       setGtSave(null);
@@ -692,25 +486,30 @@ function Calibrator({
     [item.key, item.videoPath, climberPoint, climberCrop, wallCrop, panning],
   );
 
-  // Once the Detection Frame grid exists (preview), kick off the ViTPose job for
-  // exactly those frames. The downloader echoes their timestamps, so the seed
-  // aligns frame-for-frame — the ViTPose run is not a denser grid (ADR 0019).
-  useEffect(() => {
-    if (phase !== "preview" || previewFrames.length === 0) return;
-    // Fire exactly once per Detection Frame grid. Staleness is judged by the ref,
-    // not a per-invocation `cancelled` flag: `vitposeStatus` is deliberately NOT a
-    // dependency (setting it to "requesting" would re-run this effect), and under
-    // StrictMode's mount/cleanup/mount the ref survives while a `cancelled` flag
-    // would strand the one POST that ran. Advance to "polling" only while this
-    // grid is still the active request; a superseded or reset grid is ignored.
-    if (vitposeRequestedRef.current === previewFrames) return;
-    requestViTPoseForGrid(previewFrames);
-  }, [phase, previewFrames, requestViTPoseForGrid]);
+  // Confirm: save the Scan Setup, then immediately ask the downloader to pose the
+  // Detection Frame grid. The review opens straight away and shows the seed's
+  // progress; no detection runs here at all (ADR 0018). The downloader echoes the
+  // grid's timestamps, so the seed aligns frame-for-frame (ADR 0019).
+  async function handleConfirmAndSeed() {
+    if (gridFrames.length === 0) return;
+    setPhase("saving");
+    setPhaseError(null);
+    try {
+      await saveSetup();
+    } catch (err) {
+      setPhase("error");
+      setPhaseError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    setGtFrameIndex(0);
+    setPhase("review");
+    requestViTPoseForGrid(gridFrames);
+  }
 
   // Poll the bundle for the ViTPose artifact once the job has been accepted, and
   // convert it to the seed poses once it lands. Reported job errors, empty
-  // Climber tracks, and timeouts disable only Ground Truth authoring; Detection
-  // Preview and diagnostics remain usable.
+  // Climber tracks, and timeouts gate Ground Truth authoring behind a retry; the
+  // Scan Setup save that preceded the job stands either way.
   useEffect(() => {
     if (vitposeStatus !== "polling") return;
     let cancelled = false;
@@ -722,7 +521,6 @@ function Calibrator({
       setVitposeError(message);
       setVitposeWarnings([]);
       setVitpose(null);
-      setGtMode(false);
       setGtSeed(null);
       setGtInput(null);
       setGtSave(null);
@@ -765,17 +563,17 @@ function Calibrator({
   // authored flags. Both key one record per Detection Frame.
   useEffect(() => {
     if (
-      phase !== "preview" ||
+      phase !== "review" ||
       vitposeStatus !== "ready" ||
       seedPoseFrames.length === 0 ||
-      previewFrames.length === 0
+      gridFrames.length === 0
     ) {
       return;
     }
     const seedHash = vitpose?.setupHash || currentSetupHash;
-    const pureScaffold = buildGroundTruthScaffold(previewFrames, seedPoseFrames, seedHash, null);
+    const pureScaffold = buildGroundTruthScaffold(gridFrames, seedPoseFrames, seedHash, null);
     const working = buildGroundTruthScaffold(
-      previewFrames,
+      gridFrames,
       seedPoseFrames,
       seedHash,
       existingGtRef.current,
@@ -784,11 +582,11 @@ function Calibrator({
     setGtInput(working);
     setGtPriorDiscarded(priorTruthIsStale(existingGtRef.current, seedHash));
     setGtSave(null);
-  }, [phase, vitposeStatus, seedPoseFrames, previewFrames, currentSetupHash, vitpose]);
+  }, [phase, vitposeStatus, seedPoseFrames, gridFrames, currentSetupHash, vitpose]);
 
   const handleRetryViTPose = useCallback(() => {
-    requestViTPoseForGrid(previewFrames);
-  }, [previewFrames, requestViTPoseForGrid]);
+    requestViTPoseForGrid(gridFrames);
+  }, [gridFrames, requestViTPoseForGrid]);
 
   // Apply the current Detection Frame's Auto / Wrong / Absent review flag. The
   // immutable seed frame is always the source of truth so unflagging restores it.
@@ -810,8 +608,8 @@ function Calibrator({
   const gtMarkByIndex = useMemo(() => {
     const byIndex = new Map<number, FrameReviewMark>();
     for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, frameReviewMark(f));
-    return previewFrames.map((_, i) => byIndex.get(i));
-  }, [gtInput, previewFrames]);
+    return gridFrames.map((_, i) => byIndex.get(i));
+  }, [gtInput, gridFrames]);
 
   // Seed coverage surfaced beside the accept button — posed vs. seeded-absent,
   // updating as flags move presence truth. Surfaced only, never blocks accept.
@@ -844,23 +642,11 @@ function Calibrator({
     }
   }, [gtInput, item.key, currentSetupHash, vitpose]);
 
-  // Return to calibration from the preview, keeping the current Setup in place.
-  function handleRescan() {
-    setPreviewAttempt(null);
-    setPreviewDiag(null);
+  // Return to the Setup from the review, keeping the current Setup in place. Any
+  // in-flight seed is abandoned; the saved Setup and saved truth both stand.
+  function handleBackToSetup() {
     setPhaseError(null);
-    setGtMode(false);
     setVitpose(null);
-    setVitposeStatus("idle");
-    setVitposeError(null);
-    vitposeRequestedRef.current = null;
-    setPhase("idle");
-  }
-
-  // Abort an in-flight scan from the progress view and return to calibration.
-  function handleCancelRun() {
-    resetProcessor();
-    setPhaseError(null);
     setVitposeStatus("idle");
     setVitposeError(null);
     vitposeRequestedRef.current = null;
@@ -882,7 +668,7 @@ function Calibrator({
     );
   }
 
-  if (!videoUrl) {
+  if (!videoUrl || !videoMeta) {
     return (
       <main className="flex flex-1 items-center justify-center p-8">
         <p className="text-fg-muted">Loading {item.videoKey}…</p>
@@ -890,69 +676,11 @@ function Calibrator({
     );
   }
 
-  // ── In-scan progress: harness uses a low-overhead progress shell only ──
-  if (phase === "running") {
-    const pct = totalFrames > 0 ? Math.min(100, Math.round((currentFrame / totalFrames) * 100)) : 0;
-    const finishing = status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
-    return (
-      <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
-        <div className="absolute inset-x-0 top-0 z-10">
-          <ScanLoadingBar progressPct={pct} finishing={finishing} />
-        </div>
-        <section className="flex h-full min-h-0 flex-col" aria-label="Scanning Test Video">
-          <header className="shrink-0 border-b border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
-            <div className="mx-auto flex h-7 w-full max-w-5xl items-center gap-3">
-              <span className="text-sm font-medium text-fg">Scanning Test Video</span>
-            </div>
-          </header>
-
-          <div className="flex min-h-0 flex-1 items-center justify-center bg-surface px-6">
-            <div className="flex w-full max-w-md flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-fg-secondary">
-                  {finishing ? "Preparing results" : "Detecting frames"}
-                </span>
-                <span className="text-sm font-semibold tabular-nums text-fg">{pct}%</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-edge/30" aria-hidden="true">
-                <div
-                  className="h-full bg-send transition-[width] duration-200"
-                  style={{ width: `${finishing ? 100 : pct}%` }}
-                />
-              </div>
-              <p className="font-mono text-xs text-fg-muted">
-                {currentFrame} / {totalFrames || "?"} sampled frames
-              </p>
-            </div>
-          </div>
-
-          <footer className="shrink-0 border-t border-edge/60 bg-surface px-4 py-2.5 sm:px-6">
-            <div className="mx-auto flex w-full max-w-5xl items-center justify-start">
-              <button
-                type="button"
-                onClick={handleCancelRun}
-                className="rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
-              >
-                Cancel scan
-              </button>
-            </div>
-          </footer>
-        </section>
-      </div>
-    );
-  }
-
-  // ── Post-scan Detection Preview (review only; the run is already posted) ──
-  if (phase === "preview") {
-    const skel = previewSkel;
-    const topo = getTopology(previewAttempt?.poseBackend ?? "mediapipe");
-    const topoStyle: SkeletonStyle = {
-      skeletonEdges: topo.skeletonEdges,
-      keypointNames: topo.keypointNames,
-    };
-    const orbKeypoints = previewAttempt?.orbFeatures?.keypoints.map((kp) => kp.pt);
-    const gtFrame = gtInput?.frames.find((f) => f.frameIndex === previewFrameIndex) ?? null;
-    const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === previewFrameIndex) ?? null;
+  // ── Ground Truth review over the seeded Detection Frame grid ──
+  if (phase === "review") {
+    const gtFrame = gtInput?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
+    const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
+    const reviewing = gtGate.authoring === "ready" && gtFrame !== null && gtSeedFrame !== null;
 
     return (
       <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
@@ -962,68 +690,43 @@ function Calibrator({
             <div className="truncate font-mono text-xs text-fg-muted">{item.videoKey}</div>
           </div>
           <div className="flex items-center gap-2">
-            {gtMode && gtSave && (
+            {gtSave && (
               <span
                 className={`max-w-xs truncate text-xs ${gtSave.ok ? "text-send" : "text-danger"}`}
               >
                 {gtSave.message}
               </span>
             )}
-            {!gtMode && (
-              <label className="flex shrink-0 items-center gap-1.5 text-xs text-fg-muted">
-                <input
-                  type="checkbox"
-                  checked={showCrops}
-                  onChange={(e) => setShowCrops(e.target.checked)}
-                  className="accent-accent"
-                />
-                Crops
-              </label>
-            )}
             {gtGate.authoring === "ready" && (
-              <GroundTruthSeedStatus
-                gate={gtGate}
-                posedCount={vitposePosedCount}
-                frameCount={vitpose?.frames.length ?? 0}
-                onRetry={handleRetryViTPose}
-              />
+              <>
+                <GroundTruthSeedStatus
+                  gate={gtGate}
+                  posedCount={vitposePosedCount}
+                  frameCount={vitpose?.frames.length ?? 0}
+                  onRetry={handleRetryViTPose}
+                />
+                <span
+                  className="shrink-0 text-xs tabular-nums text-fg-muted"
+                  title="Seed coverage: posed frames vs. frames seeded absent"
+                >
+                  {seedCoverage.posed} posed · {seedCoverage.seededAbsent} seeded absent
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleSaveGt()}
+                  disabled={gtSaving || !gtInput}
+                  className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
+                >
+                  {gtSaving ? "Saving…" : "Accept & save Ground Truth"}
+                </button>
+              </>
             )}
             <button
               type="button"
-              onClick={() => {
-                if (gtGate.authoring === "ready") setGtMode((v) => !v);
-              }}
-              disabled={gtGate.authoring !== "ready" || !gtInput}
-              className={`shrink-0 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
-                gtMode ? "bg-accent text-fg-inverse" : "bg-surface-alt text-fg"
-              }`}
-            >
-              {gtMode ? "Reviewing GT" : "Edit Ground Truth"}
-            </button>
-            {gtMode && (
-              <span
-                className="shrink-0 text-xs tabular-nums text-fg-muted"
-                title="Seed coverage: posed frames vs. frames seeded absent"
-              >
-                {seedCoverage.posed} posed · {seedCoverage.seededAbsent} seeded absent
-              </span>
-            )}
-            {gtMode && (
-              <button
-                type="button"
-                onClick={() => void handleSaveGt()}
-                disabled={gtSaving || gtGate.authoring !== "ready" || !gtInput}
-                className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
-              >
-                {gtSaving ? "Saving…" : "Accept & save Ground Truth"}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleRescan}
+              onClick={handleBackToSetup}
               className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
             >
-              Re-scan
+              Back to setup
             </button>
             <button
               type="button"
@@ -1036,26 +739,17 @@ function Calibrator({
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-3 bg-surface p-3">
-          <DetectionFrameStepper
-            frames={previewFrames}
-            thumbnails={previewThumbnails}
-            frameMarks={gtMarkByIndex}
-            currentIndex={previewFrameIndex}
-            onSeek={handlePreviewSeek}
-            onTogglePlay={handlePreviewTogglePlay}
-            isPlaying={previewPlaying}
-            className="shrink-0"
-          />
-          {gtGate.authoring !== "ready" && (
-            <GroundTruthSeedStatus
-              gate={gtGate}
-              posedCount={vitposePosedCount}
-              frameCount={vitpose?.frames.length ?? 0}
-              onRetry={handleRetryViTPose}
+          {reviewing && (
+            <DetectionFrameStepper
+              frames={gridFrames}
+              thumbnails={gridThumbnails}
+              frameMarks={gtMarkByIndex}
+              currentIndex={gtFrameIndex}
+              onSeek={setGtFrameIndex}
               className="shrink-0"
             />
           )}
-          {gtMode && gtGate.authoring === "ready" && gtPriorDiscarded && (
+          {gtPriorDiscarded && reviewing && (
             <div
               role="status"
               className="shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
@@ -1069,7 +763,9 @@ function Calibrator({
               role="status"
               className="shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
             >
-              <p className="font-medium">The ViTPose run reported {vitposeWarnings.length === 1 ? "a warning" : "warnings"}:</p>
+              <p className="font-medium">
+                The ViTPose run reported {vitposeWarnings.length === 1 ? "a warning" : "warnings"}:
+              </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
                 {vitposeWarnings.map((w, i) => (
                   <li key={i}>{w}</li>
@@ -1077,43 +773,43 @@ function Calibrator({
               </ul>
             </div>
           )}
-          {gtMode && gtGate.authoring === "ready" && gtFrame && gtSeedFrame && previewAttempt ? (
+
+          {reviewing ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">
               <GroundTruthReviewer
                 videoSrc={videoUrl}
-                videoWidth={previewAttempt.videoMeta.width}
-                videoHeight={previewAttempt.videoMeta.height}
+                videoWidth={videoMeta.width}
+                videoHeight={videoMeta.height}
                 frame={gtFrame}
                 seedFrame={gtSeedFrame}
                 contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
                 onFlagChange={(flag) => setGtFrameFlag(gtFrame.frameIndex, flag)}
               />
             </div>
+          ) : gtGate.authoring === "disabled" ? (
+            <div className="flex min-h-0 flex-1 items-center justify-center p-8">
+              <GroundTruthSeedStatus
+                gate={gtGate}
+                posedCount={vitposePosedCount}
+                frameCount={vitpose?.frames.length ?? 0}
+                onRetry={handleRetryViTPose}
+                className="max-w-md"
+              />
+            </div>
           ) : (
-            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
-              {firstFrameFile && skel ? (
-                <FramePlayer
-                  ref={previewPlayerRef}
-                  imageFile={firstFrameFile}
-                  videoSrc={videoUrl}
-                  videoTimeOffset={skel.startOffsetSec}
-                  layers={[{ frames: skel.frames, style: topoStyle }]}
-                  duration={skel.duration}
-                  autoPlay
-                  hidePlayButton
-                  orbKeypoints={orbKeypoints}
-                  cropTrace={showCrops ? cropTrace : undefined}
-                  fit="contain"
-                  bare
-                  className="min-h-0 flex-1 rounded-none"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center p-8 text-center text-sm text-fg-muted">
-                  No climber detected — the Detection Preview has nothing to show. See the
-                  diagnostics for why.
-                </div>
-              )}
-              <DiagnosticsPanel record={previewDiag} defaultOpen />
+            // The seed job is the only thing standing between Confirm and review
+            // — calibration itself runs nothing.
+            <div
+              role="status"
+              className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
+            >
+              <LoadingSpinner />
+              <p className="text-sm text-fg-secondary">
+                Seeding Ground Truth from ViTPose over {gridFrames.length} Detection Frames…
+              </p>
+              <p className="text-xs text-fg-muted">
+                The Scan Setup is saved. This runs on the downloader; review opens when it lands.
+              </p>
             </div>
           )}
         </div>
@@ -1121,13 +817,12 @@ function Calibrator({
     );
   }
 
-  // running / preview return earlier, so only "saving" is busy here.
+  // The review phase returns earlier, so only "saving" is busy here.
   const busy = phase === "saving";
   const phaseLabel: Record<RunPhase, string> = {
     idle: "",
     saving: "Saving setup…",
-    running: "Running detection…",
-    preview: "",
+    review: "",
     done: "Setup saved",
     error: phaseError ?? "Error",
   };
@@ -1192,11 +887,10 @@ function Calibrator({
           videoPreviewUrl={videoUrl}
           climberCrop={climberCrop}
           wallCrop={wallCrop}
-          onClimberCropChange={setClimberCrop}
+          onClimberCropChange={handleClimberCropChange}
           onWallCropChange={handleWallCropChange}
           climberPoint={climberPoint}
           onClimberPointChange={handleClimberPointChange}
-          onClimberTapDetect={handleClimberTapDetect}
           tier={tier}
           onTierChange={handleTierChange}
           modelVariant={modelVariant}
@@ -1205,8 +899,8 @@ function Calibrator({
           onFrameStepChange={setFrameStep}
           panning={panning}
           onPanningChange={setPanning}
-          canScan={!!model && cvReady && !busy}
-          onScan={() => void handleConfirmAndRun()}
+          canScan={gridFrames.length > 0 && !busy}
+          onScan={() => void handleConfirmAndSeed()}
           onBack={onBack}
         />
       </div>

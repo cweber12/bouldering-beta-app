@@ -81,9 +81,8 @@ export function contextKeypointsAt(
  * Detection Frame: a frame is `present` when a scaffold pose matches its
  * timestamp (core joints seeded from it, with their confidence-seeded `occluded`
  * flags), `absent` when none does. State keys off whether the **scaffold** found
- * a pose, not the detector-under-test's own `status` — a frame MediaPipe missed
- * but the ViTPose scaffold posed is `present` (the Climber is there), so the
- * seed no longer inherits MediaPipe's misses (ADR 0019). Every frame arrives
+ * a pose — no detector under test is involved in seeding truth at all, so the
+ * seed can never inherit a detector's misses (ADR 0019). Every frame arrives
  * `review: "auto"` (nobody has objected yet) and `verified: false`; the human's
  * job is only to flag exceptions.
  *
@@ -94,12 +93,13 @@ export function contextKeypointsAt(
  * caller can detect the discard via {@link priorTruthIsStale}. `"auto"` frames
  * carry nothing (the fresh seed already is auto).
  *
- * `detectionFrames` supplies the frame grid + timestamps (established by the
- * MediaPipe pass); `poseFrames` supplies the landmarks (the ViTPose scaffold);
- * `setupHash` is the seed's Scan Setup hash, stamped onto the result.
+ * `detectionFrames` supplies the frame grid + timestamps (the uniform 100 ms
+ * grid from `buildDetectionGrid`); `poseFrames` supplies the landmarks (the
+ * ViTPose scaffold); `setupHash` is the seed's Scan Setup hash, stamped onto the
+ * result.
  */
 export function buildGroundTruthScaffold(
-  detectionFrames: readonly { timestamp: number; status: string }[],
+  detectionFrames: readonly { timestamp: number }[],
   poseFrames: readonly { timestamp: number; keypoints: Keypoint[] }[],
   setupHash: string,
   existing: GroundTruthInput | null,

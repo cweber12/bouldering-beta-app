@@ -61,14 +61,10 @@ describe("keypointsToPositions / contextKeypointsAt", () => {
 });
 
 describe("buildGroundTruthScaffold", () => {
-  const detectionFrames = [
-    { timestamp: 0.0, status: "detected" },
-    { timestamp: 0.5, status: "missing" },
-    { timestamp: 1.0, status: "weak" },
-  ];
+  // The Detection Frame grid: uniform 100 ms timestamps, no detector verdicts.
+  const detectionFrames = [{ timestamp: 0.0 }, { timestamp: 0.5 }, { timestamp: 1.0 }];
   const poseFrames = [
     { timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1), kp("left_wrist", 0.4, 0.6)] },
-    // ViTPose posed a frame MediaPipe reported "missing" — the Climber is there.
     { timestamp: 0.5, keypoints: [kp("nose", 0.5, 0.15)] },
     { timestamp: 1.0, keypoints: [kp("nose", 0.5, 0.2)] },
   ];
@@ -86,16 +82,14 @@ describe("buildGroundTruthScaffold", () => {
     });
     expect(Object.keys(gt.frames[0].joints).sort()).toEqual(["left_wrist", "nose"]);
 
-    // Status "missing" but the ViTPose scaffold posed it → present (ADR 0019).
     expect(gt.frames[1]).toMatchObject({ frameIndex: 1, state: "present", review: "auto" });
     expect(Object.keys(gt.frames[1].joints)).toEqual(["nose"]);
 
-    // Weak but detected → present with whatever joints exist.
     expect(gt.frames[2]).toMatchObject({ frameIndex: 2, state: "present", review: "auto" });
   });
 
   it("seeds occluded flags from the scaffold confidence, kept on the seed", () => {
-    const frames = [{ timestamp: 0.0, status: "detected" }];
+    const frames = [{ timestamp: 0.0 }];
     const poses = [{ timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] }];
     const gt = buildGroundTruthScaffold(frames, poses, "setup-1", null);
     expect(gt.frames[0].joints.nose.occluded).toBe(true);
@@ -103,7 +97,7 @@ describe("buildGroundTruthScaffold", () => {
 
   it("marks a frame seeded-absent when no scaffold pose matches its timestamp", () => {
     const gt = buildGroundTruthScaffold(
-      [{ timestamp: 9.0, status: "detected" }],
+      [{ timestamp: 9.0 }],
       poseFrames,
       "setup-1",
       null,
