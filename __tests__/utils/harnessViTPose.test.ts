@@ -76,17 +76,39 @@ describe("loadViTPose", () => {
 
   it("returns the scaffold once the artifact lands", async () => {
     stubResponse({ vitpose: scaffold });
-    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold, error: null });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold, error: null, warnings: [] });
   });
 
   it("returns pending (both null) while the job is still running", async () => {
     stubResponse({ vitpose: null, error: null });
-    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold: null, error: null });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({
+      scaffold: null,
+      error: null,
+      warnings: [],
+    });
   });
 
   it("surfaces a terminal job error from the proxy", async () => {
     stubResponse({ vitpose: null, error: "boom" });
-    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold: null, error: "boom" });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({
+      scaffold: null,
+      error: "boom",
+      warnings: [],
+    });
+  });
+
+  it("surfaces downloader warnings alongside a completed scaffold", async () => {
+    stubResponse({ vitpose: scaffold, warnings: ["climber_point.t is missing", "ambiguous tap"] });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({
+      scaffold,
+      error: null,
+      warnings: ["climber_point.t is missing", "ambiguous tap"],
+    });
+  });
+
+  it("drops non-string and empty warning entries", async () => {
+    stubResponse({ vitpose: null, error: null, warnings: ["ok", 42, null, ""] });
+    expect((await loadViTPose("route-x/vid_1")).warnings).toEqual(["ok"]);
   });
 
   it("throws when the proxy request fails", async () => {

@@ -356,6 +356,9 @@ function Calibrator({
     "idle" | "requesting" | "polling" | "ready" | "failed"
   >("idle");
   const [vitposeError, setVitposeError] = useState<string | null>(null);
+  // Non-fatal advisories the downloader attaches to a completed run (legacy tap
+  // without a timestamp, ambiguous t=0 tap). Surfaced as a caution in the preview.
+  const [vitposeWarnings, setVitposeWarnings] = useState<string[]>([]);
   // The Detection Frame grid a ViTPose job has already been kicked off for. Keyed
   // on the grid's array identity so each new scan re-requests, but our own status
   // transitions never re-fire (and cancel) the request mid-flight.
@@ -380,6 +383,11 @@ function Calibrator({
     vitposeError,
     seedHasPose: vitpose ? scaffoldHasPose(vitpose) : false,
   });
+
+  // A Climber tap from a setup calibrated before the tap-timestamp contract: the
+  // downloader can only seed by global tap position, which grabs a bystander who
+  // ever crosses that spot. Re-tapping the Climber writes `t` and fixes it.
+  const legacyTapNoTimestamp = climberPoint != null && climberPoint.t === undefined;
 
   const poseModelConfig = useMemo(
     () => ({ backend: "mediapipe" as const, variant: modelVariant, maxPoses }),
@@ -657,6 +665,7 @@ function Calibrator({
       vitposeRequestedRef.current = grid;
       setVitpose(null);
       setVitposeError(null);
+      setVitposeWarnings([]);
       setGtMode(false);
       setGtSeed(null);
       setGtInput(null);
@@ -711,6 +720,7 @@ function Calibrator({
     const fail = (message: string) => {
       setVitposeStatus("failed");
       setVitposeError(message);
+      setVitposeWarnings([]);
       setVitpose(null);
       setGtMode(false);
       setGtSeed(null);
@@ -720,7 +730,7 @@ function Calibrator({
 
     const poll = async () => {
       try {
-        const { scaffold, error } = await loadViTPose(item.key);
+        const { scaffold, error, warnings } = await loadViTPose(item.key);
         if (cancelled) return;
         if (scaffold) {
           // A scaffold with no posed frames means the tracker never found the
@@ -728,6 +738,7 @@ function Calibrator({
           // "absent".
           if (!scaffoldHasPose(scaffold)) return fail("ViTPose tracked no climber.");
           setVitpose(scaffold);
+          setVitposeWarnings(warnings);
           setVitposeStatus("ready");
           return;
         }
@@ -1053,6 +1064,19 @@ function Calibrator({
               seed.
             </div>
           )}
+          {vitposeWarnings.length > 0 && (
+            <div
+              role="status"
+              className="shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+            >
+              <p className="font-medium">The ViTPose run reported {vitposeWarnings.length === 1 ? "a warning" : "warnings"}:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {vitposeWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {gtMode && gtGate.authoring === "ready" && gtFrame && gtSeedFrame && previewAttempt ? (
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg border border-edge/30 bg-surface p-3">
               <GroundTruthReviewer
@@ -1153,6 +1177,16 @@ function Calibrator({
         />
       </Modal>
 
+      {legacyTapNoTimestamp && (
+        <div
+          role="status"
+          className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+        >
+          This setup was calibrated without a tap timestamp (legacy) — ViTPose can only
+          seed by tap position and may pose the wrong person when bystanders are present.
+          Re-tap the climber to record the frame time and fix the seed.
+        </div>
+      )}
       <div className="min-h-0 flex-1">
         <StepSetDetection
           videoPreviewUrl={videoUrl}

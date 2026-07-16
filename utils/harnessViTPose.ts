@@ -209,6 +209,9 @@ export interface ViTPosePollResult {
   scaffold: ViTPoseScaffold | null;
   /** Non-null when the downloader reported the job failed after acceptance. */
   error: string | null;
+  /** Non-fatal downloader advisories about the Climber selection (a legacy tap
+   * with no timestamp, or an ambiguous `t=0` tap). Empty when the run was clean. */
+  warnings: string[];
 }
 
 /**
@@ -224,5 +227,10 @@ export async function loadViTPose(bundleKey: string): Promise<ViTPosePollResult>
   return {
     scaffold: (body.vitpose as ViTPoseScaffold | null) ?? null,
     error: (body.error as string | null) ?? null,
+    warnings: Array.isArray(body.warnings)
+      ? (body.warnings as unknown[]).filter(
+          (w): w is string => typeof w === "string" && w.length > 0,
+        )
+      : [],
   };
 }

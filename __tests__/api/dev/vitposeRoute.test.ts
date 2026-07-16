@@ -112,6 +112,38 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
   });
 
+  it("GET surfaces downloader warnings from the status sidecar alongside a scaffold", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({
+        jobId: "j1",
+        status: "done",
+        warnings: ["climber_point.t is missing; using legacy global tap seeding.", 7, ""],
+      }),
+    );
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toEqual(validScaffold);
+    expect(body.warnings).toEqual(["climber_point.t is missing; using legacy global tap seeding."]);
+    expect(body.error).toBeUndefined();
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("GET returns warnings with a terminal error when no artifact exists", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "j1", status: "error", error: "boom", warnings: ["heads up"] }),
+    );
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toBeNull();
+    expect(body.error).toBe("boom");
+    expect(body.warnings).toEqual(["heads up"]);
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
   it("GET reports no error while the job is still running (non-error status)", async () => {
     const { GET } = await importRoute("development");
     await writeFile(
