@@ -191,6 +191,19 @@ New `pipeline/` and `hooks/` files must have corresponding `__tests__/` coverage
 **After every code change: always run `git add .`, `git commit`, and `git push`
 automatically — do not wait for the user to ask.**
 
+### Issue tracking
+
+- When implementing a `.scratch/` issue, follow the **PRD lifecycle loop** in
+  `docs/agents/issue-tracker.md`: tackle exactly one issue per branch,
+  sequence issues by number, branch each one from `main`, write the active
+  `Branch:` line into the `.scratch/.../issues/*.md` file when work starts,
+  then merge with `git merge --no-ff` and close the issue in that same `.scratch`
+  file by setting `Status: done` + `Merged: <sha>` in the same step.
+- An issue is never `done` until its code is merged, and merged code never lands
+  without moving its issue to `done` — the two happen together.
+- Before ending a PRD work session, run `node scripts/audit-issues.mjs` and
+  resolve any drift it reports (implemented-but-not-closed, or closed-but-unmerged).
+
 ### README maintenance
 
 - When a code change adds, removes, or renames user-visible features, pages,

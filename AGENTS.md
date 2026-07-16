@@ -228,9 +228,11 @@ and `git add .` + `git commit` after every code change session without waiting t
 ### Issue tracking
 
 - When implementing a `.scratch/` issue, follow the **PRD lifecycle loop** in
-  `docs/agents/issue-tracker.md`: one issue per branch, sequenced by number,
-  each branched off `main`, merged with `git merge --no-ff`, and closed by
-  setting `Status: done` + writing a `Merged: <sha>` line in the same step.
+  `docs/agents/issue-tracker.md`: tackle exactly one issue per branch,
+  sequence issues by number, branch each one from `main`, write the active
+  `Branch:` line into the `.scratch/.../issues/*.md` file when work starts,
+  then merge with `git merge --no-ff` and close the issue in that same `.scratch`
+  file by setting `Status: done` + `Merged: <sha>` in the same step.
 - An issue is never `done` until its code is merged, and merged code never lands
   without moving its issue to `done` — the two happen together.
 - Before ending a PRD work session, run `node scripts/audit-issues.mjs` and
