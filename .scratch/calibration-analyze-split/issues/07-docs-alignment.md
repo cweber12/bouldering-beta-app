@@ -1,0 +1,26 @@
+# Docs alignment — ADRs 0018/0019 and old issues 08/09
+
+Status: ready-for-agent
+Type: AFK
+
+## Parent
+
+- `.scratch/calibration-analyze-split/PRD.md`
+
+## What to build
+
+Bring the documented decisions in line with the shipped ones. Amend ADR 0018 (grid definition → uniform 100 ms video-keyed grid; staleness rule → removed for accepted truth; scoring flow → probed-frame domain with `probeCoverage`) and ADR 0019 (seed timing → immediately on setup confirm; grid source → pure arithmetic, not a MediaPipe pass). Re-point the old ground-truth-detection-eval issues 08 (headless scoring) and 09 (batch gate) at this feature's issues 04 and 05 with a short note, so the tracker never double-tracks the Analyze work and the drift audit stays clean — their grilled scoring design remains referenced, not rewritten. Update CONTEXT.md glossary entries touched by the grid/keying change if any drifted.
+
+## Acceptance criteria
+
+- [ ] ADR 0018 and ADR 0019 describe the uniform grid, video-keyed truth, and Analyze-step flow as built.
+- [ ] Old issues 08/09 carry a status + note pointing at this feature's issues 04/05; `node scripts/audit-issues.mjs` reports no drift.
+- [ ] CONTEXT.md matches the shipped vocabulary.
+
+## Blocked by
+
+- `.scratch/calibration-analyze-split/issues/01-uniform-grid-calibration.md`
+- `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
+- `.scratch/calibration-analyze-split/issues/03-analyze-action-production-run.md`
+- `.scratch/calibration-analyze-split/issues/04-scoring-vs-ground-truth.md`
+- `.scratch/calibration-analyze-split/issues/05-batch-analyze-gt-gate.md`
