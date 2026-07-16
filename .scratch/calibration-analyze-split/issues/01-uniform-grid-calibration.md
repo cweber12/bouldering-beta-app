@@ -1,7 +1,8 @@
 # Uniform grid seeds calibration — MediaPipe scan removed
 
-Status: in-progress
+Status: done
 Branch: feat/uniform-grid-calibration
+Merged: 1fc5394
 Type: AFK
 
 ## Parent
@@ -16,12 +17,12 @@ Note: this slice removes the harness's only detection view; issue 03 restores it
 
 ## Acceptance criteria
 
-- [ ] Grid module returns 100 ms-multiple timestamps covering the whole duration, deterministic, covered by unit tests (boundary at the final frame included).
-- [ ] Confirm saves the setup and fires the ViTPose request with the uniform grid — no detection runs first; `vitpose.json` timestamps echo the grid.
-- [ ] The calibrator loads no pose model; throwaway-scan wiring and Detection Preview phases are deleted, not flagged off.
-- [ ] Loading state shows while polling; flag-only review opens on the seeded grid exactly as before.
-- [ ] ViTPose failure gates review with retry; the setup save still succeeds; legacy-tap warnings still surface.
-- [ ] Type-check, lint, and targeted tests pass.
+- [x] Grid module returns 100 ms-multiple timestamps covering the whole duration, deterministic, covered by unit tests (boundary at the final frame included).
+- [x] Confirm saves the setup and fires the ViTPose request with the uniform grid — no detection runs first; `vitpose.json` timestamps echo the grid.
+- [x] The calibrator loads no pose model; throwaway-scan wiring and Detection Preview phases are deleted, not flagged off.
+- [x] Loading state shows while polling; flag-only review opens on the seeded grid exactly as before.
+- [x] ViTPose failure gates review with retry; the setup save still succeeds; legacy-tap warnings still surface.
+- [x] Type-check, lint, and targeted tests pass.
 
 ## Blocked by
 
