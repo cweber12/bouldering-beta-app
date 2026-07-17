@@ -12,8 +12,11 @@
  * is accepted, confirming an edited Setup only saves it — the seed and the review
  * are skipped, and "Re-seed Ground Truth" is the explicit way back in.
  * Calibration runs no detection at all: it authors truth, and nothing else.
- * Detection output lives in the separate Analyze step. "Save setup only"
- * persists the Setup without seeding.
+ * Detection output lives in the separate Analyze step, reached per video from
+ * the corpus list: it runs the production pipeline against the saved Scan Setup,
+ * renders the skeleton + diagnostics, and posts the run. Nothing about it fires
+ * off the back of accepting Ground Truth. "Save setup only" persists the Setup
+ * without seeding.
  * Rendered only in development. See docs/adr/0017, 0018 and 0019.
  */
 
@@ -24,6 +27,7 @@ import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
+import Analyzer from "@/components/dev/Analyzer";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
@@ -107,10 +111,13 @@ function probeVideoMeta(url: string): Promise<VideoMeta> {
   });
 }
 
+/** What the corpus list opened a video for — the two acts are kept separate. */
+type Selection = { item: CorpusItem; mode: "calibrate" | "analyze" };
+
 export default function HarnessPage() {
   const [items, setItems] = useState<CorpusItem[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<CorpusItem | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
 
   const refreshList = useCallback(async () => {
     setListError(null);
@@ -139,10 +146,22 @@ export default function HarnessPage() {
     );
   }
 
+  if (selected?.mode === "analyze") {
+    return (
+      <Analyzer
+        item={selected.item}
+        onBack={() => setSelected(null)}
+        // A posted run changes the run count; keep the Analyze view open so the
+        // rendered result stays on screen.
+        onDone={refreshList}
+      />
+    );
+  }
+
   if (selected) {
     return (
       <Calibrator
-        item={selected}
+        item={selected.item}
         onBack={() => setSelected(null)}
         onDone={async () => {
           await refreshList();
@@ -216,13 +235,28 @@ export default function HarnessPage() {
                   </td>
                   <td className="py-2 pr-3 tabular-nums text-fg">{it.runCount}</td>
                   <td className="py-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => setSelected(it)}
-                      className="rounded-md bg-send/80 px-3 py-1.5 text-xs font-medium text-fg-inverse"
-                    >
-                      {it.hasSetup ? "Re-calibrate" : "Calibrate"}
-                    </button>
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelected({ item: it, mode: "calibrate" })}
+                        className="rounded-md bg-send/80 px-3 py-1.5 text-xs font-medium text-fg-inverse"
+                      >
+                        {it.hasSetup ? "Re-calibrate" : "Calibrate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelected({ item: it, mode: "analyze" })}
+                        disabled={!it.hasSetup}
+                        title={
+                          it.hasSetup
+                            ? "Run the production detection pipeline with this video's Scan Setup"
+                            : "Calibrate a Scan Setup before analyzing"
+                        }
+                        className="rounded-md bg-surface-alt px-3 py-1.5 text-xs font-medium text-fg disabled:opacity-50"
+                      >
+                        Analyze
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
