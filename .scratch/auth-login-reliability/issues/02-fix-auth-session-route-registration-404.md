@@ -1,8 +1,9 @@
 # Fix /api/auth/session route-registration 404
 
-Status: in-progress
+Status: done
 Type: interactive
 Branch: fix/auth-session-route-404
+Merged: 2a75cd8
 
 ## Parent
 
