@@ -1,7 +1,12 @@
 # Broaden the Capture-Mode Toggle Label
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 48baa7d
 Type: AFK
+
+> Shipped in 48baa7d: the toggle reads "Moving camera" with Fixed described as the
+> tripod case, and README + CONTEXT.md were aligned in the same commit.
 
 ## Parent
 
@@ -29,11 +34,11 @@ diagnostics type unchanged. No ADR — the display/label choices here are easily
 
 ## Acceptance criteria
 
-- [ ] The toggle label and help text read as covering panning, handheld, and shaky shots,
+- [x] The toggle label and help text read as covering panning, handheld, and shaky shots,
       with Fixed described as the tripod case.
-- [ ] The docs page description matches the new label.
-- [ ] CONTEXT.md's Panning Capture entry is clarified; internal terms/types unchanged.
-- [ ] No behavioural change to detection/matching — label and copy only.
+- [x] The docs page description matches the new label.
+- [x] CONTEXT.md's Panning Capture entry is clarified; internal terms/types unchanged.
+- [x] No behavioural change to detection/matching — label and copy only.
 
 ## Blocked by
 

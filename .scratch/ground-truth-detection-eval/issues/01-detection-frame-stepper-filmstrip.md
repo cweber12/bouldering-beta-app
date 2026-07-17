@@ -1,6 +1,8 @@
 # Detection Frame Stepper and Filmstrip
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 8b061ed
 Type: AFK
 
 ## Parent
@@ -17,11 +19,17 @@ Keyboard: ←/→ step, space play/pause.
 
 ## Acceptance criteria
 
-- [ ] The harness Detection Preview shows a filmstrip with one tick per Detection Frame, colored by status, bad-stretches visibly highlighted.
-- [ ] Prev/next and click-to-seek move the player to the exact Detection Frame; ←/→ and space work.
-- [ ] "Jump to next flagged stretch" lands on the next missing/weak run.
-- [ ] The stepper is a self-contained component with no harness-specific coupling (reusable), covered by tests.
-- [ ] Continuous play still works; stepping pauses and snaps to frame.
+- [x] The harness Detection Preview shows a filmstrip with one tick per Detection Frame, colored by status, bad-stretches visibly highlighted.
+- [x] Prev/next and click-to-seek move the player to the exact Detection Frame; ←/→ and space work.
+- [x] "Jump to next flagged stretch" lands on the next missing/weak run.
+- [x] The stepper is a self-contained component with no harness-specific coupling (reusable), covered by tests.
+- [x] Continuous play still works; stepping pauses and snaps to frame.
+
+> Shipped in 8b061ed. The stepper was wired into the harness Detection Preview
+> as specified; that phase was later removed with the throwaway scan
+> (`.scratch/calibration-analyze-split/issues/01`), and the component now drives
+> the Ground Truth review and the Analyze step's rendered run instead. Reusable
+> exactly as intended — the seam outlived the caller it was built for.
 
 ## Blocked by
 

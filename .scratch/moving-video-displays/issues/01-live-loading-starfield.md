@@ -1,7 +1,13 @@
 # Live-Updating Loading Starfield
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 48baa7d
 Type: AFK
+
+> Shipped in 48baa7d: `shouldEmitOrbPreview` throttles the re-extraction in
+> `useVideoProcessor`, XrayStage cross-fades the refreshes, and the cadence is
+> covered by `__tests__/hooks/useVideoProcessor.test.ts`.
 
 ## Parent
 
@@ -37,14 +43,14 @@ currentAnalysis, cropOptions, wallCropPx, …)` → `setOrbPreview(...)`. Thrott
 
 ## Acceptance criteria
 
-- [ ] The loading-screen ORB dots update during the scan and scroll with the wall as the
+- [x] The loading-screen ORB dots update during the scan and scroll with the wall as the
       camera moves (not frozen at frame-0 positions).
-- [ ] The live skeleton and the wall dots stay visually coherent as the camera moves.
-- [ ] Re-extraction is throttled to a bounded display cadence and reuses already-captured
+- [x] The live skeleton and the wall dots stay visually coherent as the camera moves.
+- [x] Re-extraction is throttled to a bounded display cadence and reuses already-captured
       frame data / Panning keyframe ORB; no measurable slowdown to scan completion.
-- [ ] Fixed/tripod videos still show a coherent (effectively static) starfield — no
+- [x] Fixed/tripod videos still show a coherent (effectively static) starfield — no
       regression.
-- [ ] `XrayStage` / `useVideoProcessor` tests cover the re-emit; ORB is mocked at the
+- [x] `XrayStage` / `useVideoProcessor` tests cover the re-emit; ORB is mocked at the
       module boundary.
 
 ## Blocked by

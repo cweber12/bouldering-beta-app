@@ -1,7 +1,15 @@
 # Play the Real Video Behind the Detection Preview
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 48baa7d
 Type: AFK
+
+> Shipped in 48baa7d: `FramePlayer` gained the optional `videoSrc` backdrop with
+> timeline sync, tests cover both the video and the static-image paths. The
+> harness Calibrator preview named here was later removed with the throwaway scan
+> (`.scratch/calibration-analyze-split/issues/01`); the video-backed overlay now
+> renders in the Analyze step instead.
 
 ## Parent
 
@@ -37,14 +45,14 @@ existing bitmap cleanup.
 
 ## Acceptance criteria
 
-- [ ] The Detection Preview plays the real source video with the per-frame skeleton
+- [x] The Detection Preview plays the real source video with the per-frame skeleton
       overlaid; the skeleton stays on the climber through the whole climb, not on a stale
       first frame.
-- [ ] Play / pause / seek work against the video timeline.
-- [ ] ORB dots (Developer view) and Holds still render correctly over the video.
-- [ ] The static-image `FramePlayer` path (Route Overlay, Compare) is unchanged.
-- [ ] The dev harness Calibrator preview plays the corpus video with the overlay.
-- [ ] `FramePlayer` tests cover the video-background path and confirm the static path is
+- [x] Play / pause / seek work against the video timeline.
+- [x] ORB dots (Developer view) and Holds still render correctly over the video.
+- [x] The static-image `FramePlayer` path (Route Overlay, Compare) is unchanged.
+- [x] The dev harness Calibrator preview plays the corpus video with the overlay.
+- [x] `FramePlayer` tests cover the video-background path and confirm the static path is
       unaffected.
 
 ## Blocked by
