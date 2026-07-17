@@ -2,7 +2,7 @@
 
 Status: done
 Branch: none (cross-repo — work landed in beta-scan-analysis)
-Merged: 6445d7a (beta-scan-analysis; seed diagnostics c7afff9)
+Merged: c0d1f18
 
 ## Context
 
@@ -36,7 +36,10 @@ selector changes that don't need `t` can land regardless).
 ## Comments
 
 Closed 2026-07-17 (per `handoff-beta-scanner-prd-update.md`): all four changes
-are implemented and unit-tested in beta-scan-analysis `vitpose_job.py` —
+are implemented and unit-tested in beta-scan-analysis `vitpose_job.py`
+(`6445d7a`, seed diagnostics `c7afff9`). The `Merged:` sha above is the
+beta-scanner closure-record commit — cross-repo work has no local merge
+commit. The changes —
 tap-anchored seeding with no global fallback when `t` is present, crop as a
 seed-only gate (+10% per side), slack cap `min(0.08 + 0.04·gap, 0.18)` with an
 area-ratio band [1/3, 3×] on re-acquisition, and the silent un-crop fallback
