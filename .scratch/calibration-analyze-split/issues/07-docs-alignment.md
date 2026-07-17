@@ -24,3 +24,10 @@ Bring the documented decisions in line with the shipped ones. Amend ADR 0018 (gr
 - `.scratch/calibration-analyze-split/issues/03-analyze-action-production-run.md`
 - `.scratch/calibration-analyze-split/issues/04-scoring-vs-ground-truth.md`
 - `.scratch/calibration-analyze-split/issues/05-batch-analyze-gt-gate.md`
+
+## Comments
+
+- 2026-07-17 (tracker audit): the second acceptance criterion is already
+  satisfied — old issues 08/09 now carry `Status: wontfix` + `Superseded-by:`
+  pointers at this feature's issues 04/05, and the drift audit is clean. The
+  ADR 0018/0019 amendments and the CONTEXT.md check remain to be done here.

@@ -1,6 +1,11 @@
 # Calibration without MediaPipe: uniform GT grid, video-keyed truth, Analyze step
 
-Status: ready-for-agent
+Status: in-progress
+
+> 2026-07-17 (tracker audit): issues 01–03 done (merges `a16c6b1`, `0f2a9e1`,
+> `beb9191`); issues 04–07 remain open. The re-pointing of the old
+> ground-truth-detection-eval issues 08/09 (part of issue 07's acceptance) was
+> done during the audit; issue 07's ADR/CONTEXT amendments remain.
 
 Spec inputs: `docs/adr/0018` (Ground Truth eval) and `docs/adr/0019` (ViTPose scaffold), both amended by this PRD; the flag-only review model shipped by `.scratch/calibration-flag-review/`; the scoring design in `.scratch/ground-truth-detection-eval/issues/08-headless-scoring-pass.md` (amended, not superseded, by this PRD); the analyzer handoff pattern established by `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`.
 Glossary: CONTEXT.md — **Ground Truth**, **Detection Frame**, **Scan Setup**, **Test Video**, **Climber**, **Detection Error**.

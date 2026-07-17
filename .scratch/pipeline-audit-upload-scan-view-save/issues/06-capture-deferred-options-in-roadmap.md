@@ -1,6 +1,8 @@
 # Capture Deferred Pipeline Options in Roadmap
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: b5e3d64
 Type: AFK
 
 ## Parent
@@ -16,10 +18,14 @@ tracked follow-ups with clear trigger conditions.
 
 ## Acceptance criteria
 
-- [ ] Roadmap contains all three deferred options from the audit with concise rationale.
-- [ ] Each deferred item includes a practical trigger/condition for reconsideration.
-- [ ] Deferred items are documented as out-of-scope for the current hardening increment.
+- [x] Roadmap contains all three deferred options from the audit with concise rationale.
+- [x] Each deferred item includes a practical trigger/condition for reconsideration.
+- [x] Deferred items are documented as out-of-scope for the current hardening increment.
 
 ## Blocked by
 
 None - can start immediately
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in b5e3d64 (workstream C). docs/roadmap.md captures five deferrals (the original three plus the two pose-addendum ones), exceeding the three required here.

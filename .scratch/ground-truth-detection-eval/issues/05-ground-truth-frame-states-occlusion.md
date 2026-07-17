@@ -2,6 +2,7 @@
 
 Status: done
 Type: AFK
+Branch: feat/vitpose-gt-scaffold
 Merged: 0453740
 
 ## Parent

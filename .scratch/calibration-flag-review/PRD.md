@@ -1,6 +1,9 @@
 # Calibration flag-only Ground Truth review + scanner data-contract alignment
 
-Status: ready-for-agent
+Status: done
+
+> Closed 2026-07-17 (tracker audit). All 7 issues were merged and individually
+> closed (final merge `684eb81`, issue 07); only this PRD status had drifted.
 
 Spec inputs: `docs/adr/0018` (Ground Truth eval), `docs/adr/0019` (ViTPose scaffold, amended by this PRD), and the harness handoff `scanner-data-contract.md` (Phase 3 + the `analysisInputs` move; Phases 1–2 out of scope).
 Glossary: CONTEXT.md — **Ground Truth**, **Detection Frame**, **Scan Setup**, **Test Video**, **Climber**.

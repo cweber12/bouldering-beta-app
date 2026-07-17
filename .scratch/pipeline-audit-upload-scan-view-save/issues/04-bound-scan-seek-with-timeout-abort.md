@@ -1,6 +1,8 @@
 # Bound Scan Seek Operations with Timeout and Abort Race
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: fdcc6bd
 Type: AFK
 
 ## Parent
@@ -16,11 +18,15 @@ events or throttled media behavior.
 
 ## Acceptance criteria
 
-- [ ] Each seek operation races completion against timeout and abort signals.
-- [ ] Scan reset/cancel interrupts in-flight processing promptly instead of waiting for unresolved seek events.
-- [ ] Both main scan and recovery seek paths share the bounded behavior.
-- [ ] Targeted tests cover timeout handling, abort handling, and guaranteed loop termination/progress.
+- [x] Each seek operation races completion against timeout and abort signals.
+- [x] Scan reset/cancel interrupts in-flight processing promptly instead of waiting for unresolved seek events.
+- [x] Both main scan and recovery seek paths share the bounded behavior.
+- [x] Targeted tests cover timeout handling, abort handling, and guaranteed loop termination/progress.
 
 ## Blocked by
 
 None - can start immediately
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in fdcc6bd (workstream A). seekVideo timeout/abort race verified in utils/videoSeek.ts, used by both scan loops in useVideoProcessor.

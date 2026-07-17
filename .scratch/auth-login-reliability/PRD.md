@@ -1,6 +1,10 @@
 # Auth & login reliability
 
-Status: ready-for-agent
+Status: in-progress
+
+> 2026-07-17 (tracker audit): issue 01 done (`46ba194`). Issue 02 remains valid
+> — the Next version skew it targets still exists (installed 16.2.7 vs pinned
+> `^16.2.10`, re-verified today). Issue 03 stays blocked on 02.
 
 Spec inputs: dev-server + browser console logs showing `POST /api/auth/session 404`
 and a `/login?redirect=/scan` bounce loop. Code under `hooks/useAuth.tsx`,

@@ -234,9 +234,17 @@ and `git add .` + `git commit` after every code change session without waiting t
   then merge with `git merge --no-ff` and close the issue in that same `.scratch`
   file by setting `Status: done` + `Merged: <sha>` in the same step.
 - An issue is never `done` until its code is merged, and merged code never lands
-  without moving its issue to `done` — the two happen together.
+  without moving its issue to `done` — the two happen together. This includes
+  **batch commits**: a commit that lands several issues' work closes every one of
+  them (status + `Branch:` + `Merged:` + ticked checkboxes) immediately.
+- The PRD's own `Status:` moves with its issues (`ready-for-agent` →
+  `in-progress` on first landing → `done` when all issues are terminal), and an
+  issue replaced by newer work is closed `wontfix` with a `Superseded-by:`
+  pointer — see `docs/agents/issue-tracker.md`.
 - Before ending a PRD work session, run `node scripts/audit-issues.mjs` and
-  resolve any drift it reports (implemented-but-not-closed, or closed-but-unmerged).
+  resolve any drift it reports (unclosed/unmerged issues, incomplete tracking
+  blocks, PRD status drift, dangling supersession pointers); delete local
+  branches it warns about.
 
 ### README maintenance
 

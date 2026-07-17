@@ -47,3 +47,9 @@ This issue requires a **live dev server**, so it is interactive (not AFK):
 
 None - can start immediately (independent of 01, but 01 makes this easier to observe
 because login now surfaces the real error).
+
+## Comments
+
+- 2026-07-17 (tracker audit): still valid — re-verified the version skew:
+  installed Next is 16.2.7 while `package.json` pins `^16.2.10`. The
+  `npm install` + `.next` rebuild step has not been run yet.

@@ -3,6 +3,14 @@
 Status: ready-for-agent
 Type: AFK
 
+> Amendment (2026-07-17 tracker audit): still valid, but the surface has moved.
+> The calibrator's throwaway MediaPipe scan and Detection Preview were deleted by
+> `.scratch/calibration-analyze-split/` — detection now runs only in the Analyze
+> action (production `useVideoProcessor` path), so the per-frame conditions and
+> the "this frame" display belong in the Analyze view / `DiagnosticsPanel`, not
+> the old calibration stepper. The computation site (`useVideoProcessor` under
+> the diagnostics gate) is unchanged; only frame-0 conditions exist today.
+
 ## Parent
 
 - `.scratch/ground-truth-detection-eval/PRD.md`

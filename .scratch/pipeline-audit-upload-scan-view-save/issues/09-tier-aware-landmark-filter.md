@@ -1,6 +1,8 @@
 # Tier-Aware, Climbing-Weighted Landmark Filtering (S3)
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 0dae4cd
 Type: AFK
 
 ## Parent
@@ -22,15 +24,19 @@ working with sensible defaults if tiers are not yet wired.
 
 ## Acceptance criteria
 
-- [ ] Filtering judges frames primarily on a climbing-relevant keypoint subset,
+- [x] Filtering judges frames primarily on a climbing-relevant keypoint subset,
       not all 33 weighted equally.
-- [ ] The missing/low-confidence tolerance is parameterised (default preserves or
+- [x] The missing/low-confidence tolerance is parameterised (default preserves or
       improves current behavior; tier-tunable).
-- [ ] Frames with occluded feet but strong hands/torso/hips survive; genuinely
+- [x] Frames with occluded feet but strong hands/torso/hips survive; genuinely
       degraded frames are still dropped.
-- [ ] Targeted tests cover occluded-foot survival and degraded-frame rejection.
-- [ ] tsc, eslint, and vitest are green.
+- [x] Targeted tests cover occluded-foot survival and degraded-frame rejection.
+- [x] tsc, eslint, and vitest are green.
 
 ## Blocked by
 
 None — can start immediately. Tier wiring is optional and lands with issue 10.
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in 0dae4cd (workstream B). CLIMBING_KEYPOINT_WEIGHTS + tier-tunable tolerance verified in pipeline/pose/poseInterpolator.ts.

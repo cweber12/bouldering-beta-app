@@ -1,6 +1,10 @@
 # PRD: Moving-Video Scan Displays — Loading & Preview Alignment
 
-Status: ready-for-agent
+Status: done
+
+> Closed 2026-07-17 (tracker audit). All 3 issues landed in `48baa7d`
+> (feat: improve moving-camera scan previews) and were already marked done;
+> only this PRD status had drifted.
 
 ## Problem Statement
 

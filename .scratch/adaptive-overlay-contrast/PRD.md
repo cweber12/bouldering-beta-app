@@ -1,7 +1,15 @@
 # Adaptive contrast for Skeleton & Holds overlays
 
-Status: ready-for-agent
+Status: done
 Type: AFK
+
+> Closed 2026-07-17 (tracker audit). Shipped without issues being cut:
+> `aada381` (feat: adapt overlay colours for contrast against the wall) built
+> `pipeline/overlay/contrastAdapter.ts`, `hooks/useContrastAdjust.ts`, the
+> SkeletonStylePanel toggle, and threading through skeleton/holds overlays,
+> Compare, and the route console (`6f61e70`). **Deviation from this PRD:**
+> follow-up `6ec012d` made the contrast boost opt-in (default **off**) after
+> the default-on behaviour pushed colours near-black on dark walls.
 
 ## Problem Statement
 

@@ -9,7 +9,7 @@ Issues and PRDs for this repo live as markdown files in `.scratch/`.
 - Implementation issues are `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Two more tracking lines are added as an issue moves through implementation, directly under `Status:`:
-  - `Branch:` — the branch the work lives on, written when implementation starts (status moves to `in-progress`)
+  - `Branch:` — the branch the work lives on, written when implementation starts (status moves to `in-progress`). Work committed directly to `main` (rare; batch/doc commits) records `Branch: main`.
   - `Merged:` — the commit SHA that landed the work on `main`, written when the issue is closed (status moves to `done`)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
@@ -20,6 +20,51 @@ Status: done
 Branch: feat/gt-03-model-persistence
 Merged: 9750b1c
 ```
+
+A `done` issue must always carry **both** `Branch:` and `Merged:` — the drift
+audit fails on a `done` issue missing either.
+
+### PRD status lifecycle
+
+The PRD's own `Status:` line tracks the feature as a whole:
+
+- `ready-for-agent` — no issue has landed yet
+- `in-progress` — at least one issue is done, others remain open
+- `done` — every issue is terminal (`done` or `wontfix`)
+
+Moving the last issue to `done` and moving the PRD to `done` happen in the same
+commit. The drift audit checks PRD/issue consistency.
+
+### Superseded issues
+
+When a newer PRD replaces an issue rather than implementing it, close it as:
+
+```text
+Status: wontfix
+Superseded-by: .scratch/<new-feature>/issues/<NN>-<slug>.md
+```
+
+with a short blockquote note under the tracking block saying what superseded it
+and where the spec of record now lives. Never leave two live issues tracking the
+same work — the older one gets the pointer. The drift audit verifies the
+`Superseded-by:` target exists.
+
+### Batch commits
+
+If one commit lands the work of several issues (a workstream batch), close
+**every** covered issue immediately: set `Status: done`, `Branch:`, and
+`Merged: <landing sha>` and tick their acceptance checkboxes, in the very next
+(chore) commit if the SHA can't be known in advance — never later in the
+session. An implementation commit whose issues are left unclosed is
+the tracker's primary failure mode — it leaves nothing for the drift audit to
+key on. (This is exactly how ten pipeline-audit issues shipped silently before
+the 2026-07-17 audit.)
+
+### Acceptance checkboxes
+
+Checkbox state must reflect the implementation at close time: tick the boxes
+verified by the quality gate, and note any criterion that shipped differently
+(or was exceeded) in `## Comments` instead of leaving it unchecked.
 
 ## PRD lifecycle loop
 

@@ -1,6 +1,11 @@
 # PRD: Pipeline Audit — Upload -> Scan -> View -> Save
 
-Status: ready-for-agent
+Status: done
+
+> Closed 2026-07-17 (tracker audit). All 10 issues shipped in three workstream
+> commits on main — A: `fdcc6bd` (issues 01–05), B: `0dae4cd` (issues 08–10),
+> C: `b5e3d64` (issues 06–07) — but were never closed at the time; statuses
+> reconciled retroactively. See `IMPLEMENTATION-PLAN.md` for the executed sequence.
 
 ## Problem Statement
 

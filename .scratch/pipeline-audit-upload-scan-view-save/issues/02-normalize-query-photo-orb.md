@@ -1,6 +1,8 @@
 # Normalize Query Photo Resolution Before ORB Matching
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: fdcc6bd
 Type: AFK
 
 ## Parent
@@ -17,11 +19,15 @@ and overlay behavior remain unchanged.
 
 ## Acceptance criteria
 
-- [ ] Query-image preprocessing downscales to reference-aware bounds with a hard maximum edge.
-- [ ] Keypoint coordinates are mapped back to native query-image space before downstream matching.
-- [ ] High-resolution photo matching no longer causes multi-second UI blocking in normal usage.
-- [ ] Targeted tests verify coordinate round-trip correctness and stable matching behavior.
+- [x] Query-image preprocessing downscales to reference-aware bounds with a hard maximum edge.
+- [x] Keypoint coordinates are mapped back to native query-image space before downstream matching.
+- [x] High-resolution photo matching no longer causes multi-second UI blocking in normal usage.
+- [x] Targeted tests verify coordinate round-trip correctness and stable matching behavior.
 
 ## Blocked by
 
 None - can start immediately
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in fdcc6bd (workstream A). downscaleImageData + queryMaxEdgeFor verified in hooks/useImageMatcher.ts.

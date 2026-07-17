@@ -1,5 +1,12 @@
 # Ground-truth-scored detection eval
 
+Status: in-progress
+
+> 2026-07-17 (tracker audit): this PRD had no Status line; added. Slices
+> 01, 03–07, 10 are done. 02 remains open (see its amendment note). 08 and 09
+> are superseded by `.scratch/calibration-analyze-split/` issues 04 and 05 —
+> their grilled designs remain the spec of record, referenced from there.
+
 Spec: `docs/adr/0018-ground-truth-scored-detection-eval.md` (extends ADR 0017).
 Glossary: CONTEXT.md — **Ground Truth**, **Detection Error**, **Detection Frame**, **Scan Setup**, **Test Video**.
 

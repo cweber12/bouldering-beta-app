@@ -1,6 +1,8 @@
 # Correct Auth Documentation to Match Firebase Implementation
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: b5e3d64
 Type: AFK
 
 ## Parent
@@ -15,10 +17,14 @@ documentation alignment task and should not change runtime auth behavior.
 
 ## Acceptance criteria
 
-- [ ] Documentation no longer claims Supabase auth where Firebase is the actual implementation.
-- [ ] Updated docs describe route protection and session handling terms consistent with current code.
-- [ ] Scope remains documentation-only with no production auth code changes.
+- [x] Documentation no longer claims Supabase auth where Firebase is the actual implementation.
+- [x] Updated docs describe route protection and session handling terms consistent with current code.
+- [x] Scope remains documentation-only with no production auth code changes.
 
 ## Blocked by
 
 None - can start immediately
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in b5e3d64 (workstream C). AGENTS.md/CLAUDE.md now describe the Firebase session-cookie architecture; the only remaining Supabase mention is the intentional no-Supabase note.

@@ -1,7 +1,14 @@
 # Headless Scoring Pass (Detection Errors)
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/calibration-analyze-split/issues/04-scoring-vs-ground-truth.md
 Type: AFK
+
+> 2026-07-17 (tracker audit): superseded, not rejected. The calibration-analyze-split
+> PRD amends this design (probed-frame scoring domain, `probeCoverage`, amended
+> `detectionRateVsGT` denominator) and its issue 04 is the implementation ticket.
+> The grilled ladder/thresholds/rollup below remain the spec of record and are
+> referenced from there — do not implement from this file.
 
 > Unaffected by ADR 0019 / issue 10. The ViTPose scaffold change is entirely on
 > the authoring side: it reads `ground-truth.json` exactly as before, with the

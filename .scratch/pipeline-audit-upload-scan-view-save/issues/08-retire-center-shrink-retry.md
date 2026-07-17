@@ -1,6 +1,8 @@
 # Retire the Centre-Shrink Pose Retry (S1)
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 0dae4cd
 Type: AFK
 
 ## Parent
@@ -21,14 +23,18 @@ climber-aware via the tracker.
 
 ## Acceptance criteria
 
-- [ ] `estimateFrameWithRetry` and its `RetryOptions` are removed, or reworked to
+- [x] `estimateFrameWithRetry` and its `RetryOptions` are removed, or reworked to
       re-centre on the detected centroid instead of shrinking from edges.
-- [ ] No remaining references to the centre-shrink retry in `hooks/` or `pipeline/`.
-- [ ] `scorePoseFrame` / `meanConfidence` are retained if still used elsewhere,
+- [x] No remaining references to the centre-shrink retry in `hooks/` or `pipeline/`.
+- [x] `scorePoseFrame` / `meanConfidence` are retained if still used elsewhere,
       otherwise removed with their tests.
-- [ ] tsc, eslint, and vitest are green; obsolete retry tests are deleted, not skipped.
+- [x] tsc, eslint, and vitest are green; obsolete retry tests are deleted, not skipped.
 
 ## Blocked by
 
 None — can start immediately. (The tracker work it depends on is already shipped
 on `feat/climber-identity-tracking`.)
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in 0dae4cd (workstream B). estimateFrameWithRetry and RetryOptions removed from pipeline/.

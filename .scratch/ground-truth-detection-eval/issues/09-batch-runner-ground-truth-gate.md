@@ -1,7 +1,12 @@
 # Batch Runner Ground-Truth Gate
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/calibration-analyze-split/issues/05-batch-analyze-gt-gate.md
 Type: AFK
+
+> 2026-07-17 (tracker audit): superseded, not rejected. The batch sweep is now
+> the Analyze batch gated on accepted Ground Truth — implement from
+> calibration-analyze-split issue 05, not this file.
 
 ## Parent
 

@@ -1,6 +1,8 @@
 # Fast / Balanced / Accurate Quality Tier Selector (S5)
 
-Status: ready-for-agent
+Status: done
+Branch: main
+Merged: 0dae4cd
 Type: AFK
 
 ## Parent
@@ -25,14 +27,18 @@ users. Tier choice should flow through the scan page into `useVideoProcessor`.
 
 ## Acceptance criteria
 
-- [ ] A single Fast / Balanced / Accurate control replaces the primary model +
+- [x] A single Fast / Balanced / Accurate control replaces the primary model +
       stride controls; advanced overrides remain accessible.
-- [ ] Each preset maps to a documented config bundle (variant, maxPoses, effort,
+- [x] Each preset maps to a documented config bundle (variant, maxPoses, effort,
       frameStep) from one shared source.
-- [ ] Selecting a tier changes the model config and detection behavior end to end.
-- [ ] Tests assert each preset resolves to the expected config.
-- [ ] tsc, eslint, and vitest are green; README detection-controls section updated.
+- [x] Selecting a tier changes the model config and detection behavior end to end.
+- [x] Tests assert each preset resolves to the expected config.
+- [x] tsc, eslint, and vitest are green; README detection-controls section updated.
 
 ## Blocked by
 
 None — can start immediately. Pairs naturally with issue 09 (tier-aware filtering).
+
+## Comments
+
+- 2026-07-17 (tracker audit): closed retroactively — landed in 0dae4cd (workstream B). utils/poseTiers.ts presets + StepSetDetection tier control verified; tests in __tests__/utils/poseTiers.test.ts.

@@ -1,6 +1,11 @@
 # ViTPose Climber Identity — fix wrong-person Ground Truth seeds
 
-Status: ready-for-agent
+Status: in-progress
+
+> 2026-07-17 (tracker audit): issue 01 is done (`defe7ed`); issue 02 is
+> ready-for-agent (cross-repo work in beta-scan-analysis, spec in
+> `downloader-selector-fix.md`); issue 03 is the ready-for-human validation
+> session that gates triage of issues 04–07 (intentionally needs-triage).
 
 Spec inputs: `docs/adr/0019` (ViTPose scaffold, amended by this PRD), the cross-program
 contract `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`
