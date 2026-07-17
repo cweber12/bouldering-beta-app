@@ -1,6 +1,6 @@
 # Auth & login reliability
 
-Status: in-progress
+Status: done
 
 > 2026-07-17 (tracker audit): issue 01 done (`46ba194`). Issue 02 remains valid
 > — the Next version skew it targets still exists (installed 16.2.7 vs pinned

@@ -1,8 +1,9 @@
 # Keep client & server session in lockstep via onIdTokenChanged
 
-Status: in-progress
+Status: done
 Type: AFK
 Branch: fix/alr-03-session-lockstep
+Merged: f7e1312
 
 ## Parent
 
@@ -33,17 +34,17 @@ In `hooks/useAuth.tsx`:
 
 ## Acceptance criteria
 
-- [ ] `onIdTokenChanged` drives the provider; a token emission re-mints the
+- [x] `onIdTokenChanged` drives the provider; a token emission re-mints the
       `__session` cookie via `POST /api/auth/session`.
-- [ ] A repeated identical token does not trigger a second POST (sync guard works).
-- [ ] Sign-out still clears the cookie and the user.
-- [ ] With the Firebase client authenticated but the server cookie cleared, a reload
+- [x] A repeated identical token does not trigger a second POST (sync guard works).
+- [x] Sign-out still clears the cookie and the user.
+- [x] With the Firebase client authenticated but the server cookie cleared, a reload
       silently re-mints the cookie and protected routes load without a manual
       re-login.
-- [ ] Cookie flags unchanged; strict decision documented in the route.
-- [ ] Tests in `__tests__/hooks/useAuth.test.tsx` cover: token emission → POST, and
+- [x] Cookie flags unchanged; strict decision documented in the route.
+- [x] Tests in `__tests__/hooks/useAuth.test.tsx` cover: token emission → POST, and
       unchanged token → no second POST.
-- [ ] `npx tsc --noEmit`, `npx eslint .`, and the targeted `npx vitest run` pass.
+- [x] `npx tsc --noEmit`, `npx eslint .`, and the targeted `npx vitest run` pass.
 
 ## Blocked by
 
