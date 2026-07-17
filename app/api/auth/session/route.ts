@@ -28,6 +28,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     response.cookies.set(SESSION_COOKIE_NAME, sessionCookie, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
+      // strict over lax: no cross-site entry links into protected pages exist, and
+      // onIdTokenChanged re-mints the cookie on load if a strict-blocked navigation
+      // ever arrives without it — so the CSRF-tightest setting costs nothing.
       sameSite: "strict",
       maxAge: SESSION_COOKIE_MAX_AGE_MS / 1000, // seconds
       path: "/",
