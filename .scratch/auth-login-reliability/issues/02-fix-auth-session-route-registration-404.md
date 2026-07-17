@@ -37,10 +37,9 @@ This issue requires a **live dev server**, so it is interactive (not AFK):
 ## Acceptance criteria
 
 - [x] Installed Next version matches `package.json` (`^16.2.10`); `.next` rebuilt.
-- [x] `POST /api/auth/session` with a dummy body returns 400 (not 404). (The
-      real-login-200 half was not exercised in this automated run — no headless
-      Firebase test account; the 400/401 healthy signals prove both handlers execute,
-      which is the defect that was failing. See Comments.)
+- [x] `POST /api/auth/session` with a dummy body returns 400 (not 404); a real login
+      (REST sign-in → real signed ID token → POST) returns 200 and sets the
+      `__session` cookie. See Comments.
 - [x] `GET /api/s3/list` returns 401 when unauthenticated (not 404).
 - [x] Verified in both `next dev` and `next build && next start`.
 - [x] All `[DEBUG-auth]` instrumentation removed (grep clean).
@@ -75,3 +74,10 @@ because login now surfaces the real error).
   - **Durable prevention:** keep `node_modules` in sync with the lockfile (a plain
     `npm install`/`npm ci` after a lockfile bump) and clear `.next` after a Next upgrade.
     The lockfile/manifest are already aligned, so no further code change guards this.
+- 2026-07-17 (round-trip verified): closed the real-login gap. Using the Identity
+  Toolkit REST API (`accounts:signInWithPassword` with `NEXT_PUBLIC_FIREBASE_API_KEY`)
+  to obtain a **real signed ID token** for a Spark-plan test account, then POSTing it
+  to `/api/auth/session` returned **200 `{"ok":true}`** and set the `__session`
+  cookie — exercising the real `adminAuth.createSessionCookie()` path end to end
+  (throwaway `scratchpad/probe-login-roundtrip.mjs`, not committed). No Blaze plan
+  needed; email/password auth is free on Spark.
