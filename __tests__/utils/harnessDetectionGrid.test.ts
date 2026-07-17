@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   buildDetectionGrid,
+  isOnDetectionGrid,
+  summarizeGridAlignment,
   DETECTION_GRID_INTERVAL_MS,
 } from "@/utils/harnessDetectionGrid";
 
@@ -56,5 +58,64 @@ describe("buildDetectionGrid", () => {
     expect(buildDetectionGrid(NaN)).toEqual([]);
     expect(buildDetectionGrid(Infinity)).toEqual([]);
     expect(buildDetectionGrid(-1)).toEqual([]);
+  });
+});
+
+describe("isOnDetectionGrid", () => {
+  it("accepts the stride multiples the seek loop probes", () => {
+    // The same arithmetic useVideoProcessor seeks with: (i * 100) / 1000.
+    for (let i = 0; i <= 300; i += 1) {
+      expect(isOnDetectionGrid((i * DETECTION_GRID_INTERVAL_MS) / 1000)).toBe(true);
+    }
+  });
+
+  it("tolerates a millisecond of float noise on either side", () => {
+    expect(isOnDetectionGrid(2.4999)).toBe(true);
+    expect(isOnDetectionGrid(2.5001)).toBe(true);
+  });
+
+  it("rejects a probe time between two strides", () => {
+    expect(isOnDetectionGrid(0.05)).toBe(false);
+    // A frame-boundary snap (30 fps) lands well off the stride.
+    expect(isOnDetectionGrid(0.0333)).toBe(false);
+    expect(isOnDetectionGrid(2.4666)).toBe(false);
+  });
+
+  it("rejects an unusable timestamp", () => {
+    expect(isOnDetectionGrid(NaN)).toBe(false);
+    expect(isOnDetectionGrid(-0.1)).toBe(false);
+  });
+});
+
+describe("summarizeGridAlignment", () => {
+  it("reports a production run's probes as wholly on-grid", () => {
+    // A sparse tier stride plus an Adaptive Refinement re-probe — both are
+    // i x 100 ms by construction, so both land on the grid.
+    const run = [0, 1, 1.1, 1.2, 2, 3].map((timestamp) => ({ timestamp }));
+    expect(summarizeGridAlignment(run)).toEqual({
+      total: 6,
+      onGrid: 6,
+      offGrid: 0,
+      offGridTimestamps: [],
+    });
+  });
+
+  it("counts and names the probes that drifted off the grid", () => {
+    const run = [{ timestamp: 0 }, { timestamp: 0.0333 }, { timestamp: 0.2 }];
+    expect(summarizeGridAlignment(run)).toEqual({
+      total: 3,
+      onGrid: 2,
+      offGrid: 1,
+      offGridTimestamps: [0.0333],
+    });
+  });
+
+  it("reports an empty run as aligned", () => {
+    expect(summarizeGridAlignment([])).toEqual({
+      total: 0,
+      onGrid: 0,
+      offGrid: 0,
+      offGridTimestamps: [],
+    });
   });
 });

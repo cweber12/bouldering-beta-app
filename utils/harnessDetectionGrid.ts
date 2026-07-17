@@ -51,3 +51,50 @@ export function buildDetectionGrid(durationSec: number): DetectionGridFrame[] {
   }
   return frames;
 }
+
+/**
+ * Tolerance (ms) for calling a run's probe time a grid timestamp. The seek loop
+ * probes at the same `i × 100 ms` arithmetic the grid is built from, so an
+ * aligned frame is exact up to float noise; a millisecond of slack absorbs a
+ * video element that reports a seeked position back a hair off the requested one
+ * without ever admitting a frame from a neighbouring stride.
+ */
+const ON_GRID_TOLERANCE_MS = 1;
+
+/** True when `timestampSec` lands on a Detection Frame stride (within 1 ms). */
+export function isOnDetectionGrid(timestampSec: number): boolean {
+  if (!Number.isFinite(timestampSec) || timestampSec < 0) return false;
+  const ms = timestampSec * 1000;
+  const offset = ms % DETECTION_GRID_INTERVAL_MS;
+  const distance = Math.min(offset, DETECTION_GRID_INTERVAL_MS - offset);
+  return distance <= ON_GRID_TOLERANCE_MS;
+}
+
+/** How many of a run's Detection Frames land on the grid. */
+export interface GridAlignment {
+  total: number;
+  onGrid: number;
+  offGrid: number;
+  /** The off-grid probe times, for surfacing which frames drifted. */
+  offGridTimestamps: number[];
+}
+
+/**
+ * Classify a detection run's probe times against the Detection Frame grid.
+ *
+ * Every frame the production seek loop can probe — base samples at any tier
+ * stride and Adaptive Refinement re-probes alike — is computed as `i × 100 ms`,
+ * so a healthy run is entirely on-grid and pairs with Ground Truth by exact
+ * set-intersection. A non-zero `offGrid` count means that arithmetic no longer
+ * holds and the run's frames can never be scored against stored truth, so the
+ * harness surfaces it rather than letting the misalignment score as `missing`.
+ */
+export function summarizeGridAlignment(frames: readonly { timestamp: number }[]): GridAlignment {
+  const offGridTimestamps = frames.map((f) => f.timestamp).filter((t) => !isOnDetectionGrid(t));
+  return {
+    total: frames.length,
+    onGrid: frames.length - offGridTimestamps.length,
+    offGrid: offGridTimestamps.length,
+    offGridTimestamps,
+  };
+}

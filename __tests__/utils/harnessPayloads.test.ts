@@ -1,5 +1,10 @@
-import { describe, it, expect } from "vitest";
-import { buildHarnessPayloads } from "@/utils/harnessPayloads";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import {
+  buildHarnessPayloads,
+  postDetectionRun,
+  type HarnessOrbPayload,
+  type HarnessPosePayload,
+} from "@/utils/harnessPayloads";
 import type { ScanDiagnostics, ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 
@@ -56,5 +61,79 @@ describe("buildHarnessPayloads", () => {
       setupHash: "h",
     });
     expect(orb.referenceFrameMeta).toBeNull();
+  });
+});
+
+describe("postDetectionRun", () => {
+  const { pose, orb } = buildHarnessPayloads({
+    diagnostics,
+    frames,
+    referenceFrameMeta,
+    setupHash: "setup-hash",
+  });
+
+  const stubFetch = (response: { ok: boolean; status: number; body: unknown }) => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: response.ok,
+      status: response.status,
+      json: async () => response.body,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const run = (p: HarnessPosePayload = pose, o: HarnessOrbPayload = orb) =>
+    postDetectionRun({ videoPath: "analysis/route/vid/vid.mp4", pose: p, orb: o });
+
+  it("relays the run with its video path and both stamped halves", async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: { run_id: "run-1" } });
+    await run();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/dev/detections");
+    expect(init.method).toBe("POST");
+    const body = JSON.parse(init.body);
+    expect(body.video_path).toBe("analysis/route/vid/vid.mp4");
+    expect(body.pose.setupHash).toBe("setup-hash");
+    expect(body.pose.diagnostics.appVersion).toBe("abc1234");
+    expect(body.orb.appVersion).toBe("abc1234");
+  });
+
+  it("returns the run id the downloader assigned", async () => {
+    stubFetch({ ok: true, status: 200, body: { run_id: "run-7" } });
+    await expect(run()).resolves.toEqual({ runId: "run-7" });
+  });
+
+  it("resolves with a null run id when the downloader reports none", async () => {
+    stubFetch({ ok: true, status: 200, body: {} });
+    await expect(run()).resolves.toEqual({ runId: null });
+  });
+
+  it("surfaces the downloader's error message", async () => {
+    stubFetch({ ok: false, status: 422, body: { error: "video_path not found." } });
+    await expect(run()).rejects.toThrow("video_path not found.");
+  });
+
+  it("falls back to the status when the failure carries no message", async () => {
+    stubFetch({ ok: false, status: 502, body: {} });
+    await expect(run()).rejects.toThrow("502");
+  });
+
+  it("treats a non-JSON failure body as a failure, not a crash", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => {
+          throw new SyntaxError("Unexpected token");
+        },
+      }),
+    );
+    await expect(run()).rejects.toThrow("500");
   });
 });

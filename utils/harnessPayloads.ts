@@ -7,6 +7,10 @@
  * `setupHash` that ties the run to the Scan Setup it replayed. Attribution
  * (appVersion, resolved config) already lives inside ScanDiagnostics.
  *
+ * Posting is append-only: each Analyze run adds a row, and a run superseded by a
+ * later Setup edit or code change is left in place to be told apart by its
+ * stamps rather than deleted (ADR 0018).
+ *
  * Framework-agnostic — no React imports.
  */
 
@@ -45,4 +49,33 @@ export function buildHarnessPayloads(args: {
       summary: diagnostics.result.orb,
     },
   };
+}
+
+/**
+ * Post one Analyze run to the downloader through the dev relay, which forwards
+ * it server-to-server so the page never crosses an origin boundary. Resolves
+ * with the run identifier the downloader assigned, when it reports one.
+ */
+export async function postDetectionRun(args: {
+  videoPath: string;
+  pose: HarnessPosePayload;
+  orb: HarnessOrbPayload;
+}): Promise<{ runId: string | null }> {
+  const res = await fetch("/api/dev/detections", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ video_path: args.videoPath, pose: args.pose, orb: args.orb }),
+  });
+  let body: Record<string, unknown> = {};
+  try {
+    body = (await res.json()) as Record<string, unknown>;
+  } catch {
+    // The relay passes the downloader's body through verbatim, so a non-JSON
+    // body is possible; the status still decides success.
+  }
+  if (!res.ok) {
+    const error = typeof body.error === "string" ? body.error : null;
+    throw new Error(error ?? `Failed to post the detection run (${res.status}).`);
+  }
+  return { runId: typeof body.run_id === "string" ? body.run_id : null };
 }
