@@ -6,6 +6,12 @@ Gated on: issue 03 outcome (Phase B); depends on issue 05
 > Sequencing note (2026-07-16): if activated, land after
 > `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
 > (see the note on issue 04 — shared carry-forward semantics).
+>
+> Re-sizing note (2026-07-17): escape-hatch scope only, per the notes on
+> issues 04–05. Also: the downloader's stitching is now scored
+> motion+appearance (its issue #19), so the original parity claim in the PRD
+> is stale — propagation here is **intentionally simpler** (motion-only),
+> which is fine for a human-supervised click flow.
 
 ## Context
 
@@ -17,10 +23,12 @@ scale. A swap follows the clicked person forward until their trail runs out
 
 - New framework-agnostic propagation util: starting at the clicked frame's
   candidate, walk subsequent Detection Frames; select the candidate with the
-  same `trackId`, bridging id breaks via nearest-box continuity with the same
-  capped threshold constants as the downloader (`base 0.08`, `per-frame 0.04`,
-  `cap 0.18`, gap measured in video time × nominal fps). Stop when no candidate
-  qualifies.
+  same `trackId`, bridging id breaks via capped nearest-box continuity
+  (`base 0.08`, `per-frame 0.04`, `cap 0.18`, gap measured in video time ×
+  nominal fps — the downloader's Phase A constants). This is intentionally
+  simpler than the downloader's current scored motion+appearance stitching;
+  motion-only suffices for a human-supervised click flow. Stop when no
+  candidate qualifies.
 - Review guard per reached frame: `auto` → replaced; `human-flagged-wrong` →
   replaced and reset to `auto`; `human-flagged-absent` → skipped (trail
   continues past it); `"human"` → skipped. The clicked frame itself follows

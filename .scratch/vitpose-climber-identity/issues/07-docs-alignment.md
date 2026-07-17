@@ -6,7 +6,9 @@ Gated on: lands with or after the phase it documents
 ## Scope
 
 - ADR 0019: amend with the tap-timestamp contract field, the seed
-  anchoring/gating/slack rules (Phase A), and — once shipped — artifact v2
+  anchoring/gating/slack rules (Phase A), the appearance-anchored stitching +
+  `seedDebug.stitch` sidecar diagnostics (downloader issue #19 — shipped
+  2026-07, artifact still `version: 1`), and — once shipped — artifact v2
   candidates + swap/propagation semantics (Phase B).
 - CONTEXT.md: update the Climber Identity / Scan Setup glossary entries for
   `climberPoint.t` and (Phase B) candidate swap.

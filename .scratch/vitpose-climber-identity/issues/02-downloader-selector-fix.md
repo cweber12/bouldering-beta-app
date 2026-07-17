@@ -1,6 +1,8 @@
 # 02 — Downloader: anchor, gate, and cap the Climber selector
 
-Status: ready-for-agent
+Status: done
+Branch: none (cross-repo — work landed in beta-scan-analysis)
+Merged: 6445d7a (beta-scan-analysis; seed diagnostics c7afff9)
 
 ## Context
 
@@ -30,3 +32,16 @@ Implement `.scratch/vitpose-climber-identity/downloader-selector-fix.md`:
 
 Issue 01 (the request must carry `t` for the anchoring to have data; the
 selector changes that don't need `t` can land regardless).
+
+## Comments
+
+Closed 2026-07-17 (per `handoff-beta-scanner-prd-update.md`): all four changes
+are implemented and unit-tested in beta-scan-analysis `vitpose_job.py` —
+tap-anchored seeding with no global fallback when `t` is present, crop as a
+seed-only gate (+10% per side), slack cap `min(0.08 + 0.04·gap, 0.18)` with an
+area-ratio band [1/3, 3×] on re-acquisition, and the silent un-crop fallback
+removed (crop filtering everyone out now yields an empty trajectory). The
+end-to-end acceptance item (recalibrate a known-bad clip in `/dev/harness`)
+folds into issue 03, which now validates the follow-up appearance-anchored
+stitcher (downloader issue #19) that superseded bare Phase A behaviour.
+`downloader-selector-fix.md` is archived.

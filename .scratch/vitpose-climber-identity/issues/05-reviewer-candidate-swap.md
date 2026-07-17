@@ -6,6 +6,12 @@ Gated on: issue 03 outcome (Phase B); depends on issue 04
 > Sequencing note (2026-07-16): if activated, land after
 > `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
 > (see the note on issue 04 — shared carry-forward semantics).
+>
+> Re-sizing note (2026-07-17): with appearance-anchored stitching shipped in
+> the downloader (its issue #19), the swap UI is an escape hatch for the
+> residual (similarly-dressed climbers, appearance-blind footage), not a
+> routine correction tool — see the note on issue 04. Issue 03's tally may
+> trim this to the minimal per-frame swap or defer it.
 
 ## Context
 

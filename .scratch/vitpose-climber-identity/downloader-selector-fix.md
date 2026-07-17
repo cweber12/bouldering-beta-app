@@ -1,5 +1,12 @@
 # Downloader task: fix Climber selection in the ViTPose job (Phase A)
 
+> **Archived 2026-07-17.** Every item below is implemented and unit-tested in
+> beta-scan-analysis `vitpose_job.py` (`6445d7a`, seed diagnostics `c7afff9`);
+> issue 02 is closed. The stitching behaviour described here has since been
+> superseded by appearance-anchored stitching with backtrack recovery
+> (downloader issue #19) — see the PRD's Problem Statement item 5 and status
+> notes. Kept for contract history (`climber_point.t`).
+
 Instructions for an agent working in the **downloader repository**
 (`beta-scan-analysis`, module `vitpose_job.py`). beta-scanner's harness observes
 wrong-person Ground Truth seeds on videos with bystanders — both wrong-from-frame-0

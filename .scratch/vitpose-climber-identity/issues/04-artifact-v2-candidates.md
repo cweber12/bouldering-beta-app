@@ -9,6 +9,14 @@ Gated on: issue 03 outcome (Phase B)
 > setupHash to timestamps. Writing against the old semantics would need rework.
 > Side benefit: video-keyed GT makes re-calibration rare, shrinking the accepted
 > "swaps don't survive re-calibration" loss.
+>
+> Re-sizing note (2026-07-17): appearance-anchored stitching shipped in the
+> downloader (its issue #19), so Phase B's value proposition shrinks from
+> routine correction tool to **escape hatch for the residual**
+> (similarly-dressed climbers, appearance-blind footage). Artifact v2
+> (candidates + `selectedTrackId`) is fully compatible with the new stitcher —
+> nothing in #19 blocks this issue; issue 03's tally decides whether it is
+> worth its size.
 
 ## Context
 
