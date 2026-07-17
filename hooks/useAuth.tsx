@@ -1,12 +1,20 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   sendEmailVerification,
-  onAuthStateChanged,
+  onIdTokenChanged,
   type User,
 } from "firebase/auth";
 import { getFirebaseAuth } from "@/utils/firebase/client";
@@ -71,16 +79,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Bootstrap: observe Firebase auth state changes and keep loading true
-  // until the initial check resolves.
+  // Last ID token successfully synced to the server cookie. Firebase can emit
+  // the same token repeatedly (re-renders, duplicate emissions); skipping
+  // already-synced tokens keeps the listener from hammering the endpoint.
+  const lastSyncedTokenRef = useRef<string | null>(null);
+
+  /**
+   * Re-mint the `__session` cookie from the current Firebase ID token so the
+   * server session never drifts behind the client (Firebase persists the client
+   * session in IndexedDB, so it can outlive the cookie). Failures are logged,
+   * not surfaced — the user did not just submit a login form here.
+   */
+  const syncServerSession = useCallback(async (firebaseUser: User): Promise<void> => {
+    try {
+      const idToken = await firebaseUser.getIdToken();
+      if (idToken === lastSyncedTokenRef.current) return;
+      await createServerSession(idToken);
+      lastSyncedTokenRef.current = idToken;
+    } catch (err) {
+      console.warn("[auth] session cookie sync failed:", err);
+    }
+  }, []);
+
+  // Bootstrap: observe Firebase ID token changes (fires on sign-in, sign-out,
+  // token refresh, and initial restore) and keep the server cookie in lockstep.
   useEffect(() => {
     const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onIdTokenChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
+      if (firebaseUser) {
+        void syncServerSession(firebaseUser);
+      } else {
+        lastSyncedTokenRef.current = null;
+      }
     });
     return unsubscribe;
-  }, []);
+  }, [syncServerSession]);
 
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
     const auth = getFirebaseAuth();
@@ -88,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await credential.user.getIdToken();
       await createServerSession(idToken);
+      lastSyncedTokenRef.current = idToken;
       return null;
     } catch (err) {
       // A failed session exchange leaves the Firebase client authenticated but
@@ -111,6 +147,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       );
       const idToken = await credential.user.getIdToken();
       await createServerSession(idToken);
+      lastSyncedTokenRef.current = idToken;
       return null;
     } catch (err) {
       // See signIn: undo the half-authenticated client state on a session-
@@ -129,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear the server cookie best-effort — a failed DELETE must not block the
     // local sign-out, or the user gets stuck in a logged-in UI they can't exit.
     await deleteServerSession().catch((e) => console.warn("[auth] deleteServerSession failed:", e));
+    lastSyncedTokenRef.current = null;
     setUser(null);
   }, []);
 

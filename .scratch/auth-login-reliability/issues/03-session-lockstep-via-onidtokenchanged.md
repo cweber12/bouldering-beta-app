@@ -1,7 +1,8 @@
 # Keep client & server session in lockstep via onIdTokenChanged
 
-Status: ready-for-agent
+Status: in-progress
 Type: AFK
+Branch: fix/alr-03-session-lockstep
 
 ## Parent
 
