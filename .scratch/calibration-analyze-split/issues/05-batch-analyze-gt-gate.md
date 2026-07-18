@@ -1,7 +1,8 @@
 # Batch Analyze gated on accepted Ground Truth
 
-Status: in-progress
+Status: done
 Branch: feat/batch-analyze-gt-gate
+Merged: 56d690f
 Type: AFK
 
 ## Parent
@@ -14,10 +15,10 @@ The harness batch runner sweeps every corpus Test Video that has accepted Ground
 
 ## Acceptance criteria
 
-- [ ] Batch runs Analyze over exactly the accepted-GT subset of the corpus; others are skipped with a visible count.
-- [ ] Each batch entry posts the same stamped, scored, append-only run a manual Analyze would.
-- [ ] A batch re-run appends new runs rather than overwriting prior ones.
-- [ ] Type-check, lint, and targeted tests pass.
+- [x] Batch runs Analyze over exactly the accepted-GT subset of the corpus; others are skipped with a visible count.
+- [x] Each batch entry posts the same stamped, scored, append-only run a manual Analyze would (guaranteed structurally: both drive the shared useAnalyzeRun lifecycle).
+- [x] A batch re-run appends new runs rather than overwriting prior ones.
+- [x] Type-check, lint, and targeted tests pass.
 
 ## Blocked by
 
