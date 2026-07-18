@@ -10,11 +10,13 @@
  * suppress user-facing extras (live preview, Holds, thumbnail) the harness has
  * no use for.
  *
- * The result is rendered rather than merely scored: the skeleton over the video
- * with its Adaptive Crop trace, the Detection Frame filmstrip, and the run's
- * ScanDiagnostics — the eyeball view calibration used to provide, now sitting
- * beside the run it actually describes. The run posts append-only through the
- * detections relay, stamped with `appVersion` and the `setupHash` it replayed.
+ * The result is rendered and scored: the skeleton over the video with its
+ * Adaptive Crop trace, the Detection Frame filmstrip, the run's
+ * ScanDiagnostics, and — when the video carries accepted Ground Truth — the
+ * probed-frame verdicts from utils/harnessScoring.ts. The run posts
+ * append-only through the detections relay, stamped with `appVersion`, the
+ * `setupHash` it replayed, and the `groundTruthHash` it was scored against
+ * (null when unscored).
  *
  * Analyze is a deliberate act: it is reached from the corpus list and never
  * fires off the back of accepting Ground Truth. See docs/adr/0017 and 0018.
@@ -32,6 +34,9 @@ import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import { buildHarnessPayloads, postDetectionRun } from "@/utils/harnessPayloads";
+import { loadGroundTruth, type GroundTruth } from "@/utils/harnessGroundTruth";
+import { scoreRunAgainstGroundTruth, findScoredRow } from "@/utils/harnessScoring";
+import ScoringSummary from "@/components/dev/ScoringSummary";
 import { summarizeGridAlignment } from "@/utils/harnessDetectionGrid";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
@@ -124,6 +129,7 @@ export default function Analyzer({
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [setup, setSetup] = useState<LoadedSetup | null>(null);
+  const [groundTruth, setGroundTruth] = useState<GroundTruth | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -181,6 +187,26 @@ export default function Analyzer({
     [runAttempt],
   );
 
+  // Scoring vs Ground Truth over the probed-frame domain: the base-timeline
+  // probes (missing / flip-discarded included) plus the accepted frames, so a
+  // probe that found nothing scores `missing` while grid frames the run never
+  // visited stay outside the domain. Null when the video has no accepted truth
+  // — the run then renders and posts unscored.
+  const scoring = useMemo(() => {
+    if (!groundTruth || !runAttempt) return null;
+    return scoreRunAgainstGroundTruth({
+      groundTruth,
+      run: { probes: runFrames, frames: runAttempt.frames },
+    });
+  }, [groundTruth, runAttempt, runFrames]);
+
+  // The verdict of the frame the player is on, for the summary chip.
+  const currentRow = useMemo(() => {
+    if (!scoring) return null;
+    const frame = runFrames[frameIndex];
+    return frame ? findScoredRow(scoring.rows, frame.timestamp) : null;
+  }, [scoring, runFrames, frameIndex]);
+
   // The rendered skeleton is re-based to start at the first detected frame, so
   // the FramePlayer's clock is offset from the Detection Frame grid by this many
   // seconds. The stepper works in absolute video time.
@@ -204,6 +230,15 @@ export default function Analyzer({
         if (revoked) return;
         setVideoUrl(url);
         setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
+
+        // Accepted truth is optional: without it the run renders + posts
+        // unscored, so a truth-load failure must never block Analyze.
+        try {
+          const truth = await loadGroundTruth(item.key);
+          if (!revoked) setGroundTruth(truth);
+        } catch {
+          if (!revoked) setGroundTruth(null);
+        }
 
         const { setup: saved } = await setupRes.json();
         if (revoked) return;
@@ -313,6 +348,7 @@ export default function Analyzer({
           frames: runAttempt?.frames ?? [],
           referenceFrameMeta: runAttempt?.referenceFrameMeta ?? null,
           setupHash: setup.setupHash,
+          scoring,
         });
         await postDetectionRun({ videoPath: item.videoPath, pose, orb });
         if (cancelled) return;
@@ -329,7 +365,7 @@ export default function Analyzer({
     return () => {
       cancelled = true;
     };
-  }, [phase, runDiag, runAttempt, setup, item.videoPath, onDone]);
+  }, [phase, runDiag, runAttempt, setup, scoring, item.videoPath, onDone]);
 
   useEffect(() => {
     if (phase !== "result") return;
@@ -542,6 +578,13 @@ export default function Analyzer({
               {alignment.total} detection frames · all on the 100 ms Detection Frame grid
             </p>
           )}
+          {scoring ? (
+            <ScoringSummary scoring={scoring} currentRow={currentRow} />
+          ) : (
+            <p className="shrink-0 text-xs text-fg-muted">
+              No accepted Ground Truth for this video — the run posted unscored.
+            </p>
+          )}
           <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-edge/30 bg-surface">
             {firstFrameFile && skel ? (
               <FramePlayer
@@ -584,11 +627,16 @@ export default function Analyzer({
             <p className="text-sm text-fg-secondary">
               Runs the production detection pipeline over this Test Video with the saved Scan
               Setup ({setup.tier} tier{setup.panning ? ", panning" : ""}), renders the result,
-              and posts the run.
+              scores it against the video&apos;s Ground Truth, and posts the run.
             </p>
           ) : (
             <p className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-sm text-caution">
               This video has no saved Scan Setup. Calibrate it before analyzing.
+            </p>
+          )}
+          {setup && !groundTruth && (
+            <p className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution">
+              No accepted Ground Truth for this video — the run will render and post unscored.
             </p>
           )}
           {phase === "error" && phaseError && (

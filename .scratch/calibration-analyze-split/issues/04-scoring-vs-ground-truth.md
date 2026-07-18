@@ -1,6 +1,7 @@
 # Scoring vs Ground Truth — probed-frame domain
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/scoring-vs-ground-truth
 Type: AFK
 
 ## Parent
