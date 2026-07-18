@@ -1,7 +1,7 @@
 # 04 — Artifact v2: pose all candidates per Detection Frame
 
-Status: needs-triage
-Gated on: issue 03 outcome (Phase B)
+Status: wontfix
+Gated on: issue 03 outcome (Phase B) — resolved ~zero, Phase B dropped
 
 > Sequencing note (2026-07-16): if activated, land after
 > `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md` —
@@ -23,6 +23,11 @@ Gated on: issue 03 outcome (Phase B)
 > this issue stays `needs-triage` as an escape hatch, to be activated only if
 > a residual wrong-person class (similarly-dressed climbers, appearance-blind
 > footage) shows up in practice.
+>
+> Closed `wontfix` (2026-07-17, user decision): with ~zero residual there is
+> nothing routine for candidates + swap to correct — the issue is unnecessary,
+> not superseded. If a residual class ever appears, re-cut Phase B fresh
+> against the then-current scaffold rather than reopening this spec.
 
 ## Context
 

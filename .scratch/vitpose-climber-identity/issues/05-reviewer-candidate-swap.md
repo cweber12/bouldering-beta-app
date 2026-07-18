@@ -1,7 +1,7 @@
 # 05 — Reviewer: render candidates, click to swap the subject on a frame
 
-Status: needs-triage
-Gated on: issue 03 outcome (Phase B); depends on issue 04
+Status: wontfix
+Gated on: issue 03 outcome (Phase B) — resolved ~zero, Phase B dropped; depended on issue 04 (also wontfix)
 
 > Sequencing note (2026-07-16): if activated, land after
 > `.scratch/calibration-analyze-split/issues/02-video-keyed-ground-truth.md`
@@ -16,6 +16,9 @@ Gated on: issue 03 outcome (Phase B); depends on issue 04
 > Gate resolved (2026-07-17): issue 03 closed on its ~zero exit branch —
 > Phase B is **deferred**; stays `needs-triage` as an escape hatch (see the
 > gate note on issue 04).
+>
+> Closed `wontfix` (2026-07-17, user decision): Phase B dropped — see the
+> closure note on issue 04.
 
 ## Context
 

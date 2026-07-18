@@ -28,6 +28,11 @@ Status: in-progress
 > phasing gate resolves to the ~zero branch — Phase B (issues 04–06) is
 > deferred as escape-hatch scope, kept `needs-triage` rather than activated.
 > Issue 07 (docs alignment) is the remaining live issue.
+>
+> 2026-07-17 (later): issues 04–06 closed `wontfix` (user decision) — with
+> ~zero residual, Phase B is unnecessary; a future residual class would be
+> re-cut fresh rather than reviving these specs. Issue 07 is the only open
+> issue; its Phase B bullets no longer apply.
 
 Spec inputs: `docs/adr/0019` (ViTPose scaffold, amended by this PRD), the cross-program
 contract `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`
