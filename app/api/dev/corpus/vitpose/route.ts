@@ -17,13 +17,17 @@ import {
   harnessApiBase,
   parseBundleKey,
   resolveBundleDir,
+  readSetupHash,
 } from "@/app/api/dev/shared";
 import { parseViTPoseScaffold } from "@/utils/harnessViTPose";
+import { scaffoldIsStale } from "@/utils/harnessFreshness";
 
 /** The status sidecar the downloader writes alongside (or instead of) the artifact. */
 const STATUS_FILE = "vitpose.status.json";
 
 interface JobStatusInfo {
+  /** The sidecar's raw `status` value (`running` / `done` / `error`), or null. */
+  status: string | null;
   /** Terminal failure message when `status === "error"`, else null. */
   error: string | null;
   /** Non-fatal downloader advisories for the run (e.g. a legacy tap without a
@@ -52,10 +56,10 @@ async function readJobStatus(dir: string): Promise<JobStatusInfo> {
           ? status.error
           : "The ViTPose job failed."
         : null;
-    return { error, warnings };
+    return { status: typeof status.status === "string" ? status.status : null, error, warnings };
   } catch {
     // No status sidecar / unreadable → treat as still running, no advisories.
-    return { error: null, warnings: [] };
+    return { status: null, error: null, warnings: [] };
   }
 }
 
@@ -74,6 +78,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const scaffold = parseViTPoseScaffold(JSON.parse(raw));
     if (!scaffold) {
       return NextResponse.json({ error: "Malformed vitpose.json." }, { status: 422 });
+    }
+    // The freshness gate (harness issue #21): an artifact stamped under an older
+    // calibration must never be served as the seed — exporting truth from it
+    // stamps a hash no run under the current setup can pair with. While a fresh
+    // job is running the stale artifact reads as "not landed yet"; otherwise it
+    // is a terminal condition the author fixes by re-running ViTPose.
+    const currentSetupHash = await readSetupHash(dir);
+    if (scaffoldIsStale(scaffold.setupHash, currentSetupHash)) {
+      const { status, warnings } = await readJobStatus(dir);
+      const error =
+        status === "running"
+          ? null
+          : "The ViTPose scaffold is from an older calibration — re-run ViTPose.";
+      return NextResponse.json({ vitpose: null, error, warnings });
     }
     // A written artifact supersedes any stale error from an earlier run, but the
     // current run's own sidecar may carry advisories about the seed selection.
@@ -123,9 +141,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "frames (non-empty) is required." }, { status: 422 });
   }
 
-  // Clear any prior run's terminal status so the poller can't read a stale
-  // failure before the fresh job overwrites its sidecar (best-effort).
+  // Clear the prior run's terminal status AND its artifact so the poller can
+  // only ever see output of the fresh job — leaving an old vitpose.json in
+  // place is what let a re-calibration's export seed from the previous
+  // calibration's scaffold (the export race, harness issue #21). Best-effort.
   await rm(path.join(dir, STATUS_FILE), { force: true }).catch(() => {});
+  await rm(path.join(dir, "vitpose.json"), { force: true }).catch(() => {});
 
   try {
     const res = await fetch(`${base}/api/vitpose`, {

@@ -13,6 +13,7 @@
 
 import { readdir, readFile, access } from "node:fs/promises";
 import path from "node:path";
+import { runPairsWithTruth, truthIsStale } from "@/utils/harnessFreshness";
 
 /** True only in a local dev server — the harness never exists in prod. */
 export const HARNESS_ENABLED = process.env.NODE_ENV === "development";
@@ -102,8 +103,21 @@ export interface CorpusItem {
    * batch Analyze gate.
    */
   hasGroundTruth: boolean;
+  /**
+   * True when the truth exists but stamps an older calibration's `setupHash`
+   * than the current `setup.json` — it pairs with no run scanned under the
+   * current Setup, so an "accepted" badge must not read as healthy
+   * (utils/harnessFreshness, harness issue #21).
+   */
+  truthStale: boolean;
   /** Number of detection runs already written to the bundle. */
   runCount: number;
+  /**
+   * Detection runs whose stamped `setupHash` does not pair with the truth's —
+   * they produce no evaluation evidence. Always 0 for truthless bundles (that
+   * is its own surfaced state).
+   */
+  unpairedRunCount: number;
   /** The human-labelled `analysis_inputs` block, passed through verbatim. */
   analysisInputs: unknown;
 }
@@ -117,14 +131,55 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-/** Count detection runs by the `*_pose.json` files written per run. */
-async function countRuns(detectionsDir: string): Promise<number> {
+/** Read one JSON file's top-level `setupHash` string, or null when absent. */
+async function readJsonSetupHash(filePath: string): Promise<string | null> {
   try {
-    const files = await readdir(detectionsDir);
-    return files.filter((f) => f.endsWith("_pose.json")).length;
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
+    return typeof parsed.setupHash === "string" && parsed.setupHash.length > 0
+      ? parsed.setupHash
+      : null;
   } catch {
-    return 0;
+    return null;
   }
+}
+
+/** The bundle's current `setup.json` `setupHash`, or null when uncalibrated. */
+export async function readSetupHash(bundleDir: string): Promise<string | null> {
+  return readJsonSetupHash(path.join(bundleDir, "setup.json"));
+}
+
+/** Detection-run counts: total `*_pose.json` runs and how many pair with truth. */
+interface RunCounts {
+  runCount: number;
+  unpairedRunCount: number;
+}
+
+/**
+ * Count detection runs by the `*_pose.json` files written per run, and — when
+ * the bundle has Ground Truth — how many stamp a `setupHash` that does not
+ * pair with it (those runs produce no evaluation evidence in the harness).
+ */
+async function countRuns(
+  detectionsDir: string,
+  truthSetupHash: string | null,
+  setupHash: string | null,
+  hasTruth: boolean,
+): Promise<RunCounts> {
+  let files: string[];
+  try {
+    files = (await readdir(detectionsDir)).filter((f) => f.endsWith("_pose.json"));
+  } catch {
+    return { runCount: 0, unpairedRunCount: 0 };
+  }
+
+  let unpairedRunCount = 0;
+  if (hasTruth) {
+    for (const f of files) {
+      const runHash = await readJsonSetupHash(path.join(detectionsDir, f));
+      if (!runPairsWithTruth(runHash, truthSetupHash, setupHash)) unpairedRunCount += 1;
+    }
+  }
+  return { runCount: files.length, unpairedRunCount };
 }
 
 /**
@@ -167,11 +222,18 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         continue; // no / invalid metadata → not a bundle
       }
 
-      const [hasSetup, hasGroundTruth, runCount] = await Promise.all([
+      const [hasSetup, hasGroundTruth, setupHash, truthSetupHash] = await Promise.all([
         exists(path.join(bundleDir, "setup.json")),
         exists(path.join(bundleDir, "ground-truth.json")),
-        countRuns(path.join(bundleDir, "detections")),
+        readSetupHash(bundleDir),
+        readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
+      const { runCount, unpairedRunCount } = await countRuns(
+        path.join(bundleDir, "detections"),
+        truthSetupHash,
+        setupHash,
+        hasGroundTruth,
+      );
 
       items.push({
         key: `${routeEnt.name}/${vEnt.name}`,
@@ -181,7 +243,9 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         videoPath: relativeVideoPath(routeEnt.name, vEnt.name),
         hasSetup,
         hasGroundTruth,
+        truthStale: hasGroundTruth && truthIsStale(truthSetupHash, setupHash),
         runCount,
+        unpairedRunCount,
         analysisInputs: meta.analysis_inputs ?? null,
       });
     }

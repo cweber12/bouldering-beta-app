@@ -1,13 +1,15 @@
 /**
  * Batch Analyze planning — which corpus Test Videos a sweep runs and which it
- * skips (calibration-analyze-split issue 05, amending the old batch-GT-gate).
+ * skips (calibration-analyze-split issue 05, amended by the calibration
+ * freshness contract — ADR 0020).
  *
- * The gate keys on accepted Ground Truth existing, nothing else: no run-count,
- * staleness, or hash checks — stamp comparison at analysis time is what tells
- * runs apart (ADR 0018). A truth-bearing bundle without a Scan Setup cannot
- * replay a run at all, so it is skipped under its own count rather than left to
- * fail mid-sweep; both skip counts are surfaced so an under-calibrated corpus
- * is visible instead of silently thin.
+ * The gate keys on Ground Truth that is both accepted and **fresh**: truth
+ * stamping an older calibration's setupHash pairs with no run scanned under
+ * the current Setup, so sweeping it would only mint unpaired evidence the
+ * harness skips. A truth-bearing bundle without a Scan Setup cannot replay a
+ * run at all, so it is skipped under its own count rather than left to fail
+ * mid-sweep; all skip counts are surfaced so an under-calibrated or stale
+ * corpus is visible instead of silently thin.
  *
  * Framework-agnostic — no React imports.
  */
@@ -16,6 +18,8 @@
 export interface BatchAnalyzeCandidate {
   hasSetup: boolean;
   hasGroundTruth: boolean;
+  /** Truth stamps an older calibration's setupHash (utils/harnessFreshness). */
+  truthStale: boolean;
 }
 
 /** The sweep plan: what runs, what is skipped, and why. */
@@ -24,9 +28,11 @@ export interface BatchAnalyzePlan<T extends BatchAnalyzeCandidate> {
   queue: T[];
   /** Videos without accepted Ground Truth — the gate. */
   skippedNoTruth: number;
+  /** Videos whose truth is stale — re-seed and re-accept before sweeping. */
+  skippedStaleTruth: number;
   /** Truth-bearing videos with no Scan Setup to replay (pathological). */
   skippedNoSetup: number;
-  /** Every candidate considered: queue + both skip counts. */
+  /** Every candidate considered: queue + all skip counts. */
   total: number;
 }
 
@@ -36,11 +42,13 @@ export function planBatchAnalyze<T extends BatchAnalyzeCandidate>(
 ): BatchAnalyzePlan<T> {
   const queue: T[] = [];
   let skippedNoTruth = 0;
+  let skippedStaleTruth = 0;
   let skippedNoSetup = 0;
   for (const item of items) {
     if (!item.hasGroundTruth) skippedNoTruth += 1;
+    else if (item.truthStale) skippedStaleTruth += 1;
     else if (!item.hasSetup) skippedNoSetup += 1;
     else queue.push(item);
   }
-  return { queue, skippedNoTruth, skippedNoSetup, total: items.length };
+  return { queue, skippedNoTruth, skippedStaleTruth, skippedNoSetup, total: items.length };
 }

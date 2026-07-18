@@ -297,10 +297,14 @@ dragging and per-joint editing are gone. Each frame carries a `review` value:
 **auto** ("nobody objected", left as the seed) or **human-flagged-wrong** /
 **human-flagged-absent**; scoring splits auto (agreement-tier) from human-flagged
 (accuracy-tier) evidence. Paired to its **Scan Setup** by a stored `setupHash` —
-prior flags carry forward on re-calibration only when it matches, else the truth is
-discarded as stale. Frozen alongside the video's crops as calibration output; the
-scaffold that seeds it is discarded — only the Ground Truth persists, not a scored
-run.
+the hash of the calibration whose ViTPose scaffold seeded it, and the hash a run
+must stamp to be evaluated against it (ADR 0020). A Setup save that changes the
+hash flips the truth to a surfaced **stale** state (never silently healthy, never
+discarded); re-seeding under the current calibration carries the human flags
+forward by timestamp, and export is refused while the scaffold on disk belongs to
+an older calibration. Frozen alongside the video's crops as calibration output;
+the scaffold that seeds it is discarded — only the Ground Truth persists, not a
+scored run.
 _Avoid_: ground-truth run (it is not a **Run** — it yields no scored result);
 labels (those are the video-level condition metadata, a different thing);
 dragging / editing landmarks (superseded — authoring is flag-only review).

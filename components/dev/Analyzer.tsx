@@ -97,6 +97,7 @@ export default function Analyzer({
     videoUrl,
     setup,
     groundTruth,
+    truthStale,
     ready,
     phase,
     phaseError,
@@ -357,6 +358,11 @@ export default function Analyzer({
           )}
           {scoring ? (
             <ScoringSummary scoring={scoring} currentRow={currentRow} />
+          ) : truthStale ? (
+            <p className="shrink-0 text-xs text-caution">
+              Ground Truth is from an older calibration — this run cannot pair with it and
+              posted unscored. Re-seed and re-accept the truth in calibration.
+            </p>
           ) : (
             <p className="shrink-0 text-xs text-fg-muted">
               No accepted Ground Truth for this video — the run posted unscored.
@@ -413,6 +419,13 @@ export default function Analyzer({
           {setup && !groundTruth && (
             <p className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution">
               No accepted Ground Truth for this video — the run will render and post unscored.
+            </p>
+          )}
+          {setup && truthStale && (
+            <p className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution">
+              This video&apos;s Ground Truth was accepted under an older calibration — a run
+              under the current Setup cannot pair with it and will post unscored. Re-seed
+              and re-accept the truth in calibration first.
             </p>
           )}
           {phase === "error" && phaseError && (

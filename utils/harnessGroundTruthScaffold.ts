@@ -96,20 +96,22 @@ export function contextKeypointsAt(
  * `review: "auto"` (nobody has objected yet) and `verified: false`; the human's
  * job is only to flag exceptions.
  *
- * Carry-forward is keyed on **timestamp**: Ground Truth is video-keyed, so a
- * prior frame's human *flags* (Wrong / Absent) re-apply onto whichever fresh
- * grid frame shares its timestamp, regardless of what the Scan Setup has done
- * since — crops, tap, tier and panning cannot geometrically invalidate truth
- * whose landmarks are full-frame normalised. Grid frames the prior truth never
- * held (a sparse legacy grid densifying onto the 100 ms grid) arrive
- * auto-accepted, and there is no discard path. Joints always come from the new
- * seed, never the old file; `"auto"` frames carry nothing (the fresh seed
- * already is auto).
+ * Carry-forward is keyed on **timestamp**: a prior frame's human *flags*
+ * (Wrong / Absent) re-apply onto whichever fresh grid frame shares its
+ * timestamp, however the Scan Setup has changed since — the expensive human
+ * review survives every re-calibration, because crops, tap, tier and panning
+ * cannot geometrically invalidate truth whose landmarks are full-frame
+ * normalised. Grid frames the prior truth never held (a sparse legacy grid
+ * densifying onto the 100 ms grid) arrive auto-accepted, and there is no
+ * discard path. Joints always come from the new seed, never the old file;
+ * `"auto"` frames carry nothing (the fresh seed already is auto).
  *
  * `detectionFrames` supplies the frame grid + timestamps (the uniform 100 ms
  * grid from `buildDetectionGrid`); `poseFrames` supplies the landmarks (the
- * ViTPose scaffold); `setupHash` is the seed's Scan Setup hash, stamped onto the
- * result as seed provenance only — it pairs nothing.
+ * ViTPose scaffold); `setupHash` is the hash of the Scan Setup the scaffold was
+ * generated under — the harness pairs runs to truth by exactly this hash
+ * (ADR 0020), so it must come from the scaffold actually used, never from
+ * whatever setup.json holds at export time.
  */
 export function buildGroundTruthScaffold(
   detectionFrames: readonly { timestamp: number }[],
@@ -188,11 +190,13 @@ export function applyReviewFlag(seed: GroundTruthFrame, flag: ReviewFlag): Groun
 
 /**
  * Whether a video already has accepted Ground Truth — any saved truth holding at
- * least one frame. Accepted truth is video-keyed: it survives every Scan Setup
- * edit, so editing crops / tap / tier / panning must skip the ViTPose seed and
- * the review entirely, leaving the truth file untouched until the author asks for
- * a re-seed. (This replaces the old `setupHash`-mismatch staleness rule, which
- * discarded truth that a crop change could never have invalidated.)
+ * least one frame. Accepted truth survives every Scan Setup edit (editing crops /
+ * tap / tier / panning skips the ViTPose seed and the review, leaving the truth
+ * file untouched until the author asks for a re-seed) — but it only remains
+ * valid *evidence* while its stamped `setupHash` matches the current Setup's:
+ * the harness pairs runs to truth by that hash (ADR 0020), so a Setup save that
+ * changes the hash flips the truth to a surfaced stale state
+ * (utils/harnessFreshness) rather than silently reading as healthy.
  */
 export function hasAcceptedGroundTruth(existing: GroundTruthInput | null): boolean {
   return !!existing && existing.frames.length > 0;

@@ -13,6 +13,17 @@ beforeAll(async () => {
   bundleDir = path.join(root, "route-x", "vid_1");
   await mkdir(bundleDir, { recursive: true });
   await writeFile(path.join(bundleDir, "metadata.json"), JSON.stringify({ source_title: "X" }));
+  // The PUT freshness gate compares the truth's stamped setupHash against the
+  // bundle's current setup.json — the calibration the truth must belong to.
+  await writeFile(
+    path.join(bundleDir, "setup.json"),
+    JSON.stringify({ version: 1, setupHash: "setup-abc" }),
+  );
+
+  // A calibrated-but-never-set-up bundle, for the no-setup gate.
+  const noSetupDir = path.join(root, "route-x", "vid_nosetup");
+  await mkdir(noSetupDir, { recursive: true });
+  await writeFile(path.join(noSetupDir, "metadata.json"), JSON.stringify({ source_title: "Y" }));
 });
 
 afterAll(async () => {
@@ -118,6 +129,21 @@ describe("dev GET/PUT /api/dev/corpus/ground-truth", () => {
       frames: [{ frameIndex: 0, timestamp: 0, state: "present", verified: true }],
     };
     expect((await PUT(makeRequest(BUNDLE_KEY, noReview))).status).toBe(422);
+  });
+
+  it("409s a write stamping an older calibration's setupHash (the export race)", async () => {
+    const { PUT } = await importRoute("development");
+    const res = await PUT(makeRequest(BUNDLE_KEY, { ...validInput, setupHash: "stale-hash" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toMatch(/older calibration/i);
+  });
+
+  it("409s a write for a bundle with no calibrated Scan Setup", async () => {
+    const { PUT } = await importRoute("development");
+    const res = await PUT(makeRequest("route-x/vid_nosetup", validInput));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/Scan Setup/i);
   });
 
   it("400s on an unsafe / malformed bundle key", async () => {

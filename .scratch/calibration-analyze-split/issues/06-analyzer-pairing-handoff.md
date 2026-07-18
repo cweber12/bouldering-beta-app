@@ -1,7 +1,8 @@
 # Analyzer handoff doc — video-identity pairing
 
-Status: ready-for-agent
+Status: wontfix
 Type: AFK
+Superseded-by: .scratch/calibration-freshness/scanner-calibration-freshness.md
 
 ## Parent
 
@@ -20,3 +21,16 @@ A handoff doc for the beta-scan-analysis repo, in the same format as the establi
 ## Blocked by
 
 None - can start immediately.
+
+## Comments
+
+- 2026-07-18: closed wontfix. Before this doc was written, the analyzer repo
+  sent the opposite handoff (`.scratch/calibration-freshness/`, harness issue
+  #21): it will **not** relax the pairing gate — truth corrected against one
+  calibration's scaffold is only attested evidence under that calibration, and
+  22 run/truth pairs were already skipping on setupHash mismatch while the
+  scanner UI showed them healthy. The scanner now matches the hash contract
+  instead (ADR 0020, commit 65d35ba): truth keeps the timestamp-keyed flag
+  carry-forward from issue 02, but freshness/pairing is hash-chained and stale
+  truth is surfaced, gated, and re-seeded rather than re-paired by video
+  identity.

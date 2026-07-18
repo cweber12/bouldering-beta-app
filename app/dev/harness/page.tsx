@@ -8,9 +8,13 @@
  * panning, Quality Tier — by reusing the production StepSetDetection UI.
  * Confirming saves setup.json and immediately requests the downloader's ViTPose
  * job over the uniform Detection Frame grid, then opens the flag-only Ground
- * Truth review on the seed once it lands. Ground Truth is video-keyed: once it
- * is accepted, confirming an edited Setup only saves it — the seed and the review
- * are skipped, and "Re-seed Ground Truth" is the explicit way back in.
+ * Truth review on the seed once it lands. Once truth is accepted, confirming an
+ * edited Setup only saves it — the seed and the review are skipped, and
+ * "Re-seed Ground Truth" is the explicit way back in. But truth is only valid
+ * evidence while its stamped setupHash matches the current Setup's (the harness
+ * pairs runs to truth by hash — ADR 0020): a save that changes the hash flips
+ * the accepted truth to a visible stale state until it is re-seeded (flags
+ * carry forward by timestamp) and re-accepted.
  * Calibration runs no detection at all: it authors truth, and nothing else.
  * Detection output lives in the separate Analyze step, reached per video from
  * the corpus list: it runs the production pipeline against the saved Scan Setup,
@@ -56,6 +60,7 @@ import {
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
 import { buildDetectionGrid, type DetectionGridFrame } from "@/utils/harnessDetectionGrid";
+import { scaffoldIsStale, truthIsStale } from "@/utils/harnessFreshness";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
@@ -72,7 +77,11 @@ interface CorpusItem {
   videoPath: string;
   hasSetup: boolean;
   hasGroundTruth: boolean;
+  /** Truth exists but stamps an older calibration's hash — stale evidence. */
+  truthStale: boolean;
   runCount: number;
+  /** Runs whose stamped hash pairs with no truth — they produce no evidence. */
+  unpairedRunCount: number;
   analysisInputs: unknown;
 }
 
@@ -266,17 +275,34 @@ export default function HarnessPage() {
                     )}
                   </td>
                   <td className="py-2 pr-3">
-                    {it.hasGroundTruth ? (
-                      <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
-                        accepted
-                      </span>
-                    ) : (
+                    {!it.hasGroundTruth ? (
                       <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
                         none
                       </span>
+                    ) : it.truthStale ? (
+                      <span
+                        className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
+                        title="Annotations were accepted under an older calibration — re-run ViTPose and re-accept"
+                      >
+                        stale
+                      </span>
+                    ) : (
+                      <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
+                        accepted
+                      </span>
                     )}
                   </td>
-                  <td className="py-2 pr-3 tabular-nums text-fg">{it.runCount}</td>
+                  <td className="py-2 pr-3 tabular-nums text-fg">
+                    {it.runCount}
+                    {it.unpairedRunCount > 0 && (
+                      <span
+                        className="ml-1 text-xs text-caution"
+                        title="Runs whose stamped setupHash pairs with no Ground Truth — they produce no evaluation evidence"
+                      >
+                        · {it.unpairedRunCount} unpaired
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-2">
                       <button
@@ -365,6 +391,8 @@ function Calibrator({
   // seed entirely.
   const existingGtRef = useRef<GroundTruthInput | null>(null);
   const [truthAccepted, setTruthAccepted] = useState(false);
+  /** The saved truth's stamped setupHash ("" legacy) — drives the stale state. */
+  const [truthSetupHash, setTruthSetupHash] = useState("");
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
   const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
@@ -408,6 +436,11 @@ function Calibrator({
     vitposeError,
     seedHasPose: vitpose ? scaffoldHasPose(vitpose) : false,
   });
+
+  // Accepted truth whose stamped hash no longer matches the current Setup: it
+  // pairs with no run scanned under this calibration, so it must read as stale
+  // — never as healthy — until ViTPose is re-run and the truth re-accepted.
+  const truthStale = truthAccepted && truthIsStale(truthSetupHash, currentSetupHash);
 
   // A Climber tap from a setup calibrated before the tap-timestamp contract: the
   // downloader can only seed by global tap position, which grabs a bystander who
@@ -475,10 +508,12 @@ function Calibrator({
           if (revoked) return;
           existingGtRef.current = gt;
           setTruthAccepted(hasAcceptedGroundTruth(gt));
+          setTruthSetupHash(typeof gt?.setupHash === "string" ? gt.setupHash : "");
         } catch {
           if (revoked) return;
           existingGtRef.current = null;
           setTruthAccepted(false);
+          setTruthSetupHash("");
         }
       } catch (err) {
         if (!revoked) setLoadError(err instanceof Error ? err.message : String(err));
@@ -717,6 +752,17 @@ function Calibrator({
     setGtSave(null);
     try {
       const setupHash = gtInput.setupHash || vitpose?.setupHash || currentSetupHash;
+      // The export gate (harness issue #21): truth must stamp the hash of the
+      // scaffold actually used, and that scaffold must belong to the current
+      // calibration — otherwise the accepted truth pairs with no future run.
+      // The ground-truth PUT enforces the same check server-side.
+      if (scaffoldIsStale(setupHash, currentSetupHash)) {
+        setGtSave({
+          ok: false,
+          message: "The seed is from an older calibration — re-run ViTPose before accepting.",
+        });
+        return;
+      }
       const input: GroundTruthInput = {
         ...gtInput,
         setupHash,
@@ -726,6 +772,7 @@ function Calibrator({
       const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
       existingGtRef.current = savedInput;
       setTruthAccepted(hasAcceptedGroundTruth(savedInput));
+      setTruthSetupHash(saved.setupHash);
       setGtInput(savedInput);
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
@@ -967,16 +1014,27 @@ function Calibrator({
         />
       </Modal>
 
-      {truthAccepted && (
+      {truthStale ? (
+        <div
+          role="status"
+          className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+        >
+          This video&apos;s Ground Truth was accepted under an older calibration — it pairs
+          with no run scanned under the current Setup, so it is stale evidence. Use Re-seed
+          Ground Truth to re-run ViTPose and re-accept; your Wrong/Absent flags carry
+          forward by timestamp.
+        </div>
+      ) : truthAccepted ? (
         <div
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-edge/30 bg-surface-alt px-3 py-2 text-xs text-fg-muted"
         >
-          This video has accepted Ground Truth, which is keyed to the video — not to this
-          Setup. Confirming saves the Setup only: no ViTPose job runs and the truth is left
-          untouched. Use Re-seed Ground Truth to re-run the seed, carrying your flags forward.
+          This video has accepted Ground Truth paired to the current Setup. Confirming saves
+          the Setup only — but a save that changes the Setup&apos;s hash makes the truth
+          stale until it is re-seeded and re-accepted. Use Re-seed Ground Truth to re-run
+          the seed, carrying your flags forward.
         </div>
-      )}
+      ) : null}
       {legacyTapNoTimestamp && (
         <div
           role="status"
