@@ -42,9 +42,16 @@ beforeAll(async () => {
     path.join(d, "ground-truth.json"),
     JSON.stringify({ setupHash: "old-hash", frames: [] }),
   );
+  // Runs land in the downloader's envelope (`data` holds the scanner payload);
+  // the bare shape is accepted too.
   await writeFile(
     path.join(d, "detections", "20260101_000000_pose.json"),
-    JSON.stringify({ setupHash: "old-hash" }),
+    JSON.stringify({
+      video_key: "vid_3",
+      route_folder: "route-d",
+      type: "pose",
+      data: { setupHash: "old-hash" },
+    }),
   );
   await writeFile(
     path.join(d, "detections", "20260102_000000_pose.json"),
