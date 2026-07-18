@@ -31,3 +31,10 @@ Bring the documented decisions in line with the shipped ones. Amend ADR 0018 (gr
   satisfied — old issues 08/09 now carry `Status: wontfix` + `Superseded-by:`
   pointers at this feature's issues 04/05, and the drift audit is clean. The
   ADR 0018/0019 amendments and the CONTEXT.md check remain to be done here.
+- 2026-07-18: the staleness direction reversed — ADR 0020 (calibration
+  freshness, commit 65d35ba) reinstates hash-chained truth staleness as a
+  surfaced state, superseding the "staleness rule → removed for accepted
+  truth" wording above. When amending ADR 0018, describe staleness as
+  "surfaced + re-seed, per ADR 0020", not removed. The CONTEXT.md Ground
+  Truth entry was already updated in that commit; issue 06 is closed wontfix
+  (the harness declined video-identity pairing).
