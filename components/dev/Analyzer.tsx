@@ -3,65 +3,35 @@
 /**
  * Dev-only Analyze step — one production detection run over a Test Video.
  *
- * Runs the pipeline exactly as the user-facing scan does: the same seek loop,
- * the same sampling / Adaptive Refinement / Adaptive Crop, the current code, and
- * the Scan Setup as calibration last saved it. There is no harness-only
- * detection variant — the only toggles passed are the dev-output ones that
- * suppress user-facing extras (live preview, Holds, thumbnail) the harness has
- * no use for.
- *
- * The result is rendered and scored: the skeleton over the video with its
- * Adaptive Crop trace, the Detection Frame filmstrip, the run's
- * ScanDiagnostics, and — when the video carries accepted Ground Truth — the
- * probed-frame verdicts from utils/harnessScoring.ts. The run posts
- * append-only through the detections relay, stamped with `appVersion`, the
- * `setupHash` it replayed, and the `groundTruthHash` it was scored against
- * (null when unscored).
+ * The run itself — load, production scan, probed-frame scoring, append-only
+ * post — lives in {@link useAnalyzeRun}, shared with the batch sweep so a
+ * manual Analyze and a batch entry post identical runs. This component is the
+ * eyeball view on top: the skeleton over the video with its Adaptive Crop
+ * trace, the Detection Frame filmstrip, the run's ScanDiagnostics, and — when
+ * the video carries accepted Ground Truth — the verdicts.
  *
  * Analyze is a deliberate act: it is reached from the corpus list and never
  * fires off the back of accepting Ground Truth. See docs/adr/0017 and 0018.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOpenCV } from "@/hooks/useOpenCV";
-import { usePoseModel } from "@/hooks/usePoseModel";
-import { useVideoProcessor } from "@/hooks/useVideoProcessor";
+import { useAnalyzeRun, type AnalyzeRunItem } from "@/hooks/useAnalyzeRun";
 import { useDetectionThumbnails } from "@/hooks/useDetectionThumbnails";
-import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
+import { type RouteAttempt } from "@/storage/sessionStore";
 import ScanLoadingBar from "@/components/scan/process-flow/ScanLoadingBar";
 import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import DiagnosticsPanel from "@/components/dev/DiagnosticsPanel";
-import LoadingSpinner from "@/components/ui/LoadingSpinner";
-import { buildHarnessPayloads, postDetectionRun } from "@/utils/harnessPayloads";
-import { loadGroundTruth, type GroundTruth } from "@/utils/harnessGroundTruth";
-import { scoreRunAgainstGroundTruth, findScoredRow } from "@/utils/harnessScoring";
 import ScoringSummary from "@/components/dev/ScoringSummary";
+import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import { findScoredRow } from "@/utils/harnessScoring";
 import { summarizeGridAlignment } from "@/utils/harnessDetectionGrid";
-import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
-import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
 import { getTopology } from "@/utils/poseConstants";
 import { type SkeletonStyle } from "@/pipeline/overlay/skeletonOverlay";
 import type { RenderedSkeletonFrame } from "@/pipeline/overlay/skeletonRenderer";
-import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
 
 /** The corpus fields the Analyze step needs. */
-export interface AnalyzerItem {
-  key: string;
-  routeFolder: string;
-  videoKey: string;
-  videoPath: string;
-}
-
-/** The Scan Setup the run replays, as loaded from `setup.json`. */
-interface LoadedSetup {
-  climberCrop: CropFraction;
-  wallCrop: CropFraction;
-  climberPoint: { x: number; y: number; t?: number } | null;
-  panning: boolean;
-  tier: QualityTier;
-  setupHash: string;
-}
+export type AnalyzerItem = AnalyzeRunItem;
 
 interface FirstFrameSkeleton {
   frames: RenderedSkeletonFrame[];
@@ -111,9 +81,6 @@ function findFrameIndexByTime(frames: { timestamp: number }[], time: number): nu
   return frames[lo].timestamp <= time ? lo : 0;
 }
 
-type AnalyzePhase = "idle" | "running" | "result" | "error";
-type PostState = { status: "idle" | "posting" | "posted" | "failed"; message: string };
-
 export default function Analyzer({
   item,
   onBack,
@@ -124,81 +91,56 @@ export default function Analyzer({
   /** Called after a run posts, so the corpus list's run count can refresh. */
   onDone: () => void | Promise<void>;
 }) {
-  const { cv } = useOpenCV();
+  const {
+    loading,
+    loadError,
+    videoUrl,
+    setup,
+    groundTruth,
+    ready,
+    phase,
+    phaseError,
+    post,
+    runAttempt,
+    runDiag,
+    scoring,
+    runFrames,
+    cropTrace,
+    firstFrameFile,
+    currentFrame,
+    totalFrames,
+    processorStatus,
+    run,
+    cancel,
+  } = useAnalyzeRun(item, onDone);
 
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [setup, setSetup] = useState<LoadedSetup | null>(null);
-  const [groundTruth, setGroundTruth] = useState<GroundTruth | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [phase, setPhase] = useState<AnalyzePhase>("idle");
-  const [phaseError, setPhaseError] = useState<string | null>(null);
-  const [post, setPost] = useState<PostState>({ status: "idle", message: "" });
-
-  const [runAttempt, setRunAttempt] = useState<RouteAttempt | null>(null);
-  const [runDiag, setRunDiag] = useState<ScanDiagnostics | null>(null);
   const playerRef = useRef<FramePlayerHandle>(null);
   const [playing, setPlaying] = useState(true);
   const [frameIndex, setFrameIndex] = useState(0);
   const [showCrops, setShowCrops] = useState(true);
-  // Each run posts exactly once: the effect that posts watches state that keeps
-  // changing after the run lands, so the posted run's id is what gates it.
-  const postedRunRef = useRef<string | null>(null);
 
-  const tierConfig = getTierConfig(setup?.tier ?? DEFAULT_TIER);
-  const poseModelConfig = useMemo(
-    () => ({
-      backend: "mediapipe" as const,
-      variant: tierConfig.variant,
-      maxPoses: tierConfig.maxPoses,
-    }),
-    [tierConfig.variant, tierConfig.maxPoses],
-  );
-  const { model } = usePoseModel(poseModelConfig);
-  const {
-    process,
-    reset: resetProcessor,
-    status,
-    orbStatus,
-    scanDiagnostics,
-    attemptId,
-    errorMessage,
-    firstFrameFile,
-    currentFrame,
-    totalFrames,
-    cropTrace,
-    detectionFrames,
-  } = useVideoProcessor(100);
+  // Reset the player to the top of each new run, adjusting state during render
+  // (not in an effect) so the stale frame index never paints.
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
+  if (runDiag && runDiag.scanId !== lastRunId) {
+    setLastRunId(runDiag.scanId);
+    setPlaying(true);
+    setFrameIndex(0);
+  }
 
-  const runFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
   const thumbnails = useDetectionThumbnails(videoUrl, runFrames, phase === "result");
 
   // Alignment-by-arithmetic: every probe the seek loop makes is an i x 100 ms
   // multiple, so a healthy run is wholly on the Detection Frame grid and pairs
   // with truth by set-intersection. Measured over the run's own detection frames
-  // — the ones the payload carries and scoring will pair with truth, base
-  // samples and Adaptive Refinement re-probes alike — rather than the filmstrip's
+  // — the ones the payload carries and scoring pairs with truth, base samples
+  // and Adaptive Refinement re-probes alike — rather than the filmstrip's
   // base-stride timeline, which never sees the refined frames. Surfaced so a
   // drift shows up here rather than as phantom `missing` verdicts.
   const alignment = useMemo(
     () => summarizeGridAlignment(runAttempt?.frames ?? []),
     [runAttempt],
   );
-
-  // Scoring vs Ground Truth over the probed-frame domain: the base-timeline
-  // probes (missing / flip-discarded included) plus the accepted frames, so a
-  // probe that found nothing scores `missing` while grid frames the run never
-  // visited stay outside the domain. Null when the video has no accepted truth
-  // — the run then renders and posts unscored.
-  const scoring = useMemo(() => {
-    if (!groundTruth || !runAttempt) return null;
-    return scoreRunAgainstGroundTruth({
-      groundTruth,
-      run: { probes: runFrames, frames: runAttempt.frames },
-    });
-  }, [groundTruth, runAttempt, runFrames]);
 
   // The verdict of the frame the player is on, for the summary chip.
   const currentRow = useMemo(() => {
@@ -212,166 +154,6 @@ export default function Analyzer({
   // seconds. The stepper works in absolute video time.
   const skel = useMemo(() => buildFirstFrameSkeleton(runAttempt), [runAttempt]);
   const startOffset = skel?.startOffsetSec ?? 0;
-
-  // Load the video bytes + the Scan Setup the run will replay.
-  useEffect(() => {
-    let revoked = false;
-    let url: string | null = null;
-    (async () => {
-      setLoadError(null);
-      try {
-        const [vidRes, setupRes] = await Promise.all([
-          fetch(`/api/dev/corpus/video?key=${encodeURIComponent(item.key)}`),
-          fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(item.key)}`),
-        ]);
-        if (!vidRes.ok) throw new Error("Failed to load video.");
-        const blob = await vidRes.blob();
-        url = URL.createObjectURL(blob);
-        if (revoked) return;
-        setVideoUrl(url);
-        setVideoFile(new File([blob], `${item.videoKey}.mp4`, { type: "video/mp4" }));
-
-        // Accepted truth is optional: without it the run renders + posts
-        // unscored, so a truth-load failure must never block Analyze.
-        try {
-          const truth = await loadGroundTruth(item.key);
-          if (!revoked) setGroundTruth(truth);
-        } catch {
-          if (!revoked) setGroundTruth(null);
-        }
-
-        const { setup: saved } = await setupRes.json();
-        if (revoked) return;
-        if (saved) {
-          setSetup({
-            climberCrop: saved.climberCrop ?? DEFAULT_CROP,
-            wallCrop: saved.wallCrop ?? DEFAULT_CROP,
-            climberPoint: saved.climberPoint ?? null,
-            panning: !!saved.panning,
-            tier: (saved.qualityTier as QualityTier) ?? DEFAULT_TIER,
-            setupHash: typeof saved.setupHash === "string" ? saved.setupHash : "",
-          });
-        }
-      } catch (err) {
-        if (!revoked) setLoadError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!revoked) setLoading(false);
-      }
-    })();
-    return () => {
-      revoked = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [item.key, item.videoKey]);
-
-  // Run the production scan path against the saved Setup. The only options
-  // passed are dev-output toggles; every detection knob comes from the tier the
-  // Setup was calibrated with, exactly as the user-facing flow resolves it.
-  const handleRun = useCallback(async () => {
-    if (!videoFile || !model || !cv || !setup) return;
-    setPhase("running");
-    setPhaseError(null);
-    setRunAttempt(null);
-    setRunDiag(null);
-    setPost({ status: "idle", message: "" });
-    postedRunRef.current = null;
-    try {
-      const cfg = getTierConfig(setup.tier);
-      await process(
-        videoFile,
-        model,
-        cv,
-        cfg.frameStep,
-        { state: "", area: "", route: item.routeFolder },
-        {
-          climberCrop: setup.climberCrop,
-          wallCrop: setup.wallCrop,
-          climberPoint: setup.climberPoint ?? undefined,
-          panning: setup.panning,
-        },
-        0,
-        "mediapipe",
-        {
-          maxRecoveryFrames: cfg.maxRecoveryFrames,
-          filterTolerance: cfg.filterTolerance,
-          motionThreshold: cfg.motionThreshold,
-          refineStride: cfg.refineStride,
-        },
-        {
-          emitLivePreview: false,
-          frameOutput: "detected",
-          detectHolds: false,
-          generateThumbnail: false,
-        },
-      );
-    } catch (err) {
-      setPhase("error");
-      setPhaseError(err instanceof Error ? err.message : String(err));
-    }
-  }, [videoFile, model, cv, setup, process, item.routeFolder]);
-
-  // Hand the completed run to the rendered view once the pipeline has produced
-  // diagnostics (assembled only after ORB extraction completes).
-  useEffect(() => {
-    if (phase !== "running") return;
-    if (status === "error") {
-      setPhase("error");
-      setPhaseError(errorMessage ?? "Detection failed.");
-      return;
-    }
-    if (status !== "done") return;
-    if (!scanDiagnostics) {
-      // "done" fires before ORB/diagnostics; only treat as failure once ORB has.
-      if (orbStatus === "failed") {
-        setPhase("error");
-        setPhaseError("ORB extraction failed — no diagnostics produced.");
-      }
-      return;
-    }
-    setRunAttempt(attemptId ? (getAttempt(attemptId) ?? null) : null);
-    setRunDiag(scanDiagnostics);
-    setPhase("result");
-  }, [phase, status, orbStatus, scanDiagnostics, attemptId, errorMessage]);
-
-  // Post the completed run append-only, stamped with the setupHash it replayed
-  // (appVersion rides inside the diagnostics record). One POST per run.
-  useEffect(() => {
-    if (phase !== "result" || !runDiag || !setup) return;
-    if (postedRunRef.current === runDiag.scanId) return;
-    postedRunRef.current = runDiag.scanId;
-    let cancelled = false;
-    setPost({ status: "posting", message: "Posting run…" });
-    void (async () => {
-      try {
-        const { pose, orb } = buildHarnessPayloads({
-          diagnostics: runDiag,
-          frames: runAttempt?.frames ?? [],
-          referenceFrameMeta: runAttempt?.referenceFrameMeta ?? null,
-          setupHash: setup.setupHash,
-          scoring,
-        });
-        await postDetectionRun({ videoPath: item.videoPath, pose, orb });
-        if (cancelled) return;
-        setPost({ status: "posted", message: "Run posted." });
-        await onDone();
-      } catch (err) {
-        if (cancelled) return;
-        setPost({
-          status: "failed",
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [phase, runDiag, runAttempt, setup, scoring, item.videoPath, onDone]);
-
-  useEffect(() => {
-    if (phase !== "result") return;
-    setPlaying(true);
-    setFrameIndex(0);
-  }, [phase, runFrames]);
 
   useEffect(() => {
     if (phase !== "result" || runFrames.length === 0) return;
@@ -410,12 +192,6 @@ export default function Analyzer({
     });
   }, []);
 
-  function handleCancelRun() {
-    resetProcessor();
-    setPhaseError(null);
-    setPhase("idle");
-  }
-
   const header = (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
       <div className="min-w-0">
@@ -450,7 +226,7 @@ export default function Analyzer({
         {phase === "result" && (
           <button
             type="button"
-            onClick={() => void handleRun()}
+            onClick={() => void run()}
             className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
           >
             Re-run Analyze
@@ -493,7 +269,8 @@ export default function Analyzer({
   // ── In-run progress ──
   if (phase === "running") {
     const pct = totalFrames > 0 ? Math.min(100, Math.round((currentFrame / totalFrames) * 100)) : 0;
-    const finishing = status === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
+    const finishing =
+      processorStatus === "done" || (totalFrames > 0 && currentFrame >= totalFrames);
     return (
       <div className="relative flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
         <div className="absolute inset-x-0 top-0 z-10">
@@ -530,7 +307,7 @@ export default function Analyzer({
             <div className="mx-auto flex w-full max-w-5xl items-center justify-start">
               <button
                 type="button"
-                onClick={handleCancelRun}
+                onClick={cancel}
                 className="rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
               >
                 Cancel run
@@ -597,7 +374,7 @@ export default function Analyzer({
                 autoPlay
                 hidePlayButton
                 orbKeypoints={orbKeypoints}
-                cropTrace={showCrops ? cropTrace : undefined}
+                cropTrace={showCrops ? (cropTrace ?? undefined) : undefined}
                 fit="contain"
                 bare
                 className="min-h-0 flex-1 rounded-none"
@@ -616,7 +393,6 @@ export default function Analyzer({
   }
 
   // ── Idle / error: the deliberate act of starting a run ──
-  const ready = !!model && !!cv && !!setup && !!videoFile;
   return (
     <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
       {header}
@@ -652,7 +428,7 @@ export default function Analyzer({
           )}
           <button
             type="button"
-            onClick={() => void handleRun()}
+            onClick={() => void run()}
             disabled={!ready}
             className="rounded-md bg-send px-4 py-2 text-sm font-medium text-fg-inverse disabled:opacity-50"
           >

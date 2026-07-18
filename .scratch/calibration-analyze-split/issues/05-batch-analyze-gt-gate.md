@@ -1,6 +1,7 @@
 # Batch Analyze gated on accepted Ground Truth
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/batch-analyze-gt-gate
 Type: AFK
 
 ## Parent

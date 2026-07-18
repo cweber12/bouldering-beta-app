@@ -28,6 +28,8 @@ import MetadataEditorPanel from "@/components/dev/MetadataEditorPanel";
 import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
 import Analyzer from "@/components/dev/Analyzer";
+import BatchAnalyzer from "@/components/dev/BatchAnalyzer";
+import { planBatchAnalyze, type BatchAnalyzePlan } from "@/utils/harnessBatch";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
@@ -69,6 +71,7 @@ interface CorpusItem {
   title: string | null;
   videoPath: string;
   hasSetup: boolean;
+  hasGroundTruth: boolean;
   runCount: number;
   analysisInputs: unknown;
 }
@@ -118,6 +121,10 @@ export default function HarnessPage() {
   const [items, setItems] = useState<CorpusItem[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
+  // A running batch sweep. The plan is frozen at click so a mid-sweep refresh
+  // (run counts changing after each post) never reshuffles the queue.
+  const [batchPlan, setBatchPlan] = useState<BatchAnalyzePlan<CorpusItem> | null>(null);
+  const batchPreview = useMemo(() => (items ? planBatchAnalyze(items) : null), [items]);
 
   const refreshList = useCallback(async () => {
     setListError(null);
@@ -143,6 +150,19 @@ export default function HarnessPage() {
           The detection eval harness is only available in development.
         </p>
       </main>
+    );
+  }
+
+  if (batchPlan) {
+    return (
+      <BatchAnalyzer
+        plan={batchPlan}
+        onBack={() => {
+          setBatchPlan(null);
+          void refreshList();
+        }}
+        onPosted={refreshList}
+      />
     );
   }
 
@@ -180,13 +200,24 @@ export default function HarnessPage() {
             Calibrate each Test Video&apos;s Scan Setup, then re-run detection in batch.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void refreshList()}
-          className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void refreshList()}
+            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => batchPreview && setBatchPlan(batchPreview)}
+            disabled={!batchPreview || batchPreview.queue.length === 0}
+            title="Run Analyze over every video with accepted Ground Truth, one after another"
+            className="rounded-md bg-send px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
+          >
+            Batch Analyze{batchPreview ? ` (${batchPreview.queue.length})` : ""}
+          </button>
+        </div>
       </header>
 
       {listError && (
@@ -210,6 +241,7 @@ export default function HarnessPage() {
                 <th className="py-2 pr-3 font-medium">route / video</th>
                 <th className="py-2 pr-3 font-medium">title</th>
                 <th className="py-2 pr-3 font-medium">setup</th>
+                <th className="py-2 pr-3 font-medium">truth</th>
                 <th className="py-2 pr-3 font-medium tabular-nums">runs</th>
                 <th className="py-2 font-medium" />
               </tr>
@@ -230,6 +262,17 @@ export default function HarnessPage() {
                     ) : (
                       <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
                         pending
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {it.hasGroundTruth ? (
+                      <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
+                        accepted
+                      </span>
+                    ) : (
+                      <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
+                        none
                       </span>
                     )}
                   </td>

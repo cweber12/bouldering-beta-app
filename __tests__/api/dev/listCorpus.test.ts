@@ -17,6 +17,7 @@ beforeAll(async () => {
     JSON.stringify({ source_title: "Clip A", analysis_inputs: { shadows: "low" } }),
   );
   await writeFile(path.join(a, "setup.json"), JSON.stringify({ version: 1 }));
+  await writeFile(path.join(a, "ground-truth.json"), JSON.stringify({ frames: [] }));
   await writeFile(path.join(a, "detections", "20260101_000000_pose.json"), "{}");
   await writeFile(path.join(a, "detections", "20260101_000000_orb.json"), "{}");
   await writeFile(path.join(a, "detections", "20260102_000000_pose.json"), "{}");
@@ -47,6 +48,7 @@ describe("listCorpus", () => {
 
     const a = items.find((i) => i.key === "route-a/vid_1")!;
     expect(a.hasSetup).toBe(true);
+    expect(a.hasGroundTruth).toBe(true);
     expect(a.runCount).toBe(2);
     expect(a.title).toBe("Clip A");
     expect(a.videoPath).toBe("analysis/route-a/vid_1/vid_1.mp4");
@@ -54,6 +56,7 @@ describe("listCorpus", () => {
 
     const b = items.find((i) => i.key === "route-b/vid_2")!;
     expect(b.hasSetup).toBe(false);
+    expect(b.hasGroundTruth).toBe(false);
     expect(b.runCount).toBe(0);
     expect(b.analysisInputs).toBeNull();
   });
