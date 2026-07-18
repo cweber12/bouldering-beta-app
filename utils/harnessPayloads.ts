@@ -16,10 +16,18 @@
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { ScanDiagnostics, ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
+import type { DetectionScoring } from "@/utils/harnessScoring";
 
 /** The `pose` half: full diagnostics record + the dense pose frames. */
 export interface HarnessPosePayload {
   setupHash: string;
+  /**
+   * The exact Ground Truth version the run was scored against, or null when
+   * the video has no accepted truth (the run posts unscored).
+   */
+  groundTruthHash: string | null;
+  /** The probed-frame scoring block (utils/harnessScoring.ts), or null. */
+  scoring: DetectionScoring | null;
   diagnostics: ScanDiagnostics;
   frames: PoseFrame[];
 }
@@ -38,10 +46,18 @@ export function buildHarnessPayloads(args: {
   frames: PoseFrame[];
   referenceFrameMeta: ReferenceFrameMeta | null;
   setupHash: string;
+  /** Scoring vs the video's Ground Truth; null posts the run unscored. */
+  scoring?: DetectionScoring | null;
 }): { pose: HarnessPosePayload; orb: HarnessOrbPayload } {
-  const { diagnostics, frames, referenceFrameMeta, setupHash } = args;
+  const { diagnostics, frames, referenceFrameMeta, setupHash, scoring = null } = args;
   return {
-    pose: { setupHash, diagnostics, frames },
+    pose: {
+      setupHash,
+      groundTruthHash: scoring?.groundTruthHash ?? null,
+      scoring,
+      diagnostics,
+      frames,
+    },
     orb: {
       setupHash,
       appVersion: diagnostics.appVersion,

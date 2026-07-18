@@ -8,7 +8,25 @@
       "PowerShell(npx vitest run 2>&1)",
       "Bash(git commit -m 'feat: run baseline detection from the harness calibration page' -m '- Confirm \\(Scan\\) now saves setup.json then runs one baseline detection via useVideoProcessor and relays the pose + orb run to the downloader through /api/dev/detections *)",
       "Bash(curl -s http://localhost:3000/dev/harness)",
-      "Bash(curl -s http://localhost:3000/api/dev/corpus)"
+      "Bash(curl -s http://localhost:3000/api/dev/corpus)",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { $p = Get-Process -Id $_ -ErrorAction SilentlyContinue; Write-Output \\('\\\\''PID '\\\\'' + $_ + '\\\\'' = '\\\\'' + $p.ProcessName\\); Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
+      "Bash(powershell -NoProfile -Command 'Start-Sleep -Seconds 2; $c = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if \\($c\\) { Write-Output '\\\\''STILL LISTENING'\\\\'' } else { Write-Output '\\\\''PORT FREE'\\\\'' }')",
+      "Bash(npx next *)",
+      "Bash(break)",
+      "Bash(node \"C:/Users/coled/AppData/Local/Temp/claude/c--Projects--current-projects-beta-scanner/1d3277a2-74d6-4fd0-a56e-bf13f6920815/scratchpad/probe-auth-route.mjs\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"=== TSC EXIT $? ===\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"=== ESLINT EXIT $? ===\")",
+      "Bash(npx vitest *)",
+      "Bash(git commit -m '@ *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(node scripts/audit-issues.mjs)",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
+      "Bash(npm run *)",
+      "Bash(PROBE_EMAIL=\"cole.weber12@yahoo.com\" PROBE_PASSWORD=\"123456\" node \"C:/Users/coled/AppData/Local/Temp/claude/c--Projects--current-projects-beta-scanner/1d3277a2-74d6-4fd0-a56e-bf13f6920815/scratchpad/probe-login-roundtrip.mjs\")"
     ]
   }
 }
