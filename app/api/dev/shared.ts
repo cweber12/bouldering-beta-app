@@ -143,6 +143,27 @@ async function readJsonSetupHash(filePath: string): Promise<string | null> {
   }
 }
 
+/**
+ * Read a detection run's stamped `setupHash`. The downloader wraps each posted
+ * run in an envelope (`{ video_key, route_folder, run_ts, written_at, type,
+ * data }`) with the scanner's payload under `data`, so the stamp lives at
+ * `data.setupHash`; a bare payload (top-level `setupHash`) is accepted too.
+ */
+async function readRunSetupHash(filePath: string): Promise<string | null> {
+  try {
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
+    const data =
+      typeof parsed.data === "object" && parsed.data !== null
+        ? (parsed.data as Record<string, unknown>)
+        : parsed;
+    return typeof data.setupHash === "string" && data.setupHash.length > 0
+      ? data.setupHash
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The bundle's current `setup.json` `setupHash`, or null when uncalibrated. */
 export async function readSetupHash(bundleDir: string): Promise<string | null> {
   return readJsonSetupHash(path.join(bundleDir, "setup.json"));
@@ -175,7 +196,7 @@ async function countRuns(
   let unpairedRunCount = 0;
   if (hasTruth) {
     for (const f of files) {
-      const runHash = await readJsonSetupHash(path.join(detectionsDir, f));
+      const runHash = await readRunSetupHash(path.join(detectionsDir, f));
       if (!runPairsWithTruth(runHash, truthSetupHash, setupHash)) unpairedRunCount += 1;
     }
   }
