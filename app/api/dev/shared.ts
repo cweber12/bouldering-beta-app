@@ -96,6 +96,12 @@ export interface CorpusItem {
   videoPath: string;
   /** True when a Scan Setup has been calibrated for this video. */
   hasSetup: boolean;
+  /**
+   * True when the video has accepted Ground Truth. `ground-truth.json` is only
+   * ever written by Accept & save, so existence is acceptance — this is the
+   * batch Analyze gate.
+   */
+  hasGroundTruth: boolean;
   /** Number of detection runs already written to the bundle. */
   runCount: number;
   /** The human-labelled `analysis_inputs` block, passed through verbatim. */
@@ -161,8 +167,9 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         continue; // no / invalid metadata → not a bundle
       }
 
-      const [hasSetup, runCount] = await Promise.all([
+      const [hasSetup, hasGroundTruth, runCount] = await Promise.all([
         exists(path.join(bundleDir, "setup.json")),
+        exists(path.join(bundleDir, "ground-truth.json")),
         countRuns(path.join(bundleDir, "detections")),
       ]);
 
@@ -173,6 +180,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         title: typeof meta.source_title === "string" ? meta.source_title : null,
         videoPath: relativeVideoPath(routeEnt.name, vEnt.name),
         hasSetup,
+        hasGroundTruth,
         runCount,
         analysisInputs: meta.analysis_inputs ?? null,
       });
