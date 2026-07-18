@@ -20,6 +20,7 @@ import { useVideoProcessor } from "@/hooks/useVideoProcessor";
 import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import { buildHarnessPayloads, postDetectionRun } from "@/utils/harnessPayloads";
 import { loadGroundTruth, type GroundTruth } from "@/utils/harnessGroundTruth";
+import { truthIsStale } from "@/utils/harnessFreshness";
 import { scoreRunAgainstGroundTruth, type DetectionScoring } from "@/utils/harnessScoring";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
@@ -58,6 +59,12 @@ export interface AnalyzeRun {
   videoUrl: string | null;
   setup: LoadedSetup | null;
   groundTruth: GroundTruth | null;
+  /**
+   * The saved truth stamps an older calibration's setupHash than the Setup this
+   * run replays — the run cannot pair with it, so it renders and posts unscored
+   * (matching the harness's evaluate pairing rule).
+   */
+  truthStale: boolean;
   /** Everything needed to start a run is in hand. */
   ready: boolean;
   phase: AnalyzePhase;
@@ -138,18 +145,25 @@ export function useAnalyzeRun(
 
   const runFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
 
+  // The truth pairs with this run only when its stamped hash matches the Setup
+  // being replayed (legacy truth without a hash falls back to the Setup). Stale
+  // truth must not be scored against: the harness would skip the pair anyway,
+  // and a local score would fabricate evidence the evaluation never sees.
+  const truthStale =
+    !!groundTruth && !!setup && truthIsStale(groundTruth.setupHash, setup.setupHash);
+
   // Scoring vs Ground Truth over the probed-frame domain: the base-timeline
   // probes (missing / flip-discarded included) plus the accepted frames, so a
   // probe that found nothing scores `missing` while grid frames the run never
   // visited stay outside the domain. Null when the video has no accepted truth
-  // — the run then renders and posts unscored.
+  // (or only stale truth) — the run then renders and posts unscored.
   const scoring = useMemo(() => {
-    if (!groundTruth || !runAttempt) return null;
+    if (!groundTruth || !runAttempt || truthStale) return null;
     return scoreRunAgainstGroundTruth({
       groundTruth,
       run: { probes: runFrames, frames: runAttempt.frames },
     });
-  }, [groundTruth, runAttempt, runFrames]);
+  }, [groundTruth, runAttempt, runFrames, truthStale]);
 
   // Load the video bytes + the Scan Setup the run will replay + any truth.
   useEffect(() => {
@@ -318,6 +332,7 @@ export function useAnalyzeRun(
     videoUrl,
     setup,
     groundTruth,
+    truthStale,
     ready: !!model && !!cv && !!setup && !!videoFile,
     phase,
     phaseError,

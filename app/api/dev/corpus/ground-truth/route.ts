@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
-import { HARNESS_ENABLED, resolveBundleDir } from "@/app/api/dev/shared";
+import { HARNESS_ENABLED, resolveBundleDir, readSetupHash } from "@/app/api/dev/shared";
 import {
   parseGroundTruthInput,
   hashGroundTruthInput,
@@ -66,6 +66,27 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const input = parseGroundTruthInput(body);
   if (!input) {
     return NextResponse.json({ error: "Invalid Ground Truth." }, { status: 422 });
+  }
+
+  // The freshness gate (harness issue #21): accepted truth is only valid
+  // evidence while its stamped setupHash equals the calibration runs are
+  // scanned under, so a write whose hash is not the current setup.json's is
+  // refused — stale-scaffold exports can never land, however they were raced.
+  const currentSetupHash = await readSetupHash(dir);
+  if (!currentSetupHash) {
+    return NextResponse.json(
+      { error: "Save a Scan Setup before accepting Ground Truth." },
+      { status: 409 },
+    );
+  }
+  if (input.setupHash !== currentSetupHash) {
+    return NextResponse.json(
+      {
+        error:
+          "The Ground Truth seed is from an older calibration — re-run ViTPose and re-accept.",
+      },
+      { status: 409 },
+    );
   }
 
   const groundTruth: GroundTruth = {

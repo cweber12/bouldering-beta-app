@@ -215,6 +215,12 @@ export default function BatchAnalyzer({
               {plan.skippedNoTruth} skipped — no accepted Ground Truth.{" "}
             </span>
           )}
+          {plan.skippedStaleTruth > 0 && (
+            <span className="text-caution">
+              {plan.skippedStaleTruth} skipped — truth from an older calibration (re-seed
+              and re-accept first).{" "}
+            </span>
+          )}
           {plan.skippedNoSetup > 0 && (
             <span className="text-caution">
               {plan.skippedNoSetup} skipped — truth without a Scan Setup.

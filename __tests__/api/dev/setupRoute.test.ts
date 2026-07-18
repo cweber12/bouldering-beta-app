@@ -118,6 +118,18 @@ describe("dev GET/PUT /api/dev/corpus/setup", () => {
     expect(after.analysisInputs).toEqual({ motion_blur: "extreme" });
   });
 
+  it("re-saving an unchanged calibration re-derives the identical setupHash", async () => {
+    // The freshness treadmill guard (harness issue #21): the hash is derived
+    // from the calibration content, never from session identity or timestamps,
+    // so a no-op re-save can never orphan existing Ground Truth or runs.
+    const { PUT } = await importRoute("development");
+
+    const first = (await (await PUT(makeRequest(BUNDLE_KEY, CROPS))).json()).setup;
+    const again = (await (await PUT(makeRequest(BUNDLE_KEY, CROPS))).json()).setup;
+
+    expect(again.setupHash).toBe(first.setupHash);
+  });
+
   it("editing a label never changes setupHash", async () => {
     const { PUT } = await importRoute("development");
 

@@ -170,11 +170,14 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
   });
 
-  it("POST clears a stale status sidecar before relaying the job", async () => {
+  it("POST clears a stale status sidecar AND the previous artifact before relaying the job", async () => {
     await writeFile(
       path.join(bundleDir, "vitpose.status.json"),
       JSON.stringify({ jobId: "old", status: "error", error: "stale" }),
     );
+    // The previous calibration's artifact: left in place, the poller would read
+    // it instantly and seed truth from the wrong calibration (the export race).
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
     const fetchMock = vi.fn(
       async () => new Response(JSON.stringify({ jobId: "j2" }), { status: 202 }),
     );
@@ -184,6 +187,81 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     const res = await POST(makeRequest(BUNDLE_KEY, validRequest));
     expect(res.status).toBe(202);
     expect(await fileExists(path.join(bundleDir, "vitpose.status.json"))).toBe(false);
+    expect(await fileExists(path.join(bundleDir, "vitpose.json"))).toBe(false);
+  });
+
+  it("GET withholds an artifact stamped under an older calibration than setup.json", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "setup.json"),
+      JSON.stringify({ version: 1, setupHash: "current-hash" }),
+    );
+    await writeFile(
+      path.join(bundleDir, "vitpose.json"),
+      JSON.stringify({ ...validScaffold, setupHash: "old-hash" }),
+    );
+
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toBeNull();
+    expect(body.error).toMatch(/older calibration/i);
+
+    await rm(path.join(bundleDir, "setup.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+  });
+
+  it("GET treats a stale artifact as pending while a fresh job is still running", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "setup.json"),
+      JSON.stringify({ version: 1, setupHash: "current-hash" }),
+    );
+    await writeFile(
+      path.join(bundleDir, "vitpose.json"),
+      JSON.stringify({ ...validScaffold, setupHash: "old-hash" }),
+    );
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "j3", status: "running" }),
+    );
+
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toBeNull();
+    expect(body.error).toBeNull();
+
+    await rm(path.join(bundleDir, "setup.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("GET serves an artifact whose stamped hash matches the current calibration", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "setup.json"),
+      JSON.stringify({ version: 1, setupHash: "current-hash" }),
+    );
+    const freshScaffold = { ...validScaffold, setupHash: "current-hash" };
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(freshScaffold));
+
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toEqual(freshScaffold);
+
+    await rm(path.join(bundleDir, "setup.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+  });
+
+  it("GET trusts a legacy artifact without a stamped hash against any calibration", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(
+      path.join(bundleDir, "setup.json"),
+      JSON.stringify({ version: 1, setupHash: "current-hash" }),
+    );
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
+
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toEqual(validScaffold);
+
+    await rm(path.join(bundleDir, "setup.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
   });
 
   it("GET/POST 400 on an unsafe bundle key", async () => {
