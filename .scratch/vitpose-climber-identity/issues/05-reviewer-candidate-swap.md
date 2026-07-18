@@ -12,6 +12,10 @@ Gated on: issue 03 outcome (Phase B); depends on issue 04
 > residual (similarly-dressed climbers, appearance-blind footage), not a
 > routine correction tool — see the note on issue 04. Issue 03's tally may
 > trim this to the minimal per-frame swap or defer it.
+>
+> Gate resolved (2026-07-17): issue 03 closed on its ~zero exit branch —
+> Phase B is **deferred**; stays `needs-triage` as an escape hatch (see the
+> gate note on issue 04).
 
 ## Context
 

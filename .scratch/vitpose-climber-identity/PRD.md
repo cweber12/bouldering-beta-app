@@ -22,6 +22,12 @@ Status: in-progress
 > stitcher on the scanner's own corpus using the new `seedDebug.stitch`
 > diagnostics; final batch numbers live in the downloader's
 > `reports/stitch_batch_validation_v2.json` and on its issue #19.
+>
+> 2026-07-17 (issue 03 closed): all batches re-tested against the
+> appearance-anchored stitcher; residual wrong-person rate is **~zero**. The
+> phasing gate resolves to the ~zero branch — Phase B (issues 04–06) is
+> deferred as escape-hatch scope, kept `needs-triage` rather than activated.
+> Issue 07 (docs alignment) is the remaining live issue.
 
 Spec inputs: `docs/adr/0019` (ViTPose scaffold, amended by this PRD), the cross-program
 contract `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`

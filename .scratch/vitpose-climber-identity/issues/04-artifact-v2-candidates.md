@@ -17,6 +17,12 @@ Gated on: issue 03 outcome (Phase B)
 > (candidates + `selectedTrackId`) is fully compatible with the new stitcher —
 > nothing in #19 blocks this issue; issue 03's tally decides whether it is
 > worth its size.
+>
+> Gate resolved (2026-07-17): issue 03 closed on its ~zero exit branch — all
+> batches re-tested, residual wrong-person rate ~zero. Phase B is **deferred**;
+> this issue stays `needs-triage` as an escape hatch, to be activated only if
+> a residual wrong-person class (similarly-dressed climbers, appearance-blind
+> footage) shows up in practice.
 
 ## Context
 

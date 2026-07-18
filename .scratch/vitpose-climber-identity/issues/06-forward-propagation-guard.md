@@ -12,6 +12,10 @@ Gated on: issue 03 outcome (Phase B); depends on issue 05
 > motion+appearance (its issue #19), so the original parity claim in the PRD
 > is stale — propagation here is **intentionally simpler** (motion-only),
 > which is fine for a human-supervised click flow.
+>
+> Gate resolved (2026-07-17): issue 03 closed on its ~zero exit branch —
+> Phase B is **deferred**; stays `needs-triage` as an escape hatch (see the
+> gate note on issue 04).
 
 ## Context
 

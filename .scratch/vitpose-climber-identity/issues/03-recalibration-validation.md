@@ -1,6 +1,8 @@
 # 03 — Validation pass: recalibrate multi-person videos, measure residual error
 
-Status: ready-for-human
+Status: done
+Branch: main
+Merged: TBD
 
 ## Context
 
@@ -45,3 +47,15 @@ wrong. This is a human calibration session, not code.
 - Residual errors persist → move issues 04–06 to `ready-for-agent`; note they
   now target the residual only (similarly-dressed climbers, appearance-blind
   footage), so size them as an escape hatch, not a routine correction tool.
+
+## Comments
+
+> 2026-07-17 — Validation session complete (human calibration session, no code
+> branch — closed on `main`). All batches were re-tested against the
+> appearance-anchored stitcher; the **residual wrong-person rate is ~zero**,
+> confirming on the scanner's corpus what the downloader's 39-bundle batch
+> validation (its issue #19, `reports/stitch_batch_validation_v2.json`)
+> suggested. The first exit branch applies: Phase B (issues 04–06) is
+> **deferred as an escape hatch** for the residual (similarly-dressed
+> climbers, appearance-blind footage) rather than activated — the gate
+> outcome is recorded on those issues and in the PRD.
