@@ -1,7 +1,8 @@
 # Scoring vs Ground Truth — probed-frame domain
 
-Status: in-progress
+Status: done
 Branch: feat/scoring-vs-ground-truth
+Merged: 07ab949
 Type: AFK
 
 ## Parent
@@ -14,13 +15,13 @@ The pure scoring module from the grilled issue-08 design (`.scratch/ground-truth
 
 ## Acceptance criteria
 
-- [ ] Scoring module verdicts match the issue-08 ladder and thresholds over synthetic GT/run pairs (every verdict kind + body-scale degradation cases).
-- [ ] Only probed GT frames are scored; a sparse run over a dense grid produces no false `missing` verdicts; off-grid run frames are counted, not scored.
-- [ ] Rollup carries `probeCoverage` and the amended `detectionRateVsGT`; verified/unverified split unchanged.
-- [ ] The posted payload carries the scoring block + all three stamps (`appVersion`, `setupHash`, `groundTruthHash`); payload and dev-route tests updated.
-- [ ] Re-flagging truth changes `groundTruthHash` so subsequent runs score against the new truth while prior posted runs remain untouched.
-- [ ] Verdicts visible in the Analyze view.
-- [ ] Type-check, lint, and targeted tests pass.
+- [x] Scoring module verdicts match the issue-08 ladder and thresholds over synthetic GT/run pairs (every verdict kind + body-scale degradation cases).
+- [x] Only probed GT frames are scored; a sparse run over a dense grid produces no false `missing` verdicts; off-grid run frames are counted, not scored.
+- [x] Rollup carries `probeCoverage` and the amended `detectionRateVsGT`; verified/unverified split unchanged.
+- [x] The posted payload carries the scoring block + all three stamps (`appVersion`, `setupHash`, `groundTruthHash`); payload and dev-route tests updated (the detections relay is a shape-agnostic pass-through, so its contract needed no route change).
+- [x] Re-flagging truth changes `groundTruthHash` so subsequent runs score against the new truth while prior posted runs remain untouched.
+- [x] Verdicts visible in the Analyze view.
+- [x] Type-check, lint, and targeted tests pass.
 
 ## Blocked by
 
