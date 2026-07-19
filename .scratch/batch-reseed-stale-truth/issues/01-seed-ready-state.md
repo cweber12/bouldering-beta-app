@@ -1,7 +1,8 @@
 # Seed-ready state: predicate, corpus listing, badge
 
-Status: in-progress
+Status: done
 Branch: feat/seed-ready-state
+Merged: 7bf99f1
 Type: AFK
 
 ## Parent

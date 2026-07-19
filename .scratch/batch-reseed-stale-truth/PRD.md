@@ -1,6 +1,6 @@
 # Batch re-seeding for stale Ground Truth
 
-Status: ready-for-agent
+Status: in-progress
 
 ## Problem Statement
 
