@@ -36,7 +36,9 @@ import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
 import Analyzer from "@/components/dev/Analyzer";
 import BatchAnalyzer from "@/components/dev/BatchAnalyzer";
+import ReseedSweeper from "@/components/dev/ReseedSweeper";
 import { planBatchAnalyze, type BatchAnalyzePlan } from "@/utils/harnessBatch";
+import { planReseedSweep, type ReseedPlan } from "@/utils/harnessReseed";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
@@ -65,6 +67,7 @@ import {
 } from "@/utils/harnessViTPose";
 import { buildDetectionGrid, type DetectionGridFrame } from "@/utils/harnessDetectionGrid";
 import { scaffoldIsStale, truthIsStale } from "@/utils/harnessFreshness";
+import { probeVideoMeta, type VideoMeta } from "@/utils/probeVideoMeta";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
@@ -91,44 +94,6 @@ interface CorpusItem {
   analysisInputs: unknown;
 }
 
-/** Native video dimensions + duration, read from the loaded video element. */
-interface VideoMeta {
-  width: number;
-  height: number;
-  duration: number;
-}
-
-/**
- * Read a video blob's duration and native dimensions without decoding frames.
- * The duration is the sole input to the Detection Frame grid, and the dimensions
- * size the reviewer canvas — both previously came from the throwaway scan.
- */
-function probeVideoMeta(url: string): Promise<VideoMeta> {
-  return new Promise((resolve, reject) => {
-    const video = document.createElement("video");
-    video.preload = "metadata";
-    video.muted = true;
-    const cleanup = () => {
-      video.removeAttribute("src");
-      video.load();
-    };
-    video.onloadedmetadata = () => {
-      const meta = {
-        width: video.videoWidth,
-        height: video.videoHeight,
-        duration: video.duration,
-      };
-      cleanup();
-      resolve(meta);
-    };
-    video.onerror = () => {
-      cleanup();
-      reject(new Error("Failed to read the video's duration."));
-    };
-    video.src = url;
-  });
-}
-
 /** What the corpus list opened a video for — the two acts are kept separate. */
 type Selection = { item: CorpusItem; mode: "calibrate" | "analyze" };
 
@@ -140,6 +105,10 @@ export default function HarnessPage() {
   // (run counts changing after each post) never reshuffles the queue.
   const [batchPlan, setBatchPlan] = useState<BatchAnalyzePlan<CorpusItem> | null>(null);
   const batchPreview = useMemo(() => (items ? planBatchAnalyze(items) : null), [items]);
+  // A running re-seed sweep, frozen at click for the same reason — badges flip
+  // to seed-ready as artifacts land, and that must never reshuffle the queue.
+  const [reseedPlan, setReseedPlan] = useState<ReseedPlan<CorpusItem> | null>(null);
+  const reseedPreview = useMemo(() => (items ? planReseedSweep(items) : null), [items]);
 
   const refreshList = useCallback(async () => {
     setListError(null);
@@ -177,6 +146,19 @@ export default function HarnessPage() {
           void refreshList();
         }}
         onPosted={refreshList}
+      />
+    );
+  }
+
+  if (reseedPlan) {
+    return (
+      <ReseedSweeper
+        plan={reseedPlan}
+        onBack={() => {
+          setReseedPlan(null);
+          void refreshList();
+        }}
+        onLanded={refreshList}
       />
     );
   }
@@ -222,6 +204,15 @@ export default function HarnessPage() {
             className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
           >
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => reseedPreview && setReseedPlan(reseedPreview)}
+            disabled={!reseedPreview || reseedPreview.queue.length === 0}
+            title="Submit a ViTPose job for every stale-truth bundle without a usable scaffold, one after another — seed-ready bundles are skipped, nothing is auto-accepted"
+            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm font-medium text-fg disabled:opacity-50"
+          >
+            Re-seed stale{reseedPreview ? ` (${reseedPreview.queue.length})` : ""}
           </button>
           <button
             type="button"
