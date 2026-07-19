@@ -1,6 +1,6 @@
 # Batch re-seeding for stale Ground Truth
 
-Status: in-progress
+Status: done
 
 ## Problem Statement
 

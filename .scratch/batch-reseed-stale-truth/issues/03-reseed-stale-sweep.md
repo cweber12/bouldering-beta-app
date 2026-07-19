@@ -1,7 +1,8 @@
 # Re-seed stale sweep on the corpus page
 
-Status: in-progress
+Status: done
 Branch: feat/reseed-stale-sweep
+Merged: f60882f
 Type: AFK
 
 ## Parent
@@ -34,12 +35,27 @@ framework-agnostic functions; the sweep component is a thin shell over them.
 
 ## Acceptance criteria
 
-- [ ] Corpus page shows "Re-seed stale (N)" with N = stale-truth bundles needing jobs; disabled at N = 0.
-- [ ] Sweep submits jobs one at a time over the dense duration-derived grid via the existing relay routes, never concurrently.
-- [ ] Error sidecar, poll timeout, and no-Climber scaffolds each mark the bundle failed with a reason and the sweep continues; a summary lists every outcome.
-- [ ] Stop control halts after the in-flight job; listing refreshes as artifacts land.
-- [ ] No ground-truth file is written by the sweep.
-- [ ] Planner and step functions are pure with unit tests in the Batch Analyze plan-test style (queue membership, seed-ready exclusion, truthless exclusion, every failure classification, advance after success and failure).
+- [x] Corpus page shows "Re-seed stale (N)" with N = stale-truth bundles needing jobs; disabled at N = 0.
+- [x] Sweep submits jobs one at a time over the dense duration-derived grid via the existing relay routes, never concurrently.
+- [x] Error sidecar, poll timeout, and no-Climber scaffolds each mark the bundle failed with a reason and the sweep continues; a summary lists every outcome.
+- [x] Stop control halts after the in-flight job; listing refreshes as artifacts land.
+- [x] No ground-truth file is written by the sweep.
+- [x] Planner and step functions are pure with unit tests in the Batch Analyze plan-test style (queue membership, seed-ready exclusion, truthless exclusion, every failure classification, advance after success and failure).
+
+## Comments
+
+- 2026-07-18 (implementation): pure logic lives in `utils/harnessReseed.ts`
+  (`planReseedSweep` + `decideReseedStep`, terminal decisions carry
+  `advance: true`); the sweep shell is `components/dev/ReseedSweeper.tsx`,
+  untested by the PRD's testing decision (Batch Analyze precedent), as is the
+  in-browser duration probe (extracted to `utils/probeVideoMeta.ts`, shared
+  with the calibrator). Criteria 1–5 are verified by the pure tests plus the
+  existing relay-route contract tests the sweep is a client of; the sweep
+  never calls the ground-truth PUT. The Stop control finishes the in-flight
+  job rather than abandoning its poll — the downloader is already running it,
+  so stopping earlier would lose only the outcome, not the work. Per issue
+  01's comment the live queue today is 5 bundles (3 stale scaffolds + 2
+  fresh-but-poseless), not the PRD's snapshot of 3.
 
 ## Blocked by
 
