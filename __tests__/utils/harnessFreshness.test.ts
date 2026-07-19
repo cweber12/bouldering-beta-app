@@ -3,8 +3,10 @@ import {
   effectiveTruthHash,
   truthIsStale,
   scaffoldIsStale,
+  scaffoldIsSeedReady,
   runPairsWithTruth,
 } from "@/utils/harnessFreshness";
+import type { ViTPoseScaffold } from "@/utils/harnessViTPose";
 
 describe("effectiveTruthHash", () => {
   it("prefers the truth's own stamped hash", () => {
@@ -48,6 +50,40 @@ describe("scaffoldIsStale", () => {
   it("trusts a legacy scaffold without a stamped hash", () => {
     expect(scaffoldIsStale(undefined, "s1")).toBe(false);
     expect(scaffoldIsStale("", "s1")).toBe(false);
+  });
+});
+
+describe("scaffoldIsSeedReady", () => {
+  const posedFrame = {
+    timestamp: 0.1,
+    keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }],
+  };
+  const scaffold = (setupHash: string | undefined, posed: boolean): ViTPoseScaffold => ({
+    version: 1,
+    ...(setupHash ? { setupHash } : {}),
+    frames: posed ? [{ timestamp: 0, keypoints: [] }, posedFrame] : [{ timestamp: 0, keypoints: [] }],
+  });
+
+  it("is ready when the scaffold stamps the current hash and poses a frame", () => {
+    expect(scaffoldIsSeedReady(scaffold("h1", true), "h1")).toBe(true);
+  });
+
+  it("is not ready when the scaffold stamps an older calibration's hash", () => {
+    expect(scaffoldIsSeedReady(scaffold("old", true), "new")).toBe(false);
+  });
+
+  it("is not ready when there is no scaffold at all", () => {
+    expect(scaffoldIsSeedReady(null, "h1")).toBe(false);
+    expect(scaffoldIsSeedReady(undefined, "h1")).toBe(false);
+  });
+
+  it("trusts a legacy unstamped scaffold, matching the staleness fallback", () => {
+    expect(scaffoldIsSeedReady(scaffold(undefined, true), "h1")).toBe(true);
+  });
+
+  it("is never ready for a poseless scaffold — the tracker found no Climber", () => {
+    expect(scaffoldIsSeedReady(scaffold("h1", false), "h1")).toBe(false);
+    expect(scaffoldIsSeedReady({ version: 1, setupHash: "h1", frames: [] }, "h1")).toBe(false);
   });
 });
 

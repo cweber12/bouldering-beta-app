@@ -58,6 +58,36 @@ beforeAll(async () => {
     JSON.stringify({ setupHash: "new-hash" }),
   );
 
+  // Stale-truth bundles in the three scaffold states the seed-ready flag
+  // distinguishes (route-d above is the fourth: missing scaffold).
+  const posedScaffold = (setupHash: string) =>
+    JSON.stringify({
+      version: 1,
+      setupHash,
+      frames: [
+        { timestamp: 0, keypoints: [] },
+        { timestamp: 0.1, keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] },
+      ],
+    });
+  const staleTruthBundle = async (routeFolder: string, videoKey: string, vitpose: string) => {
+    const dir = path.join(root, routeFolder, videoKey);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "metadata.json"), JSON.stringify({}));
+    await writeFile(path.join(dir, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+    await writeFile(path.join(dir, "ground-truth.json"), JSON.stringify({ setupHash: "old-hash" }));
+    await writeFile(path.join(dir, "vitpose.json"), vitpose);
+  };
+  // Seed-ready: scaffold stamps the current hash and poses a frame.
+  await staleTruthBundle("route-e", "vid_4", posedScaffold("new-hash"));
+  // Fresh but poseless: the tracker found no Climber — never seed-ready.
+  await staleTruthBundle(
+    "route-f",
+    "vid_5",
+    JSON.stringify({ version: 1, setupHash: "new-hash", frames: [{ timestamp: 0, keypoints: [] }] }),
+  );
+  // Stale scaffold: stamped under the previous calibration.
+  await staleTruthBundle("route-g", "vid_6", posedScaffold("old-hash"));
+
   process.env.HARNESS_ANALYSIS_ROOT = root;
 });
 
@@ -75,6 +105,9 @@ describe("listCorpus", () => {
       "route-b/vid_2",
       "route-a/vid_1",
       "route-d/vid_3",
+      "route-e/vid_4",
+      "route-f/vid_5",
+      "route-g/vid_6",
     ]);
 
     const a = items.find((i) => i.key === "route-a/vid_1")!;
@@ -109,5 +142,21 @@ describe("listCorpus", () => {
     // nothing — exactly the harness's setupHash-mismatch skip.
     expect(d.runCount).toBe(2);
     expect(d.unpairedRunCount).toBe(1);
+  });
+
+  it("flags seed-ready only for a fresh, posed scaffold", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    // Fresh scaffold that poses a frame → one click from review.
+    expect(byKey("route-e/vid_4").seedReady).toBe(true);
+    expect(byKey("route-e/vid_4").truthStale).toBe(true);
+
+    // Fresh but poseless — the tracker found no Climber.
+    expect(byKey("route-f/vid_5").seedReady).toBe(false);
+    // Scaffold stamped under the previous calibration.
+    expect(byKey("route-g/vid_6").seedReady).toBe(false);
+    // No vitpose.json at all.
+    expect(byKey("route-d/vid_3").seedReady).toBe(false);
   });
 });

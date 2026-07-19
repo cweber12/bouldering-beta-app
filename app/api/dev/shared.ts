@@ -13,7 +13,8 @@
 
 import { readdir, readFile, access } from "node:fs/promises";
 import path from "node:path";
-import { runPairsWithTruth, truthIsStale } from "@/utils/harnessFreshness";
+import { runPairsWithTruth, truthIsStale, scaffoldIsSeedReady } from "@/utils/harnessFreshness";
+import { parseViTPoseScaffold } from "@/utils/harnessViTPose";
 
 /** True only in a local dev server — the harness never exists in prod. */
 export const HARNESS_ENABLED = process.env.NODE_ENV === "development";
@@ -110,6 +111,14 @@ export interface CorpusItem {
    * (utils/harnessFreshness, harness issue #21).
    */
   truthStale: boolean;
+  /**
+   * True when the bundle's ViTPose scaffold can seed Ground Truth review with
+   * no new job: `vitpose.json` exists, stamps the current calibration's
+   * `setupHash` (legacy unstamped scaffolds qualify), and poses at least one
+   * Detection Frame (utils/harnessFreshness). With a stale truth this is the
+   * "stale · seed ready" state — one click from review once opened.
+   */
+  seedReady: boolean;
   /** Number of detection runs already written to the bundle. */
   runCount: number;
   /**
@@ -167,6 +176,19 @@ async function readRunSetupHash(filePath: string): Promise<string | null> {
 /** The bundle's current `setup.json` `setupHash`, or null when uncalibrated. */
 export async function readSetupHash(bundleDir: string): Promise<string | null> {
   return readJsonSetupHash(path.join(bundleDir, "setup.json"));
+}
+
+/**
+ * Whether the bundle's `vitpose.json` scaffold is seed-ready against the given
+ * `setup.json` hash. A missing or malformed scaffold reads false.
+ */
+async function readSeedReady(bundleDir: string, setupHash: string | null): Promise<boolean> {
+  try {
+    const raw = await readFile(path.join(bundleDir, "vitpose.json"), "utf8");
+    return scaffoldIsSeedReady(parseViTPoseScaffold(JSON.parse(raw)), setupHash);
+  } catch {
+    return false;
+  }
 }
 
 /** Detection-run counts: total `*_pose.json` runs and how many pair with truth. */
@@ -249,12 +271,10 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         readSetupHash(bundleDir),
         readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
-      const { runCount, unpairedRunCount } = await countRuns(
-        path.join(bundleDir, "detections"),
-        truthSetupHash,
-        setupHash,
-        hasGroundTruth,
-      );
+      const [seedReady, { runCount, unpairedRunCount }] = await Promise.all([
+        readSeedReady(bundleDir, setupHash),
+        countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
+      ]);
 
       items.push({
         key: `${routeEnt.name}/${vEnt.name}`,
@@ -265,6 +285,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         hasSetup,
         hasGroundTruth,
         truthStale: hasGroundTruth && truthIsStale(truthSetupHash, setupHash),
+        seedReady,
         runCount,
         unpairedRunCount,
         analysisInputs: meta.analysis_inputs ?? null,
