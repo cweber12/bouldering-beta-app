@@ -1,6 +1,7 @@
 # Calibrator smart button: Review seed / Re-run ViTPose
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/calibrator-smart-button
 Type: AFK
 
 ## Parent

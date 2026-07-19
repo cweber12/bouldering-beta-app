@@ -15,6 +15,8 @@ import {
   type GroundTruthReview,
 } from "@/utils/harnessGroundTruth";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
+import type { ViTPoseScaffold } from "@/utils/harnessViTPose";
+import { scaffoldIsSeedReady } from "@/utils/harnessFreshness";
 
 const CORE_JOINT_NAME_SET = new Set<string>(CORE_JOINT_NAMES);
 
@@ -268,6 +270,25 @@ export interface SeedGateInput {
   vitposeError: string | null;
   /** Whether the landed scaffold posed at least one Detection Frame. */
   seedHasPose: boolean;
+}
+
+/**
+ * Which affordance the calibrator's re-seed control offers on a stale-truth
+ * bundle. A seed-ready scaffold (stamps the current calibration, poses at
+ * least one Detection Frame — utils/harnessFreshness) opens the flag review
+ * straight from the on-disk artifact: no job, no waiting, flags carried
+ * forward by timestamp exactly as a job-based re-seed. A stale, missing, or
+ * poseless scaffold falls back to submitting a ViTPose job as before — a
+ * poseless scaffold never invites a review that authoring would refuse.
+ */
+export type ReseedAffordance = "review-seed" | "run-job";
+
+/** Decide the re-seed affordance from the probed on-disk scaffold. */
+export function reseedAffordanceDecision(
+  scaffold: ViTPoseScaffold | null | undefined,
+  currentSetupHash: string | null | undefined,
+): ReseedAffordance {
+  return scaffoldIsSeedReady(scaffold, currentSetupHash) ? "review-seed" : "run-job";
 }
 
 /** Decide whether Ground Truth authoring is enabled, pending, or disabled. */

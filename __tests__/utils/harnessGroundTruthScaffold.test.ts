@@ -9,11 +9,13 @@ import {
   hasAcceptedGroundTruth,
   countSeedCoverage,
   frameReviewMark,
+  reseedAffordanceDecision,
   seedGateDecision,
   OCCLUSION_SEED_SCORE,
 } from "@/utils/harnessGroundTruthScaffold";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 import type { GroundTruthFrame, GroundTruthInput } from "@/utils/harnessGroundTruth";
+import type { ViTPoseScaffold } from "@/utils/harnessViTPose";
 
 function kp(name: string, x: number, y: number, score = 0.9): Keypoint {
   return { name, x, y, score };
@@ -322,6 +324,31 @@ describe("frameReviewMark", () => {
     expect(frameReviewMark(frame("auto", "present"))).toBe("auto");
     // Legacy skip frames read as auto — the new flow never produces them.
     expect(frameReviewMark(frame("auto", "skip"))).toBe("auto");
+  });
+});
+
+describe("reseedAffordanceDecision", () => {
+  const scaffold = (setupHash: string | undefined, posed: boolean): ViTPoseScaffold => ({
+    version: 1,
+    ...(setupHash ? { setupHash } : {}),
+    frames: [{ timestamp: 0.1, keypoints: posed ? [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] : [] }],
+  });
+
+  it("offers review-seed for a fresh, posed scaffold", () => {
+    expect(reseedAffordanceDecision(scaffold("h1", true), "h1")).toBe("review-seed");
+  });
+
+  it("offers review-seed for a legacy unstamped scaffold (freshness fallback)", () => {
+    expect(reseedAffordanceDecision(scaffold(undefined, true), "h1")).toBe("review-seed");
+  });
+
+  it("falls back to run-job when the scaffold is stale or missing", () => {
+    expect(reseedAffordanceDecision(scaffold("old", true), "new")).toBe("run-job");
+    expect(reseedAffordanceDecision(null, "h1")).toBe("run-job");
+  });
+
+  it("falls back to run-job for a poseless scaffold — authoring would refuse it", () => {
+    expect(reseedAffordanceDecision(scaffold("h1", false), "h1")).toBe("run-job");
   });
 });
 
