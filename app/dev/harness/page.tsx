@@ -66,6 +66,12 @@ import {
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
 import { buildDetectionGrid, type DetectionGridFrame } from "@/utils/harnessDetectionGrid";
+import { probeHarnessContract, videoStatsGate } from "@/utils/harnessContract";
+import {
+  requestVideoStats,
+  loadCameraAngleHint,
+  type SuggestedLabels,
+} from "@/utils/harnessVideoStats";
 import { scaffoldIsStale, truthIsStale } from "@/utils/harnessFreshness";
 import { probeVideoMeta, type VideoMeta } from "@/utils/probeVideoMeta";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
@@ -387,6 +393,64 @@ function Calibrator({
   // at mount, then overridden by setup.json.analysisInputs once the Setup loads.
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [analysisInputs, setAnalysisInputs] = useState<unknown>(item.analysisInputs);
+  // Whether the metadata form was opened as the post-save verify step — closing
+  // it then finishes the save-only flow (back to the corpus).
+  const metadataAfterSaveRef = useRef(false);
+
+  // Video-stats prefill (video-stats handoff): every Setup save re-POSTs
+  // /api/video-stats so the harness artifact tracks the current crops, and the
+  // synchronous response's suggested labels prefill the metadata form. Gated on
+  // the /api/contract probe; every failure degrades visibly to manual labels.
+  const [suggestions, setSuggestions] = useState<SuggestedLabels | null>(null);
+  const [statsNote, setStatsNote] = useState<string | null>(null);
+  const [cameraAngleHint, setCameraAngleHint] = useState<string | null>(null);
+  const statsRefreshRef = useRef<Promise<void> | null>(null);
+
+  // Surface the degraded state before any save (probe is module-cached).
+  useEffect(() => {
+    let cancelled = false;
+    void probeHarnessContract().then((contract) => {
+      if (!cancelled) setStatsNote(videoStatsGate(contract).degradedReason);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The ViTPose camera-angle estimate lands asynchronously in video-stats.json
+  // — read it fresh each time the metadata form opens (display-only hint).
+  useEffect(() => {
+    if (!metadataOpen) return;
+    let cancelled = false;
+    void loadCameraAngleHint(item.key).then((hint) => {
+      if (!cancelled) setCameraAngleHint(hint);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [metadataOpen, item.key]);
+
+  const refreshVideoStats = useCallback(
+    async (setupHash: string | null) => {
+      const gate = videoStatsGate(await probeHarnessContract());
+      setStatsNote(gate.degradedReason);
+      if (!gate.statsEnabled) return;
+      try {
+        const { suggestions: fresh } = await requestVideoStats(
+          item.key,
+          setupHash ?? undefined,
+        );
+        if (gate.prefillEnabled) setSuggestions(fresh);
+      } catch (err) {
+        // Never a gate on calibration — fall back to manual labels, visibly.
+        setSuggestions(null);
+        setStatsNote(
+          `Video stats failed — labels are manual. (${err instanceof Error ? err.message : String(err)})`,
+        );
+      }
+    },
+    [item.key],
+  );
 
   // Ground Truth review: the pure scaffold seed, the working flag review, and
   // any previously-saved GT carried onto a re-seed by timestamp. The ref is what
@@ -589,22 +653,42 @@ function Calibrator({
     if (!res.ok) throw new Error(body.error ?? "Failed to save setup.");
     const setupHash = typeof body.setup?.setupHash === "string" ? body.setup.setupHash : null;
     setCurrentSetupHash(setupHash ?? "");
+    // Re-POST video-stats on every save so the harness artifact tracks the
+    // current crops (handoff item 4). Background — never gates the save; the
+    // save-only flow awaits the held promise before opening the verify form.
+    statsRefreshRef.current = refreshVideoStats(setupHash);
     return setupHash;
-  }, [item.key, climberCrop, wallCrop, climberPoint, panning, tier]);
+  }, [item.key, climberCrop, wallCrop, climberPoint, panning, tier, refreshVideoStats]);
 
-  // Save the Setup only, without a baseline run (quick calibration).
+  // Save the Setup only, without a baseline run (quick calibration). The flow
+  // reorder from the video-stats handoff: save → stats POST → open the labels
+  // form prefilled for verification; closing it returns to the corpus.
   async function handleSaveOnly() {
     setPhase("saving");
     setPhaseError(null);
     try {
       await saveSetup();
+      // A few seconds while the harness decodes frames; on failure the form
+      // still opens, manual, with the visible degraded note.
+      await statsRefreshRef.current;
       setPhase("done");
-      await onDone();
+      metadataAfterSaveRef.current = true;
+      setMetadataOpen(true);
     } catch (err) {
       setPhase("error");
       setPhaseError(err instanceof Error ? err.message : String(err));
     }
   }
+
+  // Closing the metadata form ends the save-only flow; opened any other way it
+  // just closes.
+  const handleMetadataClose = useCallback(() => {
+    setMetadataOpen(false);
+    if (metadataAfterSaveRef.current) {
+      metadataAfterSaveRef.current = false;
+      void onDone();
+    }
+  }, [onDone]);
 
   const requestViTPoseForGrid = useCallback(
     (grid: DetectionGridFrame[]) => {
@@ -1075,14 +1159,20 @@ function Calibrator({
 
       <Modal
         open={metadataOpen}
-        onClose={() => setMetadataOpen(false)}
+        onClose={handleMetadataClose}
         ariaLabel="Edit video metadata"
         panelClassName=""
       >
         <MetadataEditorPanel
+          // Re-seed the form each open so late-arriving suggestions and label
+          // saves from this session are always reflected.
+          key={metadataOpen ? "open" : "closed"}
           bundleKey={item.key}
           initial={analysisInputs}
-          onClose={() => setMetadataOpen(false)}
+          suggestions={suggestions}
+          degradedNote={statsNote}
+          cameraAngleHint={cameraAngleHint}
+          onClose={handleMetadataClose}
           onSaved={setAnalysisInputs}
         />
       </Modal>

@@ -10,7 +10,12 @@
  */
 
 import type { CropFraction } from "@/utils/cropFraction";
-import { parseAnalysisInputsEdit, type AnalysisInputsEdit } from "@/utils/harnessMetadata";
+import {
+  parseAnalysisInputsEdit,
+  parseProvenanceEdit,
+  type AnalysisInputsEdit,
+  type AnalysisInputsProvenance,
+} from "@/utils/harnessMetadata";
 
 /** Bumped only on a breaking change to the Scan Setup shape. */
 export const SETUP_VERSION = 1;
@@ -50,6 +55,12 @@ export interface ScanSetup extends ScanSetupInput {
    * so it can never orphan saved Ground Truth or prior runs.
    */
   analysisInputs?: AnalysisInputs;
+  /**
+   * Per-label provenance (`auto-accepted` / `human-overridden` /
+   * `human-authored`) for the video-stats prefill flow. Additive sibling of
+   * {@link analysisInputs}, equally excluded from the hash.
+   */
+  analysisInputsProvenance?: Record<string, string>;
   /** ISO timestamp, stamped server-side on write. */
   updatedAt: string;
 }
@@ -194,11 +205,17 @@ export type { AnalysisInputsEdit };
 export async function saveSetupLabels(
   bundleKey: string,
   edit: AnalysisInputsEdit,
+  provenance?: AnalysisInputsProvenance,
 ): Promise<unknown> {
   const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(bundleKey)}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ analysisInputs: edit }),
+    body: JSON.stringify({
+      analysisInputs: edit,
+      ...(provenance && Object.keys(provenance).length > 0
+        ? { analysisInputsProvenance: provenance }
+        : {}),
+    }),
   });
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Failed to save labels.");
@@ -206,4 +223,4 @@ export async function saveSetupLabels(
 }
 
 // Re-exported so the setup route validates label edits without a second import.
-export { parseAnalysisInputsEdit };
+export { parseAnalysisInputsEdit, parseProvenanceEdit };

@@ -347,7 +347,13 @@ so a quality change between runs is attributable to detection-logic changes, not
 setup drift. The condition labels are stored inside the Setup itself, under
 `setup.json.analysisInputs` (snake_case keys) where the harness reads them; the
 `setupHash` covers only the scan-affecting inputs (crops, point, panning, tier), so
-editing a label never re-hashes the Setup or orphans saved Ground Truth. The
+editing a label never re-hashes the Setup or orphans saved Ground Truth. Each Setup
+save also re-POSTs the harness's `/api/video-stats` (gated on its `/api/contract`
+probe) so the harness recomputes region stats under the new hash; the suggested
+labels in its response prefill the label form for the User to verify rather than
+author, and every label save records per-label provenance under
+`setup.json.analysisInputsProvenance` (`auto-accepted` / `human-overridden` /
+`human-authored`). The
 scaffold run is discarded; calibration saves no scored run. Stored as `setup.json`
 in the Test Video's bundle, beside the `ground-truth.json` **Ground Truth**.
 _Avoid_: seed (the identity seed, `climberPoint`, is just one field of the

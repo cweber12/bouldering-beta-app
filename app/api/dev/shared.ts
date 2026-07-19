@@ -140,6 +140,22 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
+/**
+ * The bundle's `setup.json` `analysisInputs` block, or null. The harness reads
+ * condition labels only from here — the `metadata.json` `analysis_inputs`
+ * passthrough is a legacy fallback for bundles calibrated before the move.
+ */
+async function readSetupAnalysisInputs(bundleDir: string): Promise<unknown> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(path.join(bundleDir, "setup.json"), "utf8"),
+    ) as Record<string, unknown>;
+    return parsed.analysisInputs ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Read one JSON file's top-level `setupHash` string, or null when absent. */
 async function readJsonSetupHash(filePath: string): Promise<string | null> {
   try {
@@ -271,9 +287,10 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         readSetupHash(bundleDir),
         readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
-      const [seedReady, { runCount, unpairedRunCount }] = await Promise.all([
+      const [seedReady, { runCount, unpairedRunCount }, setupLabels] = await Promise.all([
         readSeedReady(bundleDir, setupHash),
         countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
+        readSetupAnalysisInputs(bundleDir),
       ]);
 
       items.push({
@@ -288,7 +305,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         seedReady,
         runCount,
         unpairedRunCount,
-        analysisInputs: meta.analysis_inputs ?? null,
+        analysisInputs: setupLabels ?? meta.analysis_inputs ?? null,
       });
     }
   }

@@ -146,6 +146,60 @@ describe("dev GET/PUT /api/dev/corpus/setup", () => {
     expect(reEdited.analysisInputs).toEqual({ shadows: "high" });
   });
 
+  it("persists label provenance beside the labels and merges it field-level", async () => {
+    const { PUT } = await importRoute("development");
+
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    await PUT(
+      makeRequest(BUNDLE_KEY, {
+        analysisInputs: { shadows: "patchy", wall_contrast: "low" },
+        analysisInputsProvenance: { shadows: "auto-accepted", wall_contrast: "human-overridden" },
+      }),
+    );
+    // A later save touching one label overwrites only that entry.
+    const res = await PUT(
+      makeRequest(BUNDLE_KEY, {
+        analysisInputs: { shadows: "climber" },
+        analysisInputsProvenance: { shadows: "human-overridden" },
+      }),
+    );
+    const setup = (await res.json()).setup;
+    expect(setup.analysisInputsProvenance).toEqual({
+      shadows: "human-overridden",
+      wall_contrast: "human-overridden",
+    });
+    // Provenance survives a crops-only save and never changes the hash.
+    const before = setup.setupHash;
+    const after = (await (await PUT(makeRequest(BUNDLE_KEY, CROPS))).json()).setup;
+    expect(after.analysisInputsProvenance).toEqual(setup.analysisInputsProvenance);
+    expect(after.setupHash).toBe(before);
+  });
+
+  it("422s an off-vocabulary or mis-keyed provenance block", async () => {
+    const { PUT } = await importRoute("development");
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    expect(
+      (
+        await PUT(
+          makeRequest(BUNDLE_KEY, {
+            analysisInputs: { shadows: "none" },
+            analysisInputsProvenance: { shadows: "guessed" },
+          }),
+        )
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await PUT(
+          makeRequest(BUNDLE_KEY, {
+            analysisInputs: { shadows: "none" },
+            analysisInputsProvenance: { notes: "human-authored" },
+          }),
+        )
+      ).status,
+    ).toBe(422);
+  });
+
   it("422s a labels-only save when no setup has been calibrated yet", async () => {
     const { PUT } = await importRoute("development");
     const res = await PUT(makeRequest(BUNDLE_KEY, { analysisInputs: { shadows: "low" } }));
