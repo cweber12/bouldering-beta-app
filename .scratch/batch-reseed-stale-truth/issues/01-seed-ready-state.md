@@ -1,6 +1,7 @@
 # Seed-ready state: predicate, corpus listing, badge
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/seed-ready-state
 Type: AFK
 
 ## Parent
@@ -26,11 +27,25 @@ bundles that are *not* seed-ready.
 
 ## Acceptance criteria
 
-- [ ] Seed-ready predicate lives with the freshness predicates, with unit tests covering the fresh, stale, missing, legacy-unstamped, and poseless-scaffold cases.
-- [ ] Corpus lister exposes a seed-ready flag per bundle; temp-directory fixture tests cover seed-ready, fresh-but-poseless, stale-scaffold, and missing-scaffold bundles.
-- [ ] Truth badge renders "stale · seed ready" vs "stale" (accepted/none badges unchanged), with an explanatory title.
-- [ ] Against the real corpus, the 12 fresh-scaffold stale bundles read seed-ready and the 3 stale-scaffold bundles read plain stale.
+- [x] Seed-ready predicate lives with the freshness predicates, with unit tests covering the fresh, stale, missing, legacy-unstamped, and poseless-scaffold cases.
+- [x] Corpus lister exposes a seed-ready flag per bundle; temp-directory fixture tests cover seed-ready, fresh-but-poseless, stale-scaffold, and missing-scaffold bundles.
+- [x] Truth badge renders "stale · seed ready" vs "stale" (accepted/none badges unchanged), with an explanatory title.
+- [x] Against the real corpus, the 12 fresh-scaffold stale bundles read seed-ready and the 3 stale-scaffold bundles read plain stale.
 
 ## Blocked by
 
 None - can start immediately.
+
+## Comments
+
+- 2026-07-18 (implementation): the real-corpus criterion shipped with different
+  counts than the PRD snapshot. `listCorpus` against the live corpus reads
+  **11 seed-ready / 5 plain stale** (16 stale-truth total). The 3
+  stale-scaffold bundles read plain stale exactly as specified; the delta is
+  **2 fresh-but-poseless scaffolds** (`get-carter/f04-LTbJ01o_20260711-144150`,
+  `get-carter/PC5eZ0Pys90_20260711-144440` — scaffold stamps the current hash
+  but poses 0 frames). The PRD's "12 fresh scaffolds" evidently counted them,
+  but the seed-ready definition itself (this issue + PRD user story 10)
+  requires a no-Climber scaffold to never read seed-ready, so plain stale is
+  the correct rendering for those two — they belong in the sweep's queue
+  (issue 03), which today is therefore 5 bundles, not 3.

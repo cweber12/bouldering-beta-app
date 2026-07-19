@@ -79,6 +79,8 @@ interface CorpusItem {
   hasGroundTruth: boolean;
   /** Truth exists but stamps an older calibration's hash — stale evidence. */
   truthStale: boolean;
+  /** A fresh, posed ViTPose scaffold is on disk — review needs no new job. */
+  seedReady: boolean;
   runCount: number;
   /** Runs whose stamped hash pairs with no truth — they produce no evidence. */
   unpairedRunCount: number;
@@ -278,6 +280,13 @@ export default function HarnessPage() {
                     {!it.hasGroundTruth ? (
                       <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
                         none
+                      </span>
+                    ) : it.truthStale && it.seedReady ? (
+                      <span
+                        className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
+                        title="Annotations were accepted under an older calibration, but a fresh ViTPose scaffold is already on disk — open the calibrator to review and re-accept, no new job needed"
+                      >
+                        stale · seed ready
                       </span>
                     ) : it.truthStale ? (
                       <span

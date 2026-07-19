@@ -14,6 +14,8 @@
  * Framework-agnostic — no React imports.
  */
 
+import { scaffoldHasPose, type ViTPoseScaffold } from "@/utils/harnessViTPose";
+
 /**
  * The hash a run must stamp to pair with the bundle's Ground Truth: the
  * truth's own `setupHash`, or — for legacy truth files that never stamped one
@@ -51,6 +53,23 @@ export function scaffoldIsStale(
   setupHash: string | null | undefined,
 ): boolean {
   return !!scaffoldSetupHash && !!setupHash && scaffoldSetupHash !== setupHash;
+}
+
+/**
+ * True when a bundle's ViTPose scaffold can seed Ground Truth review right
+ * now, with no new job: the scaffold exists, stamps the current `setup.json`
+ * hash (legacy unstamped scaffolds qualify via the {@link scaffoldIsStale}
+ * fallback), and poses at least one Detection Frame. A scaffold that tracked
+ * no Climber is never seed-ready — authoring would refuse it anyway. Shared
+ * definition for the corpus lister's badge, the re-seed sweep's queue
+ * (stale-truth bundles that are *not* seed-ready), and the calibrator's
+ * smart-button affordance.
+ */
+export function scaffoldIsSeedReady(
+  scaffold: ViTPoseScaffold | null | undefined,
+  setupHash: string | null | undefined,
+): boolean {
+  return !!scaffold && !scaffoldIsStale(scaffold.setupHash, setupHash) && scaffoldHasPose(scaffold);
 }
 
 /**
