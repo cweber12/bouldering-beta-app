@@ -1,57 +1,62 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* ─── Surfaces (deep charcoal / scanner dark) ──────── */
-  --color-surface: #161a1e;
-  --color-surface-alt: #111417;
-  --color-card: #1b2130; /* subtle teal-grey tint — scanner identity */
-  --color-card-hover: #222c3d;
-  --color-inset: #0f1318;
+  /* ─── Surfaces — wet-basalt warm charcoal (hue ~35°, sat 4–9%) ───
+     Depth is drawn: page < card < card-hover steps, inset recessed. */
+  --color-surface: #1a1815;
+  --color-surface-alt: #15130f;
+  --color-card: #211e1a; /* warm step up, no tint */
+  --color-card-hover: #292520;
+  --color-inset: #121008;
   /* Scan loading stage — an always-dark "instrument display" backdrop for the
      ORB starfield + pose skeletons. Intentionally not overridden in
      .theme-light: it stays near-black in both themes for contrast. */
-  --color-scan-stage: #080a0d;
+  --color-scan-stage: #0a0908;
 
-  /* ─── Foreground / text ─────────────────────────────── */
-  --color-fg: #e8e4de; /* warm stone-100, bright and legible */
-  --color-fg-secondary: #99a2ac; /* stone-blue — clear hierarchy */
-  --color-fg-muted: #717d8a; /* improved contrast from #636b75 */
-  --color-fg-light: #b0bac5; /* lighter fill text */
-  --color-fg-placeholder: #434e5e;
-  --color-fg-inverse: #f9fafb; /* text on colored surfaces */
+  /* ─── Foreground — warm stone text ramp (all AA on all surfaces) ── */
+  --color-fg: #ece7e0; /* headings, primary copy — 14.4:1 */
+  --color-fg-secondary: #b5aea3; /* body copy — 8.1:1 */
+  --color-fg-muted: #968f83; /* captions, metadata — 5.5:1 */
+  --color-fg-light: #c9c2b6; /* filled/supporting text — 10.0:1 */
+  --color-fg-placeholder: #847d71; /* 4.7:1 on inset */
+  --color-fg-inverse: #161310; /* dark ink on BRIGHT fills (accent/send/attempt) */
 
-  /* ─── Borders (slate) ──────────────────────────────── */
-  --color-edge: #252e3a; /* slightly more blue-teal for depth */
-  --color-edge-hover: #3a4557;
+  /* ─── Borders — hairline vs functional ──────────────────────────
+     edge: decorative hairlines, section rules, card outlines.
+     edge-strong: functional boundaries (inputs, controls) — ≥3:1. */
+  --color-edge: #37322b;
+  --color-edge-strong: #746c5d; /* 3.4:1 vs surface, 3.2:1 vs card */
+  --color-edge-hover: #57503f;
 
-  /* ─── Accent (scanner green) ────────────────────────── */
-  --color-accent: #22c55e;
-  --color-accent-hover: #16a34a;
-  --color-accent-muted: #166534;
+  /* ─── Accent — muted pine (bright tint in dark mode) ─────────────
+     Scarce by rule: primary actions, focus, active/selected, links. */
+  --color-accent: #7bb695; /* 7.6:1 as text on surface */
+  --color-accent-hover: #8fc6a6; /* bright fills hover BRIGHTER */
+  --color-accent-muted: #22392d;
 
-  /* ─── Primary (dark olive) ──────────────────────────── */
-  --color-primary: #1e3028;
+  /* ─── Primary (quiet pine-tinted action surface) ────── */
+  --color-primary: #243329;
 
   /* ─── Semantic: success ─────────────────────────────── */
-  --color-success: #22c55e;
+  --color-success: #52c68f;
 
-  /* ─── Semantic: danger / error ──────────────────────── */
-  --color-danger: #f87171; /* text */
-  --color-danger-surface: #280d0d; /* background */
-  --color-danger-border: #6b1f1f; /* border */
+  /* ─── Semantic: danger / error — warm terracotta-red ── */
+  --color-danger: #e28579; /* text — 6.6:1 on surface */
+  --color-danger-surface: #2c1613; /* background */
+  --color-danger-border: #6d3c33; /* border */
 
-  /* ─── Semantic: caution / warning ───────────────────── */
-  --color-caution: #fbbf24; /* text */
-  --color-caution-surface: #221200; /* background */
-  --color-caution-border: #6b3600; /* border */
+  /* ─── Semantic: caution / warning — desaturated amber ─ */
+  --color-caution: #d8a648; /* text — 8.0:1 on surface */
+  --color-caution-surface: #2a1f0e; /* background */
+  --color-caution-border: #6b4f1e; /* border */
 
-  /* ─── Semantic: send (completed run) ────────────────── */
-  --color-send: #34d399; /* text + chip bg */
-  --color-send-surface: #0c3d22; /* muted badge background */
+  /* ─── Semantic: send — emerald, cooler + more chromatic than pine ── */
+  --color-send: #52c68f; /* text + chip bg — 8.3:1 on surface */
+  --color-send-surface: #15352a; /* muted badge background */
 
-  /* ─── Semantic: attempt (incomplete run) ────────────── */
-  --color-attempt: #fbbf24; /* text + chip bg */
-  --color-attempt-surface: #3d2200; /* muted badge background */
+  /* ─── Semantic: attempt — shares amber with caution (never co-occur) ── */
+  --color-attempt: #d8a648; /* text + chip bg */
+  --color-attempt-surface: #2e2310; /* muted badge background */
 
   /* ─── Holds overlay markers (Route Overlay only) ────── */
   /* Kind is shown by colour: cyan ring = Hand Hold, orange ring = Foot Hold.
@@ -59,19 +64,22 @@
   --color-hand-hold: #39b1d1;
   --color-foot-hold: #f6850c;
 
-  /* ─── Scanner glow ──────────────────────────────────── */
-  --color-glow: rgba(34, 197, 94, 0.18); /* stronger scanner identity */
-
   /* ─── Fonts ──────────────────────────────────────────── */
   --font-sans: var(--font-inter);
-  --font-display: var(--font-space-grotesk);
+  --font-display: var(--font-archivo);
   --font-mono: var(--font-geist-mono);
 
   /* ─── Design-system extensions ──────────────────────── */
   --font-size-label: 11px;
+  --font-size-data: 13px; /* mono data values: grades, timestamps, counts */
   --font-size-body-sm: 15px;
   --letter-spacing-label: 0.15em;
+  --letter-spacing-display: -0.01em; /* Archivo headings sit tighter */
   --z-index-fullscreen: 60;
+
+  /* ─── Shadows — floating elements ONLY (modal, popover, dropdown) ── */
+  --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.5);
+  --shadow-raised: 0 4px 16px rgba(0, 0, 0, 0.35);
 
   /* ─── Radius scale — crisp 2px (sharp, technical edges) ──
      Overrides Tailwind's default radius ramp so every rounded-*
@@ -97,60 +105,62 @@
 .theme-light {
   color-scheme: light;
 
-  /* ── Surfaces — warm stone / chalk palette ─────────── */
-  --color-surface: #efece7; /* warm stone base */
-  --color-surface-alt: #e5e1db; /* slightly darker alt */
-  --color-card: #fefcf9; /* warm near-white card */
-  --color-card-hover: #f4f1eb; /* warm card hover */
-  --color-inset: #ddd9d2; /* warm recessed area */
+  /* ── Surfaces — chalk & limestone (same anatomy, brighter exposure) ── */
+  --color-surface: #efece7; /* chalk page */
+  --color-surface-alt: #e6e2db;
+  --color-card: #fdfbf8; /* near-white panel */
+  --color-card-hover: #f5f2ec;
+  --color-inset: #e2ded6; /* recessed area */
 
-  /* ── Foreground — warm stone tones (full contrast chain) */
-  --color-fg: #0f0c0a; /* near-black body text for max readability */
-  --color-fg-secondary: #211c17; /* dark secondary copy for light surfaces */
-  --color-fg-muted: #332d27; /* still muted, but clearly readable */
-  --color-fg-light: #4d463f; /* supporting text that remains legible */
-  --color-fg-placeholder: #6f675f; /* darker placeholder for better visibility */
-  --color-fg-inverse: #ffffff;
+  /* ── Foreground — warm stone text ramp (all AA on all surfaces) ── */
+  --color-fg: #1c1915; /* 14.9:1 on surface */
+  --color-fg-secondary: #443e36; /* 9.0:1 */
+  --color-fg-muted: #5b544b; /* 6.3:1 */
+  --color-fg-light: #514b42; /* 7.3:1 */
+  --color-fg-placeholder: #635c52; /* 4.9:1 on inset */
+  --color-fg-inverse: #ffffff; /* white on DEEP fills */
 
-  /* ── Borders — warm stone ────────────────────────────── */
-  --color-edge: #c8c3bc; /* warm stone-300 — visible but soft */
-  --color-edge-hover: #a29d96; /* stone-400 — clear hover */
+  /* ── Borders — hairline vs functional ────────────────── */
+  --color-edge: #c9c4bb;
+  --color-edge-strong: #7c7568; /* 3.9:1 vs surface, 3.4:1 vs inset */
+  --color-edge-hover: #8f887c;
 
-  /* ── Accent — richer green for legibility on light bg ── */
-  --color-accent: #14532d; /* green-900 — stronger contrast on light surfaces */
-  --color-accent-hover: #052e16; /* deep green for hover/active states */
-  --color-accent-muted: #d1fae5; /* emerald-100 tint */
+  /* ── Accent — deep pine (deep fills hover DEEPER) ────── */
+  --color-accent: #2c5942; /* 6.8:1 as text on surface */
+  --color-accent-hover: #204534;
+  --color-accent-muted: #d9e6dd;
 
   /* ── Primary ────────────────────────────────────────── */
-  --color-primary: #dcfce7; /* emerald-50 */
+  --color-primary: #dceadf;
 
   /* ── Semantic: success ───────────────────────────────── */
-  --color-success: #14532d;
+  --color-success: #116e4b;
 
   /* ── Semantic: danger / error ────────────────────────── */
-  --color-danger: #b91c1c; /* red-700 — strong on light bg */
-  --color-danger-surface: #fef2f2; /* red-50 */
-  --color-danger-border: #fca5a5; /* red-300 */
+  --color-danger: #a8372a; /* 5.5:1 */
+  --color-danger-surface: #f9edea;
+  --color-danger-border: #d9a99f;
 
   /* ── Semantic: caution / warning ─────────────────────── */
-  --color-caution: #92400e; /* amber-800 — readable on light bg */
-  --color-caution-surface: #fffbeb; /* amber-50 */
-  --color-caution-border: #fde68a; /* amber-200 */
+  --color-caution: #82550f; /* 5.5:1 */
+  --color-caution-surface: #f6efdf;
+  --color-caution-border: #d5bd8a;
 
   /* ── Semantic: send ──────────────────────────────────── */
-  --color-send: #047857; /* emerald-700 — strong on light */
-  --color-send-surface: #d1fae5; /* emerald-100 */
+  --color-send: #116e4b; /* 5.3:1 */
+  --color-send-surface: #d9e9df;
 
   /* ── Semantic: attempt ───────────────────────────────── */
-  --color-attempt: #92400e; /* amber-800 */
-  --color-attempt-surface: #fef3c7; /* amber-100 */
+  --color-attempt: #82550f;
+  --color-attempt-surface: #f2e7cd;
 
   /* ── Holds overlay markers — same colours (drawn on a photo, theme-independent) ── */
   --color-hand-hold: #39b1d1;
   --color-foot-hold: #f6850c;
 
-  /* ── Glow ────────────────────────────────────────────── */
-  --color-glow: rgba(20, 83, 45, 0.14);
+  /* ── Shadows — lighter, warmer transparency in light mode ── */
+  --shadow-overlay: 0 12px 32px rgba(28, 25, 21, 0.18);
+  --shadow-raised: 0 4px 14px rgba(28, 25, 21, 0.12);
 }
 
 /* ─── Layout constants ───────────── */
@@ -159,6 +169,17 @@
   --nav-h: 3rem; /* NavBar h-12 = 3rem; used for viewport-fit media preview max-height */
   --radius-control: 2px; /* inputs, buttons, chips — crisp */
   --radius-panel: 3px; /* popovers, surfaces — crisp */
+  --rule-hairline: 1px; /* section rules — always 1px, never scaled */
+  --reticle-size: 8px; /* corner tick length on media frames */
+  --reticle-weight: 1px; /* corner tick stroke */
+
+  /* ─── Motion tokens ─── */
+  --duration-fast: 140ms; /* hovers, color shifts */
+  --duration-normal: 200ms; /* theme crossfade, fades */
+  --duration-enter: 240ms; /* flow enter */
+  --duration-slow: 420ms; /* progress bars */
+  --ease-standard: ease;
+  --ease-out-quart: cubic-bezier(0.16, 1, 0.3, 1); /* enters, progress */
 }
 
 /* ─── Semantic utility bridge ─────────────────────────────────────────────
@@ -267,10 +288,14 @@ h2,
 h3,
 h4,
 h5,
-h6,
+h6 {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  letter-spacing: var(--letter-spacing-display);
+}
+
 .text-label {
   font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
-  letter-spacing: 0.01em;
+  letter-spacing: var(--letter-spacing-label);
 }
 
 /* ─── Shared control primitives ─────────────────────────────────────── */
@@ -519,22 +544,15 @@ dialog {
     color 150ms ease;
 }
 
-/* ─── Layered background — terrain depth + faint scanner glow ─── */
+/* ─── Overscroll backdrop — flat, no decorative gradients ─── */
 
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
-  background: #070a0e;
+  background: var(--color-surface-alt);
   pointer-events: none;
-}
-
-.theme-light body::before {
-  background:
-    radial-gradient(ellipse 90% 60% at 15% 5%, rgba(21, 128, 61, 0.06), transparent 55%),
-    radial-gradient(ellipse 55% 45% at 85% 90%, rgba(21, 128, 61, 0.04), transparent 55%),
-    linear-gradient(175deg, var(--color-surface) 0%, #dedad1 100%);
 }
 
 /* ─── Scrollbar — muted and themed ─── */
@@ -582,14 +600,10 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--color-accent);
   margin-top: -5px;
   border: 2px solid var(--color-surface);
-  box-shadow: 0 0 6px var(--color-glow);
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
+  transition: transform var(--duration-fast) var(--ease-standard);
 }
 input[type="range"]::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 10px var(--color-glow);
 }
 input[type="range"]::-moz-range-track {
   height: 4px;
@@ -602,7 +616,6 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   background: var(--color-accent);
   border: 2px solid var(--color-surface);
-  box-shadow: 0 0 6px var(--color-glow);
 }
 
 /* ─── Checkbox accent override ─── */
@@ -611,15 +624,10 @@ input[type="checkbox"] {
   accent-color: var(--color-accent);
 }
 
-/* ─── Selection — themed green tint ─── */
+/* ─── Selection — themed pine tint (tracks accent per theme) ─── */
 
 ::selection {
-  background: rgba(34, 197, 94, 0.25);
-  color: var(--color-fg);
-}
-
-.theme-light ::selection {
-  background: rgba(21, 128, 61, 0.18);
+  background: color-mix(in srgb, var(--color-accent) 28%, transparent);
   color: var(--color-fg);
 }
 
@@ -671,20 +679,7 @@ input[type="checkbox"] {
   animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ─── Scanner animations ─────────── */
-
-@keyframes scanPulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 var(--color-glow);
-  }
-  50% {
-    box-shadow: 0 0 12px 3px var(--color-glow);
-  }
-}
-.animate-scan-pulse {
-  animation: scanPulse 3s ease-in-out infinite;
-}
+/* ─── Flow animations ─────────────── */
 
 @keyframes flowEnter {
   from {
@@ -720,7 +715,6 @@ input[type="checkbox"] {
   .animate-slide-up,
   .animate-fade-in,
   .animate-scale-in,
-  .animate-scan-pulse,
   .motion-flow-enter,
   .motion-flow-progress,
   .motion-cta {

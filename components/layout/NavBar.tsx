@@ -149,7 +149,7 @@ export default function NavBar() {
               unoptimized
               className="h-8 w-auto"
             />
-            <span className="text-sm font-semibold tracking-tight text-fg-inverse">
+            <span className="text-sm font-semibold tracking-tight text-fg">
               Beta&nbsp;Scanner
             </span>
           </Link>
@@ -165,7 +165,7 @@ export default function NavBar() {
                     href={link.href}
                     className={cn(
                       "relative px-1 py-1 text-body-sm font-medium transition-colors duration-150",
-                      active ? "text-fg-inverse" : "text-fg-light hover:text-fg-inverse",
+                      active ? "text-fg" : "text-fg-light hover:text-fg",
                     )}
                     aria-current={active ? "page" : undefined}
                   >
@@ -183,7 +183,7 @@ export default function NavBar() {
                   onClick={() => setHelpOpenPath((old) => (old === path ? null : path))}
                   className={cn(
                     "flex items-center gap-1 py-1 text-body-sm font-medium transition-colors duration-150",
-                    helpOpen ? "text-fg-inverse" : "text-fg-light hover:text-fg-inverse",
+                    helpOpen ? "text-fg" : "text-fg-light hover:text-fg",
                   )}
                   aria-expanded={helpOpen}
                 >
@@ -215,7 +215,7 @@ export default function NavBar() {
             {!loading && !user && (
               <Link
                 href="/login"
-                className="hidden ui-control px-3 py-1.5 text-xs font-medium text-fg-inverse sm:inline-flex"
+                className="hidden ui-control px-3 py-1.5 text-xs font-medium text-fg sm:inline-flex"
               >
                 Sign in
               </Link>
@@ -276,8 +276,8 @@ export default function NavBar() {
                   className={cn(
                     "rounded-md px-3 py-2 text-sm font-medium transition",
                     active
-                      ? "border border-edge/80 bg-surface-alt/80 text-fg-inverse"
-                      : "text-fg-light hover:bg-surface-alt/55 hover:text-fg-inverse",
+                      ? "border border-edge/80 bg-surface-alt/80 text-fg"
+                      : "text-fg-light hover:bg-surface-alt/55 hover:text-fg",
                   )}
                   aria-current={active ? "page" : undefined}
                 >
@@ -291,7 +291,7 @@ export default function NavBar() {
                   setHelpOpenPath((old) => (old === path ? null : path));
                   setMobileOpen(false);
                 }}
-                className="rounded-md px-3 py-2 text-left text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg-inverse"
+                className="rounded-md px-3 py-2 text-left text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg"
               >
                 Help
               </button>
@@ -300,7 +300,7 @@ export default function NavBar() {
               {!loading && !user && (
                 <Link
                   href="/login"
-                  className="block rounded-md border border-edge/80 bg-surface-alt/70 px-3 py-2 text-center text-sm font-medium text-fg-inverse transition hover:border-edge-hover hover:text-fg-inverse"
+                  className="block rounded-md border border-edge/80 bg-surface-alt/70 px-3 py-2 text-center text-sm font-medium text-fg transition hover:border-edge-hover hover:text-fg"
                 >
                   Sign in
                 </Link>
@@ -309,7 +309,7 @@ export default function NavBar() {
                 <div className="flex flex-col gap-2">
                   <Link
                     href="/profile"
-                    className="rounded-md px-3 py-2 text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg-inverse"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-fg-light transition hover:bg-surface-alt/55 hover:text-fg"
                   >
                     Profile
                   </Link>

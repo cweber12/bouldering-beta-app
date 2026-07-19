@@ -35,7 +35,7 @@ export default function AccountMenu() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-edge/70 bg-surface-alt text-sm font-medium text-fg-inverse transition hover:border-edge-hover"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-edge/70 bg-surface-alt text-sm font-medium text-fg transition hover:border-edge-hover"
         aria-label="Account menu"
         aria-expanded={open}
         aria-haspopup="menu"

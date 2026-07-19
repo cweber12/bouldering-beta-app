@@ -52,26 +52,26 @@
 // Used for canvas drawing, map pins, and anywhere CSS custom
 // properties are not available. Keep in sync with globals.css.
 export const dark = {
-  surface: "#161a1e",
-  surfaceAlt: "#111417",
-  card: "#1b2130", // subtle teal-grey tint — scanner identity
-  inset: "#0f1318",
-  fg: "#e8e4de",
-  fgSecondary: "#99a2ac",
-  fgMuted: "#717d8a",
-  fgLight: "#b0bac5",
-  fgInverse: "#f9fafb",
-  edge: "#252e3a",
-  edgeHover: "#3a4557",
-  accent: "#22c55e",
-  accentHover: "#16a34a",
-  success: "#22c55e",
-  danger: "#f87171",
-  caution: "#fbbf24",
-  send: "#34d399",
-  sendSurface: "#0c3d22",
-  attempt: "#fbbf24",
-  attemptSurface: "#3d2200",
+  surface: "#1a1815",
+  surfaceAlt: "#15130f",
+  card: "#211e1a", // wet-basalt warm charcoal — no tint
+  inset: "#121008",
+  fg: "#ece7e0",
+  fgSecondary: "#b5aea3",
+  fgMuted: "#968f83",
+  fgLight: "#c9c2b6",
+  fgInverse: "#161310", // dark ink on bright fills
+  edge: "#37322b",
+  edgeHover: "#57503f",
+  accent: "#7bb695", // muted pine, bright tint
+  accentHover: "#8fc6a6",
+  success: "#52c68f",
+  danger: "#e28579",
+  caution: "#d8a648",
+  send: "#52c68f",
+  sendSurface: "#15352a",
+  attempt: "#d8a648",
+  attemptSurface: "#2e2310",
   handHold: "#39b1d1", // Hand Hold ring — mirror of HOLD_RING_COLOR.hand
   footHold: "#f6850c", // Foot Hold ring — mirror of HOLD_RING_COLOR.foot
   // Dev detection-eval-harness crop overlay (canvas-only, theme-independent —
@@ -83,26 +83,26 @@ export const dark = {
 
 // ─── Light theme canvas values ───────────────────────────────
 export const light = {
-  surface: "#efece7", // warm stone
-  surfaceAlt: "#e5e1db",
-  card: "#fefcf9", // warm near-white
-  inset: "#ddd9d2",
-  fg: "#0f0c0a", // near-black body text
-  fgSecondary: "#211c17", // dark secondary copy
-  fgMuted: "#332d27", // readable muted copy
-  fgLight: "#4d463f", // supportive but legible text
-  fgInverse: "#ffffff",
-  edge: "#c8c3bc", // warm stone-300
-  edgeHover: "#a29d96", // stone-400
-  accent: "#14532d", // green-900
-  accentHover: "#052e16", // deep green hover
-  success: "#14532d",
-  danger: "#b91c1c", // red-700
-  caution: "#92400e", // amber-800
-  send: "#047857", // emerald-700
-  sendSurface: "#d1fae5", // emerald-100
-  attempt: "#92400e", // amber-800
-  attemptSurface: "#fef3c7", // amber-100
+  surface: "#efece7", // chalk page
+  surfaceAlt: "#e6e2db",
+  card: "#fdfbf8", // near-white panel
+  inset: "#e2ded6",
+  fg: "#1c1915", // near-black warm text
+  fgSecondary: "#443e36",
+  fgMuted: "#5b544b",
+  fgLight: "#514b42",
+  fgInverse: "#ffffff", // white on deep fills
+  edge: "#c9c4bb",
+  edgeHover: "#8f887c",
+  accent: "#2c5942", // deep pine
+  accentHover: "#204534",
+  success: "#116e4b",
+  danger: "#a8372a",
+  caution: "#82550f",
+  send: "#116e4b",
+  sendSurface: "#d9e9df",
+  attempt: "#82550f",
+  attemptSurface: "#f2e7cd",
   handHold: "#39b1d1", // same colours (overlay drawn on a photo, theme-independent)
   footHold: "#f6850c",
   cropRegion: "#38bdf8", // same colours (dev harness overlay, theme-independent)

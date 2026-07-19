@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist_Mono, Inter, Space_Grotesk } from "next/font/google";
+import { Archivo, Geist_Mono, Inter } from "next/font/google";
 import NavBar from "@/components/layout/NavBar";
 import Preloader from "@/components/layout/Preloader";
 import Providers from "@/components/layout/Providers";
@@ -11,8 +11,8 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const archivo = Archivo({
+  variable: "--font-archivo",
   subsets: ["latin"],
 });
 
@@ -37,7 +37,7 @@ export default function RootLayout({
       lang="en"
       className={cn(
         inter.variable,
-        spaceGrotesk.variable,
+        archivo.variable,
         geistMono.variable,
         "h-full antialiased",
       )}
