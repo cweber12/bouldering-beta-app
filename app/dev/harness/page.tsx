@@ -14,7 +14,10 @@
  * evidence while its stamped setupHash matches the current Setup's (the harness
  * pairs runs to truth by hash — ADR 0020): a save that changes the hash flips
  * the accepted truth to a visible stale state until it is re-seeded (flags
- * carry forward by timestamp) and re-accepted.
+ * carry forward by timestamp) and re-accepted. On a stale-truth bundle whose
+ * scaffold on disk is already seed-ready (fresh + posed), the re-seed
+ * affordance becomes "Review seed" — straight into the review from the
+ * artifact, no job — with a secondary "Re-run ViTPose" to force a fresh job.
  * Calibration runs no detection at all: it authors truth, and nothing else.
  * Detection output lives in the separate Analyze step, reached per video from
  * the corpus list: it runs the production pipeline against the saved Scan Setup,
@@ -43,6 +46,7 @@ import {
   countSeedCoverage,
   frameReviewMark,
   hasAcceptedGroundTruth,
+  reseedAffordanceDecision,
   seedGateDecision,
   type FrameReviewMark,
 } from "@/utils/harnessGroundTruthScaffold";
@@ -451,6 +455,34 @@ function Calibrator({
   // — never as healthy — until ViTPose is re-run and the truth re-accepted.
   const truthStale = truthAccepted && truthIsStale(truthSetupHash, currentSetupHash);
 
+  // Smart re-seed probe (batch re-seed PRD): on a stale-truth bundle, ask the
+  // existing ViTPose GET — which already withholds stale artifacts — whether a
+  // scaffold is sitting on disk before ever offering to submit a job. A fresh
+  // posed scaffold turns the re-seed affordance into "Review seed" (straight
+  // into the review, no POST); anything else keeps today's job flow.
+  const [probedScaffold, setProbedScaffold] = useState<ViTPoseScaffold | null>(null);
+  const [probedWarnings, setProbedWarnings] = useState<string[]>([]);
+  useEffect(() => {
+    setProbedScaffold(null);
+    setProbedWarnings([]);
+    if (!truthStale) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { scaffold, warnings } = await loadViTPose(item.key);
+        if (cancelled) return;
+        setProbedScaffold(scaffold);
+        setProbedWarnings(warnings);
+      } catch {
+        // Probe failure just means no shortcut — the job flow stays available.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [truthStale, item.key]);
+  const reseedAffordance = reseedAffordanceDecision(probedScaffold, currentSetupHash);
+
   // A Climber tap from a setup calibrated before the tap-timestamp contract: the
   // downloader can only seed by global tap position, which grabs a bystander who
   // ever crosses that spot. Re-tapping the Climber writes `t` and fixes it.
@@ -634,6 +666,25 @@ function Calibrator({
     setPhase("review");
     requestViTPoseForGrid(gridFrames);
   }, [gridFrames, saveSetup, requestViTPoseForGrid]);
+
+  // Enter the flag review straight from the seed-ready scaffold on disk: no
+  // Setup save (a hash-changing save would invalidate the very scaffold being
+  // consumed), no ViTPose POST, no waiting. The seeding effect below carries
+  // prior Wrong/Absent flags forward by timestamp exactly as a job-based
+  // re-seed would, and Accept stamps the scaffold's own setupHash (ADR 0020).
+  const handleReviewSeed = useCallback(() => {
+    if (!probedScaffold) return;
+    vitposeRequestedRef.current = null; // abandon any in-flight job's completion
+    setVitpose(probedScaffold);
+    setVitposeError(null);
+    setVitposeWarnings(probedWarnings);
+    setGtSeed(null);
+    setGtInput(null);
+    setGtSave(null);
+    setVitposeStatus("ready");
+    setGtFrameIndex(0);
+    setPhase("review");
+  }, [probedScaffold, probedWarnings]);
 
   // Confirm: Ground Truth is video-keyed, so on a video that already has accepted
   // truth this only saves the edited Scan Setup — no ViTPose job, no review, and
@@ -995,17 +1046,39 @@ function Calibrator({
           >
             Save setup only
           </button>
-          {truthAccepted && (
-            <button
-              type="button"
-              onClick={() => void saveAndSeed()}
-              disabled={busy || gridFrames.length === 0}
-              className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
-              title="Re-run ViTPose over the Detection Frame grid, carrying your flags forward by timestamp"
-            >
-              Re-seed Ground Truth
-            </button>
-          )}
+          {truthAccepted &&
+            (truthStale && reseedAffordance === "review-seed" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleReviewSeed}
+                  disabled={busy || gridFrames.length === 0}
+                  className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
+                  title="A fresh ViTPose scaffold is already on disk — open the flag review from it directly, no new job, flags carried forward by timestamp"
+                >
+                  Review seed
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveAndSeed()}
+                  disabled={busy || gridFrames.length === 0}
+                  className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
+                  title="Force a fresh ViTPose job even though the on-disk scaffold is usable (e.g. after a downloader model update) — deletes the existing artifact"
+                >
+                  Re-run ViTPose
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void saveAndSeed()}
+                disabled={busy || gridFrames.length === 0}
+                className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
+                title="Re-run ViTPose over the Detection Frame grid, carrying your flags forward by timestamp"
+              >
+                Re-seed Ground Truth
+              </button>
+            ))}
         </div>
       </div>
 
@@ -1029,9 +1102,11 @@ function Calibrator({
           className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
         >
           This video&apos;s Ground Truth was accepted under an older calibration — it pairs
-          with no run scanned under the current Setup, so it is stale evidence. Use Re-seed
-          Ground Truth to re-run ViTPose and re-accept; your Wrong/Absent flags carry
-          forward by timestamp.
+          with no run scanned under the current Setup, so it is stale evidence.{" "}
+          {reseedAffordance === "review-seed"
+            ? "A fresh ViTPose scaffold is already on disk: use Review seed to go straight to the review and re-accept — no new job needed."
+            : "Use Re-seed Ground Truth to re-run ViTPose and re-accept."}{" "}
+          Your Wrong/Absent flags carry forward by timestamp.
         </div>
       ) : truthAccepted ? (
         <div
