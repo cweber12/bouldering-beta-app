@@ -1,6 +1,7 @@
 # Re-seed stale sweep on the corpus page
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/reseed-stale-sweep
 Type: AFK
 
 ## Parent
