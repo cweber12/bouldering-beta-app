@@ -150,44 +150,100 @@ export function buildGroundTruthScaffold(
 // ---------------------------------------------------------------------------
 
 /**
- * The three-way review control the author drives per Detection Frame:
- * `"auto"` (unflagged — accept the seed as-is), `"wrong"` (climber present but
- * the seed skeleton is bad), `"absent"` (no climber here). Maps to the persisted
- * {@link GroundTruthReview} provenance values.
+ * The two-state review control the author drives per Detection Frame:
+ * `"auto"` (unflagged — accept the seed as-is) and `"wrong"` (wrong person
+ * tracked — the seed skeleton is bad). A control point of either value plants a
+ * boundary the forward-fill derivation carries forward (see
+ * {@link deriveFrameFlags}). The deprecated manual **Absent** flag is gone —
+ * presence follows the seed `state`, never a flag (harness ADR 0005).
  */
-export type ReviewFlag = "auto" | "wrong" | "absent";
+export type ReviewFlag = "auto" | "wrong";
 
-/** The UI flag a persisted `review` value corresponds to (legacy `"human"` → auto). */
+/**
+ * The UI flag a persisted `review` value corresponds to. `human-flagged-wrong`
+ * is the only non-auto flag; the deprecated `human-flagged-absent` and the
+ * forward-compat `human` both soft-retire to `"auto"` (harness ADR 0005 —
+ * absence is decided by `state`, never a human flag).
+ */
 export function reviewToFlag(review: GroundTruthReview): ReviewFlag {
-  switch (review) {
-    case "human-flagged-wrong":
-      return "wrong";
-    case "human-flagged-absent":
-      return "absent";
-    default:
-      return "auto";
-  }
+  return review === "human-flagged-wrong" ? "wrong" : "auto";
 }
 
 /**
- * Apply the three-way review toggle to a **seeded** frame (the auto-accepted
+ * Apply the two-state review toggle to a **seeded** frame (the auto-accepted
  * scaffold record). `auto` restores the seed verbatim (state and joints as
  * seeded); `wrong` keeps the climber present with the seed's joints as known-bad
- * (flagging a seeded-absent frame Wrong flips it to present with empty joints);
- * `absent` marks no-climber and clears the joints. `verified` is inherited from
- * the seed — it is stamped `true` for the whole file at save. Pure: pass the
- * seed frame so unflagging back to auto can always recover the original truth.
+ * (flagging a seeded-absent frame Wrong flips it to present with empty joints).
+ * `verified` is inherited from the seed — it is stamped `true` for the whole file
+ * at save. Pure: pass the seed frame so unflagging back to auto can always
+ * recover the original truth.
  */
 export function applyReviewFlag(seed: GroundTruthFrame, flag: ReviewFlag): GroundTruthFrame {
   switch (flag) {
     case "wrong":
       return { ...seed, review: "human-flagged-wrong", state: "present", joints: seed.joints };
-    case "absent":
-      return { ...seed, review: "human-flagged-absent", state: "absent", joints: {} };
     case "auto":
     default:
       return { ...seed, review: "auto" };
   }
+}
+
+/** Whether a seeded frame posed nobody (0 core joints) — the seeded-absent case. */
+function isEmptySeed(frame: GroundTruthFrame): boolean {
+  return Object.keys(frame.joints).length === 0;
+}
+
+/**
+ * Forward-fill derivation — the heart of the segment/boundary review model.
+ * Working state is a set of **control points** (Detection Frame index →
+ * `Wrong | Auto`) the author plants by clicking. Each frame's effective flag is
+ * the value of the nearest *preceding* control point (default `auto` when none
+ * precedes), so marking Wrong at the start of a wrong-person stretch paints every
+ * following frame Wrong until an Auto control point, and an out-of-order edit
+ * re-derives the fill without clobbering later boundaries.
+ *
+ * The **empty-joint exception**: a Detection Frame the seed posed nobody at
+ * (0 core joints) is always `auto` (seeded-absent) regardless of any Wrong
+ * segment over it, and it never governs the running fill — so a Wrong stretch
+ * *bridges across* such frames rather than terminating on them. Control points on
+ * zero-joint frames are ignored for the same reason (the reviewer disables the
+ * Wrong control there, so they only ever arise as redundant no-ops).
+ *
+ * Returns each frame's effective flag keyed by `frameIndex`.
+ */
+export function deriveFrameFlags(
+  seedFrames: readonly GroundTruthFrame[],
+  controlPoints: ReadonlyMap<number, ReviewFlag>,
+): Map<number, ReviewFlag> {
+  const sorted = [...seedFrames].sort((a, b) => a.frameIndex - b.frameIndex);
+  const out = new Map<number, ReviewFlag>();
+  let current: ReviewFlag = "auto";
+  for (const frame of sorted) {
+    if (isEmptySeed(frame)) {
+      out.set(frame.frameIndex, "auto");
+      continue;
+    }
+    const cp = controlPoints.get(frame.frameIndex);
+    if (cp) current = cp;
+    out.set(frame.frameIndex, current);
+  }
+  return out;
+}
+
+/**
+ * Materialize the working control points to flat per-frame Ground Truth for
+ * save: each frame in a derived Wrong segment becomes `human-flagged-wrong`
+ * (present, seed joints kept as known-bad); every other frame is `auto` with its
+ * seeded `state`. The empty-joint exception means a zero-joint frame always
+ * materializes `auto` / seeded-absent, so no present-with-empty-joints frame is
+ * ever emitted. `verified` is left as seeded here — the save path stamps it.
+ */
+export function materializeReview(
+  seedFrames: readonly GroundTruthFrame[],
+  controlPoints: ReadonlyMap<number, ReviewFlag>,
+): GroundTruthFrame[] {
+  const flags = deriveFrameFlags(seedFrames, controlPoints);
+  return seedFrames.map((seed) => applyReviewFlag(seed, flags.get(seed.frameIndex) ?? "auto"));
 }
 
 /**

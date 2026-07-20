@@ -31,6 +31,31 @@ itself. `ground-truth.json` gains a required per-frame **`review`** and a top-le
 `metadata.json` into `setup.json.analysisInputs`. §1, §4, §5, and the amended
 Considered-Options / Consequences notes below reflect the shipped model.
 
+Amended by the forward-fill review change
+(`.scratch/calibration-wrong-forward-fill/PRD.md`): the per-frame flag becomes a
+**forward-fill over a segment model**, and the manual **Absent** flag is retired.
+Working review state is now a set of **control points** (Detection Frame index →
+`Wrong | Auto`); each frame's effective flag is *derived* as the value of the
+nearest preceding control point (default `auto`), so marking a frame Wrong paints
+every following frame Wrong until the next Auto control point — a wrong-person
+stretch of any length is flagged in two clicks, and an out-of-order edit
+re-derives the fill without clobbering later boundaries. Flat per-frame `review`
+values are materialized only at **Accept & save**: each seeded frame in a derived
+Wrong segment → `human-flagged-wrong` (present, seed joints kept); every other
+frame → `auto` with `state` from the seed. The **empty-joint exception**: a frame
+the seed posed nobody at (0 core joints) is always `state: "absent"` /
+`review: "auto"` regardless of any Wrong segment, and a Wrong stretch *bridges
+across* it rather than terminating — so the reviewer disables the Wrong control on
+a zero-joint frame. The `ReviewFlag` vocabulary drops to `"auto" | "wrong"`; the
+`applyReviewFlag` absent case is deleted; `reviewToFlag` soft-retires the legacy
+`human-flagged-absent` and forward-compat `human` to `"auto"`. The scanner never
+emits `human-flagged-absent` on new saves — presence follows `state`, never a
+human flag (aligning with harness **ADR 0005**, the manual-absent deprecation).
+The persisted schema, `GROUND_TRUTH_VERSION`, and the canonical hash pre-image are
+unchanged; the parser still reads legacy `human-flagged-absent` files. §1's
+Absent bullet and §5's `review` enumeration below are superseded by this note for
+the values the UI now produces.
+
 ## Context
 
 ADR 0017 gave us a labelled corpus and a self-contained **Scan Diagnostics**
