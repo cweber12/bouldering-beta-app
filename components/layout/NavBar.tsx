@@ -142,7 +142,7 @@ export default function NavBar() {
             aria-label="Beta Scanner home"
           >
             <Image
-              src="/climber_scan_logo.svg"
+              src="/rock_line_logo.svg"
               alt="Beta Scanner"
               width={21}
               height={24}
