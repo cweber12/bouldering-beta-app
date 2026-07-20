@@ -113,6 +113,22 @@ describe("decideReseedStep", () => {
     });
   });
 
+  it("names the re-tap remedy when the sidecar reports seedFound false", () => {
+    const step = decideReseedStep(
+      { scaffold: poselessScaffold, error: null, seedFound: false },
+      false,
+    );
+    expect(step.kind).toBe("failed");
+    if (step.kind === "failed") {
+      expect(step.failure).toBe("no-climber");
+      expect(step.message).toMatch(/re-tap the Climber/);
+    }
+    // A posed scaffold lands regardless of the flag (stale sidecar noise).
+    expect(
+      decideReseedStep({ scaffold: posedScaffold, error: null, seedFound: false }, false).kind,
+    ).toBe("landed");
+  });
+
   it("fails on the downloader's error sidecar with its message, and advances", () => {
     const step = decideReseedStep({ scaffold: null, error: "GPU exploded." }, false);
     expect(step).toEqual({

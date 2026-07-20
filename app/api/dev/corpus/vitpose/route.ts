@@ -33,6 +33,10 @@ interface JobStatusInfo {
   /** Non-fatal downloader advisories for the run (e.g. a legacy tap without a
    * timestamp, or an ambiguous `t=0` tap) — surfaced even on a successful run. */
   warnings: string[];
+  /** `seedDebug.seedFound`: false when the tracker ran but matched no person to
+   * the Climber tap — the artifact lands with every frame poseless. Null when
+   * the sidecar (or the field) is absent. */
+  seedFound: boolean | null;
 }
 
 /**
@@ -56,10 +60,19 @@ async function readJobStatus(dir: string): Promise<JobStatusInfo> {
           ? status.error
           : "The ViTPose job failed."
         : null;
-    return { status: typeof status.status === "string" ? status.status : null, error, warnings };
+    const seedDebug =
+      typeof status.seedDebug === "object" && status.seedDebug !== null
+        ? (status.seedDebug as Record<string, unknown>)
+        : null;
+    return {
+      status: typeof status.status === "string" ? status.status : null,
+      error,
+      warnings,
+      seedFound: typeof seedDebug?.seedFound === "boolean" ? seedDebug.seedFound : null,
+    };
   } catch {
     // No status sidecar / unreadable → treat as still running, no advisories.
-    return { status: null, error: null, warnings: [] };
+    return { status: null, error: null, warnings: [], seedFound: null };
   }
 }
 
@@ -86,23 +99,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // is a terminal condition the author fixes by re-running ViTPose.
     const currentSetupHash = await readSetupHash(dir);
     if (scaffoldIsStale(scaffold.setupHash, currentSetupHash)) {
-      const { status, warnings } = await readJobStatus(dir);
+      const { status, warnings, seedFound } = await readJobStatus(dir);
       const error =
         status === "running"
           ? null
           : "The ViTPose scaffold is from an older calibration — re-run ViTPose.";
-      return NextResponse.json({ vitpose: null, error, warnings });
+      return NextResponse.json({ vitpose: null, error, warnings, seedFound });
     }
     // A written artifact supersedes any stale error from an earlier run, but the
-    // current run's own sidecar may carry advisories about the seed selection.
-    const { warnings } = await readJobStatus(dir);
-    return NextResponse.json({ vitpose: scaffold, warnings });
+    // current run's own sidecar may carry advisories about the seed selection —
+    // and its seedFound flag, which tells a poseless artifact's cause (tap
+    // matched no track) from a genuine tracker miss.
+    const { warnings, seedFound } = await readJobStatus(dir);
+    return NextResponse.json({ vitpose: scaffold, warnings, seedFound });
   } catch {
     // No artifact yet — either the job is still running, or it failed after
     // being accepted. Surface a terminal error so authoring can be gated, plus
     // any advisories the downloader has already attached.
-    const { error, warnings } = await readJobStatus(dir);
-    return NextResponse.json({ vitpose: null, error, warnings });
+    const { error, warnings, seedFound } = await readJobStatus(dir);
+    return NextResponse.json({ vitpose: null, error, warnings, seedFound });
   }
 }
 

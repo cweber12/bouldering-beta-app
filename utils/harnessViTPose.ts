@@ -115,6 +115,18 @@ export function scaffoldHasPose(scaffold: ViTPoseScaffold): boolean {
   return scaffold.frames.some((f) => f.keypoints.length > 0);
 }
 
+/**
+ * The terminal message for a landed-but-poseless scaffold. When the job sidecar
+ * reports `seedFound: false` the cause is pinpointed — the tracker ran but no
+ * tracked person ever matched the Climber tap — so the message names the remedy
+ * (re-tap) instead of the symptom. Null/absent keeps the generic message.
+ */
+export function noClimberMessage(seedFound: boolean | null): string {
+  return seedFound === false
+    ? "ViTPose matched no tracked person to the Climber tap — re-tap the Climber (position and frame time) in the calibrator, then re-run."
+    : "ViTPose tracked no climber.";
+}
+
 // ---------------------------------------------------------------------------
 // Validation — the proxy trusts nothing it reads back from the bundle file.
 // ---------------------------------------------------------------------------
@@ -212,6 +224,10 @@ export interface ViTPosePollResult {
   /** Non-fatal downloader advisories about the Climber selection (a legacy tap
    * with no timestamp, or an ambiguous `t=0` tap). Empty when the run was clean. */
   warnings: string[];
+  /** The job sidecar's `seedDebug.seedFound`: false when the tracker matched no
+   * person to the Climber tap (the artifact lands poseless). Null when the
+   * sidecar is absent or predates the field. */
+  seedFound: boolean | null;
 }
 
 /**
@@ -232,5 +248,6 @@ export async function loadViTPose(bundleKey: string): Promise<ViTPosePollResult>
           (w): w is string => typeof w === "string" && w.length > 0,
         )
       : [],
+    seedFound: typeof body.seedFound === "boolean" ? (body.seedFound as boolean) : null,
   };
 }

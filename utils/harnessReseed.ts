@@ -14,7 +14,7 @@
  * Framework-agnostic — no React imports.
  */
 
-import { scaffoldHasPose, type ViTPoseScaffold } from "@/utils/harnessViTPose";
+import { scaffoldHasPose, noClimberMessage, type ViTPoseScaffold } from "@/utils/harnessViTPose";
 
 /** The per-bundle flags the sweep plan gates on (a subset of the corpus listing). */
 export interface ReseedCandidate {
@@ -84,7 +84,7 @@ export type ReseedStepDecision =
  * caller's backstop clock for a downloader that died without writing one.
  */
 export function decideReseedStep(
-  poll: { scaffold: ViTPoseScaffold | null; error: string | null },
+  poll: { scaffold: ViTPoseScaffold | null; error: string | null; seedFound?: boolean | null },
   timedOut: boolean,
 ): ReseedStepDecision {
   if (poll.scaffold) {
@@ -92,7 +92,7 @@ export function decideReseedStep(
       return {
         kind: "failed",
         failure: "no-climber",
-        message: "ViTPose tracked no climber.",
+        message: noClimberMessage(poll.seedFound ?? null),
         advance: true,
       };
     }

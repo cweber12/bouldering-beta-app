@@ -131,6 +131,29 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
   });
 
+  it("GET surfaces seedDebug.seedFound alongside a poseless scaffold", async () => {
+    const { GET } = await importRoute("development");
+    const poseless = { version: 1, frames: [{ timestamp: 0, keypoints: [] }] };
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(poseless));
+    await writeFile(
+      path.join(bundleDir, "vitpose.status.json"),
+      JSON.stringify({ jobId: "j1", status: "done", seedDebug: { seedFound: false } }),
+    );
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.vitpose).toEqual(poseless);
+    expect(body.seedFound).toBe(false);
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+    await rm(path.join(bundleDir, "vitpose.status.json"), { force: true });
+  });
+
+  it("GET reads seedFound null when the sidecar or the field is absent", async () => {
+    const { GET } = await importRoute("development");
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
+    const body = await (await GET(makeRequest(BUNDLE_KEY))).json();
+    expect(body.seedFound).toBeNull();
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+  });
+
   it("GET returns warnings with a terminal error when no artifact exists", async () => {
     const { GET } = await importRoute("development");
     await writeFile(
