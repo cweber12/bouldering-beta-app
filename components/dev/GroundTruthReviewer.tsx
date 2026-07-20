@@ -4,18 +4,18 @@
  * Dev-only read-only Ground Truth reviewer.
  *
  * Shows the paused video frame with the scaffold seed skeleton being attested.
- * The author can zoom/pan for inspection and flag the frame Auto / Wrong /
- * Absent, but cannot edit joints, translate poses, or toggle occlusion.
+ * The author can zoom/pan for inspection and plant an Auto / Wrong control point
+ * on the frame (forward-fill review model), but cannot edit joints, translate
+ * poses, or toggle occlusion. The Wrong control is disabled on a zero-joint
+ * (seeded-absent) frame — a Wrong stretch bridges across it rather than landing
+ * on it.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
 import { dark } from "@/utils/theme";
 import { getTopology } from "@/utils/poseConstants";
-import {
-  reviewToFlag,
-  type ReviewFlag,
-} from "@/utils/harnessGroundTruthScaffold";
+import { type ReviewFlag } from "@/utils/harnessGroundTruthScaffold";
 import type { GroundTruthFrame, GroundTruthJoint } from "@/utils/harnessGroundTruth";
 
 type Pos = { x: number; y: number };
@@ -25,10 +25,10 @@ export interface GroundTruthReviewerProps {
   /** Native video dimensions; the canvas draws at this resolution. */
   videoWidth: number;
   videoHeight: number;
-  /** The working frame, used for the current review flag. */
-  frame: GroundTruthFrame;
-  /** The immutable seed frame shown on the canvas. */
+  /** The immutable seed frame shown on the canvas; its timestamp drives the seek. */
   seedFrame: GroundTruthFrame;
+  /** The current frame's effective flag, derived from the working control points. */
+  flag: ReviewFlag;
   /** Non-core scaffold keypoints (video-normalized) drawn faintly for context. */
   contextKeypoints: Record<string, Pos>;
   onFlagChange: (flag: ReviewFlag) => void;
@@ -36,9 +36,12 @@ export interface GroundTruthReviewerProps {
 }
 
 const REVIEW_OPTIONS: readonly { value: ReviewFlag; label: string; hint: string }[] = [
-  { value: "auto", label: "Auto", hint: "Accept the scaffold seed for this frame" },
-  { value: "wrong", label: "Wrong", hint: "Climber is present, but the seed skeleton is wrong" },
-  { value: "absent", label: "Absent", hint: "No climber is present in this frame" },
+  { value: "auto", label: "Auto", hint: "Accept the seed forward from this frame until the next control point" },
+  {
+    value: "wrong",
+    label: "Wrong",
+    hint: "Wrong person tracked — paint every following frame Wrong until the next Auto",
+  },
 ];
 
 const { keypointNames, skeletonEdges } = getTopology("mediapipe");
@@ -55,8 +58,8 @@ export default function GroundTruthReviewer({
   videoSrc,
   videoWidth,
   videoHeight,
-  frame,
   seedFrame,
+  flag,
   contextKeypoints,
   onFlagChange,
   className,
@@ -80,9 +83,10 @@ export default function GroundTruthReviewer({
     contextRef.current = contextKeypoints;
   }, [contextKeypoints]);
 
-  const flag = reviewToFlag(frame.review);
   const occludedCount = Object.values(seedFrame.joints).filter((j) => j.occluded).length;
   const jointCount = Object.keys(seedFrame.joints).length;
+  // Wrong can't land on a seeded-absent frame — a Wrong stretch bridges across it.
+  const wrongDisabled = jointCount === 0;
 
   const posOf = useCallback((name: string): Pos | null => {
     return seedJointsRef.current[name] ?? contextRef.current[name] ?? null;
@@ -167,7 +171,7 @@ export default function GroundTruthReviewer({
     video.addEventListener("seeked", onSeeked);
     const applyTime = () => {
       try {
-        video.currentTime = frame.timestamp;
+        video.currentTime = seedFrame.timestamp;
       } catch {
         /* not seekable yet; loadeddata retries */
       }
@@ -175,7 +179,7 @@ export default function GroundTruthReviewer({
     if (video.readyState >= 1) applyTime();
     else video.addEventListener("loadeddata", applyTime, { once: true });
     return () => video.removeEventListener("seeked", onSeeked);
-  }, [frame.timestamp, draw]);
+  }, [seedFrame.timestamp, draw]);
 
   useEffect(() => {
     draw();
@@ -271,15 +275,17 @@ export default function GroundTruthReviewer({
         >
           {REVIEW_OPTIONS.map((opt) => {
             const active = flag === opt.value;
+            const disabled = opt.value === "wrong" && wrongDisabled;
             return (
               <button
                 key={opt.value}
                 type="button"
                 aria-pressed={active}
-                title={opt.hint}
+                disabled={disabled}
+                title={disabled ? "No seed pose on this frame — nothing to flag Wrong" : opt.hint}
                 onClick={() => onFlagChange(opt.value)}
                 className={cn(
-                  "rounded px-2.5 py-1 text-xs font-medium transition",
+                  "rounded px-2.5 py-1 text-xs font-medium transition disabled:opacity-40",
                   active ? "bg-accent text-fg-inverse" : "text-fg-muted hover:text-fg",
                 )}
               >

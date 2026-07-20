@@ -42,15 +42,17 @@ import { planReseedSweep, type ReseedPlan } from "@/utils/harnessReseed";
 import Modal from "@/components/ui/Modal";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
 import {
-  applyReviewFlag,
   buildGroundTruthScaffold,
   contextKeypointsAt,
   countSeedCoverage,
+  deriveFrameFlags,
   frameReviewMark,
   hasAcceptedGroundTruth,
+  materializeReview,
   reseedAffordanceDecision,
   seedGateDecision,
   type FrameReviewMark,
+  type ReviewFlag,
 } from "@/utils/harnessGroundTruthScaffold";
 import {
   loadGroundTruth,
@@ -467,7 +469,10 @@ function Calibrator({
   /** The saved truth's stamped setupHash ("" legacy) — drives the stale state. */
   const [truthSetupHash, setTruthSetupHash] = useState("");
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
-  const [gtInput, setGtInput] = useState<GroundTruthInput | null>(null);
+  // Working review state is the set of forward-fill control points (Detection
+  // Frame index → Wrong | Auto); each frame's effective flag is derived from the
+  // nearest preceding one. Materialized to flat per-frame `review` only at save.
+  const [controlPoints, setControlPoints] = useState<Map<number, ReviewFlag>>(new Map());
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
   const [gtSaving, setGtSaving] = useState(false);
   const [currentSetupHash, setCurrentSetupHash] = useState("");
@@ -709,7 +714,7 @@ function Calibrator({
       setVitposeError(null);
       setVitposeWarnings([]);
       setGtSeed(null);
-      setGtInput(null);
+      setControlPoints(new Map());
       setGtSave(null);
       setVitposeStatus("requesting");
       void (async () => {
@@ -765,7 +770,7 @@ function Calibrator({
     setVitposeError(null);
     setVitposeWarnings(probedWarnings);
     setGtSeed(null);
-    setGtInput(null);
+    setControlPoints(new Map());
     setGtSave(null);
     setVitposeStatus("ready");
     setGtFrameIndex(0);
@@ -797,7 +802,7 @@ function Calibrator({
       setVitposeWarnings([]);
       setVitpose(null);
       setGtSeed(null);
-      setGtInput(null);
+      setControlPoints(new Map());
       setGtSave(null);
     };
 
@@ -834,8 +839,10 @@ function Calibrator({
   }, [vitposeStatus, item.key]);
 
   // Seed Ground Truth once the Detection Frame grid and the ViTPose seed are
-  // both ready: a pure scaffold and a working copy that preserves any previously
-  // authored flags. Both key one record per Detection Frame.
+  // both ready: the pure scaffold the forward-fill derives against, one record
+  // per Detection Frame. Working state starts with no control points (a clean
+  // all-auto fill) — reconstructing control points from previously-saved truth
+  // on a re-seed is out of scope for this slice (issue 02).
   useEffect(() => {
     if (
       phase !== "review" ||
@@ -847,14 +854,8 @@ function Calibrator({
     }
     const seedHash = vitpose?.setupHash || currentSetupHash;
     const pureScaffold = buildGroundTruthScaffold(gridFrames, seedPoseFrames, seedHash, null);
-    const working = buildGroundTruthScaffold(
-      gridFrames,
-      seedPoseFrames,
-      seedHash,
-      existingGtRef.current,
-    );
     setGtSeed(pureScaffold);
-    setGtInput(working);
+    setControlPoints(new Map());
     setGtSave(null);
   }, [phase, vitposeStatus, seedPoseFrames, gridFrames, currentSetupHash, vitpose]);
 
@@ -862,42 +863,52 @@ function Calibrator({
     requestViTPoseForGrid(gridFrames);
   }, [gridFrames, requestViTPoseForGrid]);
 
-  // Apply the current Detection Frame's Auto / Wrong / Absent review flag. The
-  // immutable seed frame is always the source of truth so unflagging restores it.
-  const setGtFrameFlag = useCallback((index: number, flag: "auto" | "wrong" | "absent") => {
-    setGtInput((prev) => {
-      if (!prev) return prev;
-      const seedFrame = gtSeed?.frames.find((f) => f.frameIndex === index);
-      if (!seedFrame) return prev;
-      return {
-        ...prev,
-        frames: prev.frames.map((f) => (f.frameIndex === index ? applyReviewFlag(seedFrame, flag) : f)),
-      };
+  // Plant a forward-fill control point at the seeked Detection Frame. Clicking
+  // Wrong paints every following frame Wrong until the next Auto; clicking Auto
+  // does the inverse. The fill re-derives live off the control-point set.
+  const plantControlPoint = useCallback((index: number, flag: ReviewFlag) => {
+    setControlPoints((prev) => {
+      const next = new Map(prev);
+      next.set(index, flag);
+      return next;
     });
     setGtSave(null);
-  }, [gtSeed]);
+  }, []);
+
+  // The working per-frame truth, materialized from the control points on the fly
+  // for the filmstrip marks and the coverage readout.
+  const gtWorkingFrames = useMemo(
+    () => (gtSeed ? materializeReview(gtSeed.frames, controlPoints) : []),
+    [gtSeed, controlPoints],
+  );
+
+  // Each Detection Frame's effective flag — drives the reviewer's active control.
+  const derivedFlags = useMemo(
+    () => (gtSeed ? deriveFrameFlags(gtSeed.frames, controlPoints) : new Map<number, ReviewFlag>()),
+    [gtSeed, controlPoints],
+  );
 
   // Review mark per Detection Frame index, for the filmstrip (flagged / seeded
   // absent distinct from ordinary auto frames).
   const gtMarkByIndex = useMemo(() => {
     const byIndex = new Map<number, FrameReviewMark>();
-    for (const f of gtInput?.frames ?? []) byIndex.set(f.frameIndex, frameReviewMark(f));
+    for (const f of gtWorkingFrames) byIndex.set(f.frameIndex, frameReviewMark(f));
     return gridFrames.map((_, i) => byIndex.get(i));
-  }, [gtInput, gridFrames]);
+  }, [gtWorkingFrames, gridFrames]);
 
   // Seed coverage surfaced beside the accept button — posed vs. seeded-absent,
   // updating as flags move presence truth. Surfaced only, never blocks accept.
   const seedCoverage = useMemo(
-    () => countSeedCoverage(gtInput?.frames ?? []),
-    [gtInput],
+    () => countSeedCoverage(gtWorkingFrames),
+    [gtWorkingFrames],
   );
 
   const handleSaveGt = useCallback(async () => {
-    if (!gtInput) return;
+    if (!gtSeed) return;
     setGtSaving(true);
     setGtSave(null);
     try {
-      const setupHash = gtInput.setupHash || vitpose?.setupHash || currentSetupHash;
+      const setupHash = gtSeed.setupHash || vitpose?.setupHash || currentSetupHash;
       // The export gate (harness issue #21): truth must stamp the hash of the
       // scaffold actually used, and that scaffold must belong to the current
       // calibration — otherwise the accepted truth pairs with no future run.
@@ -909,24 +920,28 @@ function Calibrator({
         });
         return;
       }
+      // Materialize the control points to flat per-frame truth (seeded Wrong
+      // segments → human-flagged-wrong, everything else → auto), then stamp
+      // verified for the whole file.
       const input: GroundTruthInput = {
-        ...gtInput,
         setupHash,
-        frames: gtInput.frames.map((f) => ({ ...f, verified: true })),
+        frames: materializeReview(gtSeed.frames, controlPoints).map((f) => ({
+          ...f,
+          verified: true,
+        })),
       };
       const saved = await saveGroundTruth(item.key, input);
       const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
       existingGtRef.current = savedInput;
       setTruthAccepted(hasAcceptedGroundTruth(savedInput));
       setTruthSetupHash(saved.setupHash);
-      setGtInput(savedInput);
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
       setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
     } finally {
       setGtSaving(false);
     }
-  }, [gtInput, item.key, currentSetupHash, vitpose]);
+  }, [gtSeed, controlPoints, item.key, currentSetupHash, vitpose]);
 
   // Return to the Setup from the review, keeping the current Setup in place. Any
   // in-flight seed is abandoned; the saved Setup and saved truth both stand.
@@ -964,9 +979,9 @@ function Calibrator({
 
   // ── Ground Truth review over the seeded Detection Frame grid ──
   if (phase === "review") {
-    const gtFrame = gtInput?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
     const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
-    const reviewing = gtGate.authoring === "ready" && gtFrame !== null && gtSeedFrame !== null;
+    const gtFlag = derivedFlags.get(gtFrameIndex) ?? "auto";
+    const reviewing = gtGate.authoring === "ready" && gtSeedFrame !== null;
 
     return (
       <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
@@ -1000,7 +1015,7 @@ function Calibrator({
                 <button
                   type="button"
                   onClick={() => void handleSaveGt()}
-                  disabled={gtSaving || !gtInput}
+                  disabled={gtSaving || !gtSeed}
                   className="shrink-0 rounded-md bg-send px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
                 >
                   {gtSaving ? "Saving…" : "Accept & save Ground Truth"}
@@ -1057,10 +1072,10 @@ function Calibrator({
                 videoSrc={videoUrl}
                 videoWidth={videoMeta.width}
                 videoHeight={videoMeta.height}
-                frame={gtFrame}
                 seedFrame={gtSeedFrame}
-                contextKeypoints={contextKeypointsAt(seedPoseFrames, gtFrame.timestamp)}
-                onFlagChange={(flag) => setGtFrameFlag(gtFrame.frameIndex, flag)}
+                flag={gtFlag}
+                contextKeypoints={contextKeypointsAt(seedPoseFrames, gtSeedFrame.timestamp)}
+                onFlagChange={(flag) => plantControlPoint(gtSeedFrame.frameIndex, flag)}
               />
             </div>
           ) : gtGate.authoring === "disabled" ? (

@@ -5,6 +5,8 @@ import {
   contextKeypointsAt,
   buildGroundTruthScaffold,
   applyReviewFlag,
+  deriveFrameFlags,
+  materializeReview,
   reviewToFlag,
   hasAcceptedGroundTruth,
   countSeedCoverage,
@@ -12,6 +14,7 @@ import {
   reseedAffordanceDecision,
   seedGateDecision,
   OCCLUSION_SEED_SCORE,
+  type ReviewFlag,
 } from "@/utils/harnessGroundTruthScaffold";
 import type { Keypoint } from "@/pipeline/pose/poseDetection";
 import type { GroundTruthFrame, GroundTruthInput } from "@/utils/harnessGroundTruth";
@@ -108,7 +111,7 @@ describe("buildGroundTruthScaffold", () => {
     expect(gt.frames[0].joints).toEqual({});
   });
 
-  it("carries prior human flags onto the fresh seed by timestamp", () => {
+  it("carries a prior Wrong flag onto the fresh seed by timestamp, soft-retiring Absent to auto", () => {
     const existing: GroundTruthInput = {
       setupHash: "setup-1",
       frames: [
@@ -121,7 +124,7 @@ describe("buildGroundTruthScaffold", () => {
           verified: true,
           joints: { nose: { x: 0.9, y: 0.9, occluded: false } },
         },
-        // Absent flag carries and clears joints.
+        // Legacy Absent flag soft-retires to auto (ADR 0005 — presence follows the seed).
         {
           frameIndex: 1,
           timestamp: 0.5,
@@ -139,22 +142,22 @@ describe("buildGroundTruthScaffold", () => {
     // Joints re-seeded from the new poses, not the stale 0.9/0.9 from the old file.
     expect(gt.frames[0].joints).toEqual(coreJointsFromKeypoints(poseFrames[0].keypoints));
 
-    expect(gt.frames[1]).toMatchObject({ review: "human-flagged-absent", state: "absent" });
-    expect(gt.frames[1].joints).toEqual({});
+    // The carried Absent is dropped to auto; presence comes from the fresh seed.
+    expect(gt.frames[1]).toMatchObject({ review: "auto", state: "present" });
 
     // Unflagged frame re-seeds clean as auto.
     expect(gt.frames[2]).toMatchObject({ review: "auto", state: "present" });
   });
 
-  it("carries flags across a Scan Setup change — truth is video-keyed, not setup-keyed", () => {
+  it("carries a Wrong flag across a Scan Setup change — truth is video-keyed, not setup-keyed", () => {
     const existing: GroundTruthInput = {
       setupHash: "setup-OLD",
       frames: [
         {
           frameIndex: 0,
           timestamp: 0.0,
-          state: "absent",
-          review: "human-flagged-absent",
+          state: "present",
+          review: "human-flagged-wrong",
           verified: true,
           joints: {},
         },
@@ -162,7 +165,7 @@ describe("buildGroundTruthScaffold", () => {
     };
     const gt = buildGroundTruthScaffold(detectionFrames, poseFrames, "setup-NEW", existing);
     // The setup changed, but a crop edit cannot invalidate full-frame truth.
-    expect(gt.frames[0]).toMatchObject({ review: "human-flagged-absent", state: "absent" });
+    expect(gt.frames[0]).toMatchObject({ review: "human-flagged-wrong", state: "present" });
     // setupHash rides along as seed provenance only.
     expect(gt.setupHash).toBe("setup-NEW");
   });
@@ -202,8 +205,8 @@ describe("buildGroundTruthScaffold", () => {
         {
           frameIndex: 1,
           timestamp: 0.5,
-          state: "absent",
-          review: "human-flagged-absent",
+          state: "present",
+          review: "human-flagged-wrong",
           verified: true,
           joints: {},
         },
@@ -213,17 +216,18 @@ describe("buildGroundTruthScaffold", () => {
     const gt = buildGroundTruthScaffold(dense, poseFrames, "setup-1", existing);
 
     expect(gt.frames).toHaveLength(11);
-    expect(gt.frames[5]).toMatchObject({ timestamp: 0.5, review: "human-flagged-absent" });
+    expect(gt.frames[5]).toMatchObject({ timestamp: 0.5, review: "human-flagged-wrong" });
     // Frames the sparse grid never held arrive auto-accepted.
     expect(gt.frames[1]).toMatchObject({ timestamp: 0.1, review: "auto" });
   });
 });
 
 describe("reviewToFlag", () => {
-  it("maps persisted review values to UI flags, legacy human as auto", () => {
+  it("maps persisted review values to two-state UI flags, soft-retiring absent/human to auto", () => {
     expect(reviewToFlag("auto")).toBe("auto");
     expect(reviewToFlag("human-flagged-wrong")).toBe("wrong");
-    expect(reviewToFlag("human-flagged-absent")).toBe("absent");
+    // Deprecated absent and forward-compat human both read as auto (ADR 0005).
+    expect(reviewToFlag("human-flagged-absent")).toBe("auto");
     expect(reviewToFlag("human")).toBe("auto");
   });
 });
@@ -264,11 +268,97 @@ describe("applyReviewFlag", () => {
     expect(out.joints).toEqual({});
   });
 
-  it("flags Absent as absent, clearing the joints", () => {
-    const out = applyReviewFlag(seedPresent, "absent");
-    expect(out).toMatchObject({ review: "human-flagged-absent", state: "absent" });
-    expect(out.joints).toEqual({});
-    expect(seedPresent.joints.nose).toBeDefined(); // input not mutated
+  it("never mutates the input seed frame", () => {
+    applyReviewFlag(seedPresent, "wrong");
+    expect(seedPresent.review).toBe("auto");
+    expect(seedPresent.joints.nose).toBeDefined();
+  });
+});
+
+describe("deriveFrameFlags", () => {
+  // A seeded frame poses somebody (present) or nobody (seeded-absent, 0 joints).
+  function seed(frameIndex: number, hasJoints: boolean): GroundTruthFrame {
+    return {
+      frameIndex,
+      timestamp: frameIndex * 0.1,
+      state: hasJoints ? "present" : "absent",
+      review: "auto",
+      verified: false,
+      joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+    };
+  }
+
+  function fills(frames: GroundTruthFrame[], cps: Map<number, ReviewFlag>): ReviewFlag[] {
+    const flags = deriveFrameFlags(frames, cps);
+    return frames.map((f) => flags.get(f.frameIndex)!);
+  }
+
+  it("fills each frame from the nearest preceding control point, defaulting to auto", () => {
+    const frames = [0, 1, 2, 3, 4].map((i) => seed(i, true));
+    const cps = new Map<number, ReviewFlag>([
+      [1, "wrong"],
+      [3, "auto"],
+    ]);
+    expect(fills(frames, cps)).toEqual(["auto", "wrong", "wrong", "auto", "auto"]);
+  });
+
+  it("sorts by frame index before deriving", () => {
+    const frames = [seed(2, true), seed(0, true), seed(1, true)];
+    expect(fills(frames, new Map([[0, "wrong"]]))).toEqual(["wrong", "wrong", "wrong"]);
+  });
+
+  it("keeps a zero-joint frame seeded-absent and bridges a Wrong stretch across it", () => {
+    // Frame 2 posed nobody: it stays auto, and the Wrong from frame 1 continues.
+    const frames = [seed(0, true), seed(1, true), seed(2, false), seed(3, true)];
+    const flags = deriveFrameFlags(frames, new Map([[1, "wrong"]]));
+    expect(flags.get(1)).toBe("wrong");
+    expect(flags.get(2)).toBe("auto"); // empty-joint exception
+    expect(flags.get(3)).toBe("wrong"); // bridged across the gap
+  });
+
+  it("ignores a control point that lands on a zero-joint frame", () => {
+    const frames = [seed(0, true), seed(1, false), seed(2, true)];
+    // The Auto on the empty frame is a no-op — it must not terminate the stretch.
+    const flags = deriveFrameFlags(
+      frames,
+      new Map<number, ReviewFlag>([
+        [0, "wrong"],
+        [1, "auto"],
+      ]),
+    );
+    expect(flags.get(2)).toBe("wrong");
+  });
+});
+
+describe("materializeReview", () => {
+  function seed(frameIndex: number, hasJoints: boolean): GroundTruthFrame {
+    return {
+      frameIndex,
+      timestamp: frameIndex * 0.1,
+      state: hasJoints ? "present" : "absent",
+      review: "auto",
+      verified: false,
+      joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+    };
+  }
+
+  it("materializes a Wrong segment to human-flagged-wrong, keeping the seed joints", () => {
+    const frames = [seed(0, true), seed(1, true), seed(2, true)];
+    const out = materializeReview(frames, new Map([[1, "wrong"]]));
+    expect(out[0]).toMatchObject({ review: "auto", state: "present" });
+    expect(out[1]).toMatchObject({ review: "human-flagged-wrong", state: "present" });
+    expect(out[1].joints).toEqual(frames[1].joints);
+    expect(out[2].review).toBe("human-flagged-wrong");
+  });
+
+  it("never emits human-flagged-absent: zero-joint frames stay auto/absent even under a Wrong stretch", () => {
+    const frames = [seed(0, true), seed(1, false), seed(2, true)];
+    const out = materializeReview(frames, new Map([[0, "wrong"]]));
+    expect(out[1]).toMatchObject({ review: "auto", state: "absent" });
+    expect(out[1].joints).toEqual({});
+    expect(out.some((f) => f.review === "human-flagged-absent")).toBe(false);
+    // The Wrong stretch still bridged across the seeded-absent gap.
+    expect(out[2].review).toBe("human-flagged-wrong");
   });
 });
 
