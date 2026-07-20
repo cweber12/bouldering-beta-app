@@ -48,7 +48,9 @@ const mocks = vi.hoisted(() => {
     }),
   };
 
-  return { fitBounds, map, leaflet };
+  const initLeafletMap = vi.fn(async () => ({ L: leaflet, map }));
+
+  return { fitBounds, map, leaflet, initLeafletMap };
 });
 
 vi.mock("leaflet", () => ({
@@ -58,7 +60,7 @@ vi.mock("leaflet", () => ({
 vi.mock("leaflet.markercluster", () => ({}));
 
 vi.mock("@/utils/leaflet", () => ({
-  initLeafletMap: vi.fn(async () => ({ L: mocks.leaflet, map: mocks.map })),
+  initLeafletMap: mocks.initLeafletMap,
 }));
 
 describe("ClimbsMap", () => {
@@ -112,5 +114,21 @@ describe("ClimbsMap", () => {
     );
 
     await waitFor(() => expect(mocks.fitBounds).toHaveBeenCalledTimes(2));
+  });
+
+  it("enables drag-pan interaction in map init options", async () => {
+    render(<ClimbsMap pins={[]} />);
+
+    await waitFor(() => expect(mocks.initLeafletMap).toHaveBeenCalled());
+
+    expect(mocks.initLeafletMap).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({
+        scrollWheelZoom: true,
+        dragging: true,
+        tap: false,
+        zoomControl: true,
+      }),
+    );
   });
 });

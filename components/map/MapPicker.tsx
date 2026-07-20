@@ -42,8 +42,7 @@ export default function MapPicker({ initialLat, initialLng, onConfirm, onCancel 
         scrollWheelZoom: true,
         tap: false,
         dragging: true,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+      });
       map.setView([initLat, initLng], initZoom);
 
       // CSS-based custom marker — no CDN images required

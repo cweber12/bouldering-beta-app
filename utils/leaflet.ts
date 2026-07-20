@@ -1,5 +1,7 @@
 import type { Map as LeafletMap, MapOptions } from "leaflet";
 
+type LeafletInitOptions = MapOptions & { tap?: boolean };
+
 // ---------------------------------------------------------------------------
 // Shared Leaflet bootstrap — CartoDB Voyager tiles + attribution + the
 // bundler default-icon CDN fallback, used by both ClimbsMap and MapPicker.
@@ -41,7 +43,7 @@ export function fixLeafletDefaultIcon(L: LeafletModule): void {
  */
 export async function initLeafletMap(
   el: HTMLElement,
-  options: MapOptions = {},
+  options: LeafletInitOptions = {},
 ): Promise<{ L: LeafletModule; map: LeafletMap }> {
   const L = (await import("leaflet")).default;
 
