@@ -233,6 +233,9 @@ by every agent minting a worktree:
 - **Copilot** always creates a dedicated worktree + branch per task
   (`git worktree add ..\beta-scanner-<task> -b <type>/<task-name>`), so it never
   touches the primary checkout.
+- **Copilot** completion is PR-first (push branch + open PR + cleanup after merge);
+  see `.github/copilot-instructions.md` for Copilot-only completion and cleanup
+  rules.
 - **Claude Code** (this interactive session) works on the **primary checkout**
   with a per-issue task branch — no separate worktree. Because Copilot is
   isolated in its own worktree, editing the primary checkout cannot collide with
