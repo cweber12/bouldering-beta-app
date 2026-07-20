@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/utils/cn";
 import ClimbDetailModal from "@/components/shared/ClimbDetailModal";
 import type { ClimbDetailData } from "@/components/shared/ClimbDetailModal";
 import type { ClimbPin } from "@/components/map/ClimbsMap";
@@ -81,6 +82,8 @@ export default function PublicProfilePage() {
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [pins, setPins] = useState<ClimbPin[]>([]);
   const [loadingPins, setLoadingPins] = useState(false);
+  const pinsCacheRef = useRef<ClimbPin[] | null>(null);
+  const climbsByKeyRef = useRef<Map<string, ClimbSummary>>(new Map());
 
   const [following, setFollowing] = useState<string[]>([]);
   const isOwnProfile = user?.uid === userId;
@@ -89,6 +92,12 @@ export default function PublicProfilePage() {
   // Climb detail modal
   const [selectedClimb, setSelectedClimb] = useState<ClimbDetailData | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+
+  useEffect(() => {
+    const byKey = new Map<string, ClimbSummary>();
+    for (const climb of climbs) byKey.set(climb.key, climb);
+    climbsByKeyRef.current = byKey;
+  }, [climbs]);
 
   // ------ Load profile ----------------------------------------------------
 
@@ -155,6 +164,10 @@ export default function PublicProfilePage() {
 
   useEffect(() => {
     if (viewMode !== "map" || !userId) return;
+    if (pinsCacheRef.current) {
+      setPins(pinsCacheRef.current);
+      return;
+    }
     let cancelled = false;
     setLoadingPins(true);
 
@@ -174,16 +187,16 @@ export default function PublicProfilePage() {
           }>;
         };
         if (!cancelled && Array.isArray(data.pins)) {
-          setPins(
-            data.pins.map((p) => ({
+          const mapped = data.pins.map((p) => ({
               key: p.key,
               lat: p.lat,
               lng: p.lng,
               label: `${p.route} \u2014 ${p.area}`,
               runType: p.runType,
               timestamp: p.timestamp,
-            })),
-          );
+            }));
+          pinsCacheRef.current = mapped;
+          setPins(mapped);
         }
       } catch {
         /* ignore */
@@ -262,7 +275,7 @@ export default function PublicProfilePage() {
   const handlePinClick = useCallback(
     async (climbKey: string) => {
       // Check if we already have this climb in the grid data.
-      const found = climbs.find((c) => c.key === climbKey);
+      const found = climbsByKeyRef.current.get(climbKey);
       if (found) {
         setSelectedClimb(found);
         return;
@@ -282,7 +295,7 @@ export default function PublicProfilePage() {
         setLoadingDetail(false);
       }
     },
-    [userId, climbs],
+    [userId],
   );
 
   // ------ Filter helpers --------------------------------------------------
@@ -462,137 +475,133 @@ export default function PublicProfilePage() {
           </section>
 
           {/* ---- Map view ---- */}
-          {viewMode === "map" && (
-            <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
-              {loadingPins ? (
-                <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-                  Loading map&#8230;
-                </div>
-              ) : pins.length === 0 ? (
-                <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-                  No GPS-tagged climbs yet.
-                </div>
-              ) : (
-                <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
-              )}
-            </section>
-          )}
+          <section
+            className={cn(
+              "mb-6 rounded-md border border-edge/50 overflow-hidden",
+              viewMode === "map" ? "block" : "hidden",
+            )}
+          >
+            {loadingPins ? (
+              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                Loading map&#8230;
+              </div>
+            ) : pins.length === 0 ? (
+              <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+                No GPS-tagged climbs yet.
+              </div>
+            ) : (
+              <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
+            )}
+          </section>
 
           {/* ---- Climb grid (4×4) ---- */}
-          {viewMode === "list" && (
-            <section className="mb-8">
-              {loadingClimbs ? (
-                <div className="flex flex-col items-center gap-4 py-10">
-                  <LoadingSpinner />
-                  <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
-                </div>
-              ) : climbs.length === 0 ? (
-                <p className="py-8 text-center text-xs text-fg-muted">
-                  {climbTotal === 0
-                    ? "No climbs recorded yet."
-                    : "No climbs match the current filters."}
-                </p>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {climbs.map((c) => (
-                      <div
-                        key={c.key}
-                        onClick={() => handleCardClick(c)}
-                        className="group relative cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover"
-                      >
-                        {/* Thumbnail or placeholder */}
-                        <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
-                          {c.thumbnail ? (
-                            <Image
-                              src={c.thumbnail}
-                              alt={`${c.route} climb`}
-                              fill
-                              unoptimized
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
-                              <svg
-                                className="h-10 w-10"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.5"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
-                                />
-                              </svg>
-                            </div>
-                          )}
-
-                          {/* Run type badge */}
-                          <RunTypeBadge
-                            runType={c.runType}
-                            variant="overlay"
-                            className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+          <section className={cn("mb-8", viewMode === "list" ? "block" : "hidden")}>
+            {loadingClimbs ? (
+              <div className="flex flex-col items-center gap-4 py-10">
+                <LoadingSpinner />
+                <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
+              </div>
+            ) : climbs.length === 0 ? (
+              <p className="py-8 text-center text-xs text-fg-muted">
+                {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {climbs.map((c) => (
+                    <div
+                      key={c.key}
+                      onClick={() => handleCardClick(c)}
+                      className="group relative cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover"
+                    >
+                      {/* Thumbnail or placeholder */}
+                      <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
+                        {c.thumbnail ? (
+                          <Image
+                            src={c.thumbnail}
+                            alt={`${c.route} climb`}
+                            fill
+                            unoptimized
+                            className="object-cover"
                           />
-                        </div>
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-3xl text-fg-muted/30">
+                            <svg
+                              className="h-10 w-10"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.5"
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+                              />
+                            </svg>
+                          </div>
+                        )}
 
-                        {/* Info + options */}
-                        <div className="flex items-start gap-1 px-2 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-                            <p className="truncate text-[10px] text-fg-muted">
-                              {c.area} &middot; {c.state}
-                            </p>
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
-                              {c.rating && (
-                                <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
-                                  {c.rating}
-                                </span>
-                              )}
-                            </div>
+                        {/* Run type badge */}
+                        <RunTypeBadge
+                          runType={c.runType}
+                          variant="overlay"
+                          className="absolute top-2 left-2 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                        />
+                      </div>
+
+                      {/* Info + options */}
+                      <div className="flex items-start gap-1 px-2 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                          <p className="truncate text-[10px] text-fg-muted">
+                            {c.area} &middot; {c.state}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-[10px] text-fg-muted">{c.timestamp}</span>
+                            {c.rating && (
+                              <span className="rounded bg-accent/20 px-1 py-0.5 text-[10px] font-medium text-accent">
+                                {c.rating}
+                              </span>
+                            )}
                           </div>
-                          <div
-                            className="shrink-0 self-center"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <ClimbOptionsDropdown climbKey={c.key} />
-                          </div>
+                        </div>
+                        <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                          <ClimbOptionsDropdown climbKey={c.key} />
                         </div>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="mt-6 flex items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
-                        disabled={climbPage <= 1}
-                        className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                      >
-                        Previous
-                      </button>
-                      <span className="text-xs text-fg-muted">
-                        Page {climbPage} of {totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={climbPage >= totalPages}
-                        className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                      >
-                        Next
-                      </button>
                     </div>
-                  )}
-                </>
-              )}
-            </section>
-          )}
+                  ))}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="mt-6 flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
+                      disabled={climbPage <= 1}
+                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-xs text-fg-muted">
+                      Page {climbPage} of {totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={climbPage >= totalPages}
+                      className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
         </>
       )}
 
