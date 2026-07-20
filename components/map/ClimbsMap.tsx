@@ -154,6 +154,8 @@ export default function ClimbsMap({
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bounds key of the last successful Overpass query (skip repeat fetches).
   const lastBoundsKeyRef = useRef<string | null>(null);
+  // Pin-set signature of the last viewport auto-fit.
+  const lastFitSignatureRef = useRef<string | null>(null);
   // Guards async init so stale effects can't steal/reuse the same container.
   const initTokenRef = useRef(0);
   const initInFlightRef = useRef(false);
@@ -172,6 +174,21 @@ export default function ClimbsMap({
     }
     return map;
   }, [pins]);
+
+  // Order-insensitive signature for pin identity/location. Used to ensure
+  // viewport auto-fit only runs on first load and true pin-set changes.
+  const pinSetSignature = useMemo(() => {
+    const entries = Array.from(grouped.values()).map((group) => {
+      const { lat, lng } = group[0];
+      const ids = group
+        .map((pin) => pin.key ?? `${pin.label}:${pin.runType}`)
+        .sort()
+        .join("|");
+      return `${lat.toFixed(5)},${lng.toFixed(5)}:${ids}`;
+    });
+    entries.sort();
+    return entries.join(";");
+  }, [grouped]);
 
   // Initialise the map (runs once after mount).
   useEffect(() => {
@@ -259,9 +276,7 @@ export default function ClimbsMap({
           setReady(false);
         }
       }
-      if (initToken === initTokenRef.current) {
-        initInFlightRef.current = false;
-      }
+      initInFlightRef.current = false;
     };
   }, []);
 
@@ -321,15 +336,20 @@ export default function ClimbsMap({
         marker.addTo(cluster);
       }
 
-      // Fit the map to show all pins with some padding.
-      if (latLngs.length > 0) {
-        mapRef.current!.fitBounds(latLngs, { padding: [32, 32], maxZoom: 14 });
-      } else {
-        // Default view: North America
-        mapRef.current!.setView([39, -98], 4);
+      const shouldAutoFit = lastFitSignatureRef.current !== pinSetSignature;
+
+      if (shouldAutoFit) {
+        // Fit the map only on first load and true pin-set changes.
+        if (latLngs.length > 0) {
+          mapRef.current!.fitBounds(latLngs, { padding: [32, 32], maxZoom: 14 });
+        } else {
+          // Default view: North America
+          mapRef.current!.setView([39, -98], 4);
+        }
+        lastFitSignatureRef.current = pinSetSignature;
       }
     })();
-  }, [ready, grouped, onPinClick]);
+  }, [ready, grouped, onPinClick, pinSetSignature]);
 
   // ── OSM crags overlay ─────────────────────────────────────────────────────
 
