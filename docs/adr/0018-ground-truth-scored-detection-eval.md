@@ -56,6 +56,20 @@ unchanged; the parser still reads legacy `human-flagged-absent` files. §1's
 Absent bullet and §5's `review` enumeration below are superseded by this note for
 the values the UI now produces.
 
+The forward-fill structure survives reopening and re-seeding a Test Video. On
+re-seed, `buildGroundTruthScaffold` carries a prior **Wrong** forward by timestamp
+**only when the new seed frame has joints** — a carried Wrong onto a now-empty
+seed reverts to seeded-absent `auto` (never present-with-empty-joints), and a
+carried legacy `human-flagged-absent` maps to `auto` taking `state` from the seed,
+which delivers ADR 0005's optional `absent → auto` migration automatically on the
+next save (no bulk script). Working control points are **reconstructed** from the
+loaded/carried frames by comparing each seeded frame to the *previous seeded*
+frame (absent frames skipped), so a Wrong stretch that spanned an absent gap comes
+back as one stretch — the gap fabricates no boundary. A **"Discard flags — reset
+to seed"** control resets the working copy to the pure scaffold; it is un-saved
+until Accept, so leaving the review reverts it. `groundTruthHash` is still
+recomputed on every save over the materialized review values.
+
 ## Context
 
 ADR 0017 gave us a labelled corpus and a self-contained **Scan Diagnostics**

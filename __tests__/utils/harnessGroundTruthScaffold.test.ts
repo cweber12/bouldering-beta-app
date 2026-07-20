@@ -7,6 +7,7 @@ import {
   applyReviewFlag,
   deriveFrameFlags,
   materializeReview,
+  reconstructControlPoints,
   reviewToFlag,
   hasAcceptedGroundTruth,
   countSeedCoverage,
@@ -147,6 +148,28 @@ describe("buildGroundTruthScaffold", () => {
 
     // Unflagged frame re-seeds clean as auto.
     expect(gt.frames[2]).toMatchObject({ review: "auto", state: "present" });
+  });
+
+  it("drops a carried Wrong onto a now-empty seed frame to seeded-absent auto", () => {
+    // The prior review flagged t=9.0 Wrong, but the fresh seed poses nobody there
+    // (no matching pose) — the carry-forward guard must not fabricate a
+    // present-with-empty-joints frame.
+    const existing: GroundTruthInput = {
+      setupHash: "setup-1",
+      frames: [
+        {
+          frameIndex: 0,
+          timestamp: 9.0,
+          state: "present",
+          review: "human-flagged-wrong",
+          verified: true,
+          joints: { nose: { x: 0.5, y: 0.5, occluded: false } },
+        },
+      ],
+    };
+    const gt = buildGroundTruthScaffold([{ timestamp: 9.0 }], poseFrames, "setup-1", existing);
+    expect(gt.frames[0]).toMatchObject({ review: "auto", state: "absent" });
+    expect(gt.frames[0].joints).toEqual({});
   });
 
   it("carries a Wrong flag across a Scan Setup change — truth is video-keyed, not setup-keyed", () => {
@@ -359,6 +382,81 @@ describe("materializeReview", () => {
     expect(out.some((f) => f.review === "human-flagged-absent")).toBe(false);
     // The Wrong stretch still bridged across the seeded-absent gap.
     expect(out[2].review).toBe("human-flagged-wrong");
+  });
+});
+
+describe("reconstructControlPoints", () => {
+  function seed(frameIndex: number, hasJoints: boolean): GroundTruthFrame {
+    return {
+      frameIndex,
+      timestamp: frameIndex * 0.1,
+      state: hasJoints ? "present" : "absent",
+      review: "auto",
+      verified: false,
+      joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+    };
+  }
+  function wrong(frameIndex: number): GroundTruthFrame {
+    return { ...seed(frameIndex, true), review: "human-flagged-wrong" };
+  }
+
+  it("plants a control point only where a seeded frame's flag changes", () => {
+    // auto, auto, wrong, wrong, auto → boundaries at index 2 (wrong) and 4 (auto).
+    const frames = [seed(0, true), seed(1, true), wrong(2), wrong(3), seed(4, true)];
+    expect([...reconstructControlPoints(frames).entries()]).toEqual([
+      [2, "wrong"],
+      [4, "auto"],
+    ]);
+  });
+
+  it("skips a seeded-absent gap inside a Wrong stretch, adding no boundary", () => {
+    // wrong, (absent gap), wrong → one stretch, so only the opening boundary.
+    const frames = [seed(0, true), wrong(1), seed(2, false), wrong(3)];
+    expect([...reconstructControlPoints(frames).entries()]).toEqual([[1, "wrong"]]);
+  });
+
+  it("returns no control points for an all-auto scaffold", () => {
+    const frames = [seed(0, true), seed(1, false), seed(2, true)];
+    expect(reconstructControlPoints(frames).size).toBe(0);
+  });
+});
+
+describe("derive/materialize/reconstruct round-trip", () => {
+  function frames(spec: boolean[]): GroundTruthFrame[] {
+    return spec.map(
+      (hasJoints, i): GroundTruthFrame => ({
+        frameIndex: i,
+        timestamp: i * 0.1,
+        state: hasJoints ? "present" : "absent",
+        review: "auto",
+        verified: false,
+        joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+      }),
+    );
+  }
+
+  function fill(seeds: GroundTruthFrame[], cps: Map<number, ReviewFlag>): ReviewFlag[] {
+    const derived = deriveFrameFlags(seeds, cps);
+    return seeds.map((f) => derived.get(f.frameIndex)!);
+  }
+
+  it("reconstruct(materialize(...)) preserves the derived fill, gaps and all", () => {
+    // Seeded frames with a zero-joint gap at index 3.
+    const seeds = frames([true, true, true, false, true, true]);
+    const cases: Map<number, ReviewFlag>[] = [
+      new Map([[1, "wrong"]]), // Wrong bridging the gap at 3
+      new Map([
+        [1, "wrong"],
+        [4, "auto"],
+      ]),
+      new Map([[0, "wrong"]]), // Wrong from the very first frame
+      new Map(), // all auto
+    ];
+    for (const cps of cases) {
+      const materialized = materializeReview(seeds, cps);
+      const reconstructed = reconstructControlPoints(materialized);
+      expect(fill(seeds, reconstructed)).toEqual(fill(seeds, cps));
+    }
   });
 });
 
