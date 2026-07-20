@@ -62,6 +62,7 @@ import {
   loadViTPose,
   viTPoseToPoseFrames,
   scaffoldHasPose,
+  noClimberMessage,
   VITPOSE_POLL_TIMEOUT_MS,
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
@@ -792,13 +793,13 @@ function Calibrator({
 
     const poll = async () => {
       try {
-        const { scaffold, error, warnings } = await loadViTPose(item.key);
+        const { scaffold, error, warnings, seedFound } = await loadViTPose(item.key);
         if (cancelled) return;
         if (scaffold) {
           // A scaffold with no posed frames means the tracker never found the
           // Climber — disable authoring rather than seed every Detection Frame
-          // "absent".
-          if (!scaffoldHasPose(scaffold)) return fail("ViTPose tracked no climber.");
+          // "absent". The sidecar's seedFound pinpoints the re-tap remedy.
+          if (!scaffoldHasPose(scaffold)) return fail(noClimberMessage(seedFound));
           setVitpose(scaffold);
           setVitposeWarnings(warnings);
           setVitposeStatus("ready");
