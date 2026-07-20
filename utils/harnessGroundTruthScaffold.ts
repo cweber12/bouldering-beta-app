@@ -98,15 +98,21 @@ export function contextKeypointsAt(
  * `review: "auto"` (nobody has objected yet) and `verified: false`; the human's
  * job is only to flag exceptions.
  *
- * Carry-forward is keyed on **timestamp**: a prior frame's human *flags*
- * (Wrong / Absent) re-apply onto whichever fresh grid frame shares its
- * timestamp, however the Scan Setup has changed since — the expensive human
- * review survives every re-calibration, because crops, tap, tier and panning
- * cannot geometrically invalidate truth whose landmarks are full-frame
- * normalised. Grid frames the prior truth never held (a sparse legacy grid
- * densifying onto the 100 ms grid) arrive auto-accepted, and there is no
- * discard path. Joints always come from the new seed, never the old file;
- * `"auto"` frames carry nothing (the fresh seed already is auto).
+ * Carry-forward is keyed on **timestamp**: a prior frame's **Wrong** flag
+ * re-applies onto whichever fresh grid frame shares its timestamp, however the
+ * Scan Setup has changed since — the expensive human review survives every
+ * re-calibration, because crops, tap, tier and panning cannot geometrically
+ * invalidate truth whose landmarks are full-frame normalised. Two guards keep
+ * the carry aligned with ADR 0005 (presence-from-state, no manual absent):
+ * a carried Wrong applies **only when the new seed frame has joints** — onto a
+ * now-empty seed it reverts to seeded-absent `auto` rather than the degenerate
+ * present-with-empty-joints frame; and a legacy `human-flagged-absent` maps to
+ * `auto` taking `state` from the seed, which delivers ADR 0005's optional
+ * `absent → auto` migration automatically on the next save (no bulk script).
+ * Grid frames the prior truth never held (a sparse legacy grid densifying onto
+ * the 100 ms grid) arrive auto-accepted, and there is no discard path. Joints
+ * always come from the new seed, never the old file; `"auto"` frames carry
+ * nothing (the fresh seed already is auto).
  *
  * `detectionFrames` supplies the frame grid + timestamps (the uniform 100 ms
  * grid from `buildDetectionGrid`); `poseFrames` supplies the landmarks (the
@@ -138,8 +144,13 @@ export function buildGroundTruthScaffold(
       verified: false,
     };
 
+    // Carry a prior Wrong forward only onto a still-posed seed; a Wrong onto a
+    // now-empty seed reverts to seeded-absent auto (the empty-joint exception),
+    // and a legacy absent already mapped to auto — a no-op against the seed.
     const flag = priorFlagByTimestamp.get(timestampKey(df.timestamp));
-    return flag && flag !== "auto" ? applyReviewFlag(seedFrame, flag) : seedFrame;
+    return flag === "wrong" && !isEmptySeed(seedFrame)
+      ? applyReviewFlag(seedFrame, flag)
+      : seedFrame;
   });
 
   return { frames, setupHash };
@@ -244,6 +255,33 @@ export function materializeReview(
 ): GroundTruthFrame[] {
   const flags = deriveFrameFlags(seedFrames, controlPoints);
   return seedFrames.map((seed) => applyReviewFlag(seed, flags.get(seed.frameIndex) ?? "auto"));
+}
+
+/**
+ * Reconstruct the working control-point set from flat per-frame Ground Truth (a
+ * loaded file, or a carry-forward seed built by {@link buildGroundTruthScaffold})
+ * — the inverse of {@link deriveFrameFlags}. Each seeded frame whose effective
+ * flag differs from the **previous seeded frame**'s plants a control point;
+ * seeded-absent frames (0 core joints) are skipped and never carry a boundary, so
+ * a Wrong stretch that spanned an absent gap comes back as one stretch. The
+ * result is minimal — it re-derives to the same fill the frames encode, so a
+ * reopened video round-trips editable exactly as it was left.
+ */
+export function reconstructControlPoints(
+  frames: readonly GroundTruthFrame[],
+): Map<number, ReviewFlag> {
+  const sorted = [...frames].sort((a, b) => a.frameIndex - b.frameIndex);
+  const out = new Map<number, ReviewFlag>();
+  let prev: ReviewFlag = "auto";
+  for (const frame of sorted) {
+    if (isEmptySeed(frame)) continue;
+    const flag = reviewToFlag(frame.review);
+    if (flag !== prev) {
+      out.set(frame.frameIndex, flag);
+      prev = flag;
+    }
+  }
+  return out;
 }
 
 /**

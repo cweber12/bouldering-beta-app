@@ -1,6 +1,7 @@
 # Re-calibration round-trip: carry-forward guard, reconstruction, absent soft-retire, reset
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/wff-02-recalibration-round-trip
 
 ## Parent
 
@@ -34,21 +35,21 @@ files. `groundTruthHash` continues to be recomputed on every save.
 
 ## Acceptance criteria
 
-- [ ] On re-seed, a prior Wrong on a now-empty seed frame becomes seeded-absent
+- [x] On re-seed, a prior Wrong on a now-empty seed frame becomes seeded-absent
       `auto`; a prior Wrong on a still-posed frame is kept; a legacy
       `human-flagged-absent` becomes `auto` with `state` from the new seed.
-- [ ] Reopening a saved video restores the exact editable Wrong/Auto structure;
+- [x] Reopening a saved video restores the exact editable Wrong/Auto structure;
       a Wrong stretch that spanned an absent gap comes back as one stretch (the
       gap adds no boundary).
-- [ ] The "Discard flags — reset to seed" button resets the working copy to the
+- [x] The "Discard flags — reset to seed" button resets the working copy to the
       pure scaffold and is reversible by leaving the review without saving.
-- [ ] No new `human-flagged-absent` is written on any save or re-seed path; the
+- [x] No new `human-flagged-absent` is written on any save or re-seed path; the
       parser still loads legacy files containing it.
-- [ ] `groundTruthHash` is recomputed on save over the materialized review
+- [x] `groundTruthHash` is recomputed on save over the materialized review
       values; a re-review produces a new hash.
-- [ ] ADR 0018/0005 alignment note recorded (presence-from-state, absent
+- [x] ADR 0018/0005 alignment note recorded (presence-from-state, absent
       soft-retire).
-- [ ] Scaffold-module unit tests cover the carry-forward guard (all three cases),
+- [x] Scaffold-module unit tests cover the carry-forward guard (all three cases),
       reconstruction skipping absent, and a `reconstruct(materialize(derive(...)))`
       round-trip property. `npx tsc --noEmit`, `npx eslint .`, and the targeted
       `npx vitest run` pass.

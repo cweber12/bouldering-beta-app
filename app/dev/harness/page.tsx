@@ -49,6 +49,7 @@ import {
   frameReviewMark,
   hasAcceptedGroundTruth,
   materializeReview,
+  reconstructControlPoints,
   reseedAffordanceDecision,
   seedGateDecision,
   type FrameReviewMark,
@@ -839,10 +840,11 @@ function Calibrator({
   }, [vitposeStatus, item.key]);
 
   // Seed Ground Truth once the Detection Frame grid and the ViTPose seed are
-  // both ready: the pure scaffold the forward-fill derives against, one record
-  // per Detection Frame. Working state starts with no control points (a clean
-  // all-auto fill) — reconstructing control points from previously-saved truth
-  // on a re-seed is out of scope for this slice (issue 02).
+  // both ready. `gtSeed` is the pure scaffold the forward-fill derives against
+  // (and that "reset to seed" restores). The working control points are
+  // reconstructed from any prior truth carried forward onto this seed by
+  // timestamp — so reopening or re-seeding a video restores the exact editable
+  // Wrong/Auto structure, with the carry-forward guard folding stale flags away.
   useEffect(() => {
     if (
       phase !== "review" ||
@@ -854,8 +856,14 @@ function Calibrator({
     }
     const seedHash = vitpose?.setupHash || currentSetupHash;
     const pureScaffold = buildGroundTruthScaffold(gridFrames, seedPoseFrames, seedHash, null);
+    const carried = buildGroundTruthScaffold(
+      gridFrames,
+      seedPoseFrames,
+      seedHash,
+      existingGtRef.current,
+    );
     setGtSeed(pureScaffold);
-    setControlPoints(new Map());
+    setControlPoints(reconstructControlPoints(carried.frames));
     setGtSave(null);
   }, [phase, vitposeStatus, seedPoseFrames, gridFrames, currentSetupHash, vitpose]);
 
@@ -872,6 +880,14 @@ function Calibrator({
       next.set(index, flag);
       return next;
     });
+    setGtSave(null);
+  }, []);
+
+  // Discard every flag, resetting the working copy to the pure ViTPose scaffold
+  // (all auto). Un-saved until Accept — leaving the review without saving keeps
+  // the on-disk truth untouched, so a mistaken reset is reversible.
+  const handleResetToSeed = useCallback(() => {
+    setControlPoints(new Map());
     setGtSave(null);
   }, []);
 
@@ -1012,6 +1028,15 @@ function Calibrator({
                 >
                   {seedCoverage.posed} posed · {seedCoverage.seededAbsent} seeded absent
                 </span>
+                <button
+                  type="button"
+                  onClick={handleResetToSeed}
+                  disabled={gtSaving || controlPoints.size === 0}
+                  title="Discard every Wrong/Auto flag and reset to the pure ViTPose scaffold — un-saved until you Accept, so leaving without saving reverts it"
+                  className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg disabled:opacity-50"
+                >
+                  Discard flags — reset to seed
+                </button>
                 <button
                   type="button"
                   onClick={() => void handleSaveGt()}
