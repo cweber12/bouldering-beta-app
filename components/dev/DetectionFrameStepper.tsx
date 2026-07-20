@@ -3,7 +3,7 @@
 import type { KeyboardEvent } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/utils/cn";
-import type { FrameReviewMark } from "@/utils/harnessGroundTruthScaffold";
+import type { FrameReviewMark, WrongStretch } from "@/utils/harnessGroundTruthScaffold";
 
 export type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
@@ -35,6 +35,14 @@ export interface DetectionFrameStepperProps {
    * frames worth a second look; ordinary auto frames show none.
    */
   frameMarks?: (FrameReviewMark | undefined)[];
+  /**
+   * Derived Wrong stretches (frameIndex ranges) for the Ground Truth review. When
+   * present, a continuous caution bar spans each stretch — bridging seeded-absent
+   * gaps so a wrong-person episode reads as one span — and the Jump control walks
+   * to the start of the next Wrong stretch. When omitted (a detection run), the
+   * bar and Jump fall back to the detector's weak/missing stretches.
+   */
+  wrongStretches?: WrongStretch[];
   currentIndex: number;
   onSeek: (index: number) => void;
   onAnnotate?: (index: number) => void;
@@ -43,11 +51,17 @@ export interface DetectionFrameStepperProps {
   className?: string;
 }
 
-/** Marker colour under each bar for its review mark (auto shows no marker). */
+/**
+ * Marker colour under each cell for its review mark (auto shows no marker). The
+ * `flagged-wrong` dot is dropped — the continuous Wrong-stretch bar above the
+ * strip carries that signal, so a per-frame dot would be redundant. The
+ * seeded-absent dot is kept so a no-detection gap stays individually legible
+ * under the bar.
+ */
 const MARK_TONE: Record<FrameReviewMark, string | null> = {
   auto: null,
   "seeded-absent": "bg-fg-muted",
-  "flagged-wrong": "bg-caution",
+  "flagged-wrong": null,
   "flagged-absent": "bg-danger",
 };
 
@@ -148,6 +162,7 @@ export default function DetectionFrameStepper({
   frames,
   thumbnails,
   frameMarks,
+  wrongStretches,
   currentIndex,
   onSeek,
   onAnnotate,
@@ -155,11 +170,18 @@ export default function DetectionFrameStepper({
   isPlaying = false,
   className,
 }: DetectionFrameStepperProps) {
-  const stretches = useMemo(() => buildStretches(frames), [frames]);
+  // The bar and Jump follow the review's Wrong stretches when supplied, else the
+  // detector's weak/missing stretches (a detection run).
+  const reviewMode = wrongStretches !== undefined;
+  const stretches = useMemo<Stretch[]>(
+    () => wrongStretches ?? buildStretches(frames),
+    [wrongStretches, frames],
+  );
   const nextStretch = useMemo(
     () => findNextStretch(stretches, currentIndex),
     [stretches, currentIndex],
   );
+  const jumpLabel = reviewMode ? "Jump to next Wrong stretch" : "Jump to next flagged stretch";
 
   // Cell widths are aspect-driven (dynamic), so the flagged-run rule can't be
   // laid out by fixed pixel math. Measure each flagged stretch from the live cell
@@ -260,7 +282,7 @@ export default function DetectionFrameStepper({
           disabled={!nextStretch}
           className="rounded-md bg-caution-surface px-3 py-1.5 text-xs font-medium text-caution disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Jump to next flagged stretch
+          {jumpLabel}
         </button>
         <div className="ml-auto text-xs text-fg-muted">
           Frame {frames.length === 0 ? 0 : currentIndex + 1} / {frames.length}
@@ -292,7 +314,10 @@ export default function DetectionFrameStepper({
               ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]} · ${markLabel}`
               : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]}`;
             return (
-              <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
+              <div
+                key={`${frame.timestamp}-${index}`}
+                className="flex flex-col items-center gap-0.5"
+              >
                 <button
                   ref={(el) => {
                     cellRefs.current[index] = el;
@@ -322,10 +347,7 @@ export default function DetectionFrameStepper({
                     // structure before thumbnails decode.
                     <span
                       aria-hidden="true"
-                      className={cn(
-                        "block h-full w-auto aspect-9/16",
-                        STATUS_PLACEHOLDER[key],
-                      )}
+                      className={cn("block h-full w-auto aspect-9/16", STATUS_PLACEHOLDER[key])}
                     />
                   )}
                 </button>

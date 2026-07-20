@@ -46,7 +46,9 @@ import {
   contextKeypointsAt,
   countSeedCoverage,
   deriveFrameFlags,
+  enumerateWrongStretches,
   frameReviewMark,
+  governingControlPoint,
   hasAcceptedGroundTruth,
   materializeReview,
   reconstructControlPoints,
@@ -391,9 +393,9 @@ function Calibrator({
   const [frameStep, setFrameStep] = useState(getTierConfig(DEFAULT_TIER).frameStep);
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
-  const [climberPoint, setClimberPoint] = useState<
-    { x: number; y: number; t?: number } | null
-  >(null);
+  const [climberPoint, setClimberPoint] = useState<{ x: number; y: number; t?: number } | null>(
+    null,
+  );
   const [panning, setPanning] = useState(false);
   const wallTouchedRef = useRef(false);
 
@@ -444,10 +446,7 @@ function Calibrator({
       setStatsNote(gate.degradedReason);
       if (!gate.statsEnabled) return;
       try {
-        const { suggestions: fresh } = await requestVideoStats(
-          item.key,
-          setupHash ?? undefined,
-        );
+        const { suggestions: fresh } = await requestVideoStats(item.key, setupHash ?? undefined);
         if (gate.prefillEnabled) setSuggestions(fresh);
       } catch (err) {
         // Never a gate on calibration — fall back to manual labels, visibly.
@@ -495,10 +494,7 @@ function Calibrator({
   // so a superseded request's async completion can be ignored rather than
   // overwriting the live one's status.
   const vitposeRequestedRef = useRef<DetectionGridFrame[] | null>(null);
-  const vitposePoseFrames = useMemo(
-    () => (vitpose ? viTPoseToPoseFrames(vitpose) : []),
-    [vitpose],
-  );
+  const vitposePoseFrames = useMemo(() => (vitpose ? viTPoseToPoseFrames(vitpose) : []), [vitpose]);
   // How many Detection Frames the ViTPose seed actually posed (vs. tracked-empty),
   // surfaced in the review so the seed source and its coverage are visible.
   const vitposePosedCount = useMemo(
@@ -646,13 +642,10 @@ function Calibrator({
     setWallCrop((prev) => (wallTouchedRef.current ? prev : defaultRouteAroundClimber(c)));
   }, []);
 
-  const handleClimberPointChange = useCallback(
-    (p: { x: number; y: number; t?: number } | null) => {
+  const handleClimberPointChange = useCallback((p: { x: number; y: number; t?: number } | null) => {
     if (p === null) wallTouchedRef.current = false;
     setClimberPoint(p);
-    },
-    [],
-  );
+  }, []);
 
   const handleWallCropChange = useCallback((c: CropFraction) => {
     wallTouchedRef.current = true;
@@ -904,6 +897,13 @@ function Calibrator({
     [gtSeed, controlPoints],
   );
 
+  // Derived Wrong stretches (frameIndex ranges, bridging seeded-absent gaps) —
+  // the filmstrip paints a bar over each and the Jump control walks their starts.
+  const wrongStretches = useMemo(
+    () => (gtSeed ? enumerateWrongStretches(gtSeed.frames, controlPoints) : []),
+    [gtSeed, controlPoints],
+  );
+
   // Review mark per Detection Frame index, for the filmstrip (flagged / seeded
   // absent distinct from ordinary auto frames).
   const gtMarkByIndex = useMemo(() => {
@@ -914,10 +914,7 @@ function Calibrator({
 
   // Seed coverage surfaced beside the accept button — posed vs. seeded-absent,
   // updating as flags move presence truth. Surfaced only, never blocks accept.
-  const seedCoverage = useMemo(
-    () => countSeedCoverage(gtWorkingFrames),
-    [gtWorkingFrames],
-  );
+  const seedCoverage = useMemo(() => countSeedCoverage(gtWorkingFrames), [gtWorkingFrames]);
 
   const handleSaveGt = useCallback(async () => {
     if (!gtSeed) return;
@@ -997,6 +994,11 @@ function Calibrator({
   if (phase === "review") {
     const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
     const gtFlag = derivedFlags.get(gtFrameIndex) ?? "auto";
+    // The boundary a derived frame inherits its flag from (null on a control-point
+    // or default-auto frame) — drives the reviewer's "inherited from" hint.
+    const gtInheritedFrom = gtSeed
+      ? (governingControlPoint(gtSeed.frames, controlPoints, gtFrameIndex)?.timestamp ?? null)
+      : null;
     const reviewing = gtGate.authoring === "ready" && gtSeedFrame !== null;
 
     return (
@@ -1070,6 +1072,7 @@ function Calibrator({
               frames={gridFrames}
               thumbnails={gridThumbnails}
               frameMarks={gtMarkByIndex}
+              wrongStretches={wrongStretches}
               currentIndex={gtFrameIndex}
               onSeek={setGtFrameIndex}
               className="shrink-0"
@@ -1099,6 +1102,7 @@ function Calibrator({
                 videoHeight={videoMeta.height}
                 seedFrame={gtSeedFrame}
                 flag={gtFlag}
+                inheritedFrom={gtInheritedFrom}
                 contextKeypoints={contextKeypointsAt(seedPoseFrames, gtSeedFrame.timestamp)}
                 onFlagChange={(flag) => plantControlPoint(gtSeedFrame.frameIndex, flag)}
               />
@@ -1233,8 +1237,8 @@ function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
         >
-          This video&apos;s Ground Truth was accepted under an older calibration — it pairs
-          with no run scanned under the current Setup, so it is stale evidence.{" "}
+          This video&apos;s Ground Truth was accepted under an older calibration — it pairs with no
+          run scanned under the current Setup, so it is stale evidence.{" "}
           {reseedAffordance === "review-seed"
             ? "A fresh ViTPose scaffold is already on disk: use Review seed to go straight to the review and re-accept — no new job needed."
             : "Use Re-seed Ground Truth to re-run ViTPose and re-accept."}{" "}
@@ -1245,10 +1249,10 @@ function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-edge/30 bg-surface-alt px-3 py-2 text-xs text-fg-muted"
         >
-          This video has accepted Ground Truth paired to the current Setup. Confirming saves
-          the Setup only — but a save that changes the Setup&apos;s hash makes the truth
-          stale until it is re-seeded and re-accepted. Use Re-seed Ground Truth to re-run
-          the seed, carrying your flags forward.
+          This video has accepted Ground Truth paired to the current Setup. Confirming saves the
+          Setup only — but a save that changes the Setup&apos;s hash makes the truth stale until it
+          is re-seeded and re-accepted. Use Re-seed Ground Truth to re-run the seed, carrying your
+          flags forward.
         </div>
       ) : null}
       {legacyTapNoTimestamp && (
@@ -1256,9 +1260,9 @@ function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
         >
-          This setup was calibrated without a tap timestamp (legacy) — ViTPose can only
-          seed by tap position and may pose the wrong person when bystanders are present.
-          Re-tap the climber to record the frame time and fix the seed.
+          This setup was calibrated without a tap timestamp (legacy) — ViTPose can only seed by tap
+          position and may pose the wrong person when bystanders are present. Re-tap the climber to
+          record the frame time and fix the seed.
         </div>
       )}
       {tapOutsideCrop && (
@@ -1266,10 +1270,9 @@ function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
         >
-          The Climber tap is outside the Climber Crop — ViTPose only accepts a seed
-          inside the crop (expanded 10%), so a job from this tap will always report no
-          climber. Scrub to a frame where the climber is inside the crop and re-tap
-          there, or move the crop to cover the tap.
+          The Climber tap is outside the Climber Crop — ViTPose only accepts a seed inside the crop
+          (expanded 10%), so a job from this tap will always report no climber. Scrub to a frame
+          where the climber is inside the crop and re-tap there, or move the crop to cover the tap.
         </div>
       )}
       <div className="min-h-0 flex-1">

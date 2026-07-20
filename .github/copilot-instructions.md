@@ -204,15 +204,15 @@ git pull --ff-only
 git worktree add ..\beta-scanner-<task> -b <type>/<task-name>
 ```
 
-### Local completion policy
+### Copilot completion policy (PR-first)
 
-- Complete tasks with local validation and local commits.
-- Do not push automatically.
-- Do not open remote PRs automatically.
-- Do not merge automatically unless explicitly requested in the task.
-- If merge is requested, do a local merge only (`git merge --no-ff`) from the primary checkout after checks pass.
+- This section applies to **Copilot only**.
+- Complete tasks in an isolated worktree with local validation and local commits.
+- On completion, push the task branch to `origin` and create a PR to `main`.
+- Do not perform local `main` merges from Copilot worktrees unless the task explicitly asks for a local-only merge.
+- After opening the PR, hand off for user review; the user decides whether to request changes or merge.
 
-When explicitly asked to merge on completion:
+Copilot completion sequence:
 
 ```powershell
 # in task worktree
@@ -221,10 +221,36 @@ npx eslint .
 npx vitest run
 git add .
 git commit -m "<message>"
+git push -u origin <task-branch>
+# create PR to main (CLI or provider UI)
+```
 
-# in primary checkout
+### Copilot post-merge cleanup
+
+- This section applies to **Copilot only**.
+- After the PR is merged, clean up both local and remote branch/worktree state.
+- Prefer enabling provider auto-delete for remote branches; otherwise delete the
+  remote branch explicitly.
+- If a temporary worktree currently has `main` checked out and another chat needs
+  to advance `main`, switch that worktree off `main` first (e.g. to its merge
+  branch) before continuing.
+
+Cleanup sequence (after PR merge):
+
+```powershell
+# in any checkout
+git fetch origin
+
+# optional: update local main in a dedicated integration checkout
 git switch main
-git merge --no-ff <task-branch>
+git pull --ff-only
+
+# remove the task worktree and local branch
+git worktree remove ..\beta-scanner-<task>
+git branch -d <task-branch>
+
+# if remote branch still exists (auto-delete disabled)
+git push origin --delete <task-branch>
 ```
 
 ### Issue tracking
@@ -233,8 +259,8 @@ git merge --no-ff <task-branch>
   `docs/agents/issue-tracker.md`: tackle exactly one issue per branch,
   sequence issues by number, branch each one from `main`, write the active
   `Branch:` line into the `.scratch/.../issues/*.md` file when work starts,
-  then merge with `git merge --no-ff` and close the issue in that same `.scratch`
-  file by setting `Status: done` + `Merged: <sha>` in the same step.
+  then push branch + open PR; close the issue in that same `.scratch` file by
+  setting `Status: done` + `Merged: <sha>` when the PR merge lands on `main`.
 - An issue is never `done` until its code is merged, and merged code never lands
   without moving its issue to `done` — the two happen together.
 - Before ending a PRD work session, run `node scripts/audit-issues.mjs` and

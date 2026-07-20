@@ -6,6 +6,8 @@ import {
   buildGroundTruthScaffold,
   applyReviewFlag,
   deriveFrameFlags,
+  enumerateWrongStretches,
+  governingControlPoint,
   materializeReview,
   reconstructControlPoints,
   reviewToFlag,
@@ -96,18 +98,15 @@ describe("buildGroundTruthScaffold", () => {
 
   it("seeds occluded flags from the scaffold confidence, kept on the seed", () => {
     const frames = [{ timestamp: 0.0 }];
-    const poses = [{ timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] }];
+    const poses = [
+      { timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] },
+    ];
     const gt = buildGroundTruthScaffold(frames, poses, "setup-1", null);
     expect(gt.frames[0].joints.nose.occluded).toBe(true);
   });
 
   it("marks a frame seeded-absent when no scaffold pose matches its timestamp", () => {
-    const gt = buildGroundTruthScaffold(
-      [{ timestamp: 9.0 }],
-      poseFrames,
-      "setup-1",
-      null,
-    );
+    const gt = buildGroundTruthScaffold([{ timestamp: 9.0 }], poseFrames, "setup-1", null);
     expect(gt.frames[0]).toMatchObject({ state: "absent", review: "auto" });
     expect(gt.frames[0].joints).toEqual({});
   });
@@ -421,6 +420,106 @@ describe("reconstructControlPoints", () => {
   });
 });
 
+describe("enumerateWrongStretches", () => {
+  function seed(frameIndex: number, hasJoints: boolean): GroundTruthFrame {
+    return {
+      frameIndex,
+      timestamp: frameIndex * 0.1,
+      state: hasJoints ? "present" : "absent",
+      review: "auto",
+      verified: false,
+      joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+    };
+  }
+
+  it("returns no stretches for an all-auto scaffold", () => {
+    const frames = [0, 1, 2].map((i) => seed(i, true));
+    expect(enumerateWrongStretches(frames, new Map())).toEqual([]);
+  });
+
+  it("bounds each Wrong stretch by its first and last seeded Wrong frame", () => {
+    const frames = [0, 1, 2, 3, 4].map((i) => seed(i, true));
+    const cps = new Map<number, ReviewFlag>([
+      [1, "wrong"],
+      [3, "auto"],
+    ]);
+    // Wrong from index 1 up to (not including) the Auto at 3 → {1, 2}.
+    expect(enumerateWrongStretches(frames, cps)).toEqual([{ start: 1, end: 2 }]);
+  });
+
+  it("bridges a seeded-absent gap so one episode is one stretch", () => {
+    // wrong, (absent gap at 2), wrong → a single span from 1 to 3.
+    const frames = [seed(0, true), seed(1, true), seed(2, false), seed(3, true)];
+    expect(enumerateWrongStretches(frames, new Map([[1, "wrong"]]))).toEqual([
+      { start: 1, end: 3 },
+    ]);
+  });
+
+  it("does not let a trailing absent frame extend a stretch past its last seeded Wrong", () => {
+    // wrong@1, then absent@2 with no following seeded Wrong → the stretch ends at 1.
+    const frames = [seed(0, true), seed(1, true), seed(2, false)];
+    expect(enumerateWrongStretches(frames, new Map([[1, "wrong"]]))).toEqual([
+      { start: 1, end: 1 },
+    ]);
+  });
+
+  it("enumerates several stretches, each starting at its opening control point", () => {
+    const frames = [0, 1, 2, 3, 4, 5].map((i) => seed(i, true));
+    const cps = new Map<number, ReviewFlag>([
+      [0, "wrong"],
+      [1, "auto"],
+      [3, "wrong"],
+    ]);
+    // {0} then {3,4,5}.
+    expect(enumerateWrongStretches(frames, cps)).toEqual([
+      { start: 0, end: 0 },
+      { start: 3, end: 5 },
+    ]);
+  });
+});
+
+describe("governingControlPoint", () => {
+  function seed(frameIndex: number, hasJoints: boolean): GroundTruthFrame {
+    return {
+      frameIndex,
+      timestamp: frameIndex * 0.1,
+      state: hasJoints ? "present" : "absent",
+      review: "auto",
+      verified: false,
+      joints: hasJoints ? { nose: { x: 0.5, y: 0.5, occluded: false } } : {},
+    };
+  }
+
+  const frames = [0, 1, 2, 3].map((i) => seed(i, true));
+  const cps = new Map<number, ReviewFlag>([[1, "wrong"]]);
+
+  it("names the governing boundary for a derived frame", () => {
+    expect(governingControlPoint(frames, cps, 2)).toEqual({
+      frameIndex: 1,
+      timestamp: 0.1,
+      flag: "wrong",
+    });
+  });
+
+  it("returns null on the control-point frame itself (authored, not inherited)", () => {
+    expect(governingControlPoint(frames, cps, 1)).toBeNull();
+  });
+
+  it("returns null in the default-auto prefix with no preceding control point", () => {
+    expect(governingControlPoint(frames, cps, 0)).toBeNull();
+  });
+
+  it("returns null on a seeded-absent frame — its flag is forced auto, not inherited", () => {
+    const gapped = [seed(0, true), seed(1, true), seed(2, false), seed(3, true)];
+    expect(governingControlPoint(gapped, new Map([[1, "wrong"]]), 2)).toBeNull();
+    // ...but a posed frame past the gap still inherits across it.
+    expect(governingControlPoint(gapped, new Map([[1, "wrong"]]), 3)).toMatchObject({
+      frameIndex: 1,
+      flag: "wrong",
+    });
+  });
+});
+
 describe("derive/materialize/reconstruct round-trip", () => {
   function frames(spec: boolean[]): GroundTruthFrame[] {
     return spec.map(
@@ -495,7 +594,10 @@ describe("countSeedCoverage", () => {
 });
 
 describe("frameReviewMark", () => {
-  function frame(review: GroundTruthFrame["review"], state: GroundTruthFrame["state"]): GroundTruthFrame {
+  function frame(
+    review: GroundTruthFrame["review"],
+    state: GroundTruthFrame["state"],
+  ): GroundTruthFrame {
     return { frameIndex: 0, timestamp: 0, state, review, verified: true, joints: {} };
   }
 
@@ -519,7 +621,9 @@ describe("reseedAffordanceDecision", () => {
   const scaffold = (setupHash: string | undefined, posed: boolean): ViTPoseScaffold => ({
     version: 1,
     ...(setupHash ? { setupHash } : {}),
-    frames: [{ timestamp: 0.1, keypoints: posed ? [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] : [] }],
+    frames: [
+      { timestamp: 0.1, keypoints: posed ? [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] : [] },
+    ],
   });
 
   it("offers review-seed for a fresh, posed scaffold", () => {
@@ -555,7 +659,11 @@ describe("seedGateDecision", () => {
 
   it("disables authoring with the error on ViTPose failure", () => {
     expect(
-      seedGateDecision({ vitposeStatus: "failed", vitposeError: "job timed out", seedHasPose: false }),
+      seedGateDecision({
+        vitposeStatus: "failed",
+        vitposeError: "job timed out",
+        seedHasPose: false,
+      }),
     ).toEqual({ authoring: "disabled", reason: "job timed out" });
     expect(
       seedGateDecision({ vitposeStatus: "failed", vitposeError: null, seedHasPose: false }),
@@ -570,4 +678,3 @@ describe("seedGateDecision", () => {
     }
   });
 });
-

@@ -50,13 +50,19 @@ export function coreJointsFromKeypoints(keypoints: Keypoint[]): Record<string, G
   const out: Record<string, GroundTruthJoint> = {};
   for (const kp of keypoints) {
     if (!CORE_JOINT_NAME_SET.has(kp.name)) continue;
-    out[kp.name] = { x: clamp01(kp.x), y: clamp01(kp.y), occluded: kp.score < OCCLUSION_SEED_SCORE };
+    out[kp.name] = {
+      x: clamp01(kp.x),
+      y: clamp01(kp.y),
+      occluded: kp.score < OCCLUSION_SEED_SCORE,
+    };
   }
   return out;
 }
 
 /** All of a pose's keypoints as a name → position lookup, for faint context drawing. */
-export function keypointsToPositions(keypoints: Keypoint[]): Record<string, { x: number; y: number }> {
+export function keypointsToPositions(
+  keypoints: Keypoint[],
+): Record<string, { x: number; y: number }> {
   const out: Record<string, { x: number; y: number }> = {};
   for (const kp of keypoints) out[kp.name] = { x: kp.x, y: kp.y };
   return out;
@@ -284,6 +290,84 @@ export function reconstructControlPoints(
   return out;
 }
 
+/** A derived Wrong stretch as an inclusive `frameIndex` range on seeded frames. */
+export interface WrongStretch {
+  /** The first seeded (posed) frame whose effective flag is Wrong. */
+  start: number;
+  /** The last seeded (posed) frame whose effective flag is Wrong. */
+  end: number;
+}
+
+/**
+ * Enumerate the derived Wrong stretches over the seed frames — the spans the
+ * filmstrip bar paints and the Jump control walks. A stretch runs from the first
+ * to the last **seeded** frame whose effective flag (nearest preceding control
+ * point) is Wrong; seeded-absent frames (0 core joints) never open, close, or
+ * extend a stretch, so a Wrong episode **bridges across an absent gap** and reads
+ * as one span. Mirrors {@link deriveFrameFlags} exactly: a control point on an
+ * empty frame is ignored, and the fill carries across the gap unbroken.
+ */
+export function enumerateWrongStretches(
+  seedFrames: readonly GroundTruthFrame[],
+  controlPoints: ReadonlyMap<number, ReviewFlag>,
+): WrongStretch[] {
+  const sorted = [...seedFrames].sort((a, b) => a.frameIndex - b.frameIndex);
+  const out: WrongStretch[] = [];
+  let current: ReviewFlag = "auto";
+  let start = -1;
+  let end = -1;
+  for (const frame of sorted) {
+    if (isEmptySeed(frame)) continue;
+    const cp = controlPoints.get(frame.frameIndex);
+    if (cp) current = cp;
+    if (current === "wrong") {
+      if (start < 0) start = frame.frameIndex;
+      end = frame.frameIndex;
+    } else if (start >= 0) {
+      out.push({ start, end });
+      start = -1;
+      end = -1;
+    }
+  }
+  if (start >= 0) out.push({ start, end });
+  return out;
+}
+
+/** A control point governing a derived frame, with the boundary's timestamp. */
+export interface GoverningControlPoint {
+  frameIndex: number;
+  timestamp: number;
+  flag: ReviewFlag;
+}
+
+/**
+ * The control point a derived frame inherits its effective flag from — the
+ * nearest preceding **seeded** frame that carries a control point, for the
+ * reviewer's "inherited from mm:ss.s" hint. Returns `null` when the frame is
+ * itself a control point (nothing inherited), when it is seeded-absent (its flag
+ * is forced auto by the empty-joint exception, not inherited), or when no control
+ * point precedes it (the default-auto prefix has no boundary to name). Mirrors
+ * {@link deriveFrameFlags}: a control point on an empty frame never governs.
+ */
+export function governingControlPoint(
+  seedFrames: readonly GroundTruthFrame[],
+  controlPoints: ReadonlyMap<number, ReviewFlag>,
+  frameIndex: number,
+): GoverningControlPoint | null {
+  const sorted = [...seedFrames].sort((a, b) => a.frameIndex - b.frameIndex);
+  let governing: GoverningControlPoint | null = null;
+  for (const frame of sorted) {
+    if (isEmptySeed(frame)) continue;
+    const cp = controlPoints.get(frame.frameIndex);
+    if (frame.frameIndex === frameIndex) {
+      // The target frame: a control point here is authored, not inherited.
+      return cp ? null : governing;
+    }
+    if (cp) governing = { frameIndex: frame.frameIndex, timestamp: frame.timestamp, flag: cp };
+  }
+  return null;
+}
+
 /**
  * Whether a video already has accepted Ground Truth — any saved truth holding at
  * least one frame. Accepted truth survives every Scan Setup edit (editing crops /
@@ -405,4 +489,3 @@ export function seedGateDecision({
       return { authoring: "pending" };
   }
 }
-

@@ -1,6 +1,8 @@
 # Filmstrip Wrong-stretch bar, jump-to-next-Wrong-start, inherited hint
 
-Status: ready-for-agent
+Status: done
+Branch: feat/wff-03-filmstrip-bar-jump
+Merged: 7cbf11a
 
 ## Parent
 
@@ -21,22 +23,22 @@ Test Video.
   first seeded frame of the next Wrong segment), so the author walks episode to
   episode — including stale flags carried from the old implementation. Backed by
   a Wrong-stretch enumeration helper in the scaffold utils.
-- **Inherited-source hint.** When the reviewer is parked on a *derived* frame
+- **Inherited-source hint.** When the reviewer is parked on a _derived_ frame
   (one inheriting its flag from an earlier control point), the active flag is
   shown with an "inherited from mm:ss.s" caption naming the governing boundary,
   so the author can find the boundary to move.
 
 ## Acceptance criteria
 
-- [ ] A continuous caution bar spans each derived Wrong stretch and bridges an
+- [x] A continuous caution bar spans each derived Wrong stretch and bridges an
       absent gap within a stretch (no break across the gap).
-- [ ] The per-frame Wrong dot is removed; the seeded-absent dot is retained.
-- [ ] The Jump control lands on the start of the next Wrong stretch and is
+- [x] The per-frame Wrong dot is removed; the seeded-absent dot is retained.
+- [x] The Jump control lands on the start of the next Wrong stretch and is
       disabled when none follows the current frame.
-- [ ] A derived frame in the reviewer shows the active flag plus an
+- [x] A derived frame in the reviewer shows the active flag plus an
       "inherited from mm:ss.s" caption identifying the governing boundary; a frame
       that is itself a control point shows no such caption.
-- [ ] Filmstrip component tests cover the bar rendering and gap-bridging, the
+- [x] Filmstrip component tests cover the bar rendering and gap-bridging, the
       retained seeded-absent / dropped Wrong dot, and the Jump target; the
       reviewer test covers the inherited hint. `npx tsc --noEmit`,
       `npx eslint .`, and the targeted `npx vitest run` pass.

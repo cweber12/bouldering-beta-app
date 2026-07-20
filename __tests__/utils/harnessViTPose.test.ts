@@ -76,7 +76,12 @@ describe("loadViTPose", () => {
 
   it("returns the scaffold once the artifact lands", async () => {
     stubResponse({ vitpose: scaffold });
-    expect(await loadViTPose("route-x/vid_1")).toEqual({ scaffold, error: null, warnings: [] });
+    expect(await loadViTPose("route-x/vid_1")).toEqual({
+      scaffold,
+      error: null,
+      warnings: [],
+      seedFound: null,
+    });
   });
 
   it("returns pending (both null) while the job is still running", async () => {
@@ -85,6 +90,7 @@ describe("loadViTPose", () => {
       scaffold: null,
       error: null,
       warnings: [],
+      seedFound: null,
     });
   });
 
@@ -94,6 +100,7 @@ describe("loadViTPose", () => {
       scaffold: null,
       error: "boom",
       warnings: [],
+      seedFound: null,
     });
   });
 
@@ -103,6 +110,7 @@ describe("loadViTPose", () => {
       scaffold,
       error: null,
       warnings: ["climber_point.t is missing", "ambiguous tap"],
+      seedFound: null,
     });
   });
 

@@ -740,3 +740,22 @@ input[type="checkbox"] {
   margin: 10px 14px !important;
   color: var(--color-fg) !important;
 }
+
+.leaflet-control-zoom a,
+.leaflet-bar a {
+  background-color: var(--color-card) !important;
+  border-bottom-color: var(--color-edge) !important;
+  color: var(--color-fg) !important;
+}
+
+.leaflet-bar a:hover,
+.leaflet-bar a:focus-visible {
+  background-color: var(--color-bg-muted) !important;
+  color: var(--color-fg) !important;
+}
+
+.leaflet-bar,
+.leaflet-control-zoom {
+  border-color: var(--color-edge) !important;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.28) !important;
+}

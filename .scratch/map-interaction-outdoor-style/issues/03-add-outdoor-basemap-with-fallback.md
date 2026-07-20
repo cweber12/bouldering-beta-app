@@ -1,7 +1,8 @@
 # Add Preferred Outdoor Basemap with Automatic Fallback
 
-Status: ready-for-agent
+Status: in-progress
 Type: AFK
+Branch: feat/map-03-outdoor-basemap-fallback
 
 ## Parent
 
