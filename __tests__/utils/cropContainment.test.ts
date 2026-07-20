@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { frameClampCrop, defaultRouteAroundClimber } from "@/utils/cropContainment";
+import {
+  frameClampCrop,
+  defaultRouteAroundClimber,
+  tapOutsideSeedGate,
+} from "@/utils/cropContainment";
 import type { CropFraction } from "@/utils/cropFraction";
 
 const close = (a: number, b: number) => Math.abs(a - b) < 1e-9;
@@ -51,5 +55,28 @@ describe("defaultRouteAroundClimber", () => {
     const route = defaultRouteAroundClimber(climber);
     expect(contains(route, climber)).toBe(true);
     expect(close(route.y + route.h, 1)).toBe(true);
+  });
+});
+
+describe("tapOutsideSeedGate", () => {
+  // Mirrors the downloader's seed crop gate: center inside the crop expanded
+  // by 10% of its size per side, no un-crop fallback.
+  const crop: CropFraction = { x: 0.4, y: 0.6, w: 0.2, h: 0.3 };
+
+  it("accepts a tap inside the crop and inside the 10% expansion band", () => {
+    expect(tapOutsideSeedGate({ x: 0.5, y: 0.7 }, crop)).toBe(false);
+    // Just inside the expanded top edge (0.6 - 0.03).
+    expect(tapOutsideSeedGate({ x: 0.5, y: 0.575 }, crop)).toBe(false);
+  });
+
+  it("flags a tap beyond the expanded crop — the doomed-seed case", () => {
+    // The observed failure shape: tap on the climber mid-route, well above the
+    // crop drawn around the start.
+    expect(tapOutsideSeedGate({ x: 0.49, y: 0.46 }, crop)).toBe(true);
+    expect(tapOutsideSeedGate({ x: 0.65, y: 0.7 }, crop)).toBe(true);
+  });
+
+  it("never flags when there is no tap", () => {
+    expect(tapOutsideSeedGate(null, crop)).toBe(false);
   });
 });

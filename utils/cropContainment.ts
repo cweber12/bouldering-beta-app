@@ -43,3 +43,32 @@ export function defaultRouteAroundClimber(climber: CropFraction): CropFraction {
   const bottom = clamp01(climber.y + climber.h);
   return frameClampCrop({ x, y, w: right - x, h: bottom - y });
 }
+
+/**
+ * The downloader's seed crop gate, mirrored: a ViTPose seed candidate's box
+ * center must fall inside the Climber Crop expanded by this fraction of its
+ * size on each side (`_CROP_GATE_EXPAND` in the downloader's vitpose_job.py),
+ * and there is deliberately no un-crop fallback. A Climber tap outside that
+ * region can therefore never seed — every job returns `seedFound: false`.
+ */
+export const SEED_CROP_GATE_EXPAND = 0.1;
+
+/**
+ * True when a Climber tap sits outside the expanded Climber Crop — i.e. a
+ * ViTPose job seeded from it is structurally unable to match any track.
+ * Surfaced as a calibration warning before the job is ever submitted.
+ */
+export function tapOutsideSeedGate(
+  point: { x: number; y: number } | null,
+  crop: CropFraction,
+): boolean {
+  if (!point) return false;
+  const padX = crop.w * SEED_CROP_GATE_EXPAND;
+  const padY = crop.h * SEED_CROP_GATE_EXPAND;
+  return (
+    point.x < crop.x - padX ||
+    point.x > crop.x + crop.w + padX ||
+    point.y < crop.y - padY ||
+    point.y > crop.y + crop.h + padY
+  );
+}
