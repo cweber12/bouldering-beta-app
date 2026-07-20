@@ -213,6 +213,10 @@ export default function ClimbsMap({
       // overrides this with fitBounds once pins are known.
       const { L, map } = await initLeafletMap(containerRef.current, {
         scrollWheelZoom: true,
+        // Explicitly enable drag-pan across desktop and touch devices.
+        dragging: true,
+        // Disable Leaflet's tap handler to avoid touch drag conflicts.
+        tap: false,
         zoomControl: true,
         center: [39, -98], // North America fallback
         zoom: 4,
@@ -286,7 +290,9 @@ export default function ClimbsMap({
 
     (async () => {
       const L = (await import("leaflet")).default;
-      const cluster = clusterRef.current!;
+      const cluster = clusterRef.current;
+      const map = mapRef.current;
+      if (!cluster || !map) return;
       cluster.clearLayers();
       const latLngs: [number, number][] = [];
 
@@ -341,10 +347,10 @@ export default function ClimbsMap({
       if (shouldAutoFit) {
         // Fit the map only on first load and true pin-set changes.
         if (latLngs.length > 0) {
-          mapRef.current!.fitBounds(latLngs, { padding: [32, 32], maxZoom: 14 });
+          map.fitBounds(latLngs, { padding: [32, 32], maxZoom: 14 });
         } else {
           // Default view: North America
-          mapRef.current!.setView([39, -98], 4);
+          map.setView([39, -98], 4);
         }
         lastFitSignatureRef.current = pinSetSignature;
       }

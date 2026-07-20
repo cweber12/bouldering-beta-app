@@ -19,11 +19,11 @@ The result should be a demoable interaction contract where manual pan/zoom remai
 
 ## Acceptance criteria
 
-- [ ] Click-drag panning is reliable on the Routes map surface across desktop and mobile gesture paths.
-- [ ] Viewport auto-fit runs on first load and true pin-set changes, and does not run on selection-only state updates.
-- [ ] Selecting a Route pin keeps the user in map mode and does not force list-mode transition.
-- [ ] Map interactions no longer trigger unexpected zoom snap-back during normal Route selection flows.
-- [ ] Behavior-focused tests verify pan reliability and viewport policy boundaries from the user perspective.
+- [x] Click-drag panning is reliable on the Routes map surface across desktop and mobile gesture paths.
+- [x] Viewport auto-fit runs on first load and true pin-set changes, and does not run on selection-only state updates.
+- [x] Selecting a Route pin keeps the user in map mode and does not force list-mode transition.
+- [x] Map interactions no longer trigger unexpected zoom snap-back during normal Route selection flows.
+- [x] Behavior-focused tests verify pan reliability and viewport policy boundaries from the user perspective.
 
 ## Blocked by
 
