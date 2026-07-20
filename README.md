@@ -173,6 +173,7 @@ white joint is a neutral anchor and is exempt from adaptation.
 | `/profile`          | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes           |
 | `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal                              | Yes           |
 | `/docs`             | Usage guide                                                                                                                                                          | No            |
+| `/dev/map-drag`     | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                  | No            |
 
 ## Interactive crop boxes
 
