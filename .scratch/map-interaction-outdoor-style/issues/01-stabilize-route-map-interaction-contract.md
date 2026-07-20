@@ -1,6 +1,7 @@
 # Stabilize Route Map Interaction Contract
 
-Status: ready-for-agent
+Status: in-progress
+Branch: fix/map-01-interaction-contract
 Type: AFK
 
 ## Parent
