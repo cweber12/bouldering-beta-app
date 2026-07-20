@@ -1,7 +1,8 @@
 # Re-calibration round-trip: carry-forward guard, reconstruction, absent soft-retire, reset
 
-Status: in-progress
+Status: done
 Branch: feat/wff-02-recalibration-round-trip
+Merged: 4363527
 
 ## Parent
 
