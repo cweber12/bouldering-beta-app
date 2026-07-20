@@ -1,6 +1,7 @@
 # Align Profile Map with Stable Viewport Policy
 
-Status: ready-for-agent
+Status: in-progress
+Branch: fix/map-02-align-profile-viewport-policy
 Type: AFK
 
 ## Parent

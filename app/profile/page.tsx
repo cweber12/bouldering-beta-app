@@ -130,6 +130,13 @@ export default function ProfilePage() {
   // Climb detail modal
   const [selectedClimb, setSelectedClimb] = useState<ClimbDetailData | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const climbsByKeyRef = useRef<Map<string, ClimbSummary>>(new Map());
+
+  useEffect(() => {
+    const byKey = new Map<string, ClimbSummary>();
+    for (const climb of climbs) byKey.set(climb.key, climb);
+    climbsByKeyRef.current = byKey;
+  }, [climbs]);
 
   // ------ Load profile on mount -------------------------------------------
 
@@ -368,7 +375,7 @@ export default function ProfilePage() {
     async (climbKey: string) => {
       if (!user) return;
       // Check if we already have this climb in the grid data.
-      const found = climbs.find((c) => c.key === climbKey);
+      const found = climbsByKeyRef.current.get(climbKey);
       if (found) {
         setSelectedClimb(found);
         return;
@@ -388,7 +395,7 @@ export default function ProfilePage() {
         setLoadingDetail(false);
       }
     },
-    [user, climbs],
+    [user],
   );
 
   // ------ GPS for location ------------------------------------------------
@@ -1033,8 +1040,12 @@ export default function ProfilePage() {
       </div>
 
       {/* ---- Map view ---- */}
-      {viewMode === "map" && (
-        <section className="mb-6 rounded-md border border-edge/50 overflow-hidden">
+      <section
+        className={cn(
+          "mb-6 rounded-md border border-edge/50 overflow-hidden",
+          viewMode === "map" ? "block" : "hidden",
+        )}
+      >
           {loadingPins ? (
             <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
               Loading map&#8230;
@@ -1046,12 +1057,10 @@ export default function ProfilePage() {
           ) : (
             <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
           )}
-        </section>
-      )}
+      </section>
 
       {/* ---- Climb grid ---- */}
-      {viewMode === "list" && (
-        <section className="mb-8">
+      <section className={cn("mb-8", viewMode === "list" ? "block" : "hidden")}>
           {loadingClimbs ? (
             <div className="flex flex-col items-center gap-4 py-10">
               <LoadingSpinner />
@@ -1173,8 +1182,7 @@ export default function ProfilePage() {
               )}
             </>
           )}
-        </section>
-      )}
+      </section>
 
       {/* ---- Climb detail modal ---- */}
       {selectedClimb && (
