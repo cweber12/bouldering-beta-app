@@ -311,8 +311,10 @@ Climb locations are captured via two mechanisms, both of which require no API ke
   profile page the location field is auto-populated with the nearest locality.
 
 - **Map picker** — a "Pick on map" button on the upload page opens a full-screen
-  **Leaflet** map with an **OpenTopoMap** tile layer (topo contours + hiking trails)
-  where the user can click or drag a pin to select a precise climb location.
+  **Leaflet** map with a preferred **MapTiler Outdoor** basemap when
+  `NEXT_PUBLIC_MAPTILER_KEY` is configured, and automatic fallback to **CartoDB
+  Voyager** when the key is missing or the preferred tiles fail at runtime.
+  Users can click or drag a pin to select a precise climb location.
 
 - **Location autocomplete** — the location autocomplete component (`LocationAutocomplete`)
   queries Nominatim forward-search with a 500 ms debounce and displays a dropdown
@@ -327,7 +329,6 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 - **Profile photo crop** — the profile page replaces the plain avatar upload with a
   circular crop editor (`react-image-crop`) that lets users zoom and reposition
   their photo before saving. The cropped image is compressed to JPEG 85 % at
-  256 × 256 px maximum before being stored as a data URL.
 
 ### Environment variables
 
@@ -339,6 +340,7 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 | `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`      | Firebase storage bucket                      | `project.firebasestorage.app` |
 | `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID                 | —                             |
 | `NEXT_PUBLIC_FIREBASE_APP_ID`              | Firebase app ID                              | —                             |
+| `NEXT_PUBLIC_MAPTILER_KEY`                 | Optional key for preferred MapTiler Outdoor basemap | —                     |
 | `FIREBASE_PROJECT_ID`                      | Firebase project ID (Admin SDK, server-side) | —                             |
 | `FIREBASE_CLIENT_EMAIL`                    | Service account client email (server-side)   | —                             |
 | `FIREBASE_PRIVATE_KEY`                     | Service account private key (server-side)    | —                             |
@@ -382,7 +384,7 @@ The Firebase Admin private key can be downloaded from the Firebase console:
 | Pose detection  | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate)     |
 | Computer vision | OpenCV.js 4.12 (WASM, main thread)                                |
 | Video encoding  | MediaRecorder API (WebM)                                          |
-| Maps            | Leaflet + react-leaflet, OpenTopoMap tiles, leaflet.markercluster |
+| Maps            | Leaflet + react-leaflet, MapTiler Outdoor (preferred) with CartoDB fallback, leaflet.markercluster |
 | Geocoding       | Nominatim (OpenStreetMap, no API key required)                    |
 | Photo cropping  | react-image-crop (circular crop, canvas output)                   |
 | Testing         | Vitest + jsdom + Testing Library                                  |
