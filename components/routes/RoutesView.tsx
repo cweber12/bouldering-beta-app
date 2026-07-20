@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { cn } from "@/utils/cn";
@@ -103,7 +103,7 @@ export default function RoutesView({ userId }: RoutesViewProps) {
     [routes],
   );
 
-  const openRoute = (r: RouteSummary) => {
+  const openRoute = useCallback((r: RouteSummary) => {
     router.push(
       buildRouteUrl(
         userId,
@@ -111,19 +111,19 @@ export default function RoutesView({ userId }: RoutesViewProps) {
         { keys: [r.lastClimbKey] },
       ),
     );
-  };
+  }, [router, userId]);
 
   // Pin button on a row — highlight + reveal the route on the map.
-  const focusMap = (r: RouteSummary) => {
+  const focusMap = useCallback((r: RouteSummary) => {
     setSelectedKey(r.lastClimbKey);
     setViewMode("map");
-  };
+  }, []);
 
   // Map pin click — highlight the route and scroll its row into view.
-  const onPinClick = (key: string) => {
+  const onPinClick = useCallback((key: string) => {
     setSelectedKey(key);
-    setViewMode("list");
-  };
+    setViewMode("map");
+  }, []);
 
   // ── Reusable segmented toggles (shared between mobile bar + desktop header) ──
 

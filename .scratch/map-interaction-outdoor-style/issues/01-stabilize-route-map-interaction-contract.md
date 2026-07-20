@@ -1,6 +1,8 @@
 # Stabilize Route Map Interaction Contract
 
-Status: ready-for-agent
+Status: done
+Branch: fix/map-01-interaction-contract
+Merged: 0a9a414ce3fa546013278b31916285e0677e7be5
 Type: AFK
 
 ## Parent
