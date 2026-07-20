@@ -22,7 +22,8 @@ function frame(overrides: Partial<GroundTruthFrame> = {}): GroundTruthFrame {
 function renderReviewer({
   flag = "auto",
   seed = {},
-}: { flag?: ReviewFlag; seed?: Partial<GroundTruthFrame> } = {}) {
+  inheritedFrom = null,
+}: { flag?: ReviewFlag; seed?: Partial<GroundTruthFrame>; inheritedFrom?: number | null } = {}) {
   const onFlagChange = vi.fn();
   render(
     <GroundTruthReviewer
@@ -31,6 +32,7 @@ function renderReviewer({
       videoHeight={1280}
       seedFrame={frame(seed)}
       flag={flag}
+      inheritedFrom={inheritedFrom}
       contextKeypoints={{ left_eye: { x: 0.52, y: 0.18 } }}
       onFlagChange={onFlagChange}
     />,
@@ -77,6 +79,26 @@ describe("GroundTruthReviewer", () => {
 
     // Auto stays available — a seeded-absent frame can still anchor an Auto fill.
     expect(screen.getByRole("button", { name: "Auto" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("shows the inherited-source hint on a derived frame, naming the boundary as mm:ss.s", () => {
+    // Governing boundary at 63.4s (1:03.4) — the frame inherits Wrong from it.
+    renderReviewer({ flag: "wrong", inheritedFrom: 63.4 });
+
+    const hint = screen.getByTestId("inherited-hint");
+    expect(hint.textContent).toContain("inherited from");
+    expect(hint.textContent).toContain("1:03.4");
+    // The active flag is named in the hint.
+    expect(hint.textContent).toContain("wrong");
+    // The default review caption is replaced by the hint.
+    expect(screen.queryByText(/Occluded seed joints are hollow/i)).toBeNull();
+  });
+
+  it("shows no inherited hint on a control-point / default-auto frame", () => {
+    renderReviewer({ flag: "wrong", inheritedFrom: null });
+
+    expect(screen.queryByTestId("inherited-hint")).toBeNull();
+    expect(screen.getByText(/Occluded seed joints are hollow/i)).toBeTruthy();
   });
 
   it("surfaces occluded seed joints as hollow read-only joints", () => {

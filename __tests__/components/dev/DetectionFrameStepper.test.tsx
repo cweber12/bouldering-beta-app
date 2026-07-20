@@ -72,7 +72,7 @@ describe("DetectionFrameStepper", () => {
     expect(screen.getByLabelText("Seek to 0:01 (detected)").className).toContain("ring-fg");
   });
 
-  it("marks flagged and seeded-absent frames distinctly from auto on the filmstrip", () => {
+  it("keeps the seeded-absent dot but drops the redundant per-frame Wrong dot", () => {
     render(
       <DetectionFrameStepper
         frames={[
@@ -87,18 +87,89 @@ describe("DetectionFrameStepper", () => {
       />,
     );
 
-    // Only the non-auto frames carry a review-mark marker, each with its own kind.
+    // The Wrong dot is gone — the Wrong-stretch bar carries that signal. Only the
+    // seeded-absent (and legacy flagged-absent) dots remain.
     const markers = screen.getAllByTestId("frame-mark-marker");
-    expect(markers).toHaveLength(3);
     expect(markers.map((m) => m.getAttribute("data-mark"))).toEqual([
-      "flagged-wrong",
       "flagged-absent",
       "seeded-absent",
     ]);
+    expect(markers.some((m) => m.getAttribute("data-mark") === "flagged-wrong")).toBe(false);
 
-    // The mark is surfaced in the bar title for authoring feedback.
-    expect(screen.getByTitle("0:01 · detected · flagged wrong")).toBeTruthy();
+    // The mark is still surfaced in the bar title for authoring feedback.
     expect(screen.getByTitle("0:03 · missing · seeded absent")).toBeTruthy();
+  });
+
+  it("draws one continuous Wrong-stretch bar bridging a seeded-absent gap", () => {
+    render(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0 },
+          { timestamp: 1 },
+          { timestamp: 2 },
+          { timestamp: 3 },
+          { timestamp: 4 },
+        ]}
+        // Wrong from 1 to 3, with a seeded-absent gap at 2 the bar bridges.
+        frameMarks={["auto", "flagged-wrong", "seeded-absent", "flagged-wrong", "auto"]}
+        wrongStretches={[{ start: 1, end: 3 }]}
+        currentIndex={0}
+        onSeek={vi.fn()}
+      />,
+    );
+
+    // A single unbroken bar spans the stretch (no break across the gap).
+    expect(screen.getAllByTestId("flagged-stretch")).toHaveLength(1);
+    // The gap frame keeps its own dot under the bar.
+    const markers = screen.getAllByTestId("frame-mark-marker");
+    expect(markers.map((m) => m.getAttribute("data-mark"))).toEqual(["seeded-absent"]);
+  });
+
+  it("jumps to the start of the next Wrong stretch, and is disabled when none follows", () => {
+    const onSeek = vi.fn();
+    const { rerender } = render(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0 },
+          { timestamp: 1 },
+          { timestamp: 2 },
+          { timestamp: 3 },
+          { timestamp: 4 },
+        ]}
+        wrongStretches={[
+          { start: 1, end: 1 },
+          { start: 3, end: 4 },
+        ]}
+        currentIndex={0}
+        onSeek={onSeek}
+      />,
+    );
+
+    const jump = screen.getByRole("button", { name: /jump to next wrong stretch/i });
+    fireEvent.click(jump);
+    expect(onSeek).toHaveBeenCalledWith(1);
+
+    // Parked past the last stretch's start, nothing follows → disabled.
+    rerender(
+      <DetectionFrameStepper
+        frames={[
+          { timestamp: 0 },
+          { timestamp: 1 },
+          { timestamp: 2 },
+          { timestamp: 3 },
+          { timestamp: 4 },
+        ]}
+        wrongStretches={[
+          { start: 1, end: 1 },
+          { start: 3, end: 4 },
+        ]}
+        currentIndex={3}
+        onSeek={onSeek}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /jump to next wrong stretch/i }).hasAttribute("disabled"),
+    ).toBe(true);
   });
 
   it("steps with the keyboard and jumps to the next flagged stretch", () => {

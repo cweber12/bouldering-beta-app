@@ -225,15 +225,36 @@ Fix TypeScript errors before proceeding. Do not disable tsc checks.
 **The agent MUST run `npx tsc --noEmit`, `npx eslint .`, targeted `npx vitest run ...`,
 and `git add .` + `git commit` after every code change session without waiting to be asked.**
 
-### Worktree-first workflow (required for non-interference)
+### Branch isolation workflow (required for non-interference)
 
-- Default to a dedicated worktree and branch for each issue/task.
-- Never do implementation work on the primary checkout when other active work is in flight.
+Non-interference is enforced by keeping each agent's working tree separate, not
+by every agent minting a worktree:
+
+- **Copilot** always creates a dedicated worktree + branch per task
+  (`git worktree add ..\beta-scanner-<task> -b <type>/<task-name>`), so it never
+  touches the primary checkout.
+- **Claude Code** (this interactive session) works on the **primary checkout**
+  with a per-issue task branch — no separate worktree. Because Copilot is
+  isolated in its own worktree, editing the primary checkout cannot collide with
+  it. Only create a worktree here when a second Claude effort is already live on
+  the primary checkout.
+
+Shared rules for both agents:
+
 - Start each task branch from `main`.
 - Keep one issue per branch; do not batch unrelated fixes.
 - Avoid destructive git commands (`reset --hard`, force-push, rewriting shared history).
 
-Recommended setup:
+Claude setup (primary checkout, task branch):
+
+```powershell
+git fetch origin
+git switch main
+git pull --ff-only
+git switch -c <type>/<task-name>
+```
+
+Copilot setup (dedicated worktree):
 
 ```powershell
 git fetch origin

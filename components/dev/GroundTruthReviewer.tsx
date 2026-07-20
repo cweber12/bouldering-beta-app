@@ -29,6 +29,14 @@ export interface GroundTruthReviewerProps {
   seedFrame: GroundTruthFrame;
   /** The current frame's effective flag, derived from the working control points. */
   flag: ReviewFlag;
+  /**
+   * When the current frame is *derived* (inheriting its flag from an earlier
+   * control point rather than carrying one itself), the timestamp of that
+   * governing boundary — surfaced as an "inherited from mm:ss.s" caption so the
+   * author can find the boundary to move. `null` on a control-point frame or a
+   * default-auto frame (nothing inherited).
+   */
+  inheritedFrom?: number | null;
   /** Non-core scaffold keypoints (video-normalized) drawn faintly for context. */
   contextKeypoints: Record<string, Pos>;
   onFlagChange: (flag: ReviewFlag) => void;
@@ -54,12 +62,21 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
+/** A boundary timestamp as mm:ss.s (tenths) for the inherited-source caption. */
+function formatBoundary(seconds: number): string {
+  const total = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+  const minutes = Math.floor(total / 60);
+  const rest = total - minutes * 60;
+  return `${minutes}:${rest.toFixed(1).padStart(4, "0")}`;
+}
+
 export default function GroundTruthReviewer({
   videoSrc,
   videoWidth,
   videoHeight,
   seedFrame,
   flag,
+  inheritedFrom = null,
   contextKeypoints,
   onFlagChange,
   className,
@@ -335,7 +352,15 @@ export default function GroundTruthReviewer({
       </div>
 
       <p className="min-h-5 text-xs text-fg-secondary">
-        Review the seed skeleton for this frame. Occluded seed joints are hollow.
+        {inheritedFrom !== null ? (
+          <span data-testid="inherited-hint">
+            Flag <span className="font-medium text-fg">{flag}</span> inherited from{" "}
+            <span className="tabular-nums">{formatBoundary(inheritedFrom)}</span> — move that
+            boundary to change this frame.
+          </span>
+        ) : (
+          "Review the seed skeleton for this frame. Occluded seed joints are hollow."
+        )}
       </p>
 
       <div

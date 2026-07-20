@@ -1,6 +1,7 @@
 # Filmstrip Wrong-stretch bar, jump-to-next-Wrong-start, inherited hint
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/wff-03-filmstrip-bar-jump
 
 ## Parent
 

@@ -46,7 +46,9 @@ import {
   contextKeypointsAt,
   countSeedCoverage,
   deriveFrameFlags,
+  enumerateWrongStretches,
   frameReviewMark,
+  governingControlPoint,
   hasAcceptedGroundTruth,
   materializeReview,
   reconstructControlPoints,
@@ -904,6 +906,13 @@ function Calibrator({
     [gtSeed, controlPoints],
   );
 
+  // Derived Wrong stretches (frameIndex ranges, bridging seeded-absent gaps) —
+  // the filmstrip paints a bar over each and the Jump control walks their starts.
+  const wrongStretches = useMemo(
+    () => (gtSeed ? enumerateWrongStretches(gtSeed.frames, controlPoints) : []),
+    [gtSeed, controlPoints],
+  );
+
   // Review mark per Detection Frame index, for the filmstrip (flagged / seeded
   // absent distinct from ordinary auto frames).
   const gtMarkByIndex = useMemo(() => {
@@ -997,6 +1006,11 @@ function Calibrator({
   if (phase === "review") {
     const gtSeedFrame = gtSeed?.frames.find((f) => f.frameIndex === gtFrameIndex) ?? null;
     const gtFlag = derivedFlags.get(gtFrameIndex) ?? "auto";
+    // The boundary a derived frame inherits its flag from (null on a control-point
+    // or default-auto frame) — drives the reviewer's "inherited from" hint.
+    const gtInheritedFrom = gtSeed
+      ? (governingControlPoint(gtSeed.frames, controlPoints, gtFrameIndex)?.timestamp ?? null)
+      : null;
     const reviewing = gtGate.authoring === "ready" && gtSeedFrame !== null;
 
     return (
@@ -1070,6 +1084,7 @@ function Calibrator({
               frames={gridFrames}
               thumbnails={gridThumbnails}
               frameMarks={gtMarkByIndex}
+              wrongStretches={wrongStretches}
               currentIndex={gtFrameIndex}
               onSeek={setGtFrameIndex}
               className="shrink-0"
@@ -1099,6 +1114,7 @@ function Calibrator({
                 videoHeight={videoMeta.height}
                 seedFrame={gtSeedFrame}
                 flag={gtFlag}
+                inheritedFrom={gtInheritedFrom}
                 contextKeypoints={contextKeypointsAt(seedPoseFrames, gtSeedFrame.timestamp)}
                 onFlagChange={(flag) => plantControlPoint(gtSeedFrame.frameIndex, flag)}
               />
