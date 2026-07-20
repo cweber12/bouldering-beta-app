@@ -225,6 +225,44 @@ Fix TypeScript errors before proceeding. Do not disable tsc checks.
 **The agent MUST run `npx tsc --noEmit`, `npx eslint .`, targeted `npx vitest run ...`,
 and `git add .` + `git commit` after every code change session without waiting to be asked.**
 
+### Worktree-first workflow (required for non-interference)
+
+- Default to a dedicated worktree and branch for each issue/task.
+- Never do implementation work on the primary checkout when other active work is in flight.
+- Start each task branch from `main`.
+- Keep one issue per branch; do not batch unrelated fixes.
+- Avoid destructive git commands (`reset --hard`, force-push, rewriting shared history).
+
+Recommended setup:
+
+```powershell
+git fetch origin
+git switch main
+git pull --ff-only
+git worktree add ..\beta-scanner-<task> -b <type>/<task-name>
+```
+
+### Local merge policy
+
+- Default behavior is local validation + local commit only (no automatic push).
+- Do not merge automatically unless the user explicitly requests completion merge.
+- If requested, merge locally using `git merge --no-ff` from the primary checkout after checks pass.
+
+Merge-on-complete sequence when explicitly requested:
+
+```powershell
+# in task worktree
+npx tsc --noEmit
+npx eslint .
+npx vitest run <targeted test files>
+git add .
+git commit
+
+# in primary checkout
+git switch main
+git merge --no-ff <task-branch>
+```
+
 ### Issue tracking
 
 - When implementing a `.scratch/` issue, follow the **PRD lifecycle loop** in

@@ -183,13 +183,49 @@ npx vitest run --coverage     # check new files appear in report
 npx eslint .                  # no new lint errors
 git add .
 git commit -m "<message>"     # see Commit Convention below
-git push
 ```
 
 New `pipeline/` and `hooks/` files must have corresponding `__tests__/` coverage.
 
-**After every code change: always run `git add .`, `git commit`, and `git push`
-automatically — do not wait for the user to ask.**
+### Worktree-first git workflow (non-interference)
+
+- Default to an isolated worktree + task branch for every issue or secondary task.
+- Never implement changes on the primary checkout when another larger effort is in progress.
+- Before editing, verify branch/worktree isolation. If not isolated, create a new worktree from `main`.
+- Keep scope to one issue per branch; do not mix unrelated work.
+- Do not rebase, reset, or force-push shared branches.
+
+Recommended setup:
+
+```powershell
+git fetch origin
+git switch main
+git pull --ff-only
+git worktree add ..\beta-scanner-<task> -b <type>/<task-name>
+```
+
+### Local completion policy
+
+- Complete tasks with local validation and local commits.
+- Do not push automatically.
+- Do not open remote PRs automatically.
+- Do not merge automatically unless explicitly requested in the task.
+- If merge is requested, do a local merge only (`git merge --no-ff`) from the primary checkout after checks pass.
+
+When explicitly asked to merge on completion:
+
+```powershell
+# in task worktree
+npx tsc --noEmit
+npx eslint .
+npx vitest run
+git add .
+git commit -m "<message>"
+
+# in primary checkout
+git switch main
+git merge --no-ff <task-branch>
+```
 
 ### Issue tracking
 
