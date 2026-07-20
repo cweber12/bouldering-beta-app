@@ -23,7 +23,7 @@ Test Video.
   first seeded frame of the next Wrong segment), so the author walks episode to
   episode — including stale flags carried from the old implementation. Backed by
   a Wrong-stretch enumeration helper in the scaffold utils.
-- **Inherited-source hint.** When the reviewer is parked on a *derived* frame
+- **Inherited-source hint.** When the reviewer is parked on a _derived_ frame
   (one inheriting its flag from an earlier control point), the active flag is
   shown with an "inherited from mm:ss.s" caption naming the governing boundary,
   so the author can find the boundary to move.

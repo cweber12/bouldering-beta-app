@@ -188,13 +188,13 @@ export default function PublicProfilePage() {
         };
         if (!cancelled && Array.isArray(data.pins)) {
           const mapped = data.pins.map((p) => ({
-              key: p.key,
-              lat: p.lat,
-              lng: p.lng,
-              label: `${p.route} \u2014 ${p.area}`,
-              runType: p.runType,
-              timestamp: p.timestamp,
-            }));
+            key: p.key,
+            lat: p.lat,
+            lng: p.lng,
+            label: `${p.route} \u2014 ${p.area}`,
+            runType: p.runType,
+            timestamp: p.timestamp,
+          }));
           pinsCacheRef.current = mapped;
           setPins(mapped);
         }
@@ -503,7 +503,9 @@ export default function PublicProfilePage() {
               </div>
             ) : climbs.length === 0 ? (
               <p className="py-8 text-center text-xs text-fg-muted">
-                {climbTotal === 0 ? "No climbs recorded yet." : "No climbs match the current filters."}
+                {climbTotal === 0
+                  ? "No climbs recorded yet."
+                  : "No climbs match the current filters."}
               </p>
             ) : (
               <>

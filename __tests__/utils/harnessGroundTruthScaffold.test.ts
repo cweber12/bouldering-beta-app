@@ -98,18 +98,15 @@ describe("buildGroundTruthScaffold", () => {
 
   it("seeds occluded flags from the scaffold confidence, kept on the seed", () => {
     const frames = [{ timestamp: 0.0 }];
-    const poses = [{ timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] }];
+    const poses = [
+      { timestamp: 0.0, keypoints: [kp("nose", 0.5, 0.1, OCCLUSION_SEED_SCORE - 0.1)] },
+    ];
     const gt = buildGroundTruthScaffold(frames, poses, "setup-1", null);
     expect(gt.frames[0].joints.nose.occluded).toBe(true);
   });
 
   it("marks a frame seeded-absent when no scaffold pose matches its timestamp", () => {
-    const gt = buildGroundTruthScaffold(
-      [{ timestamp: 9.0 }],
-      poseFrames,
-      "setup-1",
-      null,
-    );
+    const gt = buildGroundTruthScaffold([{ timestamp: 9.0 }], poseFrames, "setup-1", null);
     expect(gt.frames[0]).toMatchObject({ state: "absent", review: "auto" });
     expect(gt.frames[0].joints).toEqual({});
   });
@@ -597,7 +594,10 @@ describe("countSeedCoverage", () => {
 });
 
 describe("frameReviewMark", () => {
-  function frame(review: GroundTruthFrame["review"], state: GroundTruthFrame["state"]): GroundTruthFrame {
+  function frame(
+    review: GroundTruthFrame["review"],
+    state: GroundTruthFrame["state"],
+  ): GroundTruthFrame {
     return { frameIndex: 0, timestamp: 0, state, review, verified: true, joints: {} };
   }
 
@@ -621,7 +621,9 @@ describe("reseedAffordanceDecision", () => {
   const scaffold = (setupHash: string | undefined, posed: boolean): ViTPoseScaffold => ({
     version: 1,
     ...(setupHash ? { setupHash } : {}),
-    frames: [{ timestamp: 0.1, keypoints: posed ? [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] : [] }],
+    frames: [
+      { timestamp: 0.1, keypoints: posed ? [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] : [] },
+    ],
   });
 
   it("offers review-seed for a fresh, posed scaffold", () => {
@@ -657,7 +659,11 @@ describe("seedGateDecision", () => {
 
   it("disables authoring with the error on ViTPose failure", () => {
     expect(
-      seedGateDecision({ vitposeStatus: "failed", vitposeError: "job timed out", seedHasPose: false }),
+      seedGateDecision({
+        vitposeStatus: "failed",
+        vitposeError: "job timed out",
+        seedHasPose: false,
+      }),
     ).toEqual({ authoring: "disabled", reason: "job timed out" });
     expect(
       seedGateDecision({ vitposeStatus: "failed", vitposeError: null, seedHasPose: false }),
@@ -672,4 +678,3 @@ describe("seedGateDecision", () => {
     }
   });
 });
-

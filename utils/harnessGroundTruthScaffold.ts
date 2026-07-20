@@ -50,13 +50,19 @@ export function coreJointsFromKeypoints(keypoints: Keypoint[]): Record<string, G
   const out: Record<string, GroundTruthJoint> = {};
   for (const kp of keypoints) {
     if (!CORE_JOINT_NAME_SET.has(kp.name)) continue;
-    out[kp.name] = { x: clamp01(kp.x), y: clamp01(kp.y), occluded: kp.score < OCCLUSION_SEED_SCORE };
+    out[kp.name] = {
+      x: clamp01(kp.x),
+      y: clamp01(kp.y),
+      occluded: kp.score < OCCLUSION_SEED_SCORE,
+    };
   }
   return out;
 }
 
 /** All of a pose's keypoints as a name → position lookup, for faint context drawing. */
-export function keypointsToPositions(keypoints: Keypoint[]): Record<string, { x: number; y: number }> {
+export function keypointsToPositions(
+  keypoints: Keypoint[],
+): Record<string, { x: number; y: number }> {
   const out: Record<string, { x: number; y: number }> = {};
   for (const kp of keypoints) out[kp.name] = { x: kp.x, y: kp.y };
   return out;
@@ -483,4 +489,3 @@ export function seedGateDecision({
       return { authoring: "pending" };
   }
 }
-

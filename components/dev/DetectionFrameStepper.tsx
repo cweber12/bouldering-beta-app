@@ -314,7 +314,10 @@ export default function DetectionFrameStepper({
               ? `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]} · ${markLabel}`
               : `${formatTime(frame.timestamp)} · ${STATUS_LABEL[key]}`;
             return (
-              <div key={`${frame.timestamp}-${index}`} className="flex flex-col items-center gap-0.5">
+              <div
+                key={`${frame.timestamp}-${index}`}
+                className="flex flex-col items-center gap-0.5"
+              >
                 <button
                   ref={(el) => {
                     cellRefs.current[index] = el;
@@ -344,10 +347,7 @@ export default function DetectionFrameStepper({
                     // structure before thumbnails decode.
                     <span
                       aria-hidden="true"
-                      className={cn(
-                        "block h-full w-auto aspect-9/16",
-                        STATUS_PLACEHOLDER[key],
-                      )}
+                      className={cn("block h-full w-auto aspect-9/16", STATUS_PLACEHOLDER[key])}
                     />
                   )}
                 </button>

@@ -1046,142 +1046,142 @@ export default function ProfilePage() {
           viewMode === "map" ? "block" : "hidden",
         )}
       >
-          {loadingPins ? (
-            <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-              Loading map&#8230;
-            </div>
-          ) : pins.length === 0 ? (
-            <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
-              No GPS-tagged climbs yet.
-            </div>
-          ) : (
-            <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
-          )}
+        {loadingPins ? (
+          <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+            Loading map&#8230;
+          </div>
+        ) : pins.length === 0 ? (
+          <div className="flex items-center justify-center h-80 text-xs text-fg-muted">
+            No GPS-tagged climbs yet.
+          </div>
+        ) : (
+          <ClimbsMap pins={pins} height={400} onPinClick={handlePinClick} />
+        )}
       </section>
 
       {/* ---- Climb grid ---- */}
       <section className={cn("mb-8", viewMode === "list" ? "block" : "hidden")}>
-          {loadingClimbs ? (
-            <div className="flex flex-col items-center gap-4 py-10">
-              <LoadingSpinner />
-              <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
-            </div>
-          ) : displayedClimbs.length === 0 ? (
-            <p className="py-8 text-center text-xs text-fg-muted">
-              {climbTotal === 0
-                ? "No climbs recorded yet."
-                : searchText.trim()
-                  ? "No climbs match your search."
-                  : "No climbs match the current filters."}
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {displayedClimbs.map((c) => (
-                  <div
-                    key={c.key}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => handleCardClick(c)}
-                    onKeyDown={(e) => e.key === "Enter" && handleCardClick(c)}
-                    className="group cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                  >
-                    {/* Thumbnail */}
-                    <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
-                      {c.thumbnail ? (
-                        <NextImage
-                          src={c.thumbnail}
-                          alt={`${c.route} climb`}
-                          fill
-                          unoptimized
-                          className="object-cover transition-transform duration-200 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-fg-muted/30">
-                          <svg
-                            className="h-10 w-10"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.5"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
-                            />
-                          </svg>
-                          <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">
-                            {c.route}
-                          </span>
-                        </div>
-                      )}
-                      {/* Subtle hover tint — communicates clickability without implying video playback */}
-                      <div className="absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 bg-surface/20" />
-                    </div>
-
-                    {/* Info + options */}
-                    <div className="flex items-start gap-1 px-2 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-fg">{c.route}</p>
-                        <p className="truncate text-[10px] text-fg-muted">
-                          {c.area}&nbsp;&middot;&nbsp;{c.state}
-                        </p>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                          {/* Run type badge — subtle, inline with metadata */}
-                          <RunTypeBadge
-                            runType={c.runType}
-                            className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+        {loadingClimbs ? (
+          <div className="flex flex-col items-center gap-4 py-10">
+            <LoadingSpinner />
+            <p className="text-sm text-fg-muted">Loading climbs&#8230;</p>
+          </div>
+        ) : displayedClimbs.length === 0 ? (
+          <p className="py-8 text-center text-xs text-fg-muted">
+            {climbTotal === 0
+              ? "No climbs recorded yet."
+              : searchText.trim()
+                ? "No climbs match your search."
+                : "No climbs match the current filters."}
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {displayedClimbs.map((c) => (
+                <div
+                  key={c.key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleCardClick(c)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCardClick(c)}
+                  className="group cursor-pointer rounded-md border border-edge/60 bg-surface transition hover:border-edge-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  {/* Thumbnail */}
+                  <div className="relative aspect-square w-full overflow-hidden rounded-t-md bg-inset">
+                    {c.thumbnail ? (
+                      <NextImage
+                        src={c.thumbnail}
+                        alt={`${c.route} climb`}
+                        fill
+                        unoptimized
+                        className="object-cover transition-transform duration-200 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-fg-muted/30">
+                        <svg
+                          className="h-10 w-10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
                           />
-                          {c.rating && (
-                            <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
-                              {c.rating}
-                            </span>
-                          )}
-                          <span className="text-[9px] text-fg-muted">{c.timestamp}</span>
-                        </div>
+                        </svg>
+                        <span className="px-2 text-center text-[9px] text-fg-muted/50 leading-tight">
+                          {c.route}
+                        </span>
                       </div>
-                      <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
-                        <ClimbOptionsDropdown
-                          climbKey={c.key}
-                          state={c.state}
-                          area={c.area}
-                          route={c.route}
-                          size="sm"
+                    )}
+                    {/* Subtle hover tint — communicates clickability without implying video playback */}
+                    <div className="absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-100 bg-surface/20" />
+                  </div>
+
+                  {/* Info + options */}
+                  <div className="flex items-start gap-1 px-2 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-medium text-fg">{c.route}</p>
+                      <p className="truncate text-[10px] text-fg-muted">
+                        {c.area}&nbsp;&middot;&nbsp;{c.state}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {/* Run type badge — subtle, inline with metadata */}
+                        <RunTypeBadge
+                          runType={c.runType}
+                          className="rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
                         />
+                        {c.rating && (
+                          <span className="rounded bg-accent/15 px-1 py-0.5 text-[9px] font-medium text-accent">
+                            {c.rating}
+                          </span>
+                        )}
+                        <span className="text-[9px] text-fg-muted">{c.timestamp}</span>
                       </div>
+                    </div>
+                    <div className="shrink-0 self-center" onClick={(e) => e.stopPropagation()}>
+                      <ClimbOptionsDropdown
+                        climbKey={c.key}
+                        state={c.state}
+                        area={c.area}
+                        route={c.route}
+                        size="sm"
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div className="mt-6 flex items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
-                    disabled={climbPage <= 1}
-                    className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                  >
-                    Previous
-                  </button>
-                  <span className="text-xs text-fg-muted">
-                    Page {climbPage} of {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={climbPage >= totalPages}
-                    className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
-                  >
-                    Next
-                  </button>
                 </div>
-              )}
-            </>
-          )}
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setClimbPage((p) => Math.max(1, p - 1))}
+                  disabled={climbPage <= 1}
+                  className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                >
+                  Previous
+                </button>
+                <span className="text-xs text-fg-muted">
+                  Page {climbPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setClimbPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={climbPage >= totalPages}
+                  className="ui-control px-3 py-1.5 text-xs disabled:opacity-30"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* ---- Climb detail modal ---- */}

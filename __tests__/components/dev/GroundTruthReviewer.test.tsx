@@ -61,12 +61,8 @@ describe("GroundTruthReviewer", () => {
   it("marks the active review flag pressed", () => {
     renderReviewer({ flag: "wrong" });
 
-    expect(screen.getByRole("button", { name: "Wrong" }).getAttribute("aria-pressed")).toBe(
-      "true",
-    );
-    expect(screen.getByRole("button", { name: "Auto" }).getAttribute("aria-pressed")).toBe(
-      "false",
-    );
+    expect(screen.getByRole("button", { name: "Wrong" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Auto" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("disables the Wrong control on a zero-joint (seeded-absent) frame", () => {

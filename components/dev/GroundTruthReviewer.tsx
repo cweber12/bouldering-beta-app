@@ -44,7 +44,11 @@ export interface GroundTruthReviewerProps {
 }
 
 const REVIEW_OPTIONS: readonly { value: ReviewFlag; label: string; hint: string }[] = [
-  { value: "auto", label: "Auto", hint: "Accept the seed forward from this frame until the next control point" },
+  {
+    value: "auto",
+    label: "Auto",
+    hint: "Accept the seed forward from this frame until the next control point",
+  },
   {
     value: "wrong",
     label: "Wrong",
