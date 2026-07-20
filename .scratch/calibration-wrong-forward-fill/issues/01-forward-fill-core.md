@@ -1,7 +1,8 @@
 # Forward-fill core: two-state segment model, fresh-authoring path
 
-Status: in-progress
+Status: done
 Branch: feat/wff-01-forward-fill-core
+Merged: 7d90052
 
 ## Parent
 
