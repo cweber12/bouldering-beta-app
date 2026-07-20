@@ -1,6 +1,6 @@
 # Forward-fill Wrong/Auto Ground Truth review + ADR 0005 absent deprecation
 
-Status: in-progress
+Status: done
 
 Spec inputs: amends `.scratch/calibration-flag-review/PRD.md` (the flag-only review this builds on), `docs/adr/0018` (Ground Truth eval), `docs/adr/0020` (calibration freshness / setupHash pairing), and the harness handoffs `scanner-data-contract.md` (Phase 3 review contract) + `scanner-review-provenance-adr0005.md` (manual-absent deprecation). Phases 1–2 of the data contract are out of scope.
 Glossary: CONTEXT.md — **Ground Truth**, **Detection Frame**, **Scan Setup**, **Test Video**, **Climber**, **ViTPose scaffold (seed)**. New terms introduced here: **control point**, **Wrong stretch**, **forward-fill**.
