@@ -14,10 +14,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { HARNESS_ENABLED, resolveBundleDir } from "@/app/api/dev/shared";
-import { mergeAnalysisInputs } from "@/utils/harnessMetadata";
+import { mergeAnalysisInputs, mergeProvenance } from "@/utils/harnessMetadata";
 import {
   parseScanSetupInput,
   parseAnalysisInputsEdit,
+  parseProvenanceEdit,
   bodyHasScanInputs,
   pickScanInput,
   hashSetupInput,
@@ -105,11 +106,20 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     analysisInputs = mergeAnalysisInputs(existing?.analysisInputs, edit);
   }
 
+  // Per-label provenance: same merge semantics as the labels themselves. Like
+  // the labels, it never participates in `setupHash`.
+  const provenanceEdit = parseProvenanceEdit(body);
+  if (!provenanceEdit) {
+    return NextResponse.json({ error: "Invalid label provenance." }, { status: 422 });
+  }
+  const provenance = mergeProvenance(existing?.analysisInputsProvenance, provenanceEdit);
+
   const setup: ScanSetup = {
     version: SETUP_VERSION,
     ...input,
     setupHash: await hashSetupInput(input),
     ...(Object.keys(analysisInputs).length > 0 ? { analysisInputs } : {}),
+    ...(Object.keys(provenance).length > 0 ? { analysisInputsProvenance: provenance } : {}),
     updatedAt: new Date().toISOString(),
   };
 

@@ -4,25 +4,33 @@
  * Dev-only editable video metadata panel.
  *
  * Renders a Test Video's `analysis_inputs` labels for correction in the
- * calibration flow: amount fields (`shadows`, `climber_contrast`,
- * `wall_contrast`, `motion_blur`, `occlusion`) as `unknown/none/low/medium/high`
- * selects; `camera_stability`, `route_orientation`, `camera_angle` as free-text
- * combos seeded with the current value; `notes` as a textarea. Saving persists
- * the labels into `setup.json.analysisInputs` through the merging setup write
- * (/api/dev/corpus/setup), which never re-hashes the Scan Setup. Rendered only
- * in development. See the calibration-flag-review PRD.
+ * calibration flow: scale fields (`shadows` with the structural
+ * `none/solid/patchy/climber` vocabulary; `climber_contrast`, `wall_contrast`,
+ * `motion_blur`, `occlusion` as `unknown/none/low/medium/high`) as selects;
+ * `camera_stability`, `route_orientation`, `camera_angle` as free-text combos;
+ * `notes` as a textarea. Harness suggestions (video-stats handoff) prefill
+ * unlabelled fields with a visible "suggested" affordance the user verifies
+ * rather than authors; each save records per-label provenance
+ * (auto-accepted / human-overridden / human-authored). Saving persists into
+ * `setup.json.analysisInputs` (+ `analysisInputsProvenance`) through the
+ * merging setup write (/api/dev/corpus/setup), which never re-hashes the Scan
+ * Setup. Rendered only in development. See the calibration-flag-review PRD and
+ * `.scratch/video-stats-prefill`.
  */
 
 import { useMemo, useState } from "react";
 import ComboInput from "@/components/ui/ComboInput";
 import {
-  AMOUNT_FIELDS,
+  SCALE_FIELDS,
   SELECT_FIELDS,
-  amountOptions,
+  SELECT_FIELD_VOCAB,
+  computeProvenance,
+  scaleOptions,
   normalizeAnalysisInputs,
   type AnalysisInputsValues,
   type EditableField,
 } from "@/utils/harnessMetadata";
+import { applySuggestions, type SuggestedLabels } from "@/utils/harnessVideoStats";
 import { saveSetupLabels } from "@/utils/harnessSetup";
 
 /** Human labels for the editable fields. */
@@ -43,6 +51,12 @@ export interface MetadataEditorPanelProps {
   bundleKey: string;
   /** The bundle's raw `analysis_inputs` block (from the corpus passthrough). */
   initial: unknown;
+  /** Harness-suggested labels to prefill unlabelled fields with, or null. */
+  suggestions?: SuggestedLabels | null;
+  /** Visible degraded-state note when suggestions are unavailable, or null. */
+  degradedNote?: string | null;
+  /** Async ViTPose camera-angle estimate — display-only hint, or null. */
+  cameraAngleHint?: string | null;
   /** Close the panel. */
   onClose: () => void;
   /** Called with the merged `analysis_inputs` after a successful save. */
@@ -54,11 +68,20 @@ type SaveState = "idle" | "saving" | "saved" | "error";
 export default function MetadataEditorPanel({
   bundleKey,
   initial,
+  suggestions,
+  degradedNote,
+  cameraAngleHint,
   onClose,
   onSaved,
 }: MetadataEditorPanelProps) {
   const seeded = useMemo(() => normalizeAnalysisInputs(initial), [initial]);
-  const [values, setValues] = useState<AnalysisInputsValues>(seeded);
+  // Prefill unlabelled fields from the harness suggestions; `applied` is the
+  // subset actually shown, which the affordance and provenance key off.
+  const prefilled = useMemo(
+    () => applySuggestions(seeded, suggestions ?? {}),
+    [seeded, suggestions],
+  );
+  const [values, setValues] = useState<AnalysisInputsValues>(prefilled.values);
   const [state, setState] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -72,11 +95,33 @@ export default function MetadataEditorPanel({
     setState("idle");
   }
 
+  /** The suggested affordance: shown while a prefill stands unconfirmed. */
+  function isSuggested(field: EditableField): boolean {
+    return state !== "saved" && prefilled.applied[field] === values[field];
+  }
+
+  function fieldLabel(field: EditableField) {
+    return (
+      <span className="text-xs font-medium text-fg-secondary">
+        {FIELD_LABELS[field]}
+        {isSuggested(field) && (
+          <span
+            className="ml-1.5 rounded bg-caution-surface px-1 py-px text-[10px] font-normal text-caution"
+            title="Prefilled from the harness video stats — confirm or override, then save"
+          >
+            suggested
+          </span>
+        )}
+      </span>
+    );
+  }
+
   async function handleSave() {
     setState("saving");
     setError(null);
     try {
-      const merged = await saveSetupLabels(bundleKey, values);
+      const provenance = computeProvenance(values, seeded, prefilled.applied);
+      const merged = await saveSetupLabels(bundleKey, values, provenance);
       setValues(normalizeAnalysisInputs(merged));
       setState("saved");
       onSaved?.(merged);
@@ -100,16 +145,25 @@ export default function MetadataEditorPanel({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+        {degradedNote && (
+          <p
+            role="status"
+            className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+          >
+            {degradedNote}
+          </p>
+        )}
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {AMOUNT_FIELDS.map((field) => (
+          {SCALE_FIELDS.map((field) => (
             <label key={field} className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-fg-secondary">{FIELD_LABELS[field]}</span>
+              {fieldLabel(field)}
               <select
                 value={values[field]}
                 onChange={(e) => set(field, e.target.value)}
                 className="ui-input px-3 py-2 text-sm"
               >
-                {amountOptions(values[field]).map((opt) => (
+                {scaleOptions(field, values[field]).map((opt) => (
                   <option key={opt} value={opt}>
                     {opt}
                   </option>
@@ -121,15 +175,33 @@ export default function MetadataEditorPanel({
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {SELECT_FIELDS.map((field) => (
-            <ComboInput
-              key={field}
-              label={FIELD_LABELS[field]}
-              value={values[field]}
-              onChange={(v) => set(field, v)}
-              suggestions={seeded[field] ? [seeded[field]] : []}
-              placeholder="unset"
-              maxLength={200}
-            />
+            <div key={field} className="flex flex-col gap-1">
+              <ComboInput
+                label={FIELD_LABELS[field]}
+                value={values[field]}
+                onChange={(v) => set(field, v)}
+                suggestions={Array.from(
+                  new Set([
+                    ...(prefilled.applied[field] ? [prefilled.applied[field] as string] : []),
+                    ...(seeded[field] ? [seeded[field]] : []),
+                    ...SELECT_FIELD_VOCAB[field],
+                  ]),
+                )}
+                placeholder="unset"
+                maxLength={200}
+              />
+              {field === "camera_stability" && isSuggested(field) && (
+                <span className="text-[10px] text-caution">suggested by the harness</span>
+              )}
+              {field === "camera_angle" && cameraAngleHint && (
+                <span
+                  className="text-[10px] text-fg-muted"
+                  title="Written asynchronously by the harness ViTPose job — the hand label stays authoritative"
+                >
+                  ViTPose estimate: {cameraAngleHint}
+                </span>
+              )}
+            </div>
           ))}
         </div>
 
