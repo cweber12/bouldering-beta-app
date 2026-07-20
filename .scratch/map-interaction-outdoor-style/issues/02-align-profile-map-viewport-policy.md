@@ -1,7 +1,8 @@
 # Align Profile Map with Stable Viewport Policy
 
-Status: in-progress
+Status: done
 Branch: fix/map-02-align-profile-viewport-policy
+Merged: e9db21f
 Type: AFK
 
 ## Parent
@@ -18,10 +19,10 @@ This should be verifiable as a complete user-facing improvement on profile map f
 
 ## Acceptance criteria
 
-- [ ] Profile map pin selection no longer causes unintended viewport resets during normal interactions.
-- [ ] Viewport behavior in profile map aligns with the same policy used in Routes (first-load/data-change fit only).
-- [ ] Manual pan/zoom remains stable after opening climb details from map interactions.
-- [ ] Behavior tests cover profile-specific map interaction regression boundaries.
+- [x] Profile map pin selection no longer causes unintended viewport resets during normal interactions.
+- [x] Viewport behavior in profile map aligns with the same policy used in Routes (first-load/data-change fit only).
+- [x] Manual pan/zoom remains stable after opening climb details from map interactions.
+- [x] Behavior tests cover profile-specific map interaction regression boundaries.
 
 ## Blocked by
 
