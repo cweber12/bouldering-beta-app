@@ -221,6 +221,10 @@ export default function ClimbsMap({
         center: [39, -98], // North America fallback
         zoom: 4,
       });
+
+      // Some browser/driver combinations ignore drag intent in init options.
+      // Re-enable at runtime to guarantee click-drag pan stays available.
+      map.dragging?.enable();
       mapInstance = map;
 
       if (aborted || initToken !== initTokenRef.current) {
