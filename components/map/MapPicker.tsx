@@ -29,21 +29,23 @@ export default function MapPicker({ initialLat, initialLng, onConfirm, onCancel 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    (async () => {
-      if (!containerRef.current) return;
+    const initTimer = setTimeout(() => {
+      void (async () => {
+      try {
+        if (!containerRef.current) return;
 
-      const initLat = initialLat ?? 39;
-      const initLng = initialLng ?? -98;
-      const initZoom = initialLat != null ? 13 : 4;
+        const initLat = initialLat ?? 39;
+        const initLng = initialLng ?? -98;
+        const initZoom = initialLat != null ? 13 : 4;
 
-      // tap:false prevents Leaflet's own tap handler conflicting with drag on iOS.
-      // CartoDB tiles + stale-id clearing live in the shared util.
-      const { L, map } = await initLeafletMap(containerRef.current, {
-        scrollWheelZoom: true,
-        tap: false,
-        dragging: true,
-      });
-      map.setView([initLat, initLng], initZoom);
+        // tap:false prevents Leaflet's own tap handler conflicting with drag on iOS.
+        // CartoDB tiles + stale-id clearing live in the shared util.
+        const { L, map } = await initLeafletMap(containerRef.current, {
+          scrollWheelZoom: true,
+          tap: false,
+          dragging: true,
+        });
+        map.setView([initLat, initLng], initZoom);
 
       // CSS-based custom marker — no CDN images required
       const pinIcon = L.divIcon({
@@ -85,10 +87,15 @@ export default function MapPicker({ initialLat, initialLng, onConfirm, onCancel 
         }
       });
 
-      mapRef.current = map;
-    })();
+        mapRef.current = map;
+      } catch {
+        // Detached-host races are expected during strict-mode remounts.
+      }
+      })();
+    }, 0);
 
     return () => {
+      clearTimeout(initTimer);
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;

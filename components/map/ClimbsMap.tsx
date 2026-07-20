@@ -198,82 +198,92 @@ export default function ClimbsMap({
     let mapInstance: LeafletMap | null = null;
     const initToken = ++initTokenRef.current;
     initInFlightRef.current = true;
+    let initTimer: ReturnType<typeof setTimeout> | null = null;
     // Declared outside the IIFE so the cleanup closure can disconnect it.
     let resizeObs: ResizeObserver | null = null;
 
-    (async () => {
-      if (!containerRef.current) {
+    initTimer = setTimeout(() => {
+      void (async () => {
+      try {
+        if (!containerRef.current) {
+          initInFlightRef.current = false;
+          return;
+        }
+        // CartoDB tiles + icon fix live in the shared util; clustering stays here.
+        // A default center/zoom must be set at creation: Leaflet throws
+        // "Set map center and zoom first" when layers are added (and dragging is
+        // attempted) before the map has a view. The marker-sync effect below
+        // overrides this with fitBounds once pins are known.
+        const { L, map } = await initLeafletMap(containerRef.current, {
+          scrollWheelZoom: true,
+          // Explicitly enable drag-pan across desktop and touch devices.
+          dragging: true,
+          // Disable Leaflet's tap handler to avoid touch drag conflicts.
+          tap: false,
+          zoomControl: true,
+          center: [39, -98], // North America fallback
+          zoom: 4,
+        });
+
+        // Some browser/driver combinations ignore drag intent in init options.
+        // Re-enable at runtime to guarantee click-drag pan stays available.
+        map.dragging?.enable();
+        mapInstance = map;
+
+        if (aborted || initToken !== initTokenRef.current) {
+          safelyRemoveMap(map);
+          initInFlightRef.current = false;
+          return;
+        }
+
+        // markercluster augments L (side-effect import); keep it out of SSR.
+        await import("leaflet.markercluster");
+        if (aborted || initToken !== initTokenRef.current) {
+          safelyRemoveMap(map);
+          initInFlightRef.current = false;
+          return;
+        }
+
+        // MarkerClusterGroup is added to L by the side-effect import above.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const cluster = (L as any).markerClusterGroup({
+          maxClusterRadius: 60,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          animate: true,
+        }) as MarkerClusterGroup;
+
+        // Separate layer group for the OSM crags overlay (not clustered).
+        const osmLayer = L.layerGroup();
+
+        mapRef.current = map;
+        clusterRef.current = cluster;
+        osmLayerRef.current = osmLayer;
+        map.addLayer(cluster);
+        map.addLayer(osmLayer);
+
+        // ResizeObserver replaces the unreliable setTimeout(invalidateSize, 100).
+        // It fires whenever the container's pixel dimensions change — including
+        // when the parent transitions from display:none to visible — ensuring
+        // tiles are re-requested at the correct container size.
+        resizeObs = new ResizeObserver(() => {
+          map.invalidateSize();
+        });
+        resizeObs.observe(containerRef.current);
+
+        setReady(true);
         initInFlightRef.current = false;
-        return;
-      }
-      // CartoDB tiles + icon fix live in the shared util; clustering stays here.
-      // A default center/zoom must be set at creation: Leaflet throws
-      // "Set map center and zoom first" when layers are added (and dragging is
-      // attempted) before the map has a view. The marker-sync effect below
-      // overrides this with fitBounds once pins are known.
-      const { L, map } = await initLeafletMap(containerRef.current, {
-        scrollWheelZoom: true,
-        // Explicitly enable drag-pan across desktop and touch devices.
-        dragging: true,
-        // Disable Leaflet's tap handler to avoid touch drag conflicts.
-        tap: false,
-        zoomControl: true,
-        center: [39, -98], // North America fallback
-        zoom: 4,
-      });
-
-      // Some browser/driver combinations ignore drag intent in init options.
-      // Re-enable at runtime to guarantee click-drag pan stays available.
-      map.dragging?.enable();
-      mapInstance = map;
-
-      if (aborted || initToken !== initTokenRef.current) {
-        safelyRemoveMap(map);
+      } catch {
+        // Detached-host races in strict mode are non-fatal; a fresh mount
+        // immediately retries with a connected container.
         initInFlightRef.current = false;
-        return;
       }
-
-      // markercluster augments L (side-effect import); keep it out of SSR.
-      await import("leaflet.markercluster");
-      if (aborted || initToken !== initTokenRef.current) {
-        safelyRemoveMap(map);
-        initInFlightRef.current = false;
-        return;
-      }
-
-      // MarkerClusterGroup is added to L by the side-effect import above.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cluster = (L as any).markerClusterGroup({
-        maxClusterRadius: 60,
-        spiderfyOnMaxZoom: true,
-        showCoverageOnHover: false,
-        animate: true,
-      }) as MarkerClusterGroup;
-
-      // Separate layer group for the OSM crags overlay (not clustered).
-      const osmLayer = L.layerGroup();
-
-      mapRef.current = map;
-      clusterRef.current = cluster;
-      osmLayerRef.current = osmLayer;
-      map.addLayer(cluster);
-      map.addLayer(osmLayer);
-
-      // ResizeObserver replaces the unreliable setTimeout(invalidateSize, 100).
-      // It fires whenever the container's pixel dimensions change — including
-      // when the parent transitions from display:none to visible — ensuring
-      // tiles are re-requested at the correct container size.
-      resizeObs = new ResizeObserver(() => {
-        map.invalidateSize();
-      });
-      resizeObs.observe(containerRef.current);
-
-      setReady(true);
-      initInFlightRef.current = false;
-    })();
+      })();
+    }, 0);
 
     return () => {
       aborted = true;
+      if (initTimer) clearTimeout(initTimer);
       resizeObs?.disconnect();
       if (mapInstance) {
         safelyRemoveMap(mapInstance);

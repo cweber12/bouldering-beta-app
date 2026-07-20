@@ -1,6 +1,10 @@
 import type { Map as LeafletMap, MapOptions } from "leaflet";
 
 type LeafletInitOptions = MapOptions & { tap?: boolean };
+type LeafletHostElement = HTMLElement & {
+  _leaflet_id?: number;
+  __leafletMapInstance__?: LeafletMap;
+};
 
 // ---------------------------------------------------------------------------
 // Shared Leaflet bootstrap — CartoDB Voyager tiles + attribution + the
@@ -47,13 +51,29 @@ export async function initLeafletMap(
 ): Promise<{ L: LeafletModule; map: LeafletMap }> {
   const L = (await import("leaflet")).default;
 
+  if (!el.isConnected) {
+    throw new Error("Leaflet host detached before map init.");
+  }
+
   fixLeafletDefaultIcon(L);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const anyEl = el as any;
-  if (anyEl._leaflet_id) delete anyEl._leaflet_id;
+  const host = el as LeafletHostElement;
+
+  // Fast refresh / strict-mode teardown races can leave a stale map attached
+  // to the same host element. Remove it before creating a fresh instance.
+  host.__leafletMapInstance__?.remove();
+  host.__leafletMapInstance__ = undefined;
+
+  if (host._leaflet_id) delete host._leaflet_id;
+  if (host.firstChild) host.replaceChildren();
 
   const map = L.map(el, options);
+  host.__leafletMapInstance__ = map;
+  map.on("unload", () => {
+    if (host.__leafletMapInstance__ === map) {
+      host.__leafletMapInstance__ = undefined;
+    }
+  });
 
   L.tileLayer(CARTO_TILE_URL, {
     attribution: CARTO_ATTRIBUTION,
