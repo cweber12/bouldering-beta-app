@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => {
   const addLayer = vi.fn();
   const on = vi.fn();
   const off = vi.fn();
+  const draggingEnable = vi.fn();
   const invalidateSize = vi.fn();
   const remove = vi.fn();
   const clearLayers = vi.fn();
@@ -22,6 +23,7 @@ const mocks = vi.hoisted(() => {
     setView,
     on,
     off,
+    dragging: { enable: draggingEnable },
     getZoom: vi.fn(() => 10),
     getBounds: vi.fn(() => ({
       getSouth: () => 39,
@@ -50,7 +52,7 @@ const mocks = vi.hoisted(() => {
 
   const initLeafletMap = vi.fn(async () => ({ L: leaflet, map }));
 
-  return { fitBounds, map, leaflet, initLeafletMap };
+  return { fitBounds, map, leaflet, initLeafletMap, draggingEnable };
 });
 
 vi.mock("leaflet", () => ({
@@ -130,5 +132,7 @@ describe("ClimbsMap", () => {
         zoomControl: true,
       }),
     );
+
+    expect(mocks.draggingEnable).toHaveBeenCalledTimes(1);
   });
 });
