@@ -211,6 +211,8 @@ git worktree add ..\beta-scanner-<task> -b <type>/<task-name>
 - On completion, push the task branch to `origin` and create a PR to `main`.
 - Do not perform local `main` merges from Copilot worktrees unless the task explicitly asks for a local-only merge.
 - After opening the PR, hand off for user review; the user decides whether to request changes or merge.
+- Once the PR merges, the task is still not complete until the branch and worktree
+  cleanup in **Copilot post-merge cleanup** below has run.
 
 Copilot completion sequence:
 
@@ -228,14 +230,20 @@ git push -u origin <task-branch>
 ### Copilot post-merge cleanup
 
 - This section applies to **Copilot only**.
-- After the PR is merged, clean up both local and remote branch/worktree state.
+- **Cleanup is mandatory and gates completion.** A task is not done until, once
+  its PR is merged, the task worktree is removed and the task branch is deleted
+  both locally and on `origin`. Never leave a merged worktree or branch behind.
+- Clean up both local and remote branch/worktree state.
 - Prefer enabling provider auto-delete for remote branches; otherwise delete the
   remote branch explicitly.
 - If a temporary worktree currently has `main` checked out and another chat needs
   to advance `main`, switch that worktree off `main` first (e.g. to its merge
   branch) before continuing.
+- After cleanup, run `node scripts/audit-issues.mjs` and resolve every warning it
+  emits, including merged-but-undeleted local branches. A clean audit is the
+  completion gate.
 
-Cleanup sequence (after PR merge):
+Cleanup sequence (after PR merge — required to finish the task):
 
 ```powershell
 # in any checkout
@@ -245,12 +253,15 @@ git fetch origin
 git switch main
 git pull --ff-only
 
-# remove the task worktree and local branch
+# remove the task worktree and local branch (worktree must be clean and off main)
 git worktree remove ..\beta-scanner-<task>
 git branch -d <task-branch>
 
 # if remote branch still exists (auto-delete disabled)
 git push origin --delete <task-branch>
+
+# verify: no merged branch/worktree left behind
+node scripts/audit-issues.mjs
 ```
 
 ### Issue tracking
