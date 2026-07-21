@@ -247,6 +247,14 @@ Shared rules for both agents:
 - Start each task branch from `main`.
 - Keep one issue per branch; do not batch unrelated fixes.
 - Avoid destructive git commands (`reset --hard`, force-push, rewriting shared history).
+- **Clean up on completion.** A task is not complete until its now-merged task
+  branch — and any worktree created for it — is removed. Once the branch is
+  merged into `main`, delete it (`git branch -d <task-branch>`) and, if a
+  worktree was created, remove it first (`git worktree remove <path>`) while it
+  is clean and off `main`. Never leave a merged branch or its worktree behind.
+- **Verify the cleanup.** After merging and closing the issue, run
+  `node scripts/audit-issues.mjs` and resolve every warning it emits, including
+  merged-but-undeleted local branches. A clean audit is the completion gate.
 
 Claude setup (primary checkout, task branch):
 
@@ -271,11 +279,16 @@ git worktree add ..\beta-scanner-<task> -b <type>/<task-name>
 - Default behavior is local validation + local commit only (no automatic push).
 - Do not merge automatically unless the user explicitly requests completion merge.
 - If requested, merge locally using `git merge --no-ff` from the primary checkout after checks pass.
+- **A completion merge is not finished until cleanup runs.** Immediately after
+  the merge (and after closing the issue), delete the merged task branch and
+  remove any worktree that was created for the effort, then confirm the
+  `audit-issues.mjs` cleanup is clean. Do not end the session with a merged
+  branch or worktree still present.
 
 Merge-on-complete sequence when explicitly requested:
 
 ```powershell
-# in task worktree
+# in task branch (primary checkout) or task worktree
 npx tsc --noEmit
 npx eslint .
 npx vitest run <targeted test files>
@@ -285,6 +298,12 @@ git commit
 # in primary checkout
 git switch main
 git merge --no-ff <task-branch>
+
+# cleanup — required to finish the task
+git branch -d <task-branch>
+# if a worktree was created for this effort (must be clean and off main first):
+git worktree remove ..\beta-scanner-<task>
+node scripts/audit-issues.mjs   # resolve every warning, incl. merged branches
 ```
 
 ### Issue tracking
