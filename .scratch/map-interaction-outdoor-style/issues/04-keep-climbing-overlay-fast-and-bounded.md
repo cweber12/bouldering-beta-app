@@ -1,7 +1,8 @@
 # Keep Climbing Overlay Fast and Bounded
 
-Status: in-progress
+Status: done
 Branch: fix/issue-04-bounded-nearby-overlay
+Merged: 558852e
 Type: AFK
 
 ## Parent
@@ -18,10 +19,10 @@ This should be independently verifiable by toggling nearby climbing overlay acro
 
 ## Acceptance criteria
 
-- [ ] Nearby climbing overlay appears only at intended zoom thresholds and hides cleanly below threshold.
-- [ ] Repeated pan/zoom within equivalent bounds does not trigger redundant overlay fetch churn.
-- [ ] Overlay toggling and updates do not degrade map interaction responsiveness.
-- [ ] Behavior tests cover zoom gating and bounded query behavior.
+- [x] Nearby climbing overlay appears only at intended zoom thresholds and hides cleanly below threshold.
+- [x] Repeated pan/zoom within equivalent bounds does not trigger redundant overlay fetch churn.
+- [x] Overlay toggling and updates do not degrade map interaction responsiveness.
+- [x] Behavior tests cover zoom gating and bounded query behavior.
 
 ## Blocked by
 
