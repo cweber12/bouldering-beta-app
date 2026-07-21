@@ -1,7 +1,8 @@
 # Document Map Provider Strategy and Dataset Scope
 
-Status: ready-for-agent
+Status: in-progress
 Type: AFK
+Branch: feat/map-05-outdoor-contours-docs
 
 ## Parent
 
@@ -17,9 +18,20 @@ The outcome should provide a clear, durable record that this work remains free-t
 
 ## Acceptance criteria
 
-- [ ] Documentation reflects the current preferred basemap and fallback behavior accurately.
-- [ ] Documentation explicitly records deferral of heavyweight external style/geocoding dataset ingestion for this PRD scope.
-- [ ] Documentation language aligns with Route/Run map workflows and avoids implying a map engine migration.
+- [x] Documentation reflects the current preferred basemap and fallback behavior accurately.
+- [x] Documentation explicitly records deferral of heavyweight external style/geocoding dataset ingestion for this PRD scope.
+- [x] Documentation language aligns with Route/Run map workflows and avoids implying a map engine migration.
+
+## Implementation notes
+
+- ADR `docs/adr/0021-outdoor-contour-basemap-provider-strategy.md` records the
+  preferred/fallback tiers, the theme-tint approach, and the explicit deferral of
+  heavyweight style/geocoding dataset ingestion (no map-engine migration).
+- README "Location & Maps" + stack table updated: fallback is now OpenTopoMap
+  (contour lines), and the dark-theme tile filter is described.
+- Shipped the aligned UI change: fallback basemap switched CartoDB Voyager →
+  OpenTopoMap in `utils/leaflet.ts`, and a theme-aware `.leaflet-tile-pane`
+  filter in `app/globals.css` darkens the tiles to the app surface in dark mode.
 
 ## Blocked by
 

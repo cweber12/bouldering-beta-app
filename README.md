@@ -312,9 +312,13 @@ Climb locations are captured via two mechanisms, both of which require no API ke
 
 - **Map picker** — a "Pick on map" button on the upload page opens a full-screen
   **Leaflet** map with a preferred **MapTiler Outdoor** basemap when
-  `NEXT_PUBLIC_MAPTILER_KEY` is configured, and automatic fallback to **CartoDB
-  Voyager** when the key is missing or the preferred tiles fail at runtime.
-  Users can click or drag a pin to select a precise climb location.
+  `NEXT_PUBLIC_MAPTILER_KEY` is configured, and automatic fallback to
+  **OpenTopoMap** when the key is missing or the preferred tiles fail at runtime.
+  Both tiers are outdoor topographic styles with contour lines, so the map keeps
+  its climbing identity in either path. A theme-aware CSS filter on the tile pane
+  (`app/globals.css`) tones the tiles toward the app's warm-charcoal surface in
+  dark mode and relaxes to a light, natural render under `.theme-light`. Users
+  can click or drag a pin to select a precise climb location.
 
 - **Location autocomplete** — the location autocomplete component (`LocationAutocomplete`)
   queries Nominatim forward-search with a 500 ms debounce and displays a dropdown
@@ -375,19 +379,19 @@ The Firebase Admin private key can be downloaded from the Firebase console:
 
 ## Stack
 
-| Concern         | Library                                                                                            |
-| --------------- | -------------------------------------------------------------------------------------------------- |
-| Framework       | Next.js 16 App Router                                                                              |
-| Language        | TypeScript (strict)                                                                                |
-| Styling         | Tailwind CSS v4                                                                                    |
-| Authentication  | Firebase Auth (email/password, session cookies)                                                    |
-| Pose detection  | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate)                                      |
-| Computer vision | OpenCV.js 4.12 (WASM, main thread)                                                                 |
-| Video encoding  | MediaRecorder API (WebM)                                                                           |
-| Maps            | Leaflet + react-leaflet, MapTiler Outdoor (preferred) with CartoDB fallback, leaflet.markercluster |
-| Geocoding       | Nominatim (OpenStreetMap, no API key required)                                                     |
-| Photo cropping  | react-image-crop (circular crop, canvas output)                                                    |
-| Testing         | Vitest + jsdom + Testing Library                                                                   |
+| Concern         | Library                                                                                                |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| Framework       | Next.js 16 App Router                                                                                  |
+| Language        | TypeScript (strict)                                                                                    |
+| Styling         | Tailwind CSS v4                                                                                        |
+| Authentication  | Firebase Auth (email/password, session cookies)                                                        |
+| Pose detection  | MediaPipe Pose Landmarker (Lite / Full / Heavy, GPU delegate)                                          |
+| Computer vision | OpenCV.js 4.12 (WASM, main thread)                                                                     |
+| Video encoding  | MediaRecorder API (WebM)                                                                               |
+| Maps            | Leaflet + react-leaflet, MapTiler Outdoor (preferred) with OpenTopoMap fallback, leaflet.markercluster |
+| Geocoding       | Nominatim (OpenStreetMap, no API key required)                                                         |
+| Photo cropping  | react-image-crop (circular crop, canvas output)                                                        |
+| Testing         | Vitest + jsdom + Testing Library                                                                       |
 
 ## Development
 

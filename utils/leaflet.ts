@@ -7,17 +7,24 @@ type LeafletHostElement = HTMLElement & {
 };
 
 // ---------------------------------------------------------------------------
-// Shared Leaflet bootstrap — CartoDB Voyager tiles + attribution + the
-// bundler default-icon CDN fallback, used by both ClimbsMap and MapPicker.
-// Each component keeps its own unique logic (clustering, draggable marker).
+// Shared Leaflet bootstrap — an outdoor, contour-lined basemap + attribution +
+// the bundler default-icon CDN fallback, used by both ClimbsMap and MapPicker.
+// Both basemap tiers carry topographic contour lines; the dark-theme tint that
+// harmonises them with the app surface lives in `app/globals.css`
+// (`.leaflet-tile-pane` filter). Each component keeps its own unique logic
+// (clustering, draggable marker).
 // ---------------------------------------------------------------------------
 
-/** CartoDB Voyager raster tiles ({r} → @2x on HiDPI displays). */
-export const CARTO_TILE_URL =
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+/**
+ * Free fallback basemap — OpenTopoMap raster tiles. Topographic style with
+ * contour lines and hillshading, so the map keeps its outdoor identity even
+ * without a preferred-provider key. Native tiles stop at z17; Leaflet upscales
+ * beyond that so zoom stays in lock-step with the markers.
+ */
+export const OPENTOPO_TILE_URL = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
 
-export const CARTO_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+export const OPENTOPO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, SRTM &copy; map style: <a href="https://opentopomap.org/">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)';
 
 /** Preferred outdoor style (MapTiler) used when `NEXT_PUBLIC_MAPTILER_KEY` exists. */
 export const MAPTILER_OUTDOOR_TILE_URL =
@@ -56,13 +63,16 @@ function preferredOutdoorConfig(key: string): BasemapConfig {
   };
 }
 
-function fallbackCartoConfig(): BasemapConfig {
+function fallbackOpenTopoConfig(): BasemapConfig {
   return {
     id: "fallback",
-    url: CARTO_TILE_URL,
+    url: OPENTOPO_TILE_URL,
     options: {
-      attribution: CARTO_ATTRIBUTION,
-      subdomains: "abcd",
+      attribution: OPENTOPO_ATTRIBUTION,
+      subdomains: "abc",
+      // OpenTopoMap serves native tiles up to z17; upscale past that so the
+      // basemap never blanks out relative to the (z19) marker layer.
+      maxNativeZoom: 17,
       maxZoom: 19,
       detectRetina: true,
       keepBuffer: 4,
@@ -76,7 +86,7 @@ export function resolveBasemapSelection(): {
   fallback: BasemapConfig;
   hasPreferred: boolean;
 } {
-  const fallback = fallbackCartoConfig();
+  const fallback = fallbackOpenTopoConfig();
   const key = readPreferredOutdoorKey();
   if (!key) {
     return {
