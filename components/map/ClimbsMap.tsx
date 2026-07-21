@@ -106,6 +106,36 @@ function osmFeatureType(tags: Record<string, string>): OsmFeature["featureType"]
   return "other";
 }
 
+function roundedBoundsKey(bounds: import("leaflet").LatLngBounds): string {
+  return `${bounds.getSouth().toFixed(1)},${bounds.getWest().toFixed(1)},${bounds.getNorth().toFixed(1)},${bounds.getEast().toFixed(1)}`;
+}
+
+function renderOsmFeatures(
+  L: typeof import("leaflet"),
+  osmLayer: LayerGroup,
+  features: OsmFeature[],
+): void {
+  osmLayer.clearLayers();
+  const icon = buildOsmIcon(L);
+  for (const f of features) {
+    const typeLabel =
+      f.featureType === "gym"
+        ? "🏋 Climbing gym"
+        : f.featureType === "area"
+          ? "🏔 Climbing area"
+          : f.featureType === "crag"
+            ? "🪨 Crag"
+            : f.featureType === "boulder"
+              ? "🪨 Boulder"
+              : "⛰ Climbing site";
+    const websiteRow = f.website
+      ? `<br/><a href="${f.website}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);font-size:11px">Website ↗</a>`
+      : "";
+    const popup = `<div style="font-size:13px;line-height:1.5;color:var(--color-fg);max-width:200px"><strong>${f.name}</strong><br/><span style="color:var(--color-fg-muted);font-size:11px">${typeLabel}</span>${websiteRow}</div>`;
+    L.marker([f.lat, f.lng], { icon }).bindPopup(popup).addTo(osmLayer);
+  }
+}
+
 async function fetchOsmClimbing(
   south: number,
   west: number,
@@ -154,6 +184,12 @@ export default function ClimbsMap({
   const moveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bounds key of the last successful Overpass query (skip repeat fetches).
   const lastBoundsKeyRef = useRef<string | null>(null);
+  // Cache OSM features by rounded bounds key to avoid repeat network churn.
+  const osmCacheRef = useRef<Map<string, OsmFeature[]>>(new Map());
+  // Deduplicate concurrent requests for the same key while panning/zooming.
+  const inFlightRef = useRef<Map<string, Promise<OsmFeature[]>>>(new Map());
+  // Most recent requested key; stale responses must not replace newer viewport data.
+  const latestQueryKeyRef = useRef<string | null>(null);
   // Pin-set signature of the last viewport auto-fit.
   const lastFitSignatureRef = useRef<string | null>(null);
   // Guards async init so stale effects can't steal/reuse the same container.
@@ -163,6 +199,7 @@ export default function ClimbsMap({
   const [ready, setReady] = useState(false);
   const [showCrags, setShowCrags] = useState(false);
   const [loadingCrags, setLoadingCrags] = useState(false);
+  const [mapZoom, setMapZoom] = useState<number>(4);
 
   // Group pins by location so the popup can list all climbs at a spot.
   const grouped = useMemo(() => {
@@ -381,72 +418,85 @@ export default function ClimbsMap({
     if (!showCrags) {
       osmLayer.clearLayers();
       lastBoundsKeyRef.current = null;
+      latestQueryKeyRef.current = null;
+      setLoadingCrags(false);
       return;
     }
 
     const queryVisible = async () => {
       if (!mapRef.current) return;
       const zoom = map.getZoom();
+      setMapZoom(zoom);
       if (zoom < MIN_ZOOM_CRAGS) {
         osmLayer.clearLayers();
+        lastBoundsKeyRef.current = null;
+        latestQueryKeyRef.current = null;
+        setLoadingCrags(false);
         return;
       }
       const b = map.getBounds();
-      // Round bounds to 1 decimal degree (~11 km) — skip if we're within the
-      // same approximate area as the last successful query.
-      const key = `${b.getSouth().toFixed(1)},${b.getWest().toFixed(1)},${b.getNorth().toFixed(1)},${b.getEast().toFixed(1)}`;
+      // Equivalent local pan/zoom reuses data and avoids repeat Overpass churn.
+      const key = roundedBoundsKey(b);
       if (key === lastBoundsKeyRef.current) return;
       lastBoundsKeyRef.current = key;
+      latestQueryKeyRef.current = key;
+
+      const cached = osmCacheRef.current.get(key);
+      if (cached) {
+        const L = (await import("leaflet")).default;
+        if (!mapRef.current || latestQueryKeyRef.current !== key) return;
+        renderOsmFeatures(L, osmLayer, cached);
+        return;
+      }
 
       setLoadingCrags(true);
       try {
         const L = (await import("leaflet")).default;
-        const features = await fetchOsmClimbing(
-          b.getSouth(),
-          b.getWest(),
-          b.getNorth(),
-          b.getEast(),
-        );
-        if (!mapRef.current) return; // unmounted while fetching
-        osmLayer.clearLayers();
-        const icon = buildOsmIcon(L);
-        for (const f of features) {
-          const typeLabel =
-            f.featureType === "gym"
-              ? "🏋 Climbing gym"
-              : f.featureType === "area"
-                ? "🏔 Climbing area"
-                : f.featureType === "crag"
-                  ? "🪨 Crag"
-                  : f.featureType === "boulder"
-                    ? "🪨 Boulder"
-                    : "⛰ Climbing site";
-          const websiteRow = f.website
-            ? `<br/><a href="${f.website}" target="_blank" rel="noopener noreferrer" style="color:var(--color-accent);font-size:11px">Website ↗</a>`
-            : "";
-          const popup = `<div style="font-size:13px;line-height:1.5;color:var(--color-fg);max-width:200px"><strong>${f.name}</strong><br/><span style="color:var(--color-fg-muted);font-size:11px">${typeLabel}</span>${websiteRow}</div>`;
-          L.marker([f.lat, f.lng], { icon }).bindPopup(popup).addTo(osmLayer);
+        let req = inFlightRef.current.get(key);
+        if (!req) {
+          req = fetchOsmClimbing(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()).finally(() => {
+            inFlightRef.current.delete(key);
+          });
+          inFlightRef.current.set(key, req);
         }
+        const features = await req;
+        if (!mapRef.current || latestQueryKeyRef.current !== key) return;
+        osmCacheRef.current.set(key, features);
+        renderOsmFeatures(L, osmLayer, features);
       } catch {
         // Overpass request failed — silently skip, don't clear existing markers.
         lastBoundsKeyRef.current = null;
       } finally {
-        setLoadingCrags(false);
+        if (latestQueryKeyRef.current === key) {
+          setLoadingCrags(false);
+        }
       }
     };
 
-    const onMoveEnd = () => {
+    const scheduleQuery = () => {
       if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
       // Debounce: wait 600ms after the last pan/zoom before querying.
       moveTimerRef.current = setTimeout(queryVisible, 600);
     };
 
+    const onMoveEnd = () => {
+      scheduleQuery();
+    };
+
+    const onZoomEnd = () => {
+      setMapZoom(map.getZoom());
+      scheduleQuery();
+    };
+
     map.on("moveend", onMoveEnd);
+    map.on("zoomend", onZoomEnd);
     // Fire immediately for the current viewport.
+    setMapZoom(map.getZoom());
     queryVisible();
 
     return () => {
       map.off("moveend", onMoveEnd);
+      map.off("zoomend", onZoomEnd);
       if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
     };
   }, [ready, showCrags]);
@@ -463,7 +513,7 @@ export default function ClimbsMap({
 
       {/* Nearby crags toggle — positioned top-right, z-index above Leaflet controls */}
       {ready && (
-        <div className="absolute top-2 right-2 z-[400] flex items-center gap-2">
+        <div className="absolute top-2 right-2 z-400 flex items-center gap-2">
           <button
             type="button"
             onClick={() => setShowCrags((s) => !s)}
@@ -500,8 +550,8 @@ export default function ClimbsMap({
       )}
 
       {/* Zoom-too-low hint shown when crags are toggled on but zoom < MIN_ZOOM_CRAGS */}
-      {ready && showCrags && mapRef.current && mapRef.current.getZoom() < MIN_ZOOM_CRAGS && (
-        <div className="absolute bottom-2 left-1/2 z-[400] -translate-x-1/2 rounded-lg bg-surface/90 px-3 py-1.5 text-xs text-fg-muted shadow backdrop-blur-sm">
+      {ready && showCrags && mapZoom < MIN_ZOOM_CRAGS && (
+        <div className="absolute bottom-2 left-1/2 z-400 -translate-x-1/2 rounded-lg bg-surface/90 px-3 py-1.5 text-xs text-fg-muted shadow backdrop-blur-sm">
           Zoom in to see nearby crags
         </div>
       )}

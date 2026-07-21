@@ -1,6 +1,7 @@
 # Keep Climbing Overlay Fast and Bounded
 
-Status: ready-for-agent
+Status: in-progress
+Branch: fix/issue-04-bounded-nearby-overlay
 Type: AFK
 
 ## Parent
