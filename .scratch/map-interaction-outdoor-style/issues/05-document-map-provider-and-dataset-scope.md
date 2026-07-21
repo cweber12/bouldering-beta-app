@@ -1,8 +1,9 @@
 # Document Map Provider Strategy and Dataset Scope
 
-Status: in-progress
+Status: done
 Type: AFK
 Branch: feat/map-05-outdoor-contours-docs
+Merged: 24ecdad9ef2d6b6c5d09fb7993aade771511e743
 
 ## Parent
 

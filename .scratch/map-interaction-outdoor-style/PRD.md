@@ -1,6 +1,6 @@
 # PRD: Route Map Interaction Reliability and Outdoor Visual Refresh
 
-Status: in-progress
+Status: done
 
 ## Problem Statement
 
