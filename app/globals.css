@@ -724,6 +724,23 @@ input[type="checkbox"] {
   }
 }
 
+/* ─── Leaflet basemap tint ──────────────────────────────
+   Both basemap tiers (MapTiler Outdoor, OpenTopoMap fallback) ship light,
+   high-chroma topographic tiles. The filter tones them down to the warm
+   charcoal surface so the map reads as part of the dark UI while the contour
+   lines and terrain shading stay legible. Only the tile pane is filtered —
+   markers, popups and controls live in sibling panes and keep full colour.
+   Dark is the default (matches the @theme inline base); `.theme-light` relaxes
+   the tint so the topo tiles sit naturally on the chalk surface. */
+
+.leaflet-tile-pane {
+  filter: brightness(0.62) contrast(1.08) saturate(0.72) sepia(0.14);
+  transition: filter 200ms ease;
+}
+.theme-light .leaflet-tile-pane {
+  filter: saturate(0.85) brightness(0.99);
+}
+
 /* ─── Leaflet popup theme overrides ─────────────────── */
 
 .leaflet-popup-content-wrapper {

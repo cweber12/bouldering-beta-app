@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  CARTO_TILE_URL,
+  OPENTOPO_TILE_URL,
   initLeafletMap,
   MAPTILER_OUTDOOR_TILE_URL,
   resolveBasemapSelection,
@@ -115,11 +115,11 @@ describe("leaflet basemap fallback", () => {
     await initLeafletMap(host, { center: [39, -98], zoom: 4 });
 
     expect(mocks.tileLayerRecords).toHaveLength(1);
-    expect(mocks.tileLayerRecords[0].url).toBe(CARTO_TILE_URL);
+    expect(mocks.tileLayerRecords[0].url).toBe(OPENTOPO_TILE_URL);
     expect(mocks.map.removeLayer).not.toHaveBeenCalled();
   });
 
-  it("falls back to Carto when preferred provider emits tileerror", async () => {
+  it("falls back to OpenTopoMap when preferred provider emits tileerror", async () => {
     process.env.NEXT_PUBLIC_MAPTILER_KEY = "demo-outdoor-key";
 
     const host = document.createElement("div");
@@ -138,7 +138,7 @@ describe("leaflet basemap fallback", () => {
     preferredLayer.emit("tileerror");
 
     expect(mocks.tileLayerRecords).toHaveLength(2);
-    expect(mocks.tileLayerRecords[1].url).toBe(CARTO_TILE_URL);
+    expect(mocks.tileLayerRecords[1].url).toBe(OPENTOPO_TILE_URL);
     expect(mocks.map.removeLayer).toHaveBeenCalledTimes(1);
     expect(mocks.map.removeLayer).toHaveBeenCalledWith(preferredLayer);
   });
