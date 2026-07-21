@@ -261,6 +261,10 @@ git push origin --delete <task-branch>
   `Branch:` line into the `.scratch/.../issues/*.md` file when work starts,
   then push branch + open PR; close the issue in that same `.scratch` file by
   setting `Status: done` + `Merged: <sha>` when the PR merge lands on `main`.
+- If a PR/issue is already closed or merged, immediately update the matching
+  `.scratch/.../issues/*.md` file in the same session: set `Status: done`,
+  keep `Branch:`, write `Merged: <sha>`, and tick all satisfied acceptance
+  checkboxes before ending the task.
 - An issue is never `done` until its code is merged, and merged code never lands
   without moving its issue to `done` — the two happen together.
 - Before ending a PRD work session, run `node scripts/audit-issues.mjs` and

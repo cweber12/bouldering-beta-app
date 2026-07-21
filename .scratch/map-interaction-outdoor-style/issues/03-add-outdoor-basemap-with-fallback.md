@@ -1,8 +1,9 @@
 # Add Preferred Outdoor Basemap with Automatic Fallback
 
-Status: in-progress
+Status: done
 Type: AFK
 Branch: feat/map-03-outdoor-basemap-fallback
+Merged: 495795e676b8659aead70f065104c447a2b40d3e
 
 ## Parent
 
@@ -18,10 +19,10 @@ This should be demoable by toggling configured and fallback states and confirmin
 
 ## Acceptance criteria
 
-- [ ] Preferred outdoor basemap is used when provider configuration is available.
-- [ ] Automatic fallback keeps map surfaces usable when preferred provider configuration is absent or fails.
-- [ ] Map popups/controls remain legible and coherent with app theme in both preferred and fallback states.
-- [ ] Behavior tests validate fallback for missing configuration and runtime provider failure scenarios.
+- [x] Preferred outdoor basemap is used when provider configuration is available.
+- [x] Automatic fallback keeps map surfaces usable when preferred provider configuration is absent or fails.
+- [x] Map popups/controls remain legible and coherent with app theme in both preferred and fallback states.
+- [x] Behavior tests validate fallback for missing configuration and runtime provider failure scenarios.
 
 ## Blocked by
 

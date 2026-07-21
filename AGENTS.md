@@ -295,6 +295,10 @@ git merge --no-ff <task-branch>
   `Branch:` line into the `.scratch/.../issues/*.md` file when work starts,
   then merge with `git merge --no-ff` and close the issue in that same `.scratch`
   file by setting `Status: done` + `Merged: <sha>` in the same step.
+- If a PR/issue is already closed or merged, immediately reconcile the
+  corresponding `.scratch/.../issues/*.md` file in that same session: set
+  `Status: done`, preserve `Branch:`, add `Merged: <sha>`, and tick satisfied
+  acceptance checkboxes before ending work.
 - An issue is never `done` until its code is merged, and merged code never lands
   without moving its issue to `done` — the two happen together. This includes
   **batch commits**: a commit that lands several issues' work closes every one of
