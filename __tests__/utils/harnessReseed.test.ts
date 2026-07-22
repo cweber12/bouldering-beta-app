@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planReseedSweep, decideReseedStep } from "@/utils/harnessReseed";
+import { planReseedSweep, planBatchCalibrate, decideReseedStep } from "@/utils/harnessReseed";
 import type { ViTPoseScaffold } from "@/utils/harnessViTPose";
 
 function item(
@@ -93,6 +93,61 @@ describe("planReseedSweep", () => {
     expect(plan.seedReady).toBe(0);
     expect(plan.skippedNoSetup).toBe(0);
     expect(plan.staleTotal).toBe(0);
+    expect(plan.total).toBe(0);
+  });
+});
+
+describe("planBatchCalibrate", () => {
+  it("queues exactly the setup-but-truthless bundles that are not seed-ready, in corpus order", () => {
+    const plan = planBatchCalibrate([
+      item("truthless-a", { hasGroundTruth: false }),
+      item("has-truth", {}),
+      item("truthless-b", { hasGroundTruth: false }),
+    ]);
+    expect(plan.queue.map((i) => i.key)).toEqual(["truthless-a", "truthless-b"]);
+    expect(plan.seedReady).toBe(0);
+    expect(plan.truthlessTotal).toBe(2);
+    expect(plan.total).toBe(3);
+  });
+
+  it("surfaces seed-ready truthless bundles as review-ready, never re-jobbed", () => {
+    const plan = planBatchCalibrate([
+      item("ready", { hasGroundTruth: false, seedReady: true }),
+      item("needs-job", { hasGroundTruth: false }),
+    ]);
+    expect(plan.queue.map((i) => i.key)).toEqual(["needs-job"]);
+    expect(plan.seedReady).toBe(1);
+    expect(plan.truthlessTotal).toBe(2);
+  });
+
+  it("skips a truthless bundle with no Scan Setup under its own count", () => {
+    const plan = planBatchCalibrate([
+      item("no-setup", { hasGroundTruth: false, hasSetup: false }),
+      item("ok", { hasGroundTruth: false }),
+    ]);
+    expect(plan.queue.map((i) => i.key)).toEqual(["ok"]);
+    expect(plan.skippedNoSetup).toBe(1);
+    expect(plan.truthlessTotal).toBe(2);
+  });
+
+  it("excludes every truth-bearing bundle — stale or fresh, calibration is not first-time authoring", () => {
+    const plan = planBatchCalibrate([
+      item("fresh", {}),
+      item("stale", { truthStale: true }),
+      item("stale-ready", { truthStale: true, seedReady: true }),
+    ]);
+    expect(plan.queue).toEqual([]);
+    expect(plan.seedReady).toBe(0);
+    expect(plan.truthlessTotal).toBe(0);
+    expect(plan.total).toBe(3);
+  });
+
+  it("plans an empty corpus as an empty sweep", () => {
+    const plan = planBatchCalibrate([]);
+    expect(plan.queue).toEqual([]);
+    expect(plan.seedReady).toBe(0);
+    expect(plan.skippedNoSetup).toBe(0);
+    expect(plan.truthlessTotal).toBe(0);
     expect(plan.total).toBe(0);
   });
 });

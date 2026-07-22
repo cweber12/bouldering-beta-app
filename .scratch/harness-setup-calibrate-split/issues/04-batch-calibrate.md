@@ -1,6 +1,7 @@
 # Batch Calibrate sweep for setup-but-truthless bundles
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-batch-calibrate
 Type: AFK
 
 ## Parent
@@ -21,12 +22,12 @@ fast Review-seed path.
 
 ## Acceptance criteria
 
-- [ ] The sweep queues exactly `hasSetup && !hasGroundTruth && !seedReady` bundles;
+- [x] The sweep queues exactly `hasSetup && !hasGroundTruth && !seedReady` bundles;
       already-seed-ready truthless bundles are surfaced as review-ready, not re-jobbed.
-- [ ] Each queued bundle submits one ViTPose job and lands a fresh scaffold (flips to
+- [x] Each queued bundle submits one ViTPose job and lands a fresh scaffold (flips to
       `truth: seed ready`); no Ground Truth is auto-accepted.
-- [ ] The Batch Calibrate button shows a live count and its plan is frozen at click.
-- [ ] Type-check, lint, and targeted tests pass
+- [x] The Batch Calibrate button shows a live count and its plan is frozen at click.
+- [x] Type-check, lint, and targeted tests pass
       (`__tests__/utils/harnessReseed.test.ts` or a new batch-calibrate plan test).
 
 ## Blocked by
