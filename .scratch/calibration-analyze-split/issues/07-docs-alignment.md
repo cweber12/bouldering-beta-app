@@ -2,7 +2,7 @@
 
 Status: done
 Branch: chore/calibration-analyze-split-docs-closeout
-Merged: pending
+Merged: a7b97ef
 Type: AFK
 
 ## Parent
