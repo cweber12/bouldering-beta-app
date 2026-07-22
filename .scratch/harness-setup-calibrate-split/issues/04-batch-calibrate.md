@@ -1,7 +1,8 @@
 # Batch Calibrate sweep for setup-but-truthless bundles
 
-Status: in-progress
+Status: done
 Branch: feat/harness-batch-calibrate
+Merged: PENDING
 Type: AFK
 
 ## Parent
