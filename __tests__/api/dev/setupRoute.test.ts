@@ -206,6 +206,69 @@ describe("dev GET/PUT /api/dev/corpus/setup", () => {
     expect(res.status).toBe(422);
   });
 
+  it("a seedTap-only save leaves the scan fields and setupHash byte-identical", async () => {
+    const { PUT } = await importRoute("development");
+
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    const before = await onDisk();
+
+    const res = await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.7, y: 0.4, t: 3.2 } }));
+    expect(res.status).toBe(200);
+    const after = await onDisk();
+
+    // The off-hash seed tap never touches the analysis inputs or the hash.
+    expect(after.setupHash).toBe(before.setupHash);
+    expect(after.climberCrop).toEqual(before.climberCrop);
+    expect(after.climberPoint).toEqual(before.climberPoint);
+    expect(after.seedTap).toEqual({ x: 0.7, y: 0.4, t: 3.2 });
+    expect((await res.json()).setup.seedTap).toEqual({ x: 0.7, y: 0.4, t: 3.2 });
+  });
+
+  it("a seedTap survives a later crops-only save and a null clears it", async () => {
+    const { PUT } = await importRoute("development");
+
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.7, y: 0.4 } }));
+
+    // A crops-only save carries the seed tap forward.
+    const kept = (await (await PUT(makeRequest(BUNDLE_KEY, { ...CROPS, panning: true }))).json())
+      .setup;
+    expect(kept.seedTap).toEqual({ x: 0.7, y: 0.4 });
+
+    // An explicit null clears it back to falling through to climberPoint.
+    const cleared = (await (await PUT(makeRequest(BUNDLE_KEY, { seedTap: null }))).json()).setup;
+    expect(cleared.seedTap).toBeUndefined();
+  });
+
+  it("editing only the seedTap never changes setupHash", async () => {
+    const { PUT } = await importRoute("development");
+
+    const first = (await (await PUT(makeRequest(BUNDLE_KEY, CROPS))).json()).setup;
+    const seeded = (
+      await (await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.3, y: 0.3, t: 1 } }))).json()
+    ).setup;
+    const reSeeded = (
+      await (await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.8, y: 0.8, t: 5 } }))).json()
+    ).setup;
+
+    expect(seeded.setupHash).toBe(first.setupHash);
+    expect(reSeeded.setupHash).toBe(first.setupHash);
+    expect(reSeeded.seedTap).toEqual({ x: 0.8, y: 0.8, t: 5 });
+  });
+
+  it("422s a malformed seedTap", async () => {
+    const { PUT } = await importRoute("development");
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    const res = await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: "no", y: 0.4 } }));
+    expect(res.status).toBe(422);
+  });
+
+  it("422s a seedTap-only save when no setup has been calibrated yet", async () => {
+    const { PUT } = await importRoute("development");
+    const res = await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.5, y: 0.5 } }));
+    expect(res.status).toBe(422);
+  });
+
   it("422s a label edit that names a structural / unknown field", async () => {
     const { PUT } = await importRoute("development");
     await PUT(makeRequest(BUNDLE_KEY, CROPS));

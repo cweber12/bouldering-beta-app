@@ -6,8 +6,11 @@
  * `setupHash` server-side and preserves the saved condition labels; a labels-only
  * body (`{ analysisInputs }`) preserves the saved crops and their `setupHash`
  * byte-for-byte — `setupHash` never covers the labels, so a label edit can never
- * orphan saved Ground Truth or prior runs. The bundle must already exist. 404s
- * outside development. See docs/adr/0017 and the Scan Setup glossary entry.
+ * orphan saved Ground Truth or prior runs. A `seedTap`-only body (`{ seedTap }`)
+ * likewise preserves the crops + hash: the off-hash ViTPose seed tap is excluded
+ * from `setupHash`, so re-seeding never re-pairs prior runs. The bundle must
+ * already exist. 404s outside development. See docs/adr/0017 and 0020 and the
+ * Scan Setup glossary entry.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,10 +22,13 @@ import {
   parseScanSetupInput,
   parseAnalysisInputsEdit,
   parseProvenanceEdit,
+  parseSeedTapEdit,
   bodyHasScanInputs,
+  bodyHasSeedTap,
   pickScanInput,
   hashSetupInput,
   SETUP_VERSION,
+  type ClimberPoint,
   type ScanSetup,
   type ScanSetupInput,
 } from "@/utils/harnessSetup";
@@ -89,11 +95,22 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   } else if (existing) {
     input = pickScanInput(existing);
   } else {
-    // Labels-only save with nothing to merge onto — crops must be calibrated first.
+    // Labels-/seed-tap-only save with nothing to merge onto — crops first.
     return NextResponse.json(
-      { error: "Save the Scan Setup before editing labels." },
+      { error: "Save the Scan Setup before editing labels or the seed tap." },
       { status: 422 },
     );
+  }
+
+  // Seed tap (off-hash): merge an edit onto the saved one, else carry it forward.
+  // `null` clears it (falls back to `climberPoint`); it never touches `setupHash`.
+  let seedTap: ClimberPoint | undefined = existing?.seedTap;
+  if (bodyHasSeedTap(body)) {
+    const parsed = parseSeedTapEdit(body);
+    if (parsed === false) {
+      return NextResponse.json({ error: "Invalid seed tap." }, { status: 422 });
+    }
+    seedTap = parsed ?? undefined;
   }
 
   // Condition labels: merge an edit onto the saved block, else carry it forward.
@@ -120,6 +137,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     setupHash: await hashSetupInput(input),
     ...(Object.keys(analysisInputs).length > 0 ? { analysisInputs } : {}),
     ...(Object.keys(provenance).length > 0 ? { analysisInputsProvenance: provenance } : {}),
+    ...(seedTap ? { seedTap } : {}),
     updatedAt: new Date().toISOString(),
   };
 

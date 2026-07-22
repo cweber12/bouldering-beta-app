@@ -1,6 +1,7 @@
 # Seed tap persisted off the setupHash
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-seed-tap-off-hash
 Type: AFK
 
 ## Parent
