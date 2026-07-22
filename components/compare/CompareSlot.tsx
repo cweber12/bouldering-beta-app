@@ -6,7 +6,7 @@ import FramePlayer, { type FramePlayerHandle } from "@/components/skeleton/Frame
 import type { CropFraction } from "@/components/capture/CropBoxOverlay";
 import { cn } from "@/utils/cn";
 import { useImageMatcher } from "@/hooks/useImageMatcher";
-import type { ImageMatchResult } from "@/hooks/useImageMatcher";
+import type { ImageMatchResult, MatchStatus } from "@/hooks/useImageMatcher";
 import { useSkeletonFrames } from "@/hooks/useSkeletonFrames";
 import { useHolds } from "@/hooks/useHolds";
 import { renderPoseVideo } from "@/pipeline/render/poseVideoRenderer";
@@ -43,6 +43,12 @@ export interface CompareSlotProps {
   /** This climb's identity colour — drives the Silhouette and Skeleton lines. */
   limbColor: string;
   /**
+   * Owner attribution shown in the slot header ("You" / a climber's displayName).
+   * Set in cross-user comparison so each side-by-side card names whose run it is;
+   * omit for a single-owner comparison where every run is the viewer's own.
+   */
+  ownerLabel?: string;
+  /**
    * When set, the overlay colours are nudged (lightness only, hue-locked) for
    * legibility against the sampled route photo. Omit to render the exact identity
    * colours. Threaded into the live player layer and the exported WebM so the
@@ -63,6 +69,13 @@ export interface CompareSlotProps {
   /** Ref forwarded to the inner FramePlayer for external play control. */
   playerRef?: Ref<FramePlayerHandle>;
   onMatchResult: (idx: number, result: ImageMatchResult | null) => void;
+  /**
+   * Report this slot's match lifecycle (idle/matching/done/error). The overlay
+   * result is null both while matching and on a failed alignment, so the console
+   * needs the status to distinguish "still matching" from "couldn't align" and
+   * trigger the side-by-side fallback.
+   */
+  onMatchStatus?: (idx: number, status: MatchStatus) => void;
   /** Edit this climb's identity colour inline (omit to hide the swatch). */
   onColorChange?: (idx: number, hex: string) => void;
   /** Flag the current scrub position as this climb's start (omit to hide). */
@@ -83,6 +96,7 @@ export default function CompareSlot({
   matchTrigger,
   cv,
   limbColor,
+  ownerLabel,
   contrastAdjust,
   hidePlayer = false,
   hidePlayButton = false,
@@ -90,6 +104,7 @@ export default function CompareSlot({
   startOffset = 0,
   playerRef,
   onMatchResult,
+  onMatchStatus,
   onColorChange,
   onSetStart,
   onClearStart,
@@ -114,6 +129,11 @@ export default function CompareSlot({
   useEffect(() => {
     onMatchResult(slotIndex, matchResult);
   }, [matchResult, slotIndex, onMatchResult]);
+
+  // Report the match lifecycle so the console can drive the side-by-side fallback.
+  useEffect(() => {
+    onMatchStatus?.(slotIndex, matchStatus);
+  }, [matchStatus, slotIndex, onMatchStatus]);
 
   // Re-run matching when the user triggers a match (via "Apply & Match" button).
   useEffect(() => {
@@ -204,15 +224,23 @@ export default function CompareSlot({
             />
           )}
 
-          {/* Date · time — the real distinguisher between a climber's own runs. */}
+          {/* Owner (cross-user) · date · time — attribution first when set, then
+              the date/time that distinguishes a single climber's own runs. */}
           {(() => {
             const ts = formatRunTimestamp(attempt.id);
-            return ts ? (
+            return (
               <span className="flex min-w-0 items-baseline gap-1.5 text-xs">
-                <span className="truncate font-medium text-fg">{ts.date}</span>
-                <span className="shrink-0 text-fg-muted">{ts.time}</span>
+                {ownerLabel && <span className="truncate font-medium text-fg">{ownerLabel}</span>}
+                {ts && (
+                  <>
+                    <span className={cn("truncate text-fg", !ownerLabel && "font-medium")}>
+                      {ts.date}
+                    </span>
+                    <span className="shrink-0 text-fg-muted">{ts.time}</span>
+                  </>
+                )}
               </span>
-            ) : null;
+            );
           })()}
 
           {/* Send / attempt indicator — small dot at the end. */}

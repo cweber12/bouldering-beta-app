@@ -2,7 +2,13 @@
 
 ## Status
 
-accepted
+superseded by [ADR 0022](0022-cross-user-run-comparison.md)
+
+Cross-user comparison is now enabled: a guest Run from another user is read
+through the prefix-gated `/api/profile/[userId]/climbs/attempt` endpoint and
+overlaid in the console. The own-user path below still describes the **host**
+side (the session user's own route + photo); only the guest slot rides on the
+cross-user endpoint.
 
 ## Context
 

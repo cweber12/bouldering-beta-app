@@ -30,6 +30,12 @@ export interface S3StorageResult {
   uploadAttempt: (attempt: RouteAttempt) => Promise<string>;
   /** Fetch and deserialise a RouteAttempt from S3 by its object key. */
   downloadAttempt: (key: string) => Promise<RouteAttempt>;
+  /**
+   * Fetch and deserialise another user's RouteAttempt via the prefix-gated
+   * cross-user endpoint. `key` is the full `RouteData/{ownerUserId}/…` key; the
+   * owner is parsed from it. Use for guest slots in cross-user comparison.
+   */
+  downloadAttemptCrossUser: (key: string) => Promise<RouteAttempt>;
   /** Permanently delete an object from S3 by its key. */
   deleteAttempt: (key: string) => Promise<void>;
   /** List attempt objects under an optional prefix (defaults to "RouteData/{userId}"). */
@@ -155,6 +161,41 @@ export function useS3Storage(): S3StorageResult {
     }
   }, []);
 
+  // ---- Cross-user download ---------------------------------------------------
+
+  const downloadAttemptCrossUser = useCallback(async (key: string): Promise<RouteAttempt> => {
+    setStatus("loading");
+    setErrorMessage(null);
+    // The owner is the first path segment after the RouteData prefix:
+    // RouteData/{ownerUserId}/{state}/{area}/{route}/{id}-{runType}.json
+    const ownerUserId = key.split("/")[1] ?? "";
+    if (!ownerUserId) {
+      const msg = "Could not determine the owner of this run.";
+      setErr(msg);
+      throw new Error(msg);
+    }
+    try {
+      const res = await fetch(
+        `/api/profile/${encodeURIComponent(ownerUserId)}/climbs/attempt?key=${encodeURIComponent(key)}`,
+      );
+      if (!res.ok) {
+        const err = ((await res.json()) as { error?: string }).error ?? "Download failed.";
+        setErr(err);
+        throw new Error(err);
+      }
+      // The endpoint already merges the heavy-data sibling, so the payload is a
+      // complete attempt — rehydrate descriptors exactly as downloadAttempt does.
+      const raw = (await res.json()) as Record<string, unknown>;
+      const attempt = loadAttemptFromJson(raw);
+      setStatus("idle");
+      return attempt;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErr(msg);
+      throw err;
+    }
+  }, []);
+
   // ---- Delete ----------------------------------------------------------------
 
   const deleteAttempt = useCallback(async (key: string): Promise<void> => {
@@ -240,6 +281,7 @@ export function useS3Storage(): S3StorageResult {
   return {
     uploadAttempt,
     downloadAttempt,
+    downloadAttemptCrossUser,
     deleteAttempt,
     listAttempts,
     listPrefixes,
