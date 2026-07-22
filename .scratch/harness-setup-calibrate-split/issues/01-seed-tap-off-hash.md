@@ -1,7 +1,8 @@
 # Seed tap persisted off the setupHash
 
-Status: in-progress
+Status: done
 Branch: feat/harness-seed-tap-off-hash
+Merged: 0d1f582
 Type: AFK
 
 ## Parent
@@ -22,15 +23,15 @@ re-pair prior runs.
 
 ## Acceptance criteria
 
-- [ ] `seedTap?: ClimberPoint` exists on `ScanSetup` (persisted, validated) and is
+- [x] `seedTap?: ClimberPoint` exists on `ScanSetup` (persisted, validated) and is
       absent from `ScanSetupInput` and `canonicalSetupInput`.
-- [ ] Re-saving a setup with only `seedTap` changed re-derives an identical `setupHash`
+- [x] Re-saving a setup with only `seedTap` changed re-derives an identical `setupHash`
       (pinned by a regression test alongside the existing hash-stability test).
-- [ ] The setup PUT accepts a `seedTap`-only body that preserves crops + hash + labels;
+- [x] The setup PUT accepts a `seedTap`-only body that preserves crops + hash + labels;
       a scan-input body still re-hashes; a labels-only body still preserves crops+hash.
-- [ ] `bodyHasSeedTap()` classifies bodies correctly and `saveSeedTap` client seam PUTs
+- [x] `bodyHasSeedTap()` classifies bodies correctly and `saveSeedTap` client seam PUTs
       it.
-- [ ] Type-check, lint, and targeted tests pass
+- [x] Type-check, lint, and targeted tests pass
       (`__tests__/utils/harnessSetup.test.ts`, `__tests__/api/dev/setupRoute.test.ts`).
 
 ## Blocked by
