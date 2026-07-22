@@ -4,12 +4,16 @@
 
 accepted
 
-Amends ADR 0018 (ground-truth-scored detection eval). ADR 0018 §1 seeds the
-calibration authoring scaffold from a *throwaway MediaPipe detection run*; this
-ADR replaces that seed's **poses** with **ViTPose++** run on the downloader, and
-supersedes ADR 0018 §Considered-Options #4's premise about circularity. The rest
-of ADR 0018 — human-authored Ground Truth, per-Detection-Frame records, the
-headless scoring pass, `groundTruthHash` stamping — is unchanged.
+Amends ADR 0018 (ground-truth-scored detection eval). ADR 0018 originally seeded
+the calibration authoring scaffold from a throwaway MediaPipe detection run;
+this ADR replaced that seed's **poses** with **ViTPose++** run on the downloader
+and superseded ADR 0018 §Considered-Options #4's premise about circularity.
+
+Further amended by `.scratch/calibration-analyze-split/PRD.md`: calibration no
+longer runs a throwaway MediaPipe pass at all. The Detection Frame set is now a
+uniform 100 ms arithmetic grid from video duration, sent to the ViTPose job
+immediately after setup confirm. Production detection moved to the explicit
+Analyze step, separate from truth authoring.
 
 Amended by the calibration flag-only review change
 (`.scratch/calibration-flag-review/PRD.md`): the authoring interaction is now a
@@ -19,9 +23,9 @@ to *the truth being attested*. Consequently the "**ViTPose is not a hard
 dependency**" consequence below is **reversed**: with auto-accept, an untouched
 frame *is* the seed, so a MediaPipe seed fallback would grade MediaPipe against
 itself. ViTPose becomes a **hard requirement** for Ground Truth authoring; on its
-failure the reviewer is disabled with a message + retry, while Detection Preview
-and diagnostics keep working. §2's "verified"/"unverified" wording is superseded
-by the `review` vocabulary — `verified` now means "nobody objected" (ADR 0018 §1).
+failure the reviewer is disabled with a message + retry while the Scan Setup save
+still stands. §2's "verified"/"unverified" wording is superseded by the `review`
+vocabulary — `verified` now means "nobody objected" (ADR 0018 §1).
 
 ## Context
 
@@ -67,13 +71,14 @@ a stronger reference model.
    Ground Truth's quality ceiling is the human's review, not ViTPose's accuracy on
    hard poses.
 
-3. **MediaPipe still defines the Detection Frame set.** Calibration keeps running
-   the MediaPipe pass to establish which frames are **Detection Frames** (base
-   grid + **Adaptive Refinement**), their timestamps, and present/absent status.
-   ViTPose supplies only the *pose landmarks* overlaid on those frames. Division
-   of labour: MediaPipe owns "which frames," ViTPose owns "where the joints are."
-   A frame MediaPipe missed but ViTPose posed is authored `present` (the Climber
-   is there) — the seed no longer inherits MediaPipe's misses.
+3. **A uniform arithmetic grid defines the Detection Frame set.** Calibration
+   computes Detection Frames as `i x 100 ms` for `i = 0..floor(duration / 100 ms)`
+   from video duration and sends that list directly to the ViTPose job at setup
+   confirm time. ViTPose supplies the *pose landmarks* on that detector-neutral
+   grid. Division of labour is now: arithmetic grid owns "which frames," ViTPose
+   owns "where the joints are." Production MediaPipe probing (base stride +
+   adaptive refinement) happens later in Analyze, and scoring intersects by
+   timestamp rather than forcing run-time probes onto a schedule.
 
 4. **Confidence gates review effort, never inclusion.** ViTPose per-keypoint
    confidence feeds the existing occluded/needs-review seed (replacing MediaPipe
@@ -118,20 +123,20 @@ a stronger reference model.
   verbatim** so beta-scanner's 1 ms seed-match aligns frame-for-frame — the
   ViTPose run is not a denser grid). Full handoff spec:
   `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`.
-- **Calibration runs two models.** MediaPipe (to define Detection Frames) and
-  ViTPose (to seed poses). Acceptable: calibration is the dev-only heavy step
-  already, and the payoff is far less manual dragging.
+- **Calibration runs one model for authoring.** ViTPose seeds the review over a
+   deterministic arithmetic grid; calibration no longer runs a throwaway
+   MediaPipe detection pass.
 - **Scaffold quality now depends on the tracker.** If the tracker follows a
   **Bystander**, the seed is wrong on those frames — caught by the human in the
   stepper flagging them **Wrong**, since ViTPose is only a scaffold. A lost track
   just means more frames to flag.
 - **ViTPose is a hard requirement for authoring** (reversed by the flag-only
-  review change). The earlier MediaPipe seed fallback is removed: under auto-accept
-  an untouched frame *is* the seed, so falling back to MediaPipe would let an
-  auto-accepted frame grade MediaPipe against itself. On ViTPose failure (job
-  error, timeout, no climber tracked, downloader absent) the review mode is
-  disabled with a message and a retry affordance, while Detection Preview and
-  diagnostics stay available so crop/tier calibration is never blocked.
+   review change). The earlier MediaPipe seed fallback is removed: under
+   auto-accept an untouched frame *is* the seed, so falling back to MediaPipe
+   would let an auto-accepted frame grade MediaPipe against itself. On ViTPose
+   failure (job error, timeout, no climber tracked, downloader absent) review
+   stays gated with a message and retry, while the Scan Setup save remains
+   successful.
 - **Circularity is broken for auto (unflagged) frames.** Auto Ground Truth is a
   ViTPose guess, so a scored MediaPipe run there measures divergence from an
   independent model rather than from itself — still soft, but no longer
