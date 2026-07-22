@@ -56,16 +56,28 @@ export interface ViTPoseScaffold {
 
 /**
  * The Climber selection beta-scanner sends to start a ViTPose job. The
- * downloader tracks the Climber from `climberPoint` and poses the track's box.
- * This is the cross-program request contract (ADR 0019); keep it in sync with
+ * downloader tracks the Climber from `seedTap` within `seedRegion` and poses the
+ * track's box. This is the cross-program request contract (ADR 0019, amended by
+ * the harness-setup-calibrate-split downloader handoff); keep it in sync with
  * the downloader's endpoint.
  */
 export interface ViTPoseRequest {
   /** External-API relative path to the Test Video (from `relativeVideoPath`). */
   videoPath: string;
-  /** Tap that seeds Climber Identity, video-normalized; may be absent. */
-  climberPoint?: { x: number; y: number; t?: number };
-  /** Climber Crop — the first-acquisition search region. */
+  /**
+   * The Seed tap that seeds the downloader's Climber track, video-normalized;
+   * may be absent (the tracker then acquires the strongest pose). This is the
+   * off-hash calibration seed, distinct from the in-hash MediaPipe analysis tap
+   * — see the harness-setup-calibrate-split PRD.
+   */
+  seedTap?: { x: number; y: number; t?: number };
+  /**
+   * The acquisition box the downloader gates the seed against, derived from the
+   * Seed tap (`deriveSeedRegion`, utils/cropContainment). Replaces the Climber
+   * Crop as the seed gate, so the seed is independent of the crop.
+   */
+  seedRegion: CropFraction;
+  /** Climber Crop — carried for parity with Scan Setup; no longer the seed gate. */
   climberCrop: CropFraction;
   /** Wall Crop — carried for parity with Scan Setup, unused by pose. */
   wallCrop: CropFraction;

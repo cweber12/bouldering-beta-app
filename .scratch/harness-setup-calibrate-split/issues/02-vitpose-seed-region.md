@@ -1,6 +1,7 @@
 # ViTPose request seeded by seedTap + seedRegion
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-vitpose-seed-region
 Type: AFK
 
 ## Parent

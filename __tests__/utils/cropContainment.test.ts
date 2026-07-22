@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   frameClampCrop,
   defaultRouteAroundClimber,
-  tapOutsideSeedGate,
+  deriveSeedRegion,
+  SEED_REGION_HALF,
 } from "@/utils/cropContainment";
 import type { CropFraction } from "@/utils/cropFraction";
 
@@ -58,25 +59,29 @@ describe("defaultRouteAroundClimber", () => {
   });
 });
 
-describe("tapOutsideSeedGate", () => {
-  // Mirrors the downloader's seed crop gate: center inside the crop expanded
-  // by 10% of its size per side, no un-crop fallback.
-  const crop: CropFraction = { x: 0.4, y: 0.6, w: 0.2, h: 0.3 };
-
-  it("accepts a tap inside the crop and inside the 10% expansion band", () => {
-    expect(tapOutsideSeedGate({ x: 0.5, y: 0.7 }, crop)).toBe(false);
-    // Just inside the expanded top edge (0.6 - 0.03).
-    expect(tapOutsideSeedGate({ x: 0.5, y: 0.575 }, crop)).toBe(false);
+describe("deriveSeedRegion", () => {
+  it("centers a box of ±SEED_REGION_HALF on the tap", () => {
+    const region = deriveSeedRegion({ x: 0.5, y: 0.5 });
+    expect(close(region.x, 0.5 - SEED_REGION_HALF)).toBe(true);
+    expect(close(region.y, 0.5 - SEED_REGION_HALF)).toBe(true);
+    expect(close(region.w, SEED_REGION_HALF * 2)).toBe(true);
+    expect(close(region.h, SEED_REGION_HALF * 2)).toBe(true);
+    // The tap is always the box center — the seed is independent of any crop.
+    expect(close(region.x + region.w / 2, 0.5)).toBe(true);
+    expect(close(region.y + region.h / 2, 0.5)).toBe(true);
   });
 
-  it("flags a tap beyond the expanded crop — the doomed-seed case", () => {
-    // The observed failure shape: tap on the climber mid-route, well above the
-    // crop drawn around the start.
-    expect(tapOutsideSeedGate({ x: 0.49, y: 0.46 }, crop)).toBe(true);
-    expect(tapOutsideSeedGate({ x: 0.65, y: 0.7 }, crop)).toBe(true);
+  it("clamps the box to the frame near an edge", () => {
+    const region = deriveSeedRegion({ x: 0.02, y: 0.98 });
+    expect(region.x).toBe(0);
+    expect(region.y + region.h).toBe(1);
+    expect(region.x).toBeGreaterThanOrEqual(0);
+    expect(region.y).toBeGreaterThanOrEqual(0);
+    expect(region.x + region.w).toBeLessThanOrEqual(1);
+    expect(region.y + region.h).toBeLessThanOrEqual(1);
   });
 
-  it("never flags when there is no tap", () => {
-    expect(tapOutsideSeedGate(null, crop)).toBe(false);
+  it("yields the full frame when there is no tap", () => {
+    expect(deriveSeedRegion(null)).toEqual({ x: 0, y: 0, w: 1, h: 1 });
   });
 });

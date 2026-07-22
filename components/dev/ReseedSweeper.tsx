@@ -32,6 +32,7 @@ import {
 } from "@/utils/harnessViTPose";
 import { buildDetectionGrid } from "@/utils/harnessDetectionGrid";
 import { probeVideoMeta } from "@/utils/probeVideoMeta";
+import { deriveSeedRegion } from "@/utils/cropContainment";
 import type { CropFraction } from "@/utils/cropFraction";
 
 /** What the sweep needs to know about one queued bundle. */
@@ -55,7 +56,8 @@ interface EntryOutcome {
 interface SetupForJob {
   climberCrop: CropFraction;
   wallCrop: CropFraction;
-  climberPoint?: { x: number; y: number; t?: number };
+  /** The off-hash Seed tap, falling back to the analysis tap when unset. */
+  seedTap?: { x: number; y: number; t?: number };
   panning: boolean;
 }
 
@@ -68,7 +70,9 @@ async function loadSetupForJob(bundleKey: string): Promise<SetupForJob> {
   return {
     climberCrop: setup.climberCrop,
     wallCrop: setup.wallCrop,
-    climberPoint: setup.climberPoint ?? undefined,
+    // Prefer the dedicated Seed tap; fall back to the analysis tap (absent
+    // seedTap means "use climberPoint" — harness-setup-calibrate-split issue 01).
+    seedTap: setup.seedTap ?? setup.climberPoint ?? undefined,
     panning: !!setup.panning,
   };
 }
@@ -135,7 +139,8 @@ function ReseedItemRunner({
         setStage("submitting job…");
         await requestViTPoseScaffold(item.key, {
           videoPath: item.videoPath,
-          climberPoint: setup.climberPoint,
+          seedTap: setup.seedTap,
+          seedRegion: deriveSeedRegion(setup.seedTap ?? null),
           climberCrop: setup.climberCrop,
           wallCrop: setup.wallCrop,
           panning: setup.panning,

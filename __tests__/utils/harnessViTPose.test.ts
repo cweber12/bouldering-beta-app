@@ -3,6 +3,7 @@ import {
   viTPoseToPoseFrames,
   parseViTPoseScaffold,
   loadViTPose,
+  requestViTPoseScaffold,
   scaffoldHasPose,
   VITPOSE_TO_MP_NAME,
   type ViTPoseScaffold,
@@ -122,6 +123,51 @@ describe("loadViTPose", () => {
   it("throws when the proxy request fails", async () => {
     stubResponse({}, false);
     await expect(loadViTPose("route-x/vid_1")).rejects.toThrow();
+  });
+});
+
+describe("requestViTPoseScaffold", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs the request body carrying the Seed tap + region", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        ({ ok: true, json: async () => ({}) }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestViTPoseScaffold("route-x/vid_1", {
+      videoPath: "analysis/route-x/vid_1/vid_1.mp4",
+      seedTap: { x: 0.5, y: 0.4, t: 2.3 },
+      seedRegion: { x: 0.35, y: 0.25, w: 0.3, h: 0.3 },
+      climberCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
+      wallCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
+      panning: false,
+      frames: [{ timestamp: 0 }, { timestamp: 0.1 }],
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const [, init] = fetchMock.mock.calls[0];
+    const sent = JSON.parse(init!.body as string);
+    expect(sent.seedTap).toEqual({ x: 0.5, y: 0.4, t: 2.3 });
+    expect(sent.seedRegion).toEqual({ x: 0.35, y: 0.25, w: 0.3, h: 0.3 });
+  });
+
+  it("throws with the proxy's error message on a non-ok response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, json: async () => ({ error: "nope" }) }) as unknown as Response),
+    );
+    await expect(
+      requestViTPoseScaffold("route-x/vid_1", {
+        videoPath: "v",
+        seedRegion: { x: 0, y: 0, w: 1, h: 1 },
+        climberCrop: { x: 0, y: 0, w: 1, h: 1 },
+        wallCrop: { x: 0, y: 0, w: 1, h: 1 },
+        panning: false,
+        frames: [{ timestamp: 0 }],
+      }),
+    ).rejects.toThrow("nope");
   });
 });
 

@@ -171,7 +171,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         video_path: b.videoPath,
         route_folder: parsed.routeFolder,
         video_key: parsed.videoKey,
-        climber_point: b.climberPoint,
+        // The Seed tap + its derived acquisition region are the seed contract
+        // now (harness-setup-calibrate-split downloader handoff). `climber_point`
+        // is kept as a legacy alias so a downloader that has not yet migrated to
+        // `seed_tap` / `seed_region` still seeds from the same point; the crops
+        // ride along for parity but no longer gate the seed.
+        seed_tap: b.seedTap,
+        seed_region: b.seedRegion,
+        climber_point: b.seedTap,
         climber_crop: b.climberCrop,
         wall_crop: b.wallCrop,
         panning: b.panning,
