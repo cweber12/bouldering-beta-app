@@ -2,7 +2,7 @@
 
 Status: done
 Branch: feat/harness-batch-calibrate
-Merged: PENDING
+Merged: cffb4c9
 Type: AFK
 
 ## Parent
