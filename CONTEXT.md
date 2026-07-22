@@ -255,6 +255,33 @@ space (after homography) so a held limb still counts as a Dwell while the camera
 pans in **Panning Capture**. One Hold may gather several Dwells at the same spot.
 _Avoid_: pause, stop, hover.
 
+### Comparison
+
+**Comparison**:
+The console surface that plays two to four **Run**s together — their **Skeleton**s
+overlaid on one shared **Route Photo**, or side by side each in its own space —
+so their beta can be read against each other. A same-owner Comparison lines up a
+climber's own Runs of one **Route**; a cross-user Comparison brings in a **Guest
+Run** (ADR 0022). Lives at `/route/{userId}/{state}/{area}/{route}`.
+_Avoid_: compare (bare verb, when the surface/noun is meant); the old `/compare`
+page (now only a redirect into this console).
+
+**Host Route**:
+The **Route** a **Comparison** is anchored on — its owner is the `{userId}` in the
+path and its **Route Photo** is the default coordinate space the overlay projects
+onto. In a cross-user Comparison the Host Route is the **viewer's own** Route; the
+other climber's Run rides in as a **Guest Run**.
+_Avoid_: owner route, base route.
+
+**Guest Run**:
+In a cross-user **Comparison**, a **Run** owned by a different **User** than the
+one hosting the Comparison, read through the prefix-gated cross-user endpoint and
+overlaid alongside the viewer's own Run. Attributed to its owner by
+`displayName`. Its pose may not align on the **Host Route**'s **Route Photo**
+(different viewpoint), which is why either owner's photo may anchor the overlay
+and why the surface falls back to side by side.
+_Avoid_: their run, foreign run, shared run.
+
 ### Diagnostics
 
 **Scan Diagnostics**:
@@ -399,6 +426,10 @@ Setup), config, calibration, fixture.
   resolved: a **Hold** is always the inferred place a limb used (from a **Dwell**);
   the app never detects physical wall holds, so the bare word always means the
   inferred one.
+- "compare" was an undocumented UI surface — resolved: the noun is a
+  **Comparison** (the console showing multiple Runs together), on a **Host Route**,
+  optionally including a cross-user **Guest Run** (ADR 0022). The bare verb still
+  means "put runs against each other"; use Comparison when the surface is meant.
 - "preview"/"overlay" meant both the skeleton over the Run's own first frame and
   the skeleton projected onto the Route Photo — resolved: **Detection Preview**
   (video-pixel, no homography) vs **Route Overlay** (projected onto the Route

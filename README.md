@@ -169,9 +169,10 @@ white joint is a neutral anchor and is exempt from adaptation.
 | `/`                 | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary              | No            |
 | `/login`            | Sign in / sign up with email & password                                                                                                                              | No            |
 | `/scan`             | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                        | Yes           |
-| `/compare`          | Climb console — open one climb (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-climb start-time alignment                 | Yes           |
+| `/compare`          | Redirect into the route console (below); preserved for older links                                                                                                  | Yes           |
+| `/route/[userId]/[state]/[area]/[route]` | Route console — open one run (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-run start-time alignment. Guest runs from **another user** can be overlaid (cross-user comparison): selectable anchor photo, side-by-side fallback when alignment fails, and a colour + name legend | Yes           |
 | `/profile`          | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes           |
-| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal                              | Yes           |
+| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                              | Yes           |
 | `/docs`             | Usage guide                                                                                                                                                          | No            |
 | `/dev/map-drag`     | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                   | No            |
 
@@ -250,6 +251,16 @@ climb keeps its identity colour. Use **Set start** on each side-by-side climb to
 flag the frame its sequence begins, then **Play all** runs every climb from its
 own start in sync. (In the overlaid view the translucent Silhouette is suppressed
 so several climbers' skeletons stay legible.)
+
+**Cross-user comparison.** From another climber's climb detail modal, **Compare
+with mine** picks one of your own runs and opens the console hosted on your route,
+with their run overlaid as a guest. Because the two videos may be shot from
+different viewpoints, the anchor photo is selectable between either owner's saved
+photo (Update photo), and when no single photo aligns both runs the view drops to
+side by side with a notice. Each skeleton is attributed by colour and the owner's
+display name. Any authenticated user may read another user's pose data for this,
+served by the prefix-gated `/api/profile/[userId]/climbs/attempt` endpoint (see
+ADR 0022).
 
 ## Authentication
 
@@ -373,6 +384,7 @@ The Firebase Admin private key can be downloaded from the Firebase console:
 | `/api/profile/[userId]/climbs`        | GET             | List any user's climbs (raw S3 keys)               |
 | `/api/profile/[userId]/climbs/page`   | GET             | Paginated climb summaries with thumbnails, filters |
 | `/api/profile/[userId]/climbs/detail` | GET             | Single climb detail by S3 key                      |
+| `/api/profile/[userId]/climbs/attempt`| GET             | Full run data (pose frames) or route photo, cross-user (prefix-gated) |
 | `/api/profile/[userId]/pins`          | GET             | GPS pins for a user's climbs (map view)            |
 | `/api/profile/follow`                 | GET/POST/DELETE | List/add/remove followed users                     |
 | `/api/profile/search`                 | GET             | Search users by name or email                      |

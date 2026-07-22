@@ -16,9 +16,10 @@ import { useOpenCV } from "@/hooks/useOpenCV";
 import { useClickOutside } from "@/hooks/useClickOutside";
 import { useMeasuredHeight } from "@/hooks/useMeasuredHeight";
 import { useS3Storage } from "@/hooks/useS3Storage";
+import { useAuth } from "@/hooks/useAuth";
 import { saveAttempt } from "@/storage/sessionStore";
 import type { RouteAttempt } from "@/storage/sessionStore";
-import { useImageMatcher, type ImageMatchResult } from "@/hooks/useImageMatcher";
+import { useImageMatcher, type ImageMatchResult, type MatchStatus } from "@/hooks/useImageMatcher";
 import { useContrastAdjust } from "@/hooks/useContrastAdjust";
 import type { FramePlayerHandle } from "@/components/skeleton/FramePlayer";
 import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
@@ -75,7 +76,8 @@ export default function RouteConsole({
 }: RouteConsoleProps) {
   const { cv } = useOpenCV();
   const router = useRouter();
-  const { downloadAttempt } = useS3Storage();
+  const { user } = useAuth();
+  const { downloadAttempt, downloadAttemptCrossUser } = useS3Storage();
   // Auto-frame estimator — a standalone matcher instance used only to project the
   // reference climber box onto a freshly-added route photo (estimateCrop). The
   // per-slot matches run inside each CompareSlot's own useImageMatcher.
@@ -121,6 +123,20 @@ export default function RouteConsole({
   const [matchResults, setMatchResults] = useState<(ImageMatchResult | null)[]>(() =>
     Array.from({ length: MAX_SLOTS }, () => null),
   );
+  // Per-slot match lifecycle — the overlay result is null both while matching and
+  // on a failed alignment, so the status is what distinguishes the two and drives
+  // the side-by-side fallback (a cross-user guest run may not ORB-match the host
+  // photo when the two videos were shot from different viewpoints).
+  const [matchStatuses, setMatchStatuses] = useState<(MatchStatus | null)[]>(() =>
+    Array.from({ length: MAX_SLOTS }, () => null),
+  );
+  // Set once per match run when a placed overlay cannot align every slot on the
+  // chosen photo; the view auto-falls back to side-by-side and a notice explains
+  // why, so a missing skeleton is never silent.
+  const [alignmentFallback, setAlignmentFallback] = useState(false);
+  // displayName per owner UID, for the attribution legend and the anchor-photo
+  // selector. Fetched once per distinct owner across the active slots.
+  const [ownerNames, setOwnerNames] = useState<Record<string, string>>({});
 
   // One hex limb color per slot; pre-populated from defaults so each slot
   // starts with a distinct color and duplicates are avoided by default.
@@ -179,11 +195,19 @@ export default function RouteConsole({
 
   // ── Slot loading + URL sync ──────────────────────────────────────────────
 
-  /** Loads an S3 climb into a specific slot. */
+  /**
+   * Loads an S3 climb into a specific slot. The owner is parsed from the key
+   * (`RouteData/{ownerUserId}/…`): own runs load through the self-scoped
+   * `/api/s3/get`; a guest run (a different owner, cross-user comparison) loads
+   * through the prefix-gated cross-user endpoint. The rest of the slot machinery
+   * is owner-agnostic.
+   */
   const loadIntoSlot = useCallback(
     async (slot: number, key: string) => {
       try {
-        const a = await downloadAttempt(key);
+        const owner = key.split("/")[1] ?? "";
+        const isGuest = Boolean(user) && owner !== user!.uid;
+        const a = isGuest ? await downloadAttemptCrossUser(key) : await downloadAttempt(key);
         saveAttempt(a);
         setAttempts((prev) => {
           const n = [...prev];
@@ -194,7 +218,7 @@ export default function RouteConsole({
         /* leave the slot empty — the rail still shows the climb as available */
       }
     },
-    [downloadAttempt],
+    [downloadAttempt, downloadAttemptCrossUser, user],
   );
 
   // URL sync is a side effect of state, never a render-time action.
@@ -415,6 +439,87 @@ export default function RouteConsole({
     });
   }, []);
 
+  const handleMatchStatus = useCallback((idx: number, status: MatchStatus) => {
+    setMatchStatuses((prev) => {
+      const next = [...prev];
+      next[idx] = status;
+      return next;
+    });
+  }, []);
+
+  // Alignment fallback — once a photo has been placed and every active slot has
+  // finished matching, if any slot failed to align on the chosen photo, drop to
+  // the side-by-side view (which needs no shared photo) and surface a notice.
+  // Runs at most once per placed photo; re-arming happens when applyPhoto resets
+  // routeMatchTriggered. The user can still toggle back to overlay manually.
+  const fallbackAppliedRef = useRef(false);
+  useEffect(() => {
+    if (!routeMatchTriggered) {
+      fallbackAppliedRef.current = false;
+      return;
+    }
+    if (fallbackAppliedRef.current) return;
+    const activeIdx = slotKeys.map((k, i) => (k ? i : -1)).filter((i) => i !== -1 && attempts[i]);
+    if (activeIdx.length < 2) return; // overlay only matters with 2+ climbs
+    const allSettled = activeIdx.every(
+      (i) => matchStatuses[i] === "done" || matchStatuses[i] === "error",
+    );
+    if (!allSettled) return;
+    const anyFailed = activeIdx.some((i) => matchStatuses[i] === "error");
+    fallbackAppliedRef.current = true;
+    if (anyFailed) {
+      setAlignmentFallback(true);
+      setViewMode("sidebyside");
+    }
+  }, [routeMatchTriggered, matchStatuses, slotKeys, attempts]);
+
+  // Resolve displayName for every distinct owner across the active slots (for the
+  // attribution legend + anchor selector). Own runs and misses fall back to a
+  // generic label so the legend is never blank.
+  useEffect(() => {
+    const owners = Array.from(
+      new Set(slotKeys.filter((k): k is string => Boolean(k)).map((k) => k.split("/")[1])),
+    ).filter((o) => o && ownerNames[o] === undefined);
+    if (owners.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const entries = await Promise.all(
+        owners.map(async (o) => {
+          try {
+            const res = await fetch(`/api/profile/${encodeURIComponent(o)}`);
+            if (!res.ok) return [o, ""] as const;
+            const data = (await res.json()) as { displayName?: string };
+            return [o, data.displayName ?? ""] as const;
+          } catch {
+            return [o, ""] as const;
+          }
+        }),
+      );
+      if (!cancelled) {
+        setOwnerNames((prev) => {
+          const next = { ...prev };
+          for (const [o, name] of entries) next[o] = name;
+          return next;
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slotKeys, ownerNames]);
+
+  /** Human label for a slot's owner — "You" for own runs, displayName otherwise. */
+  const ownerLabelForKey = useCallback(
+    (key: string | null): string => {
+      if (!key) return "";
+      const owner = key.split("/")[1] ?? "";
+      if (user && owner === user.uid) return "You";
+      const name = ownerNames[owner];
+      return name && name.trim() ? name : "Climber";
+    },
+    [ownerNames, user],
+  );
+
   function handleColorChange(idx: number, hex: string) {
     setSlotColors((prev) => {
       const next = [...prev];
@@ -449,10 +554,42 @@ export default function RouteConsole({
     setImageFileWithPreview(file);
     setImageCrop(DEFAULT_CROP);
     setMatchResults(Array.from({ length: MAX_SLOTS }, () => null));
+    setMatchStatuses(Array.from({ length: MAX_SLOTS }, () => null));
+    setAlignmentFallback(false);
     setRouteMatchTriggered(false);
     setAutoFramed(false);
     setMatchTrigger(0);
     framedFileRef.current = null; // allow the auto-frame estimate to run for this file
+  }
+
+  /**
+   * Load a Route Photo stored under any user's prefix and apply it as the shared
+   * anchor. Own photos read through the self-scoped `/api/s3/get`; a guest owner's
+   * photo reads through the prefix-gated cross-user endpoint. Selecting a
+   * different owner's photo is the "either photo" anchor toggle — the guest run
+   * may align better on the guest's own photo than on the host's.
+   */
+  const [loadingAnchorKey, setLoadingAnchorKey] = useState<string | null>(null);
+  async function loadPhotoFromKey(photoKey: string) {
+    if (loadingAnchorKey) return;
+    const owner = photoKey.split("/")[1] ?? "";
+    const isSelf = Boolean(user) && owner === user!.uid;
+    setLoadingAnchorKey(photoKey);
+    try {
+      const url = isSelf
+        ? `/api/s3/get?key=${encodeURIComponent(photoKey)}`
+        : `/api/profile/${encodeURIComponent(owner)}/climbs/attempt?key=${encodeURIComponent(photoKey)}`;
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = (await res.json()) as { dataUrl?: string };
+      if (!data.dataUrl) return;
+      applyPhoto(await dataUrlToFile(data.dataUrl, "route-image.jpg"));
+      setShowUpdateMenu(false);
+    } catch {
+      /* leave the current photo in place — the user can pick another anchor */
+    } finally {
+      setLoadingAnchorKey(null);
+    }
   }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -503,6 +640,35 @@ export default function RouteConsole({
   }
 
   const hasPhoto = !!(imageFile && imagePreviewUrl);
+
+  // True when at least one active slot belongs to another user — a cross-user
+  // comparison, which is what turns on owner attribution and the anchor toggle.
+  const hasGuestSlot = activeKeysOf(slotKeys).some((k) => {
+    const owner = k.split("/")[1] ?? "";
+    return owner && (!user || owner !== user.uid);
+  });
+
+  // Anchor-photo options — the shared photo both skeletons project onto. The host
+  // route's own photo (self-read) plus each distinct guest owner's photo of their
+  // route (cross-user read). Lets the user pick whichever photo both runs align
+  // on, since a single viewpoint rarely matches both cross-user videos.
+  const anchorPhotoOptions: { key: string; label: string }[] = (() => {
+    const opts: { key: string; label: string }[] = [];
+    if (savedPhotoKey) opts.push({ key: savedPhotoKey, label: "This route's photo" });
+    const seen = new Set<string>();
+    for (const k of activeKeysOf(slotKeys)) {
+      const parts = k.split("/");
+      const owner = parts[1] ?? "";
+      if (!owner || (user && owner === user.uid) || seen.has(owner)) continue;
+      seen.add(owner);
+      // Guest key: RouteData/{owner}/{state}/{area}/{route}/{file}.json
+      if (parts.length < 6) continue;
+      const photoKey = `RouteData/${owner}/${parts[2]}/${parts[3]}/${parts[4]}/route-image.json`;
+      const name = ownerNames[owner];
+      opts.push({ key: photoKey, label: `${name && name.trim() ? name : "Climber"}'s photo` });
+    }
+    return opts;
+  })();
   // Route grade lives per-attempt; compared climbs share a route so the grade is
   // consistent — surface the first non-empty one, accented, next to the route name.
   const grade = attempts.find((a) => a?.rating)?.rating ?? null;
@@ -666,6 +832,34 @@ export default function RouteConsole({
               {loadingSaved ? "Loading…" : "Use saved photo"}
             </button>
           )}
+          {/* Anchor toggle — a guest owner's Route Photo. Lets the overlay try
+              the other person's photo when the host's doesn't align both runs. */}
+          {anchorPhotoOptions
+            .filter((o) => o.key !== savedPhotoKey)
+            .map((o) => (
+              <button
+                key={o.key}
+                onClick={() => loadPhotoFromKey(o.key)}
+                disabled={loadingAnchorKey === o.key}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-xs text-fg-secondary transition hover:bg-inset/80 hover:text-fg disabled:cursor-wait disabled:opacity-60"
+              >
+                <svg
+                  className="h-3.5 w-3.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 21h18M3 4.5h18M3 4.5v16.5M21 4.5v16.5"
+                  />
+                </svg>
+                {loadingAnchorKey === o.key ? "Loading…" : `Use ${o.label}`}
+              </button>
+            ))}
         </div>
       )}
     </div>
@@ -674,6 +868,40 @@ export default function RouteConsole({
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ToolRouteHeader title="Route" subtitle={subtitle} actions={headerActions} />
+
+      {/* Alignment fallback notice — the placed photo could not align every climb
+          (a common cross-user case: the two videos were shot from different
+          viewpoints), so the view dropped to side-by-side. Try the other owner's
+          photo from "Update photo" to attempt an overlay again. */}
+      {alignmentFallback && (
+        <div className="flex shrink-0 items-start gap-2 border-b border-caution-border bg-caution-surface px-4 py-2 text-xs text-caution">
+          <svg
+            className="mt-0.5 h-4 w-4 shrink-0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
+            />
+          </svg>
+          <span>
+            Couldn&apos;t align every climb on this wall photo — showing them side by side. Try
+            another owner&apos;s photo from Update photo to overlay them.
+          </span>
+          <button
+            type="button"
+            onClick={() => setAlignmentFallback(false)}
+            className="ml-auto shrink-0 font-semibold underline-offset-2 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Rail (left on desktop, bottom strip on mobile) + main column. */}
       <div className="flex-1 min-h-0 flex flex-col-reverse overflow-hidden sm:flex-row">
@@ -999,9 +1227,11 @@ export default function RouteConsole({
                               matchTrigger={matchTrigger}
                               cv={cv}
                               limbColor={slotColors[i]}
+                              ownerLabel={hasGuestSlot ? ownerLabelForKey(slotKeys[i]) : undefined}
                               contrastAdjust={activeContrast}
                               startOffset={slotOffsets[i]}
                               onMatchResult={handleMatchResult}
+                              onMatchStatus={handleMatchStatus}
                               onColorChange={handleColorChange}
                               onSetStart={handleSetStart}
                               onClearStart={handleClearStart}
@@ -1038,6 +1268,7 @@ export default function RouteConsole({
                             cv={cv}
                             limbColor={slotColors[i]}
                             onMatchResult={handleMatchResult}
+                            onMatchStatus={handleMatchStatus}
                             hidePlayer
                           />
                         ) : null,
@@ -1061,6 +1292,9 @@ export default function RouteConsole({
                       {attempts.map((att, i) => {
                         if (!att) return null;
                         const ts = formatRunTimestamp(att.id);
+                        // Owner attribution — "You" for own runs, the climber's
+                        // displayName for a guest run in a cross-user comparison.
+                        const ownerLabel = ownerLabelForKey(slotKeys[i]);
                         return (
                           <span
                             key={i}
@@ -1079,7 +1313,14 @@ export default function RouteConsole({
                                 aria-label="Climb colour"
                               />
                             </label>
-                            <span className="font-medium text-fg">{ts ? ts.date : att.route}</span>
+                            {hasGuestSlot && (
+                              <span className="font-medium text-fg">{ownerLabel}</span>
+                            )}
+                            <span
+                              className={hasGuestSlot ? "text-fg-muted" : "font-medium text-fg"}
+                            >
+                              {ts ? ts.date : att.route}
+                            </span>
                             {ts && <span className="text-fg-muted">{ts.time}</span>}
                             <RunStatusDot runType={att.runType} />
                           </span>
