@@ -11,9 +11,19 @@ its detection pass is a discarded scaffold, and scored runs come only from a
 separate headless pass.
 
 Amended by ADR 0019: §1's scaffold *poses* now come from ViTPose++ run on the
-downloader (MediaPipe still defines the Detection Frame set); the human stays the
-truth authority. §Considered-Options #4's circularity premise is superseded —
-seeding from a different model breaks the self-reference on unverified frames.
+downloader; the human stays the truth authority. §Considered-Options #4's
+circularity premise is superseded — seeding from a different model breaks the
+self-reference on unverified frames.
+
+Amended by `.scratch/calibration-analyze-split/PRD.md` and ADR 0020
+(calibration freshness): calibration no longer runs a throwaway MediaPipe pass;
+the Detection Frame set is a uniform 100 ms arithmetic grid keyed to video
+duration and sent directly to ViTPose at setup-confirm time. Detection + scoring
+run in the explicit Analyze step (manual and batch), scoring only the GT frames
+the run actually probed (1 ms timestamp match), with `probeCoverage` and
+`detectionRateVsGT` computed over probed present frames. Ground Truth remains
+video-keyed in carry-forward semantics, while freshness/pairing is hash-chained
+and surfaced (stale + re-seed), not silently discarded.
 
 Amended by the calibration flag-only review change
 (`.scratch/calibration-flag-review/PRD.md`): authoring is inverted from *dragging
@@ -140,15 +150,15 @@ manual inputs, and the bundle is the corpus of record.
    drift histogram.
 
 3. **Flow splits into calibrate vs score.** Calibration mode authors Ground Truth
-   - crops + metadata and posts nothing. A separate **headless scoring pass** (the
-     ADR 0017 batch runner, or a "Score now" action) runs detection with the frozen
-     **Scan Setup**, scores in-browser against the bundle's Ground Truth, and folds
-     the per-frame errors + per-run rollup into the run's `pose` payload posted
-     through the existing `POST /api/detections` — one append-only, self-attributing
-     record per run. Each score is stamped with a **`groundTruthHash`** alongside
-     `appVersion` + `setupHash`, so a score is always tied to the exact Ground Truth
-     version it was measured against. The scoring pass skips any video without a
-     `ground-truth.json`. `ScanDiagnostics` still rides along, GT-free.
+    - crops + metadata and posts nothing. A separate **Analyze** action (per-video
+       plus the batch runner) runs detection with the frozen **Scan Setup**, scores
+       in-browser against the bundle's Ground Truth, and folds the per-frame errors
+       + per-run rollup into the run's `pose` payload posted through the existing
+       `POST /api/detections` — one append-only, self-attributing record per run.
+       Each score is stamped with a **`groundTruthHash`** alongside `appVersion` +
+       `setupHash`, so a score is always tied to the exact Ground Truth version it
+       was measured against. The Analyze pass skips any video without a
+       `ground-truth.json`. `ScanDiagnostics` still rides along, GT-free.
 
 4. **Video condition labels live in the Scan Setup.** The condition labels
    (`route_orientation`, `camera_angle`, `shadows`, `climber_contrast`,
@@ -184,11 +194,12 @@ manual inputs, and the bundle is the corpus of record.
    server recomputes both hashes on write, requires `review`, and enforces
    flagged-absent ⇒ `state: "absent"`.
 
-   **Staleness rule.** On re-calibration, prior human flags carry forward onto the
-   fresh seed only when the saved truth's `setupHash` matches the new one; joints
-   always come from the new seed. On mismatch — or legacy truth without a
-   `setupHash` — the review starts clean and the UI shows a "prior truth discarded
-   (setup changed)" notice.
+   **Staleness rule (ADR 0020).** Freshness is hash-chained and surfaced, not
+   discard-based. On re-calibration, prior human flags carry forward by timestamp
+   onto the re-seed scaffold; if the persisted truth's `setupHash` does not match
+   the current setup, the truth is marked stale and must be re-seeded under the
+   current setup before export/evaluation as current-state evidence. Historical
+   truth and runs remain intact and attributable by hashes.
 
 ## Considered options
 

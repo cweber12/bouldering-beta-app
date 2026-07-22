@@ -1,6 +1,8 @@
 # Docs alignment — ADRs 0018/0019 and old issues 08/09
 
-Status: ready-for-agent
+Status: done
+Branch: chore/calibration-analyze-split-docs-closeout
+Merged: pending
 Type: AFK
 
 ## Parent
@@ -13,9 +15,9 @@ Bring the documented decisions in line with the shipped ones. Amend ADR 0018 (gr
 
 ## Acceptance criteria
 
-- [ ] ADR 0018 and ADR 0019 describe the uniform grid, video-keyed truth, and Analyze-step flow as built.
-- [ ] Old issues 08/09 carry a status + note pointing at this feature's issues 04/05; `node scripts/audit-issues.mjs` reports no drift.
-- [ ] CONTEXT.md matches the shipped vocabulary.
+- [x] ADR 0018 and ADR 0019 describe the uniform grid, video-keyed truth, and Analyze-step flow as built.
+- [x] Old issues 08/09 carry a status + note pointing at this feature's issues 04/05; `node scripts/audit-issues.mjs` reports no drift.
+- [x] CONTEXT.md matches the shipped vocabulary.
 
 ## Blocked by
 
@@ -38,3 +40,6 @@ Bring the documented decisions in line with the shipped ones. Amend ADR 0018 (gr
   "surfaced + re-seed, per ADR 0020", not removed. The CONTEXT.md Ground
   Truth entry was already updated in that commit; issue 06 is closed wontfix
   (the harness declined video-identity pairing).
+- 2026-07-21: completed. ADR 0018/0019 now reflect the shipped calibration-
+  analyze split (uniform arithmetic grid, Analyze-run scoring flow, and
+  staleness surfaced via ADR 0020); CONTEXT vocabulary checked unchanged.
