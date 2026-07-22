@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminAuth } from "@/utils/firebase/admin";
 import { getAuthUserId, profileKey, readProfileStorage } from "../../s3/shared";
 
 // ---------------------------------------------------------------------------
@@ -24,11 +25,22 @@ export async function GET(
   try {
     const profile = await readProfileStorage<Record<string, unknown>>(profileKey(userId));
     if (!profile) {
-      return NextResponse.json({ userId });
+      try {
+        const fbUser = await getAdminAuth().getUser(userId);
+        return NextResponse.json({ userId, displayName: fbUser.displayName ?? "" });
+      } catch {
+        return NextResponse.json({ userId });
+      }
     }
     return NextResponse.json({ ...profile, userId });
   } catch (err) {
-    console.error("[profile/userId/GET]", err);
-    return NextResponse.json({ error: "Failed to load profile." }, { status: 502 });
+    console.error("[profile/userId/GET:s3]", err);
+    try {
+      const fbUser = await getAdminAuth().getUser(userId);
+      return NextResponse.json({ userId, displayName: fbUser.displayName ?? "", degraded: true });
+    } catch (fallbackErr) {
+      console.error("[profile/userId/GET:firebase]", fallbackErr);
+      return NextResponse.json({ error: "Failed to load profile." }, { status: 502 });
+    }
   }
 }

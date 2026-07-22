@@ -6,6 +6,7 @@ import {
   readProfileStorage,
   writeProfileStorage,
   PROFILE_TEXT_LIMIT,
+  awsErrorMessage,
 } from "../s3/shared";
 
 // ---------------------------------------------------------------------------
@@ -32,13 +33,33 @@ export async function GET(): Promise<NextResponse> {
 
   try {
     const profile = await readProfileStorage<ProfilePayload>(profileKey(authUser.id));
+
+    // Keep the profile search index warm for every signed-in user, even if they
+    // have never pressed "Save profile". This avoids invisible accounts in
+    // /people search when only auth/email exists.
+    try {
+      await writeProfileStorage(indexKey(authUser.id), {
+        displayName: profile?.displayName ?? "",
+        email: authUser.email,
+        location: profile?.location ?? "",
+      });
+    } catch (indexErr) {
+      // Search index updates should not block profile reads.
+      console.error("[profile/GET index]", indexErr);
+    }
+
     if (!profile) {
       return NextResponse.json({ userId: authUser.id, email: authUser.email });
     }
     return NextResponse.json({ ...profile, userId: authUser.id, email: authUser.email });
   } catch (err) {
-    console.error("[profile/GET]", err);
-    return NextResponse.json({ error: "Failed to load profile." }, { status: 502 });
+    const msg = awsErrorMessage(err);
+    console.error("[profile/GET]", msg);
+    // Keep profile UI functional during storage outages.
+    return NextResponse.json(
+      { userId: authUser.id, email: authUser.email, warning: msg },
+      { status: 200 },
+    );
   }
 }
 
@@ -94,7 +115,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[profile/PUT]", err);
-    return NextResponse.json({ error: "Failed to save profile." }, { status: 502 });
+    const msg = awsErrorMessage(err);
+    console.error("[profile/PUT]", msg);
+    return NextResponse.json({ error: msg }, { status: 502 });
   }
 }

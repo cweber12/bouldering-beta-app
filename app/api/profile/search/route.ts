@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthUserId, readProfileStorage, listProfileStorage } from "../../s3/shared";
+import { getAdminAuth } from "@/utils/firebase/admin";
+import {
+  getAuthUserId,
+  readProfileStorage,
+  listProfileStorage,
+  awsErrorMessage,
+} from "../../s3/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -13,8 +19,36 @@ interface IndexEntry {
 
 const INDEX_FOLDER = "ProfileData/_index";
 
+async function fallbackFirebaseSearch(q: string, authUserId: string) {
+  const auth = getAdminAuth();
+  const matches: Array<{ userId: string; displayName?: string; email?: string; location?: string }> = [];
+  let pageToken: string | undefined;
+
+  do {
+    const page = await auth.listUsers(1000, pageToken);
+    for (const user of page.users) {
+      if (user.uid === authUserId) continue;
+
+      const uid = user.uid.toLowerCase();
+      const name = (user.displayName ?? "").toLowerCase();
+      const email = (user.email ?? "").toLowerCase();
+      if (!uid.includes(q) && !name.includes(q) && !email.includes(q)) continue;
+
+      matches.push({
+        userId: user.uid,
+        displayName: user.displayName ?? "",
+        email: user.email ?? "",
+      });
+      if (matches.length >= 20) return matches;
+    }
+    pageToken = page.pageToken;
+  } while (pageToken);
+
+  return matches;
+}
+
 // ---------------------------------------------------------------------------
-// GET — search users by displayName or email (query param: q)
+// GET — search users by displayName, userId, or email (query param: q)
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -35,12 +69,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    // List all index files
+    // List all index files.
     const fileNames = await listProfileStorage(INDEX_FOLDER);
 
-    // Read index entries in parallel (capped at 50 to limit concurrency)
+    // Read index entries in parallel. Search the full index so known accounts
+    // are never dropped before matching.
     const entries = await Promise.all(
-      fileNames.slice(0, 50).map(async (fileName) => {
+      fileNames.map(async (fileName) => {
         const entry = await readProfileStorage<IndexEntry>(`${INDEX_FOLDER}/${fileName}`);
         if (!entry) return null;
         const userId = fileName.replace(".json", "");
@@ -52,15 +87,24 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const results = entries
       .filter((e): e is NonNullable<typeof e> => {
         if (!e || e.userId === authUserId) return false;
+        const userId = e.userId.toLowerCase();
         const name = (e.displayName ?? "").toLowerCase();
         const email = (e.email ?? "").toLowerCase();
-        return name.includes(q) || email.includes(q);
+        return userId.includes(q) || name.includes(q) || email.includes(q);
       })
       .slice(0, 20);
 
     return NextResponse.json({ results });
   } catch (err) {
-    console.error("[profile/search]", err);
-    return NextResponse.json({ error: "Search failed." }, { status: 502 });
+    const msg = awsErrorMessage(err);
+    console.error("[profile/search:s3]", msg);
+    try {
+      const results = await fallbackFirebaseSearch(q, authUserId);
+      return NextResponse.json({ results, degraded: true });
+    } catch (fallbackErr) {
+      const fallbackMsg = awsErrorMessage(fallbackErr);
+      console.error("[profile/search:firebase]", fallbackMsg);
+      return NextResponse.json({ error: fallbackMsg }, { status: 502 });
+    }
   }
 }

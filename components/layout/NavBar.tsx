@@ -16,6 +16,7 @@ const PUBLIC_LINKS = [{ href: "/docs", label: "Docs" }] as const;
 const AUTH_LINKS = [
   { href: "/scan", label: "Scan" },
   { href: "/routes", label: "Routes" },
+  { href: "/people", label: "People" },
   { href: "/docs", label: "Docs" },
 ] as const;
 
@@ -94,6 +95,16 @@ const HELP_CONTENT: Record<string, HelpSection[]> = {
         "Matching finds pairs of features that appear the same in both images. The best pairs compute a perspective transform that maps the video's coordinate space onto the photo.",
         "Each recorded skeleton keypoint is then projected into the photo using that transform, producing the overlay.",
         "Open Refine to crop the route photo onto the wall surface — rock texture, holds, and chalk marks are ideal features; exclude sky, trees, gear, people, and the floor. All loaded climbs match against the same photo, so you only crop once.",
+      ],
+    },
+  ],
+  "/people": [
+    {
+      title: "Find climbers",
+      bullets: [
+        "Search by display name or email to find another climber's public profile.",
+        "Open a profile to browse their climbs, then tap any climb card or map pin to see the full detail modal.",
+        "From another user's climb detail, choose Compare with mine to pick one of your own runs and open the cross-user compare console.",
       ],
     },
   ],
