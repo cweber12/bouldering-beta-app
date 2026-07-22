@@ -1,6 +1,7 @@
 # Three acts: Setup / Calibrate / Analyze flow split
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-three-act-flow-split
 Type: AFK
 
 ## Parent
@@ -27,16 +28,16 @@ Calibrate enables once `hasSetup`). Split today's `Calibrator`
 
 ## Acceptance criteria
 
-- [ ] Corpus list shows Setup / Calibrate(or Re-calibrate) / Analyze; Calibrate is gated
+- [x] Corpus list shows Setup / Calibrate(or Re-calibrate) / Analyze; Calibrate is gated
       on `hasSetup`, Analyze on `hasSetup` as before.
-- [ ] Setup saves crops/tap/wall/tier + metadata without seeding; the save affordance is
+- [x] Setup saves crops/tap/wall/tier + metadata without seeding; the save affordance is
       visibly emphasized while dirty.
-- [ ] Calibrate is a seed-tap-only view pre-filled from the analysis tap (first time) or
+- [x] Calibrate is a seed-tap-only view pre-filled from the analysis tap (first time) or
       the saved seed tap; confirming persists the seed tap off-hash and runs ViTPose + GT
       review; `setupHash` is unchanged by a seed re-tap.
-- [ ] Existing GT review, carry-forward, Review-seed, and Re-run-ViTPose behaviours are
+- [x] Existing GT review, carry-forward, Review-seed, and Re-run-ViTPose behaviours are
       preserved.
-- [ ] Type-check, lint, and targeted tests pass (page stays untested; verify util seams).
+- [x] Type-check, lint, and targeted tests pass (page stays untested; verify util seams).
 
 ## Blocked by
 
