@@ -21,6 +21,8 @@ export interface CorpusItem {
   /** A fresh, posed ViTPose scaffold is on disk — review needs no new job. */
   seedReady: boolean;
   runCount: number;
+  /** Runs whose stamped hash pairs with the truth — real evidence; 0 ⇒ un-analyzed. */
+  pairedRunCount: number;
   /** Runs whose stamped hash pairs with no truth — they produce no evidence. */
   unpairedRunCount: number;
   analysisInputs: unknown;

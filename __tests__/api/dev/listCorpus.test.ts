@@ -117,8 +117,9 @@ describe("listCorpus", () => {
     expect(a.title).toBe("Clip A");
     expect(a.videoPath).toBe("analysis/route-a/vid_1/vid_1.mp4");
     expect(a.analysisInputs).toEqual({ shadows: "low" });
-    // Hashless legacy bundle: never read as stale or unpaired.
+    // Hashless legacy bundle: never read as stale or unpaired — both runs pair.
     expect(a.truthStale).toBe(false);
+    expect(a.pairedRunCount).toBe(2);
     expect(a.unpairedRunCount).toBe(0);
 
     const b = items.find((i) => i.key === "route-b/vid_2")!;
@@ -126,6 +127,7 @@ describe("listCorpus", () => {
     expect(b.hasGroundTruth).toBe(false);
     expect(b.runCount).toBe(0);
     expect(b.truthStale).toBe(false);
+    expect(b.pairedRunCount).toBe(0);
     expect(b.unpairedRunCount).toBe(0);
     expect(b.analysisInputs).toBeNull();
   });
@@ -141,6 +143,7 @@ describe("listCorpus", () => {
     // The old-hash run pairs with the truth; the new-hash run pairs with
     // nothing — exactly the harness's setupHash-mismatch skip.
     expect(d.runCount).toBe(2);
+    expect(d.pairedRunCount).toBe(1);
     expect(d.unpairedRunCount).toBe(1);
   });
 
