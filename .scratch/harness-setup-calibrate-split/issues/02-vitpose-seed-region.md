@@ -1,7 +1,8 @@
 # ViTPose request seeded by seedTap + seedRegion
 
-Status: in-progress
+Status: done
 Branch: feat/harness-vitpose-seed-region
+Merged: 798c038
 Type: AFK
 
 ## Parent
@@ -23,15 +24,18 @@ work is executable separately.
 
 ## Acceptance criteria
 
-- [ ] `ViTPoseRequest` carries `seedTap` + `seedRegion` and no longer relies on the
+- [x] `ViTPoseRequest` carries `seedTap` + `seedRegion` and no longer relies on the
       Climber Crop as the seed gate.
-- [ ] `seedRegion` is derived from the seed tap and clamped to the frame; unit-tested.
-- [ ] `requestViTPoseForGrid` sends the new shape; out-of-region / legacy-tap cautions
-      are re-pointed at the seed tap.
-- [ ] A handoff doc/ADR specifies the new request shape and the removed crop gate
-      (scanner ships independently; downloader honors it later).
-- [ ] Type-check, lint, and targeted tests pass
-      (`__tests__/utils/harnessViTPose.test.ts`).
+- [x] `seedRegion` is derived from the seed tap and clamped to the frame; unit-tested.
+- [x] `requestViTPoseForGrid` sends the new shape; the obsolete out-of-crop caution is
+      removed and the legacy-tap caution stays on the seed tap. (Also updated the second
+      caller, `ReseedSweeper`, to the same request.)
+- [x] A handoff doc/ADR specifies the new request shape and the removed crop gate
+      (scanner ships independently; downloader honors it later) —
+      `downloader-seed-region-contract.md`.
+- [x] Type-check, lint, and targeted tests pass
+      (`__tests__/utils/harnessViTPose.test.ts`, `__tests__/utils/cropContainment.test.ts`,
+      `__tests__/api/dev/vitposeRoute.test.ts`).
 
 ## Blocked by
 
