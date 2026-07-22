@@ -1,19 +1,22 @@
 "use client";
 
 /**
- * Dev-only re-seed stale sweep (batch re-seed PRD issue 03).
+ * Dev-only shared ViTPose sweeper — drives both the Re-seed stale sweep (batch
+ * re-seed PRD issue 03) and the Batch Calibrate sweep (harness-setup-calibrate-
+ * split issue 04). The two draw from different populations (stale-truth vs.
+ * setup-but-truthless bundles) but run identically, so they share one sweeper
+ * parametrized only by its {@link SweeperCopy}.
  *
  * Works the ViTPose backlog off the corpus page without opening bundles
- * individually: for each stale-truth bundle that is not seed-ready, fetch the
- * Test Video through the dev proxy, probe its duration in-browser, build the
- * uniform 100 ms Detection Frame grid (legacy sparse-grid bundles densify),
- * POST the job through the existing relay — which deletes the prior artifact,
- * so the freshness gates apply identically to batch and manual seeding — and
- * poll the existing GET until {@link decideReseedStep} resolves it. Jobs run
- * strictly one at a time (the downloader owns one GPU); failures skip and
- * summarize, never retry. The sweep only lands scaffolds — it never writes
- * Ground Truth, so every bundle stays stale until a human reviews and accepts
- * from the calibrator.
+ * individually: for each queued bundle, fetch the Test Video through the dev
+ * proxy, probe its duration in-browser, build the uniform 100 ms Detection
+ * Frame grid (legacy sparse-grid bundles densify), POST the job through the
+ * existing relay — which deletes the prior artifact, so the freshness gates
+ * apply identically to batch and manual seeding — and poll the existing GET
+ * until {@link decideReseedStep} resolves it. Jobs run strictly one at a time
+ * (the downloader owns one GPU); failures skip and summarize, never retry. The
+ * sweep only lands scaffolds — it never writes Ground Truth, so every bundle
+ * waits for a human to review and accept from the calibrator.
  *
  * Stop halts after the in-flight job: the downloader is already running it, so
  * abandoning the poll would only lose the outcome, not the work.
@@ -23,7 +26,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   decideReseedStep,
   type ReseedCandidate,
-  type ReseedPlan,
+  type SweepPlan,
 } from "@/utils/harnessReseed";
 import {
   requestViTPoseScaffold,
@@ -34,6 +37,49 @@ import { buildDetectionGrid } from "@/utils/harnessDetectionGrid";
 import { probeVideoMeta } from "@/utils/probeVideoMeta";
 import { deriveSeedRegion } from "@/utils/cropContainment";
 import type { CropFraction } from "@/utils/cropFraction";
+
+/** The wording that distinguishes one sweep's population from the other's. */
+export interface SweeperCopy {
+  /** Header title, e.g. "Re-seed stale" / "Batch Calibrate". */
+  title: string;
+  /** The intro sentence for a queue of `queued` bundles. */
+  intro: (queued: number) => string;
+  /** The note for `n` seed-ready bundles skipped as review-only. */
+  seedReadyNote: (n: number) => string;
+  /** The note for `n` bundles skipped for lack of a Scan Setup. */
+  noSetupNote: (n: number) => string;
+  /** The empty-queue line. */
+  empty: string;
+}
+
+const plural = (n: number) => (n === 1 ? "" : "s");
+
+/** Re-seed stale wording — the default population is stale-truth bundles. */
+export const RESEED_COPY: SweeperCopy = {
+  title: "Re-seed stale",
+  intro: (n) =>
+    `Re-running ViTPose for the ${n} stale-truth bundle${plural(n)} without a usable ` +
+    `scaffold, one job at a time. Nothing is auto-accepted — landed seeds wait for review ` +
+    `in the calibrator.`,
+  seedReadyNote: (n) =>
+    `${n} stale bundle${plural(n)} skipped — seed already ready, open the calibrator to review.`,
+  noSetupNote: (n) => `${n} skipped — stale truth without a Scan Setup.`,
+  empty: "Nothing to re-seed — no stale-truth bundle needs a ViTPose job.",
+};
+
+/** Batch Calibrate wording — the population is setup-but-truthless bundles. */
+export const BATCH_CALIBRATE_COPY: SweeperCopy = {
+  title: "Batch Calibrate",
+  intro: (n) =>
+    `Running ViTPose for the ${n} setup-but-truthless bundle${plural(n)} without a usable ` +
+    `scaffold, one job at a time. Nothing is auto-accepted — landed seeds wait for review ` +
+    `in the calibrator.`,
+  seedReadyNote: (n) =>
+    `${n} truthless bundle${plural(n)} skipped — seed already ready, open the calibrator to review.`,
+  noSetupNote: (n) =>
+    `${n} skipped — no Scan Setup yet, run Setup before calibrating.`,
+  empty: "Nothing to calibrate — no setup-but-truthless bundle needs a ViTPose job.",
+};
 
 /** What the sweep needs to know about one queued bundle. */
 export interface ReseedRunItem extends ReseedCandidate {
@@ -203,11 +249,14 @@ export default function ReseedSweeper({
   plan,
   onBack,
   onLanded,
+  copy = RESEED_COPY,
 }: {
-  plan: ReseedPlan<ReseedRunItem>;
+  plan: SweepPlan<ReseedRunItem>;
   onBack: () => void;
   /** Called after each landed artifact so the corpus badges refresh mid-sweep. */
   onLanded: () => void | Promise<void>;
+  /** Which sweep's wording to render — defaults to Re-seed stale. */
+  copy?: SweeperCopy;
 }) {
   const [entries, setEntries] = useState<SweepEntry[]>(() =>
     plan.queue.map((item) => ({ item, status: "pending", message: "" })),
@@ -245,7 +294,7 @@ export default function ReseedSweeper({
     <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 bg-surface px-4 py-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-fg">Re-seed stale</div>
+          <div className="truncate text-sm font-medium text-fg">{copy.title}</div>
           <div className="truncate text-xs text-fg-muted">
             {done
               ? stopped
@@ -279,26 +328,15 @@ export default function ReseedSweeper({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-surface p-4">
         <p className="text-xs text-fg-muted">
-          Re-running ViTPose for the {entries.length} stale-truth bundle
-          {entries.length === 1 ? "" : "s"} without a usable scaffold, one job at a time.
-          Nothing is auto-accepted — landed seeds wait for review in the calibrator.{" "}
-          {plan.seedReady > 0 && (
-            <span>
-              {plan.seedReady} stale bundle{plan.seedReady === 1 ? "" : "s"} skipped — seed
-              already ready, open the calibrator to review.{" "}
-            </span>
-          )}
+          {copy.intro(entries.length)}{" "}
+          {plan.seedReady > 0 && <span>{copy.seedReadyNote(plan.seedReady)} </span>}
           {plan.skippedNoSetup > 0 && (
-            <span className="text-caution">
-              {plan.skippedNoSetup} skipped — stale truth without a Scan Setup.
-            </span>
+            <span className="text-caution">{copy.noSetupNote(plan.skippedNoSetup)}</span>
           )}
         </p>
 
         {entries.length === 0 ? (
-          <p className="text-sm text-fg-muted">
-            Nothing to re-seed — no stale-truth bundle needs a ViTPose job.
-          </p>
+          <p className="text-sm text-fg-muted">{copy.empty}</p>
         ) : (
           <ul className="flex flex-col gap-1">
             {entries.map((entry, i) => (

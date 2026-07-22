@@ -26,19 +26,29 @@ export interface ReseedCandidate {
   seedReady: boolean;
 }
 
-/** The sweep plan: which bundles get a job, and why the rest do not. */
-export interface ReseedPlan<T extends ReseedCandidate> {
-  /** Stale-truth bundles needing a ViTPose job, in corpus-list order. */
+/**
+ * The fields every ViTPose sweep plan surfaces to the shared sweeper
+ * (ReseedSweeper). Both the Re-seed stale and Batch Calibrate sweeps queue a
+ * job per bundle, skip the seed-ready ones as review-only, and skip the ones
+ * that cannot build a job request — they differ only in which population they
+ * draw from (stale-truth vs. truthless).
+ */
+export interface SweepPlan<T> {
+  /** Bundles needing a ViTPose job, in corpus-list order. */
   queue: T[];
-  /** Stale-truth bundles whose scaffold is already seed-ready — review, no job. */
+  /** Bundles whose scaffold is already seed-ready — review, no job. */
   seedReady: number;
-  /** Stale-truth bundles with no Scan Setup to build a job request from
-   * (pathological — a stale hash comparison implies a saved Setup). */
+  /** Bundles with no Scan Setup to build a job request from. */
   skippedNoSetup: number;
-  /** Every stale-truth bundle: queue + seedReady + skippedNoSetup. */
-  staleTotal: number;
-  /** Every candidate considered, including fresh-truth and truthless bundles. */
+  /** Every candidate considered, across all populations. */
   total: number;
+}
+
+/** The re-seed sweep plan: which stale-truth bundles get a job. */
+export interface ReseedPlan<T extends ReseedCandidate> extends SweepPlan<T> {
+  /** Every stale-truth bundle: queue + seedReady + skippedNoSetup. A no-Setup
+   * skip here is pathological — a stale hash comparison implies a saved Setup. */
+  staleTotal: number;
 }
 
 /** Plan a re-seed sweep over the corpus listing. */
@@ -57,6 +67,39 @@ export function planReseedSweep<T extends ReseedCandidate>(
     else queue.push(item);
   }
   return { queue, seedReady, skippedNoSetup, staleTotal, total: items.length };
+}
+
+/** The Batch Calibrate sweep plan: which truthless bundles get a job. */
+export interface BatchCalibratePlan<T extends ReseedCandidate> extends SweepPlan<T> {
+  /** Every truthless bundle: queue + seedReady + skippedNoSetup. Unlike the
+   * re-seed sweep, a no-Setup skip is ordinary here — a brand-new bundle that
+   * has not been set up yet cannot be calibrated. */
+  truthlessTotal: number;
+}
+
+/**
+ * Plan a Batch Calibrate sweep over the corpus listing. The queue is the
+ * ViTPose backlog for first-time authoring: truthless bundles that already
+ * have a Scan Setup but no fresh scaffold yet. A truthless bundle that is
+ * already seed-ready needs only the calibrator's review, never a new job, so
+ * it is surfaced as review-ready and never re-jobbed. Nothing is auto-accepted
+ * — landed seeds still wait for a human to accept Ground Truth per bundle.
+ */
+export function planBatchCalibrate<T extends ReseedCandidate>(
+  items: readonly T[],
+): BatchCalibratePlan<T> {
+  const queue: T[] = [];
+  let seedReady = 0;
+  let skippedNoSetup = 0;
+  let truthlessTotal = 0;
+  for (const item of items) {
+    if (item.hasGroundTruth) continue;
+    truthlessTotal += 1;
+    if (item.seedReady) seedReady += 1;
+    else if (!item.hasSetup) skippedNoSetup += 1;
+    else queue.push(item);
+  }
+  return { queue, seedReady, skippedNoSetup, truthlessTotal, total: items.length };
 }
 
 // ---------------------------------------------------------------------------

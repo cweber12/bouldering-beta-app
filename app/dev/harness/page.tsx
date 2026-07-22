@@ -25,11 +25,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Analyzer from "@/components/dev/Analyzer";
 import BatchAnalyzer from "@/components/dev/BatchAnalyzer";
-import ReseedSweeper from "@/components/dev/ReseedSweeper";
+import ReseedSweeper, { BATCH_CALIBRATE_COPY } from "@/components/dev/ReseedSweeper";
 import SetupEditor from "@/components/dev/SetupEditor";
 import Calibrator from "@/components/dev/Calibrator";
 import { planBatchAnalyze, type BatchAnalyzePlan } from "@/utils/harnessBatch";
-import { planReseedSweep, type ReseedPlan } from "@/utils/harnessReseed";
+import {
+  planReseedSweep,
+  planBatchCalibrate,
+  type ReseedPlan,
+  type BatchCalibratePlan,
+} from "@/utils/harnessReseed";
 import { type CorpusItem, type HarnessMode } from "@/utils/harnessCorpus";
 
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -49,6 +54,10 @@ export default function HarnessPage() {
   // to seed-ready as artifacts land, and that must never reshuffle the queue.
   const [reseedPlan, setReseedPlan] = useState<ReseedPlan<CorpusItem> | null>(null);
   const reseedPreview = useMemo(() => (items ? planReseedSweep(items) : null), [items]);
+  // A running Batch Calibrate sweep — same freeze-at-click, drawn from the
+  // truthless (never yet accepted) population instead of the stale one.
+  const [calibratePlan, setCalibratePlan] = useState<BatchCalibratePlan<CorpusItem> | null>(null);
+  const calibratePreview = useMemo(() => (items ? planBatchCalibrate(items) : null), [items]);
 
   const refreshList = useCallback(async () => {
     setListError(null);
@@ -96,6 +105,20 @@ export default function HarnessPage() {
         plan={reseedPlan}
         onBack={() => {
           setReseedPlan(null);
+          void refreshList();
+        }}
+        onLanded={refreshList}
+      />
+    );
+  }
+
+  if (calibratePlan) {
+    return (
+      <ReseedSweeper
+        plan={calibratePlan}
+        copy={BATCH_CALIBRATE_COPY}
+        onBack={() => {
+          setCalibratePlan(null);
           void refreshList();
         }}
         onLanded={refreshList}
@@ -157,6 +180,15 @@ export default function HarnessPage() {
             className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
           >
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => calibratePreview && setCalibratePlan(calibratePreview)}
+            disabled={!calibratePreview || calibratePreview.queue.length === 0}
+            title="Submit a ViTPose job for every setup-but-truthless bundle without a usable scaffold, one after another — seed-ready bundles are skipped, nothing is auto-accepted"
+            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm font-medium text-fg disabled:opacity-50"
+          >
+            Batch Calibrate{calibratePreview ? ` (${calibratePreview.queue.length})` : ""}
           </button>
           <button
             type="button"
