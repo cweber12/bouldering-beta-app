@@ -61,6 +61,15 @@ export interface ScanSetup extends ScanSetupInput {
    * {@link analysisInputs}, equally excluded from the hash.
    */
   analysisInputsProvenance?: Record<string, string>;
+  /**
+   * The Climber tap used to seed the downloader's ViTPose job, distinct from the
+   * in-hash {@link climberPoint} (which seeds MediaPipe in Analyze). Deliberately
+   * excluded from {@link canonicalSetupInput} so re-tapping to improve the seed
+   * never changes `setupHash` — a re-seed re-authors Ground Truth without
+   * re-pairing prior runs. Absent means "use `climberPoint`". See the
+   * harness-setup-calibrate-split PRD.
+   */
+  seedTap?: ClimberPoint;
   /** ISO timestamp, stamped server-side on write. */
   updatedAt: string;
 }
@@ -180,6 +189,23 @@ export function bodyHasScanInputs(body: unknown): boolean {
   return SCAN_INPUT_KEYS.some((k) => k in b);
 }
 
+/** True when the body carries a `seedTap` edit (the off-hash ViTPose seed tap). */
+export function bodyHasSeedTap(body: unknown): boolean {
+  return typeof body === "object" && body !== null && "seedTap" in body;
+}
+
+/**
+ * Validate a `seedTap` edit off an untrusted body. `null` clears the seed tap;
+ * a valid {@link ClimberPoint} sets it; anything malformed returns `false` so the
+ * route can 422. Callers gate on {@link bodyHasSeedTap} first, so a missing
+ * `seedTap` key never reaches here.
+ */
+export function parseSeedTapEdit(body: unknown): ClimberPoint | null | false {
+  const raw = (body as Record<string, unknown>).seedTap;
+  if (raw === null) return null;
+  return isPoint(raw) ? raw : false;
+}
+
 /** Pull only the scan-input fields off a persisted setup, for re-hashing on merge. */
 export function pickScanInput(setup: ScanSetup): ScanSetupInput {
   return {
@@ -220,6 +246,26 @@ export async function saveSetupLabels(
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Failed to save labels.");
   return body.setup?.analysisInputs ?? null;
+}
+
+/**
+ * Persist the off-hash ViTPose seed tap through the merging setup write; returns
+ * the merged `seedTap`. Crops, labels, and `setupHash` are left untouched
+ * server-side (`setupHash` never covers `seedTap`), so re-seeding never re-pairs
+ * prior runs. Passing `null` clears the seed tap (falls back to `climberPoint`).
+ */
+export async function saveSeedTap(
+  bundleKey: string,
+  seedTap: ClimberPoint | null,
+): Promise<ClimberPoint | null> {
+  const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(bundleKey)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ seedTap }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Failed to save seed tap.");
+  return body.setup?.seedTap ?? null;
 }
 
 // Re-exported so the setup route validates label edits without a second import.

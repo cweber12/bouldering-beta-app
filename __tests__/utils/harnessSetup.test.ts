@@ -3,6 +3,8 @@ import {
   canonicalSetupInput,
   hashSetupInput,
   parseScanSetupInput,
+  bodyHasSeedTap,
+  parseSeedTapEdit,
   SETUP_VERSION,
   type ScanSetupInput,
 } from "@/utils/harnessSetup";
@@ -96,6 +98,39 @@ describe("parseScanSetupInput", () => {
     expect(parseScanSetupInput({ ...base, climberPoint: { x: 0.5, y: 0.42, t: Infinity } })).toBeNull();
     expect(parseScanSetupInput({ ...base, climberPoint: { x: 0.5, y: 0.42, t: -1 } })).toBeNull();
     expect(parseScanSetupInput({ ...base, climberCrop: { x: 0, y: 0, w: NaN, h: 1 } })).toBeNull();
+  });
+});
+
+describe("bodyHasSeedTap", () => {
+  it("detects a seedTap key (including an explicit null) and rejects non-objects", () => {
+    expect(bodyHasSeedTap({ seedTap: { x: 0.5, y: 0.5 } })).toBe(true);
+    expect(bodyHasSeedTap({ seedTap: null })).toBe(true);
+    expect(bodyHasSeedTap({ analysisInputs: { shadows: "low" } })).toBe(false);
+    expect(bodyHasSeedTap(null)).toBe(false);
+    expect(bodyHasSeedTap("nope")).toBe(false);
+  });
+});
+
+describe("parseSeedTapEdit", () => {
+  it("returns null to clear, the point to set, and false when malformed", () => {
+    expect(parseSeedTapEdit({ seedTap: null })).toBeNull();
+    expect(parseSeedTapEdit({ seedTap: { x: 0.4, y: 0.6 } })).toEqual({ x: 0.4, y: 0.6 });
+    expect(parseSeedTapEdit({ seedTap: { x: 0.4, y: 0.6, t: 1.5 } })).toEqual({
+      x: 0.4,
+      y: 0.6,
+      t: 1.5,
+    });
+    expect(parseSeedTapEdit({ seedTap: { x: "no", y: 0.6 } })).toBe(false);
+    expect(parseSeedTapEdit({ seedTap: { x: 0.4, y: 0.6, t: -1 } })).toBe(false);
+    expect(parseSeedTapEdit({ seedTap: 42 })).toBe(false);
+  });
+});
+
+describe("seedTap is excluded from the setup hash", () => {
+  it("does not appear in the canonical pre-image (ScanSetupInput has no seedTap)", () => {
+    // seedTap lives on ScanSetup, not ScanSetupInput — the canonical string is
+    // built only from the scan inputs, so it can never mention a seed tap.
+    expect(canonicalSetupInput(base)).not.toContain("seedTap");
   });
 });
 
