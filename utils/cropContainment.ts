@@ -45,30 +45,26 @@ export function defaultRouteAroundClimber(climber: CropFraction): CropFraction {
 }
 
 /**
- * The downloader's seed crop gate, mirrored: a ViTPose seed candidate's box
- * center must fall inside the Climber Crop expanded by this fraction of its
- * size on each side (`_CROP_GATE_EXPAND` in the downloader's vitpose_job.py),
- * and there is deliberately no un-crop fallback. A Climber tap outside that
- * region can therefore never seed — every job returns `seedFound: false`.
+ * Half-size (fraction of the frame) of the seed acquisition box on each side of
+ * the Seed tap. A tap yields a square of twice this per side, clamped to the
+ * frame — the region the downloader gates the ViTPose seed against in place of
+ * the Climber Crop (harness-setup-calibrate-split).
  */
-export const SEED_CROP_GATE_EXPAND = 0.1;
+export const SEED_REGION_HALF = 0.15;
 
 /**
- * True when a Climber tap sits outside the expanded Climber Crop — i.e. a
- * ViTPose job seeded from it is structurally unable to match any track.
- * Surfaced as a calibration warning before the job is ever submitted.
+ * The acquisition box the downloader gates the ViTPose seed against, centered on
+ * the Seed tap and clamped to the frame. Because the tap is always the box
+ * center, the seed is independent of the Climber Crop (which no longer gates
+ * it). A null tap yields the full frame, so an untapped job acquires the
+ * strongest pose rather than nothing.
  */
-export function tapOutsideSeedGate(
-  point: { x: number; y: number } | null,
-  crop: CropFraction,
-): boolean {
-  if (!point) return false;
-  const padX = crop.w * SEED_CROP_GATE_EXPAND;
-  const padY = crop.h * SEED_CROP_GATE_EXPAND;
-  return (
-    point.x < crop.x - padX ||
-    point.x > crop.x + crop.w + padX ||
-    point.y < crop.y - padY ||
-    point.y > crop.y + crop.h + padY
-  );
+export function deriveSeedRegion(point: { x: number; y: number } | null): CropFraction {
+  if (!point) return { x: 0, y: 0, w: 1, h: 1 };
+  return frameClampCrop({
+    x: point.x - SEED_REGION_HALF,
+    y: point.y - SEED_REGION_HALF,
+    w: SEED_REGION_HALF * 2,
+    h: SEED_REGION_HALF * 2,
+  });
 }

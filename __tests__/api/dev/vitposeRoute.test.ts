@@ -24,7 +24,8 @@ const validScaffold = {
 
 const validRequest = {
   videoPath: "analysis/route-x/vid_1/vid_1.mp4",
-  climberPoint: { x: 0.5, y: 0.4, t: 2.33 },
+  seedTap: { x: 0.5, y: 0.4, t: 2.33 },
+  seedRegion: { x: 0.35, y: 0.25, w: 0.3, h: 0.3 },
   climberCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   wallCrop: { x: 0.05, y: 0.05, w: 0.9, h: 0.9 },
   panning: false,
@@ -312,7 +313,7 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
     expect((await POST(makeRequest(BUNDLE_KEY, { ...noFrames, frames: [] }))).status).toBe(422);
   });
 
-  it("POST relays the Climber selection to the downloader and passes its status through", async () => {
+  it("POST relays the Seed tap + region to the downloader and passes its status through", async () => {
     const fetchMock = vi.fn(
       async (_url: string | URL, _init?: RequestInit) =>
         new Response(JSON.stringify({ jobId: "j1" }), { status: 202 }),
@@ -330,7 +331,11 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
       video_path: validRequest.videoPath,
       route_folder: "route-x",
       video_key: "vid_1",
-      climber_point: validRequest.climberPoint,
+      seed_tap: validRequest.seedTap,
+      seed_region: validRequest.seedRegion,
+      // `climber_point` is kept as a legacy alias of the Seed tap for a
+      // downloader that has not migrated to `seed_tap` yet.
+      climber_point: validRequest.seedTap,
       panning: false,
       frames: validRequest.frames,
     });

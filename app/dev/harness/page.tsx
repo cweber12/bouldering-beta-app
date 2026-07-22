@@ -84,7 +84,7 @@ import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import {
   frameClampCrop,
   defaultRouteAroundClimber,
-  tapOutsideSeedGate,
+  deriveSeedRegion,
 } from "@/utils/cropContainment";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
 import type { MediaPipeVariant } from "@/hooks/usePoseModel";
@@ -550,12 +550,6 @@ function Calibrator({
   // ever crosses that spot. Re-tapping the Climber writes `t` and fixes it.
   const legacyTapNoTimestamp = climberPoint != null && climberPoint.t === undefined;
 
-  // The downloader's seed crop gate, checked before a job is ever submitted: a
-  // tap outside the (10%-expanded) Climber Crop can never match a track — every
-  // ViTPose job from it lands poseless with seedFound false. Tap the Climber at
-  // a moment they are inside the crop, or move the crop.
-  const tapOutsideCrop = tapOutsideSeedGate(climberPoint, climberCrop);
-
   // The Detection Frame grid: uniform 100 ms stride over the video's duration,
   // independent of the Setup, the tier, and any detector (ADR 0018).
   const gridFrames = useMemo(
@@ -713,9 +707,14 @@ function Calibrator({
       setVitposeStatus("requesting");
       void (async () => {
         try {
+          // The Seed tap seeds the ViTPose job (issue 03 will source a distinct
+          // seed tap; today it is the analysis tap). The acquisition region is
+          // derived from it, so the seed no longer depends on the Climber Crop.
+          const seedTap = climberPoint ?? undefined;
           await requestViTPoseScaffold(item.key, {
             videoPath: item.videoPath,
-            climberPoint: climberPoint ?? undefined,
+            seedTap,
+            seedRegion: deriveSeedRegion(seedTap ?? null),
             climberCrop,
             wallCrop,
             panning,
@@ -1263,16 +1262,6 @@ function Calibrator({
           This setup was calibrated without a tap timestamp (legacy) — ViTPose can only seed by tap
           position and may pose the wrong person when bystanders are present. Re-tap the climber to
           record the frame time and fix the seed.
-        </div>
-      )}
-      {tapOutsideCrop && (
-        <div
-          role="status"
-          className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
-        >
-          The Climber tap is outside the Climber Crop — ViTPose only accepts a seed inside the crop
-          (expanded 10%), so a job from this tap will always report no climber. Scrub to a frame
-          where the climber is inside the crop and re-tap there, or move the crop to cover the tap.
         </div>
       )}
       <div className="min-h-0 flex-1">
