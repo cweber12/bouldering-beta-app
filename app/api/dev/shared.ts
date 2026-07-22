@@ -122,6 +122,13 @@ export interface CorpusItem {
   /** Number of detection runs already written to the bundle. */
   runCount: number;
   /**
+   * Detection runs whose stamped `setupHash` pairs with the truth's — real
+   * evaluation evidence. Always 0 for truthless bundles (that is its own
+   * surfaced state); a `pairedRunCount` of 0 on a fresh-truth bundle is what
+   * "un-analyzed" batch scope keys on.
+   */
+  pairedRunCount: number;
+  /**
    * Detection runs whose stamped `setupHash` does not pair with the truth's —
    * they produce no evaluation evidence. Always 0 for truthless bundles (that
    * is its own surfaced state).
@@ -210,13 +217,16 @@ async function readSeedReady(bundleDir: string, setupHash: string | null): Promi
 /** Detection-run counts: total `*_pose.json` runs and how many pair with truth. */
 interface RunCounts {
   runCount: number;
+  pairedRunCount: number;
   unpairedRunCount: number;
 }
 
 /**
  * Count detection runs by the `*_pose.json` files written per run, and — when
- * the bundle has Ground Truth — how many stamp a `setupHash` that does not
- * pair with it (those runs produce no evaluation evidence in the harness).
+ * the bundle has Ground Truth — split them into those whose stamped `setupHash`
+ * pairs with the truth (real evaluation evidence) and those that do not (they
+ * produce none in the harness). A truthless bundle pairs nothing, so both
+ * counts stay 0 there — that is its own already-surfaced state.
  */
 async function countRuns(
   detectionsDir: string,
@@ -228,17 +238,19 @@ async function countRuns(
   try {
     files = (await readdir(detectionsDir)).filter((f) => f.endsWith("_pose.json"));
   } catch {
-    return { runCount: 0, unpairedRunCount: 0 };
+    return { runCount: 0, pairedRunCount: 0, unpairedRunCount: 0 };
   }
 
+  let pairedRunCount = 0;
   let unpairedRunCount = 0;
   if (hasTruth) {
     for (const f of files) {
       const runHash = await readRunSetupHash(path.join(detectionsDir, f));
-      if (!runPairsWithTruth(runHash, truthSetupHash, setupHash)) unpairedRunCount += 1;
+      if (runPairsWithTruth(runHash, truthSetupHash, setupHash)) pairedRunCount += 1;
+      else unpairedRunCount += 1;
     }
   }
-  return { runCount: files.length, unpairedRunCount };
+  return { runCount: files.length, pairedRunCount, unpairedRunCount };
 }
 
 /**
@@ -287,11 +299,12 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         readSetupHash(bundleDir),
         readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
-      const [seedReady, { runCount, unpairedRunCount }, setupLabels] = await Promise.all([
-        readSeedReady(bundleDir, setupHash),
-        countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
-        readSetupAnalysisInputs(bundleDir),
-      ]);
+      const [seedReady, { runCount, pairedRunCount, unpairedRunCount }, setupLabels] =
+        await Promise.all([
+          readSeedReady(bundleDir, setupHash),
+          countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
+          readSetupAnalysisInputs(bundleDir),
+        ]);
 
       items.push({
         key: `${routeEnt.name}/${vEnt.name}`,
@@ -304,6 +317,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         truthStale: hasGroundTruth && truthIsStale(truthSetupHash, setupHash),
         seedReady,
         runCount,
+        pairedRunCount,
         unpairedRunCount,
         analysisInputs: setupLabels ?? meta.analysis_inputs ?? null,
       });

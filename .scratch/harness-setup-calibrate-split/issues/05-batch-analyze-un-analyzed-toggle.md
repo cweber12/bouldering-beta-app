@@ -1,6 +1,7 @@
 # Batch Analyze All / Un-analyzed toggle + pairedRunCount
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-batch-un-analyzed-toggle
 Type: AFK
 
 ## Parent
@@ -22,13 +23,13 @@ This slice is independent of issues 01–04 and can land in any order.
 
 ## Acceptance criteria
 
-- [ ] `listCorpus` returns `pairedRunCount` (runs passing `runPairsWithTruth`) on server
+- [x] `listCorpus` returns `pairedRunCount` (runs passing `runPairsWithTruth`) on server
       and client `CorpusItem`.
-- [ ] `planBatchAnalyze` accepts a `mode`; "all" is today's behaviour, "un-analyzed"
+- [x] `planBatchAnalyze` accepts a `mode`; "all" is today's behaviour, "un-analyzed"
       additionally requires `pairedRunCount === 0`.
-- [ ] The header exposes a segmented All / Un-analyzed control with live counts; the
+- [x] The header exposes a segmented All / Un-analyzed control with live counts; the
       chosen plan is frozen at click and drives `BatchAnalyzer` unchanged.
-- [ ] Type-check, lint, and targeted tests pass
+- [x] Type-check, lint, and targeted tests pass
       (`__tests__/utils/harnessBatch.test.ts`, `__tests__/api/dev/listCorpus.test.ts`).
 
 ## Blocked by

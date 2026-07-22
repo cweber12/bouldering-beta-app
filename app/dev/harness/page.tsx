@@ -49,7 +49,14 @@ export default function HarnessPage() {
   // A running batch sweep. The plan is frozen at click so a mid-sweep refresh
   // (run counts changing after each post) never reshuffles the queue.
   const [batchPlan, setBatchPlan] = useState<BatchAnalyzePlan<CorpusItem> | null>(null);
-  const batchPreview = useMemo(() => (items ? planBatchAnalyze(items) : null), [items]);
+  // Two scoped previews: "all" re-scores every fresh-truth bundle (a pipeline
+  // re-run), "un-analyzed" fills in bundles with no paired run yet. Both counts
+  // stay live in the segmented control; a click freezes the chosen plan.
+  const batchPreviewAll = useMemo(() => (items ? planBatchAnalyze(items, "all") : null), [items]);
+  const batchPreviewUnanalyzed = useMemo(
+    () => (items ? planBatchAnalyze(items, "un-analyzed") : null),
+    [items],
+  );
   // A running re-seed sweep, frozen at click for the same reason — badges flip
   // to seed-ready as artifacts land, and that must never reshuffle the queue.
   const [reseedPlan, setReseedPlan] = useState<ReseedPlan<CorpusItem> | null>(null);
@@ -199,15 +206,26 @@ export default function HarnessPage() {
           >
             Re-seed stale{reseedPreview ? ` (${reseedPreview.queue.length})` : ""}
           </button>
-          <button
-            type="button"
-            onClick={() => batchPreview && setBatchPlan(batchPreview)}
-            disabled={!batchPreview || batchPreview.queue.length === 0}
-            title="Run Analyze over every video with accepted Ground Truth, one after another"
-            className="rounded-md bg-send px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
-          >
-            Batch Analyze{batchPreview ? ` (${batchPreview.queue.length})` : ""}
-          </button>
+          <div className="flex items-center overflow-hidden rounded-md">
+            <button
+              type="button"
+              onClick={() => batchPreviewAll && setBatchPlan(batchPreviewAll)}
+              disabled={!batchPreviewAll || batchPreviewAll.queue.length === 0}
+              title="Run Analyze over every video with fresh accepted Ground Truth, one after another — re-scores bundles already analyzed"
+              className="bg-send px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
+            >
+              Batch Analyze — All{batchPreviewAll ? ` (${batchPreviewAll.queue.length})` : ""}
+            </button>
+            <button
+              type="button"
+              onClick={() => batchPreviewUnanalyzed && setBatchPlan(batchPreviewUnanalyzed)}
+              disabled={!batchPreviewUnanalyzed || batchPreviewUnanalyzed.queue.length === 0}
+              title="Run Analyze only over fresh-truth videos with no paired run yet — skips ones already analyzed"
+              className="border-l border-surface/30 bg-send/80 px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
+            >
+              Un-analyzed{batchPreviewUnanalyzed ? ` (${batchPreviewUnanalyzed.queue.length})` : ""}
+            </button>
+          </div>
         </div>
       </header>
 
