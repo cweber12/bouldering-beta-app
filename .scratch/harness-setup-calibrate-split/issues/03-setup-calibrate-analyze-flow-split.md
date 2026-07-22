@@ -1,7 +1,8 @@
 # Three acts: Setup / Calibrate / Analyze flow split
 
-Status: in-progress
+Status: done
 Branch: feat/harness-three-act-flow-split
+Merged: bb7a81f
 Type: AFK
 
 ## Parent
