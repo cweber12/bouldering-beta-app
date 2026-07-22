@@ -1,7 +1,8 @@
 # Batch Analyze All / Un-analyzed toggle + pairedRunCount
 
-Status: in-progress
+Status: done
 Branch: feat/harness-batch-un-analyzed-toggle
+Merged: 74c559a
 Type: AFK
 
 ## Parent

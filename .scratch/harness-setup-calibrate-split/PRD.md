@@ -1,6 +1,6 @@
 # Harness Setup / Calibrate split: off-hash seed tap, batch calibrate, targeted batch analyze
 
-Status: in-progress
+Status: done
 
 Spec inputs: `docs/adr/0020-calibration-freshness-hash-chain.md` (the setupHash pairing
 contract this feature refines to "analysis inputs only"); `docs/adr/0019-vitpose-ground-truth-scaffold.md`
