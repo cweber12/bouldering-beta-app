@@ -316,9 +316,18 @@ export default function HarnessPage() {
                   </td>
                   <td className="py-2 pr-3">
                     {!it.hasGroundTruth ? (
-                      <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
-                        none
-                      </span>
+                      it.seedReady ? (
+                        <span
+                          className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send"
+                          title="A fresh ViTPose scaffold is on disk but Ground Truth was never accepted — open Calibrate and use Review seed to accept it, no new job needed"
+                        >
+                          seed ready
+                        </span>
+                      ) : (
+                        <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
+                          none
+                        </span>
+                      )
                     ) : it.truthStale && it.seedReady ? (
                       <span
                         className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
