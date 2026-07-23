@@ -42,6 +42,31 @@ const IS_DEV = process.env.NODE_ENV === "development";
 /** What the corpus list opened a video for — the three acts are kept separate. */
 type Selection = { item: CorpusItem; mode: HarnessMode };
 
+// One cohesive button system across the whole harness: a single neutral family
+// (soft-filled + border + hover) with green (send) reserved for the one action
+// the harness exists to perform — Analyze in a row, Batch Analyze in the header.
+// All state signal lives in the row badges, never in button colour.
+const BTN_BASE =
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50";
+const BTN_NEUTRAL = `${BTN_BASE} border border-edge bg-surface-alt text-fg hover:border-edge-hover hover:bg-surface disabled:hover:border-edge disabled:hover:bg-surface-alt`;
+const BTN_ACCENT = `${BTN_BASE} border border-transparent bg-send text-fg-inverse hover:bg-send/90 disabled:hover:bg-send`;
+// A fixed lane width so the per-row actions stack into aligned columns and the
+// Calibrate ↔ Re-calibrate label change never jitters the layout.
+const ROW_BTN = "w-32";
+
+/** Consistent count badge shown inside batch buttons. */
+function CountPill({ n, tone }: { n: number; tone: "neutral" | "accent" }) {
+  return (
+    <span
+      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
+        tone === "accent" ? "bg-fg-inverse/20 text-fg-inverse" : "bg-surface/70 text-fg-muted"
+      }`}
+    >
+      {n}
+    </span>
+  );
+}
+
 export default function HarnessPage() {
   const [items, setItems] = useState<CorpusItem[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -172,58 +197,70 @@ export default function HarnessPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 p-6">
-      <header className="flex items-center justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-semibold text-fg">Detection eval harness</h1>
-          <p className="text-sm text-fg-muted">
-            Set up each Test Video, calibrate its Ground Truth, then run detection.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 p-6">
+      <header className="flex flex-col gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <h1 className="text-xl font-semibold text-fg">Detection eval harness</h1>
+            <p className="text-sm text-fg-muted">
+              Set up each Test Video, calibrate its Ground Truth, then run detection.
+            </p>
+          </div>
           <button
             type="button"
             onClick={() => void refreshList()}
-            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm text-fg"
+            title="Reload the corpus list"
+            className="shrink-0 rounded-md border border-edge px-3 py-1.5 text-sm text-fg-muted transition-colors hover:border-edge-hover hover:text-fg"
           >
             Refresh
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge/40 pt-3">
+          <span className="mr-1 text-xs font-medium uppercase tracking-wide text-fg-muted">
+            Batch
+          </span>
           <button
             type="button"
             onClick={() => calibratePreview && setCalibratePlan(calibratePreview)}
             disabled={!calibratePreview || calibratePreview.queue.length === 0}
             title="Submit a ViTPose job for every setup-but-truthless bundle without a usable scaffold, one after another — seed-ready bundles are skipped, nothing is auto-accepted"
-            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm font-medium text-fg disabled:opacity-50"
+            className={BTN_NEUTRAL}
           >
-            Batch Calibrate{calibratePreview ? ` (${calibratePreview.queue.length})` : ""}
+            Calibrate
+            {calibratePreview && <CountPill n={calibratePreview.queue.length} tone="neutral" />}
           </button>
           <button
             type="button"
             onClick={() => reseedPreview && setReseedPlan(reseedPreview)}
             disabled={!reseedPreview || reseedPreview.queue.length === 0}
             title="Submit a ViTPose job for every stale-truth bundle without a usable scaffold, one after another — seed-ready bundles are skipped, nothing is auto-accepted"
-            className="rounded-md bg-surface-alt px-3 py-1.5 text-sm font-medium text-fg disabled:opacity-50"
+            className={BTN_NEUTRAL}
           >
-            Re-seed stale{reseedPreview ? ` (${reseedPreview.queue.length})` : ""}
+            Re-seed
+            {reseedPreview && <CountPill n={reseedPreview.queue.length} tone="neutral" />}
           </button>
-          <div className="flex items-center overflow-hidden rounded-md">
+          <div className="flex items-stretch overflow-hidden rounded-md">
             <button
               type="button"
               onClick={() => batchPreviewAll && setBatchPlan(batchPreviewAll)}
               disabled={!batchPreviewAll || batchPreviewAll.queue.length === 0}
               title="Run Analyze over every video with fresh accepted Ground Truth, one after another — re-scores bundles already analyzed"
-              className="bg-send px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
+              className={`${BTN_ACCENT} rounded-none`}
             >
-              Batch Analyze — All{batchPreviewAll ? ` (${batchPreviewAll.queue.length})` : ""}
+              Analyze all
+              {batchPreviewAll && <CountPill n={batchPreviewAll.queue.length} tone="accent" />}
             </button>
             <button
               type="button"
               onClick={() => batchPreviewUnanalyzed && setBatchPlan(batchPreviewUnanalyzed)}
               disabled={!batchPreviewUnanalyzed || batchPreviewUnanalyzed.queue.length === 0}
               title="Run Analyze only over fresh-truth videos with no paired run yet — skips ones already analyzed"
-              className="border-l border-surface/30 bg-send/80 px-3 py-1.5 text-sm font-medium text-fg-inverse disabled:opacity-50"
+              className={`${BTN_ACCENT} rounded-none border-l border-surface/30 bg-send/80 hover:bg-send/70 disabled:hover:bg-send/80`}
             >
-              Un-analyzed{batchPreviewUnanalyzed ? ` (${batchPreviewUnanalyzed.queue.length})` : ""}
+              Un-analyzed
+              {batchPreviewUnanalyzed && (
+                <CountPill n={batchPreviewUnanalyzed.queue.length} tone="accent" />
+              )}
             </button>
           </div>
         </div>
@@ -247,22 +284,25 @@ export default function HarnessPage() {
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr className="border-b border-edge/40 text-left text-fg-muted">
-                <th className="py-2 pr-3 font-medium">route / video</th>
-                <th className="py-2 pr-3 font-medium">title</th>
+                <th className="py-2 pr-3 font-medium">video</th>
                 <th className="py-2 pr-3 font-medium">setup</th>
                 <th className="py-2 pr-3 font-medium">truth</th>
                 <th className="py-2 pr-3 font-medium tabular-nums">runs</th>
-                <th className="py-2 font-medium" />
+                <th className="py-2 font-medium text-right">actions</th>
               </tr>
             </thead>
             <tbody>
               {items.map((it) => (
                 <tr key={it.key} className="border-b border-edge/20 align-top">
-                  <td className="py-2 pr-3">
-                    <div className="font-medium text-fg">{it.routeFolder}</div>
-                    <div className="font-mono text-xs text-fg-muted">{it.videoKey}</div>
+                  <td className="max-w-xs py-2 pr-3">
+                    <div className="truncate font-medium text-fg">
+                      {it.title ?? it.routeFolder}
+                    </div>
+                    <div className="truncate font-mono text-xs text-fg-muted">{it.videoKey}</div>
+                    {it.title && (
+                      <div className="truncate text-xs text-fg-muted">{it.routeFolder}</div>
+                    )}
                   </td>
-                  <td className="max-w-xs py-2 pr-3 text-fg-muted">{it.title ?? "—"}</td>
                   <td className="py-2 pr-3">
                     {it.hasSetup ? (
                       <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
@@ -310,13 +350,13 @@ export default function HarnessPage() {
                       </span>
                     )}
                   </td>
-                  <td className="py-2 text-right">
+                  <td className="py-2">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => setSelected({ item: it, mode: "setup" })}
                         title="Author the Scan Setup — crops, tap, wall, tier — without seeding"
-                        className="rounded-md bg-surface-alt px-3 py-1.5 text-xs font-medium text-fg"
+                        className={`${BTN_NEUTRAL} ${ROW_BTN}`}
                       >
                         Setup
                       </button>
@@ -329,7 +369,7 @@ export default function HarnessPage() {
                             ? "Seed-tap-only: tap the climber in a clear frame, run ViTPose, and review Ground Truth"
                             : "Save a Scan Setup before calibrating"
                         }
-                        className="rounded-md bg-send/80 px-3 py-1.5 text-xs font-medium text-fg-inverse disabled:opacity-50"
+                        className={`${BTN_NEUTRAL} ${ROW_BTN}`}
                       >
                         {it.hasGroundTruth ? "Re-calibrate" : "Calibrate"}
                       </button>
@@ -342,7 +382,7 @@ export default function HarnessPage() {
                             ? "Run the production detection pipeline with this video's Scan Setup"
                             : "Save a Scan Setup before analyzing"
                         }
-                        className="rounded-md bg-surface-alt px-3 py-1.5 text-xs font-medium text-fg disabled:opacity-50"
+                        className={`${BTN_ACCENT} ${ROW_BTN}`}
                       >
                         Analyze
                       </button>
