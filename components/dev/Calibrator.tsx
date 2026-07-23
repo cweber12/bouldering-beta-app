@@ -139,15 +139,19 @@ export default function Calibrator({
   // Seed tap is off-hash, a seed re-tap alone never changes `currentSetupHash`.
   const truthStale = truthAccepted && truthIsStale(truthSetupHash, currentSetupHash);
 
-  // Smart re-seed probe (batch re-seed PRD): on a stale-truth bundle, ask the
-  // existing ViTPose GET whether a fresh posed scaffold is on disk before ever
-  // offering to submit a job — turning the re-seed affordance into "Review seed".
+  // Smart seed probe (batch re-seed / batch calibrate PRDs): ask the existing
+  // ViTPose GET whether a fresh posed scaffold is on disk before ever offering
+  // to submit a job — turning the seed affordance into "Review seed". This
+  // covers two review-without-a-job cases: a stale-truth bundle, and a truthless
+  // bundle that Batch Calibrate already seeded (seed ready, never accepted). A
+  // fresh-accepted bundle has nothing to review, so it is never probed.
+  const wantSeedProbe = truthStale || (!truthAccepted && item.seedReady);
   const [probedScaffold, setProbedScaffold] = useState<ViTPoseScaffold | null>(null);
   const [probedWarnings, setProbedWarnings] = useState<string[]>([]);
   useEffect(() => {
     setProbedScaffold(null);
     setProbedWarnings([]);
-    if (!truthStale) return;
+    if (!wantSeedProbe) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -162,7 +166,7 @@ export default function Calibrator({
     return () => {
       cancelled = true;
     };
-  }, [truthStale, item.key]);
+  }, [wantSeedProbe, item.key]);
   const reseedAffordance = reseedAffordanceDecision(probedScaffold, currentSetupHash);
 
   // A Seed tap from a setup calibrated before the tap-timestamp contract: the
@@ -642,7 +646,10 @@ export default function Calibrator({
     done: "",
     error: phaseError ?? "Error",
   };
-  const showReviewShortcut = truthStale && reseedAffordance === "review-seed";
+  // A usable scaffold is on disk and the current truth (if any) is not
+  // fresh-accepted, so the flag review can open straight from it — no new job.
+  // Covers the stale-truth re-seed and the truthless Batch Calibrate seed alike.
+  const showReviewShortcut = wantSeedProbe && reseedAffordance === "review-seed";
 
   return (
     <div className="flex h-[calc(100dvh-var(--nav-h))] min-h-0 flex-col">
@@ -717,8 +724,18 @@ export default function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-edge/30 bg-surface-alt px-3 py-2 text-xs text-fg-muted"
         >
-          Scrub to a later frame where the climber is unambiguous and tap them — that Seed tap seeds
-          the ViTPose job (the tracker follows it backward). Then Seed Ground Truth.
+          {showReviewShortcut ? (
+            <>
+              A fresh ViTPose scaffold is already on disk from a Batch Calibrate seed, but its Ground
+              Truth was never accepted. Use Review seed to open the flag review and accept it — no
+              new job needed. Or re-tap and Seed Ground Truth to run ViTPose again.
+            </>
+          ) : (
+            <>
+              Scrub to a later frame where the climber is unambiguous and tap them — that Seed tap
+              seeds the ViTPose job (the tracker follows it backward). Then Seed Ground Truth.
+            </>
+          )}
         </div>
       )}
       {legacyTapNoTimestamp && (
