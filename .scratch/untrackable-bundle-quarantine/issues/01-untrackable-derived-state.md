@@ -1,7 +1,8 @@
 # Derive Untrackable state and hold it out of the batch sweeps
 
-Status: in-progress
+Status: done
 Branch: feat/untrackable-bundle-quarantine
+Merged: ca88ee2
 Type: AFK
 
 ## Parent
