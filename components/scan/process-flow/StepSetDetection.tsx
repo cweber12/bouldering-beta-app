@@ -289,6 +289,13 @@ export interface StepSetDetectionProps {
   onScan: (startTime: number) => void;
   /** Navigates back to StepPickVideo. */
   onBack: () => void;
+  /** Overrides the primary CTA copy. Defaults keep the production scan labels;
+   *  the dev harness reuses this step to Save a Scan Setup, so it relabels the
+   *  button without changing the confirm behaviour. */
+  scanLabel?: string;
+  scanTitle?: string;
+  /** Label for the no-climber-tapped nudge press (default "Scan anyway"). */
+  scanNudgeLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +321,9 @@ export default function StepSetDetection({
   canScan,
   onScan,
   onBack,
+  scanLabel = "Scan video",
+  scanTitle = "Start pose detection",
+  scanNudgeLabel = "Scan anyway",
 }: StepSetDetectionProps) {
   // ── Video refs / state ─────────────────────────────────────────────────
   const cropVideoRef = useRef<HTMLVideoElement>(null);
@@ -674,7 +684,7 @@ export default function StepSetDetection({
   function scanButton(size: "footer" | "fullscreen") {
     const accented = canScan && climberPoint != null;
     const nudging = canScan && climberPoint == null && scanNudged;
-    const label = !canScan ? "Loading model…" : nudging ? "Scan anyway" : "Scan video";
+    const label = !canScan ? "Loading model…" : nudging ? scanNudgeLabel : scanLabel;
     return (
       <button
         type="button"
@@ -693,7 +703,7 @@ export default function StepSetDetection({
           canScan
             ? nudging
               ? "Scan without marking a climber"
-              : "Start pose detection"
+              : scanTitle
             : "Loading model…"
         }
       >
