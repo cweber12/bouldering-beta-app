@@ -88,6 +88,31 @@ beforeAll(async () => {
   // Stale scaffold: stamped under the previous calibration.
   await staleTruthBundle("route-g", "vid_6", posedScaffold("old-hash"));
 
+  // Truthless + set up, with a current-calibration poseless scaffold: the last
+  // ViTPose job tracked no Climber with this seed → Untrackable, held out of the
+  // Batch Calibrate sweep until re-seeded.
+  const h = path.join(root, "route-h", "vid_7");
+  await mkdir(h, { recursive: true });
+  await writeFile(path.join(h, "metadata.json"), JSON.stringify({}));
+  await writeFile(path.join(h, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+  await writeFile(
+    path.join(h, "vitpose.json"),
+    JSON.stringify({ version: 1, setupHash: "new-hash", frames: [{ timestamp: 0, keypoints: [] }] }),
+  );
+
+  // Fresh (non-stale) accepted truth AND a current poseless scaffold: a later
+  // re-seed posed nothing, but the good truth still stands, so the bundle is
+  // never Untrackable — the fresh-truth immunity scoping.
+  const i = path.join(root, "route-i", "vid_8");
+  await mkdir(i, { recursive: true });
+  await writeFile(path.join(i, "metadata.json"), JSON.stringify({}));
+  await writeFile(path.join(i, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+  await writeFile(path.join(i, "ground-truth.json"), JSON.stringify({ setupHash: "new-hash" }));
+  await writeFile(
+    path.join(i, "vitpose.json"),
+    JSON.stringify({ version: 1, setupHash: "new-hash", frames: [{ timestamp: 0, keypoints: [] }] }),
+  );
+
   process.env.HARNESS_ANALYSIS_ROOT = root;
 });
 
@@ -108,6 +133,8 @@ describe("listCorpus", () => {
       "route-e/vid_4",
       "route-f/vid_5",
       "route-g/vid_6",
+      "route-h/vid_7",
+      "route-i/vid_8",
     ]);
 
     const a = items.find((i) => i.key === "route-a/vid_1")!;
@@ -161,5 +188,28 @@ describe("listCorpus", () => {
     expect(byKey("route-g/vid_6").seedReady).toBe(false);
     // No vitpose.json at all.
     expect(byKey("route-d/vid_3").seedReady).toBe(false);
+  });
+
+  it("flags Untrackable for a current poseless scaffold on a bundle without fresh truth", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    // Stale truth + current poseless scaffold → Untrackable (re-seed stale sweep skips it).
+    expect(byKey("route-f/vid_5").untrackable).toBe(true);
+    // Truthless + current poseless scaffold → Untrackable (Batch Calibrate skips it).
+    expect(byKey("route-h/vid_7").untrackable).toBe(true);
+
+    // A stale scaffold is retryable, not Untrackable — the scan inputs changed.
+    expect(byKey("route-g/vid_6").untrackable).toBe(false);
+    // No scaffold on disk is un-jobbed, not failed.
+    expect(byKey("route-d/vid_3").untrackable).toBe(false);
+    // A seed-ready (posed) scaffold is not Untrackable.
+    expect(byKey("route-e/vid_4").untrackable).toBe(false);
+
+    // Fresh accepted truth immunizes the bundle even with a poseless scaffold on disk.
+    const i = byKey("route-i/vid_8");
+    expect(i.hasGroundTruth).toBe(true);
+    expect(i.truthStale).toBe(false);
+    expect(i.untrackable).toBe(false);
   });
 });

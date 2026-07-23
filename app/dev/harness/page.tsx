@@ -323,11 +323,25 @@ export default function HarnessPage() {
                         >
                           seed ready
                         </span>
+                      ) : it.untrackable ? (
+                        <span
+                          className="rounded bg-surface-alt px-1.5 py-0.5 text-xs text-fg-muted"
+                          title="ViTPose tracked no Climber with the current seed — held out of the batch sweeps. Open Calibrate, re-tap the Climber, and re-seed to retry."
+                        >
+                          no landmarks
+                        </span>
                       ) : (
                         <span className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution">
                           none
                         </span>
                       )
+                    ) : it.truthStale && it.untrackable ? (
+                      <span
+                        className="rounded bg-surface-alt px-1.5 py-0.5 text-xs text-fg-muted"
+                        title="Ground Truth is stale and the last re-seed tracked no Climber with the current seed — held out of the batch sweeps. Open Re-calibrate, re-tap the Climber, and re-seed to retry."
+                      >
+                        stale · no landmarks
+                      </span>
                     ) : it.truthStale && it.seedReady ? (
                       <span
                         className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"

@@ -9,14 +9,16 @@ function item(
     hasGroundTruth = true,
     truthStale = false,
     seedReady = false,
+    untrackable = false,
   }: Partial<{
     hasSetup: boolean;
     hasGroundTruth: boolean;
     truthStale: boolean;
     seedReady: boolean;
+    untrackable: boolean;
   }> = {},
 ) {
-  return { key, hasSetup, hasGroundTruth, truthStale, seedReady };
+  return { key, hasSetup, hasGroundTruth, truthStale, seedReady, untrackable };
 }
 
 const posedScaffold: ViTPoseScaffold = {
@@ -87,11 +89,22 @@ describe("planReseedSweep", () => {
     expect(plan.staleTotal).toBe(2);
   });
 
+  it("holds out an Untrackable stale bundle — re-running the same seed fails identically", () => {
+    const plan = planReseedSweep([
+      item("untrackable", { truthStale: true, untrackable: true }),
+      item("ok", { truthStale: true }),
+    ]);
+    expect(plan.queue.map((i) => i.key)).toEqual(["ok"]);
+    expect(plan.skippedUntrackable).toBe(1);
+    expect(plan.staleTotal).toBe(2);
+  });
+
   it("plans an empty corpus as an empty sweep", () => {
     const plan = planReseedSweep([]);
     expect(plan.queue).toEqual([]);
     expect(plan.seedReady).toBe(0);
     expect(plan.skippedNoSetup).toBe(0);
+    expect(plan.skippedUntrackable).toBe(0);
     expect(plan.staleTotal).toBe(0);
     expect(plan.total).toBe(0);
   });
@@ -142,11 +155,22 @@ describe("planBatchCalibrate", () => {
     expect(plan.total).toBe(3);
   });
 
+  it("holds out an Untrackable truthless bundle — the same seed already posed nothing", () => {
+    const plan = planBatchCalibrate([
+      item("untrackable", { hasGroundTruth: false, untrackable: true }),
+      item("ok", { hasGroundTruth: false }),
+    ]);
+    expect(plan.queue.map((i) => i.key)).toEqual(["ok"]);
+    expect(plan.skippedUntrackable).toBe(1);
+    expect(plan.truthlessTotal).toBe(2);
+  });
+
   it("plans an empty corpus as an empty sweep", () => {
     const plan = planBatchCalibrate([]);
     expect(plan.queue).toEqual([]);
     expect(plan.seedReady).toBe(0);
     expect(plan.skippedNoSetup).toBe(0);
+    expect(plan.skippedUntrackable).toBe(0);
     expect(plan.truthlessTotal).toBe(0);
     expect(plan.total).toBe(0);
   });

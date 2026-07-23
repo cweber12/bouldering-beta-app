@@ -20,6 +20,13 @@ export interface CorpusItem {
   truthStale: boolean;
   /** A fresh, posed ViTPose scaffold is on disk — review needs no new job. */
   seedReady: boolean;
+  /**
+   * Untrackable: the current-calibration ViTPose scaffold posed no Detection
+   * Frame and the bundle has no fresh truth, so the tracker matched no Climber
+   * to this seed. Held out of the batch calibration and re-seed sweeps until a
+   * re-seed lands landmarks (utils/harnessFreshness, scoped in app/api/dev/shared).
+   */
+  untrackable: boolean;
   runCount: number;
   /** Runs whose stamped hash pairs with the truth — real evidence; 0 ⇒ un-analyzed. */
   pairedRunCount: number;

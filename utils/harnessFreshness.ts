@@ -73,6 +73,31 @@ export function scaffoldIsSeedReady(
 }
 
 /**
+ * True when a bundle's ViTPose scaffold marks it **Untrackable**: the scaffold
+ * exists, belongs to the *current* calibration (not stale — legacy unstamped
+ * scaffolds qualify via the {@link scaffoldIsStale} fallback), and poses **no**
+ * Detection Frame. That is the deterministic "the tracker matched no Climber to
+ * this seed" outcome — re-running the same seed fails identically, so the batch
+ * calibration and re-seed sweeps hold such a bundle out until a re-seed lands
+ * landmarks. The exact poseless complement of {@link scaffoldIsSeedReady} among
+ * current scaffolds.
+ *
+ * A *stale* poseless scaffold is **not** Untrackable: the scan-affecting inputs
+ * changed since it was posed, so the failure may not recur — it is the ordinary
+ * "re-run ViTPose" case. Only the poseless-artifact signal marks Untrackable; a
+ * bare job-error sidecar (job died with no artifact) stays retryable, and a
+ * silent timeout leaves no disk trace to derive from at all.
+ */
+export function scaffoldIsUntrackable(
+  scaffold: ViTPoseScaffold | null | undefined,
+  setupHash: string | null | undefined,
+): boolean {
+  return (
+    !!scaffold && !scaffoldIsStale(scaffold.setupHash, setupHash) && !scaffoldHasPose(scaffold)
+  );
+}
+
+/**
  * True when a detection run's stamped hash pairs with the bundle's Ground
  * Truth — i.e. the run produces evaluation evidence. Only meaningful when the
  * bundle has truth at all; a truthless bundle is its own (already-surfaced)
