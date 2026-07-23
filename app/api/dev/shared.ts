@@ -13,8 +13,13 @@
 
 import { readdir, readFile, access } from "node:fs/promises";
 import path from "node:path";
-import { runPairsWithTruth, truthIsStale, scaffoldIsSeedReady } from "@/utils/harnessFreshness";
-import { parseViTPoseScaffold } from "@/utils/harnessViTPose";
+import {
+  runPairsWithTruth,
+  truthIsStale,
+  scaffoldIsSeedReady,
+  scaffoldIsUntrackable,
+} from "@/utils/harnessFreshness";
+import { parseViTPoseScaffold, type ViTPoseScaffold } from "@/utils/harnessViTPose";
 
 /** True only in a local dev server — the harness never exists in prod. */
 export const HARNESS_ENABLED = process.env.NODE_ENV === "development";
@@ -119,6 +124,16 @@ export interface CorpusItem {
    * "stale · seed ready" state — one click from review once opened.
    */
   seedReady: boolean;
+  /**
+   * True when the bundle is **Untrackable**: its ViTPose scaffold belongs to the
+   * current calibration but poses no Detection Frame — the tracker matched no
+   * Climber to this seed (utils/harnessFreshness). Scoped to bundles without
+   * fresh truth (`!hasGroundTruth || truthStale`), so a fresh-truth bundle whose
+   * later re-seed landed nothing keeps its good evidence and is never Untrackable.
+   * The batch calibration and re-seed sweeps hold these out until a re-seed lands
+   * landmarks; the corpus row flags them rather than dropping them.
+   */
+  untrackable: boolean;
   /** Number of detection runs already written to the bundle. */
   runCount: number;
   /**
@@ -201,16 +216,13 @@ export async function readSetupHash(bundleDir: string): Promise<string | null> {
   return readJsonSetupHash(path.join(bundleDir, "setup.json"));
 }
 
-/**
- * Whether the bundle's `vitpose.json` scaffold is seed-ready against the given
- * `setup.json` hash. A missing or malformed scaffold reads false.
- */
-async function readSeedReady(bundleDir: string, setupHash: string | null): Promise<boolean> {
+/** The bundle's parsed `vitpose.json` scaffold, or null when absent/malformed. */
+async function readScaffold(bundleDir: string): Promise<ViTPoseScaffold | null> {
   try {
     const raw = await readFile(path.join(bundleDir, "vitpose.json"), "utf8");
-    return scaffoldIsSeedReady(parseViTPoseScaffold(JSON.parse(raw)), setupHash);
+    return parseViTPoseScaffold(JSON.parse(raw));
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -299,12 +311,18 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         readSetupHash(bundleDir),
         readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
-      const [seedReady, { runCount, pairedRunCount, unpairedRunCount }, setupLabels] =
+      const [scaffold, { runCount, pairedRunCount, unpairedRunCount }, setupLabels] =
         await Promise.all([
-          readSeedReady(bundleDir, setupHash),
+          readScaffold(bundleDir),
           countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
           readSetupAnalysisInputs(bundleDir),
         ]);
+      const truthStale = hasGroundTruth && truthIsStale(truthSetupHash, setupHash);
+      // Untrackable only matters where there is no fresh evidence to fall back on:
+      // a fresh-truth bundle keeps its accepted Ground Truth even if a later
+      // re-seed posed nothing, so it is never held out of the sweeps.
+      const untrackable =
+        (!hasGroundTruth || truthStale) && scaffoldIsUntrackable(scaffold, setupHash);
 
       items.push({
         key: `${routeEnt.name}/${vEnt.name}`,
@@ -314,8 +332,9 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         videoPath: relativeVideoPath(routeEnt.name, vEnt.name),
         hasSetup,
         hasGroundTruth,
-        truthStale: hasGroundTruth && truthIsStale(truthSetupHash, setupHash),
-        seedReady,
+        truthStale,
+        seedReady: scaffoldIsSeedReady(scaffold, setupHash),
+        untrackable,
         runCount,
         pairedRunCount,
         unpairedRunCount,

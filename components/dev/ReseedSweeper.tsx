@@ -48,6 +48,8 @@ export interface SweeperCopy {
   seedReadyNote: (n: number) => string;
   /** The note for `n` bundles skipped for lack of a Scan Setup. */
   noSetupNote: (n: number) => string;
+  /** The note for `n` Untrackable bundles held out — a re-seed posed nothing. */
+  untrackableNote: (n: number) => string;
   /** The empty-queue line. */
   empty: string;
 }
@@ -64,6 +66,8 @@ export const RESEED_COPY: SweeperCopy = {
   seedReadyNote: (n) =>
     `${n} stale bundle${plural(n)} skipped — seed already ready, open the calibrator to review.`,
   noSetupNote: (n) => `${n} skipped — stale truth without a Scan Setup.`,
+  untrackableNote: (n) =>
+    `${n} skipped — no landmarks with the current seed; re-seed the bundle to retry.`,
   empty: "Nothing to re-seed — no stale-truth bundle needs a ViTPose job.",
 };
 
@@ -78,6 +82,8 @@ export const BATCH_CALIBRATE_COPY: SweeperCopy = {
     `${n} truthless bundle${plural(n)} skipped — seed already ready, open the calibrator to review.`,
   noSetupNote: (n) =>
     `${n} skipped — no Scan Setup yet, run Setup before calibrating.`,
+  untrackableNote: (n) =>
+    `${n} skipped — no landmarks with the current seed; re-seed the bundle to retry.`,
   empty: "Nothing to calibrate — no setup-but-truthless bundle needs a ViTPose job.",
 };
 
@@ -330,6 +336,9 @@ export default function ReseedSweeper({
         <p className="text-xs text-fg-muted">
           {copy.intro(entries.length)}{" "}
           {plan.seedReady > 0 && <span>{copy.seedReadyNote(plan.seedReady)} </span>}
+          {plan.skippedUntrackable > 0 && (
+            <span className="text-fg-muted">{copy.untrackableNote(plan.skippedUntrackable)} </span>
+          )}
           {plan.skippedNoSetup > 0 && (
             <span className="text-caution">{copy.noSetupNote(plan.skippedNoSetup)}</span>
           )}

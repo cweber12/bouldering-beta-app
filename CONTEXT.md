@@ -386,6 +386,23 @@ in the Test Video's bundle, beside the `ground-truth.json` **Ground Truth**.
 _Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
 Setup), config, calibration, fixture.
 
+**Untrackable** (bundle state):
+A **Test Video** whose most recent ViTPose++ seed job landed **no Climber
+landmarks** — the tracker matched nobody to the current seed, or the job failed —
+and which has no fresh, accepted **Ground Truth** to fall back on, so it holds
+neither a usable seed nor good evidence. Held out of the batch calibration and
+re-seed sweeps rather than deleted, so the same failing seed is never re-run in
+bulk every sweep; it stays in the corpus, flagged, until a **re-seed** (a fresh
+Climber tap + ViTPose run) lands landmarks. Derived from what is on disk, not a
+stored marker: a poseless seed artifact from the _current_ calibration, or a
+terminal job-failure record. A bundle that already has fresh Ground Truth is
+never Untrackable — a later re-seed that lands nothing leaves the good truth
+standing — and a poseless artifact from an _older_ calibration is retryable, not
+Untrackable (the scan-affecting inputs changed, so the failure may not recur).
+_Avoid_: broken / failed (a _job_ fails; the _bundle_ is Untrackable); dead
+(it is kept for a later pass, not discarded); quarantined (fine in prose, but the
+state is Untrackable).
+
 ## Relationships
 
 - A scan has exactly one **Climber** and zero or more **Bystanders**.

@@ -8,8 +8,10 @@
  * scaffold is **not** seed-ready, because a seed-ready bundle already holds a
  * fresh posed scaffold and only needs the calibrator's review, never a new
  * multi-minute GPU job. Truthless bundles are excluded outright: first-time
- * authoring stays a deliberate act, and the known ViTPose-can't-track bundle
- * must not burn a poll timeout every sweep.
+ * authoring stays a deliberate act. **Untrackable** bundles — whose last
+ * ViTPose job posed nothing with the current seed — are excluded from both
+ * sweeps too: re-running the same seed fails identically, so they wait for a
+ * deliberate per-bundle re-seed rather than burning a poll every sweep.
  *
  * Framework-agnostic — no React imports.
  */
@@ -24,6 +26,8 @@ export interface ReseedCandidate {
   truthStale: boolean;
   /** A fresh, posed ViTPose scaffold is already on disk (utils/harnessFreshness). */
   seedReady: boolean;
+  /** Last ViTPose job posed nothing with the current seed (utils/harnessFreshness). */
+  untrackable: boolean;
 }
 
 /**
@@ -40,6 +44,8 @@ export interface SweepPlan<T> {
   seedReady: number;
   /** Bundles with no Scan Setup to build a job request from. */
   skippedNoSetup: number;
+  /** Untrackable bundles held out — a re-seed already posed nothing with this seed. */
+  skippedUntrackable: number;
   /** Every candidate considered, across all populations. */
   total: number;
 }
@@ -58,15 +64,17 @@ export function planReseedSweep<T extends ReseedCandidate>(
   const queue: T[] = [];
   let seedReady = 0;
   let skippedNoSetup = 0;
+  let skippedUntrackable = 0;
   let staleTotal = 0;
   for (const item of items) {
     if (!item.hasGroundTruth || !item.truthStale) continue;
     staleTotal += 1;
     if (item.seedReady) seedReady += 1;
+    else if (item.untrackable) skippedUntrackable += 1;
     else if (!item.hasSetup) skippedNoSetup += 1;
     else queue.push(item);
   }
-  return { queue, seedReady, skippedNoSetup, staleTotal, total: items.length };
+  return { queue, seedReady, skippedNoSetup, skippedUntrackable, staleTotal, total: items.length };
 }
 
 /** The Batch Calibrate sweep plan: which truthless bundles get a job. */
@@ -91,15 +99,17 @@ export function planBatchCalibrate<T extends ReseedCandidate>(
   const queue: T[] = [];
   let seedReady = 0;
   let skippedNoSetup = 0;
+  let skippedUntrackable = 0;
   let truthlessTotal = 0;
   for (const item of items) {
     if (item.hasGroundTruth) continue;
     truthlessTotal += 1;
     if (item.seedReady) seedReady += 1;
+    else if (item.untrackable) skippedUntrackable += 1;
     else if (!item.hasSetup) skippedNoSetup += 1;
     else queue.push(item);
   }
-  return { queue, seedReady, skippedNoSetup, truthlessTotal, total: items.length };
+  return { queue, seedReady, skippedNoSetup, skippedUntrackable, truthlessTotal, total: items.length };
 }
 
 // ---------------------------------------------------------------------------

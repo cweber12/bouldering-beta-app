@@ -4,6 +4,7 @@ import {
   truthIsStale,
   scaffoldIsStale,
   scaffoldIsSeedReady,
+  scaffoldIsUntrackable,
   runPairsWithTruth,
 } from "@/utils/harnessFreshness";
 import type { ViTPoseScaffold } from "@/utils/harnessViTPose";
@@ -84,6 +85,42 @@ describe("scaffoldIsSeedReady", () => {
   it("is never ready for a poseless scaffold — the tracker found no Climber", () => {
     expect(scaffoldIsSeedReady(scaffold("h1", false), "h1")).toBe(false);
     expect(scaffoldIsSeedReady({ version: 1, setupHash: "h1", frames: [] }, "h1")).toBe(false);
+  });
+});
+
+describe("scaffoldIsUntrackable", () => {
+  const posedFrame = {
+    timestamp: 0.1,
+    keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }],
+  };
+  const scaffold = (setupHash: string | undefined, posed: boolean): ViTPoseScaffold => ({
+    version: 1,
+    ...(setupHash ? { setupHash } : {}),
+    frames: posed ? [{ timestamp: 0, keypoints: [] }, posedFrame] : [{ timestamp: 0, keypoints: [] }],
+  });
+
+  it("marks a current-calibration poseless scaffold Untrackable", () => {
+    expect(scaffoldIsUntrackable(scaffold("h1", false), "h1")).toBe(true);
+    expect(scaffoldIsUntrackable({ version: 1, setupHash: "h1", frames: [] }, "h1")).toBe(true);
+  });
+
+  it("is the exact poseless complement of seed-ready among current scaffolds", () => {
+    const current = scaffold("h1", true);
+    expect(scaffoldIsSeedReady(current, "h1")).toBe(true);
+    expect(scaffoldIsUntrackable(current, "h1")).toBe(false);
+  });
+
+  it("does not mark a stale poseless scaffold Untrackable — the inputs changed, retry it", () => {
+    expect(scaffoldIsUntrackable(scaffold("old", false), "new")).toBe(false);
+  });
+
+  it("trusts a legacy unstamped poseless scaffold as Untrackable, matching the fallback", () => {
+    expect(scaffoldIsUntrackable(scaffold(undefined, false), "h1")).toBe(true);
+  });
+
+  it("is never Untrackable with no scaffold on disk — that is un-jobbed, not failed", () => {
+    expect(scaffoldIsUntrackable(null, "h1")).toBe(false);
+    expect(scaffoldIsUntrackable(undefined, "h1")).toBe(false);
   });
 });
 
