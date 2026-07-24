@@ -16,6 +16,8 @@ Update project documentation so future agents understand the distinction between
 - [ ] CONTEXT.md defines **Detector Attempt** if the implementation introduces that term in exported contracts.
 - [ ] Existing **Detection Frame**, **Interpolated Landmark**, and **Estimated Landmark** glossary entries remain consistent with the new evidence stream.
 - [ ] Relevant scratch issue comments or docs note that this enhances backend analysis inputs without moving recommendation semantics into beta-scanner.
+- [ ] Docs state that `setup.json.analysisInputs` are advisory metadata and Ground Truth remains authoritative for expected Climber presence and pose.
+- [ ] Docs state that older `frames[]`-only payloads are legacy/proxy evidence and a missing `detectorAttempts[]` stream is unknown, not detector success.
 - [ ] Tests and issue drift audit pass after the implementation issues land.
 
 ## Comments

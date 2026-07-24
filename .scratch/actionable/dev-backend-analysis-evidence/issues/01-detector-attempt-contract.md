@@ -14,8 +14,11 @@ Define the analysis-only detector attempt payload shape used by dev Analyze and 
 ## Acceptance criteria
 
 - [ ] A typed detector attempt interface exists with statuses `accepted`, `missing`, `flipRejected`, and `qualityRejected`.
+- [ ] The interface includes `timestamp`, `status`, `initialSearchRegion`, `detectionRegion`, `reacquireAttempted`, `reacquired`, `rawKeypoints`, `acceptedKeypoints`, `searchConditions`, `reacquireConditions`, `candidateCount`, `rejectedCandidateCount`, and `selectionMethod`.
 - [ ] Full-frame regions are represented as `{ x: 0, y: 0, w: 1, h: 1 }`; `null` is reserved for unknown or not applicable.
-- [ ] The contract distinguishes `rawKeypoints` from `acceptedKeypoints`.
+- [ ] `initialSearchRegion` is the first normalized rectangle fed to MediaPipe and `detectionRegion` is the normalized rectangle that produced `rawKeypoints`, or `null` on a miss.
+- [ ] The contract distinguishes `rawKeypoints` from `acceptedKeypoints`; `rawKeypoints` exists whenever MediaPipe returned a selected Climber pose and `acceptedKeypoints` exists only for `accepted` attempts.
+- [ ] Reacquire fields distinguish attempted full-frame fallback from a successful rescue.
 - [ ] Candidate metadata is limited to `candidateCount`, `rejectedCandidateCount`, and `selectionMethod`.
 - [ ] Harness payload tests cover preservation of the new evidence stream.
 
@@ -23,4 +26,6 @@ Define the analysis-only detector attempt payload shape used by dev Analyze and 
 
 - `limbExpanded` is an accepted source, not a rejection status.
 - Reacquire is represented by `reacquired` and region fields, not as a selection method.
+- `selectionMethod` values are `tap`, `tracked`, and `strongest`.
+- `searchConditions` describes `initialSearchRegion`; `reacquireConditions` describes the fallback full-frame region when fallback ran.
 

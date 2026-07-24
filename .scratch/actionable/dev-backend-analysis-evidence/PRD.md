@@ -3,7 +3,7 @@
 Status: ready-for-agent
 Disposition: actionable
 
-Spec inputs: GitHub issue comment `cweber12/beta-scan-analysis#68` comment `5071900098`; grilled decisions from 2026-07-24.
+Spec inputs: GitHub issue comment `cweber12/beta-scan-analysis#68` comment `5071900098`; grilled decisions from 2026-07-24; `beta-scan-analysis/docs/handoffs/scanner-detector-attempt-evidence.md`.
 Glossary: CONTEXT.md - **Detection Frame**, **Climber**, **Adaptive Crop**, **Adaptive Refinement**, **Ground Truth**, **Detection Error**, **Scan Setup**, **Test Video**.
 
 ## Problem Statement
@@ -34,6 +34,8 @@ User-facing scanning remains unchanged. The dev Analyze path uses `frameStep = 1
 ## Implementation Decisions
 
 - **Canonical evidence stream.** Replace the current dense `pose.frames` export for backend analysis with a single `detectorAttempts` evidence stream. It includes accepted, rejected, and missing detector attempts in one shape.
+- **Payload authority.** Ground Truth owns expected Climber presence and pose. `detectorAttempts[]` owns scanner detector evidence: MediaPipe attempts, selected raw keypoints, accepted keypoints, crop/reacquire behavior, candidate metadata, and scanner-observed search conditions.
+- **Setup metadata is advisory.** Keep `setup.json.analysisInputs` entry UI and payload fields, but treat those labels as provenance metadata only. Backend scoring should use Ground Truth and detector-attempt evidence for main evaluation.
 - **Analysis-only execution knobs.** Dev Analyze runs with `frameStep = 1`, keeps the same adaptive crop logic as the scanner, and disables Adaptive Refinement because stride 1 already visits the sampled frame grid directly.
 - **Attempt statuses.** Export statuses as `accepted`, `missing`, `flipRejected`, and `qualityRejected`. `limbExpanded` is not a rejection; it is an accepted detector output source.
 - **Raw evidence.** For rejected poses, export the selected climber pose exactly as MediaPipe returned it after mapping to full-frame coordinates, before filtering, flip rejection, interpolation, smoothing, or constraints.
@@ -45,6 +47,7 @@ User-facing scanning remains unchanged. The dev Analyze path uses `frameStep = 1
 - **Frame conditions.** Every attempt carries `searchConditions` for the initial region. Reacquire attempts add `reacquireConditions` only when the successful region differs.
 - **Candidate metadata.** Export only `candidateCount`, `rejectedCandidateCount`, and `selectionMethod` (`tap`, `tracked`, `strongest`). Reacquire is represented by `reacquired`, not as a selection method. Do not add `selectionDistance` in this iteration.
 - **Continuity outputs deferred.** Interpolated, filled, smoothed, and constrained landmarks remain useful for future continuity analysis and user-visible playback evaluation, but are out of the current backend evidence payload.
+- **Backend compatibility.** The harness should prefer `data.detectorAttempts[]` when present. Older runs with only `data.frames[]` remain readable as legacy/proxy evidence. Missing `detectorAttempts[]` means the attempt stream is unknown; it must not be inferred as raw detector success.
 
 ## Testing Decisions
 
@@ -53,6 +56,7 @@ User-facing scanning remains unchanged. The dev Analyze path uses `frameStep = 1
 - Harness payload tests should confirm `detectorAttempts` are posted without schema stripping and dense playback frames are not used as detector evidence.
 - Scoring tests should continue proving that only detector evidence participates in current Ground Truth scoring, not interpolated or filled continuity frames.
 - Existing source provenance tests should be updated rather than duplicated where they already cover accepted `raw` and `limbExpanded` frames.
+- Compatibility tests should assert that legacy `frames[]` runs remain readable while current detector scoring prefers `detectorAttempts[]` and treats a missing attempt stream as unknown.
 
 ## Out of Scope
 
@@ -67,4 +71,5 @@ User-facing scanning remains unchanged. The dev Analyze path uses `frameStep = 1
 
 - The linked issue comment showed complete source coverage but zero per-frame `climber`/`wall` region-stat objects in newly posted pose frames. This PRD addresses that missing scanner-side evidence without moving interpretation out of the backend.
 - If a glossary term is added, prefer **Detector Attempt** for the exported evidence row: a scanner-owned record of one MediaPipe attempt and the scanner decisions around it.
+- Computed pixel conditions are primary predictors for analysis and should describe the region searched on that detector attempt.
 
