@@ -1,6 +1,7 @@
 # Processor detector-attempt capture
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/processor-attempt-capture
 Type: AFK
 
 ## Parent

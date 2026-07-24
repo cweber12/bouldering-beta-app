@@ -31,6 +31,9 @@ import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers
 import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
 import type { CropTrace } from "@/utils/cropTrace";
 
+const ANALYZE_FRAME_STEP = 1;
+const ANALYZE_MAX_RECOVERY_FRAMES = 0;
+
 /** The corpus fields an Analyze run needs. */
 export interface AnalyzeRunItem {
   key: string;
@@ -145,6 +148,7 @@ export function useAnalyzeRun(
     totalFrames,
     cropTrace,
     detectionFrames,
+    detectorAttempts,
   } = useVideoProcessor(100);
 
   const runFrames = useMemo(() => detectionFrames ?? [], [detectionFrames]);
@@ -237,7 +241,7 @@ export function useAnalyzeRun(
         videoFile,
         model,
         cv,
-        cfg.frameStep,
+        ANALYZE_FRAME_STEP,
         { state: "", area: "", route: item.routeFolder },
         {
           climberCrop: setup.climberCrop,
@@ -248,7 +252,7 @@ export function useAnalyzeRun(
         0,
         "mediapipe",
         {
-          maxRecoveryFrames: cfg.maxRecoveryFrames,
+          maxRecoveryFrames: ANALYZE_MAX_RECOVERY_FRAMES,
           filterTolerance: cfg.filterTolerance,
           motionThreshold: cfg.motionThreshold,
           refineStride: cfg.refineStride,
@@ -258,6 +262,7 @@ export function useAnalyzeRun(
           frameOutput: "interpolated",
           detectHolds: false,
           generateThumbnail: false,
+          collectDetectorAttempts: true,
         },
       );
     } catch (err) {
@@ -303,6 +308,7 @@ export function useAnalyzeRun(
         const { pose, orb } = buildHarnessPayloads({
           diagnostics: runDiag,
           frames: runAttempt?.frames ?? [],
+          detectorAttempts: detectorAttempts ?? undefined,
           referenceFrameMeta: runAttempt?.referenceFrameMeta ?? null,
           setupHash: setup.setupHash,
           scoring,
@@ -322,7 +328,7 @@ export function useAnalyzeRun(
     return () => {
       cancelled = true;
     };
-  }, [phase, runDiag, runAttempt, setup, scoring, item.videoPath]);
+  }, [phase, runDiag, runAttempt, detectorAttempts, setup, scoring, item.videoPath]);
 
   const cancel = useCallback(() => {
     resetProcessor();

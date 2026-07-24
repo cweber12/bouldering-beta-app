@@ -57,6 +57,7 @@ import {
   buildScanDiagnostics,
   buildReferenceFrameMeta,
   detectBadStretches,
+  toFrameConditions,
   WEAK_CONFIDENCE_THRESHOLD,
   summarizeMinAvgMax,
   type ScanDiagnostics,
@@ -65,6 +66,13 @@ import {
 import { hashFile } from "@/utils/hashFile";
 import { shipDiagnostics } from "@/utils/shipDiagnostics";
 import { APP_VERSION } from "@/utils/appVersion";
+import {
+  DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+  type DetectorAttempt,
+  type DetectorAttemptRegion,
+  type DetectorAttemptSelectionMethod,
+  type DetectorAttemptStatus,
+} from "@/utils/harnessPayloads";
 
 /** Minimum keypoint confidence the landmark filter keeps (see filterLandmarks). */
 const MIN_KEYPOINT_SCORE = 0.3;
@@ -84,6 +92,29 @@ export type ProcessingStatus = "idle" | "processing" | "done" | "error";
 export type OrbStatus = "idle" | "extracting" | "ready" | "failed";
 type DetectionFrameStatus = "detected" | "weak" | "missing" | "flip";
 
+interface ClimberDetectionResult {
+  selected: PoseFrame | null;
+  candidateCount: number;
+  rejectedCandidateCount: number;
+  selectionMethod: DetectorAttemptSelectionMethod;
+}
+
+type DetectorAttemptDraft = {
+  timestamp: number;
+  status: DetectorAttemptStatus;
+  initialSearchRegion: DetectorAttemptRegion;
+  detectionRegion: DetectorAttemptRegion | null;
+  reacquireAttempted: boolean;
+  reacquired: boolean;
+  rawKeypoints: PoseFrame["keypoints"];
+  acceptedKeypoints?: PoseFrame["keypoints"];
+  searchConditions: ReturnType<typeof toFrameConditions> | null;
+  reacquireConditions: ReturnType<typeof toFrameConditions> | null;
+  candidateCount: number;
+  rejectedCandidateCount: number;
+  selectionMethod: DetectorAttemptSelectionMethod;
+};
+
 interface ProcessingOptions {
   /** Emit live skeleton / ORB preview state for the animated scan loading view. */
   emitLivePreview?: boolean;
@@ -93,6 +124,8 @@ interface ProcessingOptions {
   detectHolds?: boolean;
   /** Generate the ORB thumbnail stored with user-facing Runs. */
   generateThumbnail?: boolean;
+  /** Collect analysis-only detector evidence for the dev harness payload. */
+  collectDetectorAttempts?: boolean;
 }
 
 /**
@@ -126,6 +159,52 @@ export function tagFlipDiscardedFrames(
     if (!flipped.has(frame.timestamp)) return frame;
     if (frame.source === "raw" || frame.source === "limbExpanded") return frame;
     return { ...frame, source: "flipDiscarded" };
+  });
+}
+
+function cloneKeypoints(keypoints: PoseFrame["keypoints"]): PoseFrame["keypoints"] {
+  return keypoints.map((kp) => ({ ...kp }));
+}
+
+function timestampKey(timestamp: number): number {
+  return Math.round(timestamp * 1000);
+}
+
+export function normalizeDetectorAttemptRegion(
+  box: CropBox | null,
+  videoWidth: number,
+  videoHeight: number,
+): DetectorAttemptRegion {
+  if (!box) return { ...DETECTOR_ATTEMPT_FULL_FRAME_REGION };
+  return {
+    x: box.x / videoWidth,
+    y: box.y / videoHeight,
+    w: box.width / videoWidth,
+    h: box.height / videoHeight,
+  };
+}
+
+export function finalizeDetectorAttempts(
+  attempts: readonly DetectorAttempt[],
+  flippedTimestamps: readonly number[],
+  goodFrames: readonly PoseFrame[],
+): DetectorAttempt[] {
+  const flipped = new Set(flippedTimestamps.map(timestampKey));
+  const good = new Set(goodFrames.map((frame) => timestampKey(frame.timestamp)));
+
+  return attempts.map((attempt): DetectorAttempt => {
+    if (attempt.status === "missing") return attempt;
+
+    const key = timestampKey(attempt.timestamp);
+    if (flipped.has(key)) {
+      const { acceptedKeypoints: _acceptedKeypoints, ...withoutAccepted } = attempt;
+      return { ...withoutAccepted, status: "flipRejected" };
+    }
+    if (!good.has(key)) {
+      const { acceptedKeypoints: _acceptedKeypoints, ...withoutAccepted } = attempt;
+      return { ...withoutAccepted, status: "qualityRejected" };
+    }
+    return attempt;
   });
 }
 
@@ -337,6 +416,11 @@ export interface VideoProcessorResult {
    * Dev-only detection-frame timeline for the harness filmstrip.
    */
   detectionFrames: { timestamp: number; status: DetectionFrameStatus }[] | null;
+  /**
+   * Analysis-only MediaPipe attempt evidence for dev Analyze. Null unless
+   * `collectDetectorAttempts` was requested for this processor run.
+   */
+  detectorAttempts: DetectorAttempt[] | null;
 }
 
 const DEFAULT_FRAME_STEP = 5;
@@ -378,6 +462,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
   const [detectionFrames, setDetectionFrames] = useState<
     { timestamp: number; status: DetectionFrameStatus }[] | null
   >(null);
+  const [detectorAttempts, setDetectorAttempts] = useState<DetectorAttempt[] | null>(null);
   const abortRef = useRef(false);
   // Aborts in-flight seeks (the boolean abortRef only gates between iterations).
   const seekAbortRef = useRef<AbortController | null>(null);
@@ -418,6 +503,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       const frameOutput = options.frameOutput ?? "interpolated";
       const shouldDetectHolds = options.detectHolds ?? true;
       const shouldGenerateThumbnail = options.generateThumbnail ?? true;
+      const shouldCollectDetectorAttempts = options.collectDetectorAttempts ?? false;
 
       abortRef.current = false;
       const seekController = new AbortController();
@@ -434,6 +520,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentPose(null);
       setCropTrace(null);
       setDetectionFrames(null);
+      setDetectorAttempts(null);
 
       const video = document.createElement("video");
       video.muted = true;
@@ -549,6 +636,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // filled under DIAGNOSTICS_ENABLED; exposed via setCropTrace, never on
         // the attempt (so it never reaches S3). See utils/cropTrace.ts.
         const cropTraceEntries: CropTraceEntry[] = [];
+        const detectorAttemptDrafts: DetectorAttempt[] = [];
 
         // Sparse detected frames + all timestamps for interpolation.
         const detected: PoseFrame[] = [];
@@ -575,12 +663,21 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           region: CropBox | null,
           predicted: Point | null,
           gate?: number,
-        ): PoseFrame | null => {
+        ): ClimberDetectionResult => {
+          const selectionMethod: DetectorAttemptSelectionMethod =
+            history.length === 0 ? (tappedPoint ? "tap" : "strongest") : "tracked";
           const reg = region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight };
           cropCanvas.width = reg.width;
           cropCanvas.height = reg.height;
           const cctx = cropCanvas.getContext("2d", { willReadFrequently: true });
-          if (!cctx) return null;
+          if (!cctx) {
+            return {
+              selected: null,
+              candidateCount: 0,
+              rejectedCandidateCount: 0,
+              selectionMethod,
+            };
+          }
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
 
           // MediaPipe detects on the raw colour crop. We deliberately do NOT run
@@ -605,7 +702,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           lastMpTs = mpTs;
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
 
-          if (posesLocal.length === 0) return null;
+          if (posesLocal.length === 0) {
+            return {
+              selected: null,
+              candidateCount: 0,
+              rejectedCandidateCount: 0,
+              selectionMethod,
+            };
+          }
 
           const posesFull: PoseFrame[] = posesLocal.map((p) => ({
             timestamp: p.timestamp,
@@ -613,12 +717,18 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           }));
 
           // First acquisition: seed identity from the tap, else the strongest pose.
-          if (history.length === 0) {
-            return tappedPoint
-              ? selectClimberByPoint(posesFull, tappedPoint)
-              : selectClimberPose(posesFull, null);
-          }
-          return selectClimberPose(posesFull, predicted, gate);
+          const selected =
+            history.length === 0
+              ? tappedPoint
+                ? selectClimberByPoint(posesFull, tappedPoint)
+                : selectClimberPose(posesFull, null)
+              : selectClimberPose(posesFull, predicted, gate);
+          return {
+            selected,
+            candidateCount: posesFull.length,
+            rejectedCandidateCount: selected ? Math.max(0, posesFull.length - 1) : posesFull.length,
+            selectionMethod,
+          };
         };
 
         /**
@@ -737,19 +847,50 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               last && predicted ? { predicted, last } : undefined,
             );
 
-            let chosen = detectClimber(region, predicted);
+            const initialDetection = detectClimber(region, predicted);
+            let chosen = initialDetection.selected;
+            let candidateCount = initialDetection.candidateCount;
+            let rejectedCandidateCount = initialDetection.rejectedCandidateCount;
+            let selectionMethod = initialDetection.selectionMethod;
+            const searchConditions =
+              shouldCollectDetectorAttempts
+                ? toFrameConditions(
+                    analyzeFrame(
+                      cv,
+                      ctx.getImageData(0, 0, videoWidth, videoHeight),
+                      region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight },
+                    ),
+                  )
+                : null;
 
             // Lost inside a crop → widen to the full frame and re-acquire by
             // identity rather than locking onto a bystander.
             let reacquired = false;
+            let reacquireConditions: ReturnType<typeof toFrameConditions> | null = null;
             if (!chosen && region) {
-              chosen = detectClimber(null, predicted, REACQUIRE_GATE);
-              reacquired = true;
+              const reacquireDetection = detectClimber(null, predicted, REACQUIRE_GATE);
+              chosen = reacquireDetection.selected;
+              candidateCount += reacquireDetection.candidateCount;
+              rejectedCandidateCount += reacquireDetection.rejectedCandidateCount;
+              selectionMethod = reacquireDetection.selectionMethod;
+              reacquired = !!chosen;
+              reacquireConditions =
+                shouldCollectDetectorAttempts
+                  ? toFrameConditions(
+                      analyzeFrame(cv, ctx.getImageData(0, 0, videoWidth, videoHeight), {
+                        x: 0,
+                        y: 0,
+                        width: videoWidth,
+                        height: videoHeight,
+                      }),
+                    )
+                  : null;
             }
 
             let avgConfidence = 0;
             let keypointCount = 0;
             let landmarkBox: CropBox | null = null; // deriveClimberCrop, for the dev crop trace
+            const rawKeypoints = chosen ? cloneKeypoints(chosen.keypoints) : [];
             if (chosen) {
               chosen.timestamp = video.currentTime;
               chosen.source = detectorFrameSource(chosen);
@@ -770,6 +911,42 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               // ADR 0014: count frames where a missing limb pushed the crop out via
               // a reach disk, so the constants can be tuned against real Runs.
               if (chosen.source === "limbExpanded") limbExpandedFrames++;
+            }
+
+            if (shouldCollectDetectorAttempts) {
+              const detectionRegion = chosen
+                ? reacquired
+                  ? normalizeDetectorAttemptRegion(null, videoWidth, videoHeight)
+                  : normalizeDetectorAttemptRegion(region, videoWidth, videoHeight)
+                : null;
+              const baseAttempt = {
+                timestamp: video.currentTime,
+                initialSearchRegion: normalizeDetectorAttemptRegion(region, videoWidth, videoHeight),
+                detectionRegion,
+                reacquireAttempted: !initialDetection.selected && !!region,
+                reacquired,
+                rawKeypoints,
+                searchConditions,
+                reacquireConditions,
+                candidateCount,
+                rejectedCandidateCount,
+                selectionMethod,
+              } satisfies Omit<DetectorAttemptDraft, "status" | "acceptedKeypoints">;
+              detectorAttemptDrafts.push(
+                chosen && detectionRegion
+                  ? {
+                      ...baseAttempt,
+                      status: "accepted",
+                      detectionRegion,
+                      acceptedKeypoints: cloneKeypoints(chosen.keypoints),
+                    }
+                  : {
+                      ...baseAttempt,
+                      status: "missing",
+                      detectionRegion: null,
+                      rawKeypoints: [],
+                    },
+              );
             }
 
             // Diagnostics: one row per pose-detection frame (wasFlip filled in
@@ -793,7 +970,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 timestamp: video.currentTime,
                 frameIndex: i,
                 detected: !!chosen,
-                reacquired,
+                reacquired: reacquired || (!initialDetection.selected && !!region),
                 refinement: false,
                 searchRegion: region,
                 landmarkBox,
@@ -967,7 +1144,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
               // Full-frame re-detection, selected by identity against the last
               // accepted position so bystanders are rejected.
-              const candidate = detectClimber(null, prevCentroid, REACQUIRE_GATE);
+              const candidate = detectClimber(null, prevCentroid, REACQUIRE_GATE).selected;
               if (!candidate) continue;
               candidate.timestamp = video.currentTime;
               candidate.source = detectorFrameSource(candidate);
@@ -1041,6 +1218,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // makes rotating limbs stretch/snap and occluded joints bend the wrong
         // way (see ADR 0015).
         const goodFrames = filterLandmarks(kept, 0.3, detection.filterTolerance);
+        const finalizedDetectorAttempts = shouldCollectDetectorAttempts
+          ? finalizeDetectorAttempts(detectorAttemptDrafts, flipScan.flippedTimestamps, goodFrames)
+          : null;
+        if (mountedRef.current) setDetectorAttempts(finalizedDetectorAttempts);
         const processedFrames =
           frameOutput === "detected"
             ? goodFrames
@@ -1339,6 +1520,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       setCurrentPose(null);
       setCropTrace(null);
       setDetectionFrames(null);
+      setDetectorAttempts(null);
     }
   }, []);
 
@@ -1366,5 +1548,6 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
     currentPose,
     cropTrace,
     detectionFrames,
+    detectorAttempts,
   };
 }
