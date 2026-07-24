@@ -26,9 +26,18 @@ export interface Keypoint {
   score: number;
 }
 
+export type PoseFrameSource =
+  | "raw"
+  | "interpolated"
+  | "filled"
+  | "flipDiscarded"
+  | "limbExpanded";
+
 export interface PoseFrame {
   /** Video timestamp in seconds. */
   timestamp: number;
+  /** Provenance for scanner-exported corpus frames. Missing on legacy persisted runs. */
+  source?: PoseFrameSource;
   /** Filtered keypoints for this frame. Empty if no pose was detected. */
   keypoints: Keypoint[];
 }

@@ -107,6 +107,15 @@ describe("interpolatePoseFrames", () => {
     result.forEach((f, i) => expect(f.timestamp).toBe(timestamps[i]));
   });
 
+  it("preserves detector-source anchors and tags dense gaps as interpolated", () => {
+    const processed: PoseFrame[] = [
+      { ...frame(0, [["nose", 0.5, 0.5]]), source: "raw" },
+      { ...frame(1, [["nose", 0.6, 0.6]]), source: "limbExpanded" },
+    ];
+    const result = interpolatePoseFrames(processed, [0, 0.5, 1]);
+    expect(result.map((f) => f.source)).toEqual(["raw", "interpolated", "limbExpanded"]);
+  });
+
   it("bridges a joint missing from an intermediate anchor instead of freezing it", () => {
     // The wrist is detected at t=0 and t=2 but occluded (absent) at the t=1
     // anchor; the elbow is present throughout and moving. The wrist must
@@ -552,6 +561,7 @@ describe("estimateMissingLandmarks", () => {
     expect(estimated!.y).toBeCloseTo(0.5);
     // Score is discounted.
     expect(estimated!.score).toBeLessThan(0.9);
+    expect(result[1].source).toBe("filled");
   });
 
   it("uses structural estimation when only one temporal side is available", () => {
@@ -650,6 +660,8 @@ describe("estimateMissingLandmarks", () => {
     const result = estimateMissingLandmarks(frames, 10, 5, "mediapipe");
     expect(result[0].keypoints).toHaveLength(33);
     expect(result[1].keypoints).toHaveLength(33);
+    expect(result[0].source).toBeUndefined();
+    expect(result[1].source).toBeUndefined();
   });
 });
 
@@ -700,6 +712,7 @@ describe("fillPersistentGaps", () => {
     // Dimmed below the renderer's Estimated-Landmark threshold (0.4).
     expect(wrist!.score).toBeCloseTo(0.8 * PERSISTENT_GAP_SCORE_FACTOR);
     expect(wrist!.score).toBeLessThan(0.4);
+    expect(filled[1].source).toBe("filled");
   });
 
   it("places a gap joint structurally off a present neighbour, keeping it attached", () => {

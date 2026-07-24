@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   scoreRunAgainstGroundTruth,
   computeBodyScale,
+  detectorEvidenceFrames,
   findScoredRow,
   DRIFT_MIN,
   WRONG_MAX,
@@ -92,6 +93,23 @@ function score(gtFrames: GroundTruthFrame[], runInput: DetectionRunInput, hash =
     run: runInput,
   });
 }
+
+describe("detectorEvidenceFrames", () => {
+  it("keeps only raw detector evidence for scoring from dense exported frames", () => {
+    const frames: PoseFrame[] = [
+      { ...runPose(0), source: "raw" },
+      { ...runPose(0.1), source: "interpolated" },
+      { ...runPose(0.2), source: "filled" },
+      { ...runPose(0.3), source: "flipDiscarded" },
+      { ...runPose(0.4), source: "limbExpanded" },
+    ];
+
+    expect(detectorEvidenceFrames(frames).map((frame) => frame.source)).toEqual([
+      "raw",
+      "limbExpanded",
+    ]);
+  });
+});
 
 describe("verdict ladder", () => {
   it("scores an exact pose as good with zero drift", () => {
