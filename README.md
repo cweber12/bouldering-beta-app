@@ -123,11 +123,13 @@ trivial, so geometry is computed inline without a cache. They are toggled
 independently from the Climber panel's Holds row, and edited from the **Holds**
 drawer (the hand-glyph control on the preview bar). The
 auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
-be toggled off). The dev harness stores accepted detected frames without
-interpolating them, skips the animated scan-loading x-ray, and its Detection
-Preview adds a detection-frame filmstrip and stepper — a scrolling row of frame
-thumbnails, each bordered by its detection status (detected / weak / missing /
-flip) — for jumping through sampled frames and flagged stretches.
+be toggled off). The dev Analyze harness posts `detectorAttempts[]` as the
+backend evidence stream for accepted, missing, flip-rejected, and
+quality-rejected detector attempts while keeping playback frames separate. It
+skips the animated scan-loading x-ray, and its Detection Preview adds a
+detection-frame filmstrip and stepper — a scrolling row of frame thumbnails,
+each bordered by its detection status (detected / weak / missing / flip) — for
+jumping through sampled frames and flagged stretches.
 
 ### Adaptive overlay contrast
 

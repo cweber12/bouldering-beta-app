@@ -1,6 +1,7 @@
 # Harness posting with detector attempts
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-posting-detector-attempts
 Type: AFK
 
 ## Parent
