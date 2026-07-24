@@ -325,7 +325,10 @@ node scripts/audit-issues.mjs   # resolve every warning, incl. merged branches
 - The PRD's own `Status:` moves with its issues (`ready-for-agent` →
   `in-progress` on first landing → `done` when all issues are terminal), and an
   issue replaced by newer work is closed `wontfix` with a `Superseded-by:`
-  pointer — see `docs/agents/issue-tracker.md`.
+  pointer — see `docs/agents/issue-tracker.md`. PRD folders are grouped by
+  disposition (`.scratch/actionable/`, `.scratch/parked/`, `.scratch/done/`);
+  when disposition changes, move the folder and update the PRD's `Disposition:`
+  line in the same commit.
 - Before ending a PRD work session, run `node scripts/audit-issues.mjs` and
   resolve any drift it reports (unclosed/unmerged issues, incomplete tracking
   blocks, PRD status drift, dangling supersession pointers); delete local

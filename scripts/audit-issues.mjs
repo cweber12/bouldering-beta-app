@@ -34,6 +34,11 @@
  *      `in-progress`).
  *   6. dangling-supersession — a `Superseded-by:` line pointing at a file that
  *      does not exist.
+ *   7. scratch-structure-drift — PRDs must live under
+ *      `.scratch/actionable`, `.scratch/parked`, or `.scratch/done`.
+ *   8. missing-prd-disposition / prd-disposition-drift — a PRD's
+ *      `Disposition:` must exist, match its lane, and stay compatible with its
+ *      lifecycle status.
  *
  * Also emits a non-fatal warning for local branches already merged into HEAD
  * (the lifecycle says delete them right after merging).
@@ -52,6 +57,7 @@ const ROOT = resolve(__dirname, "..");
 const SCRATCH = resolve(ROOT, ".scratch");
 
 const TERMINAL = new Set(["done", "wontfix"]);
+const DISPOSITIONS = new Set(["actionable", "parked", "done"]);
 
 function git(args) {
   return execSync(`git ${args}`, { cwd: ROOT, encoding: "utf8" }).trim();
@@ -74,34 +80,52 @@ function readField(text, field) {
 
 /**
  * Collect every feature directory with its PRD (if any) and issue files.
- * Returns [{ name, prdFile, issueFiles }].
+ * Returns { features, structureDrift }.
  */
 function findFeatures() {
   const features = [];
-  if (!existsSync(SCRATCH)) return features;
-  for (const feature of readdirSync(SCRATCH, { withFileTypes: true })) {
-    if (!feature.isDirectory()) continue;
-    const dir = join(SCRATCH, feature.name);
-    const prdFile = join(dir, "PRD.md");
-    const issuesDir = join(dir, "issues");
-    const issueFiles = [];
-    if (existsSync(issuesDir)) {
-      for (const entry of readdirSync(issuesDir, { withFileTypes: true })) {
-        if (entry.isFile() && entry.name.endsWith(".md")) {
-          issueFiles.push(join(issuesDir, entry.name));
+  const structureDrift = [];
+  if (!existsSync(SCRATCH)) return { features, structureDrift };
+
+  for (const lane of readdirSync(SCRATCH, { withFileTypes: true })) {
+    if (!lane.isDirectory()) continue;
+    const laneRel = join(".scratch", lane.name).replace(/\\/g, "/");
+    if (!DISPOSITIONS.has(lane.name)) {
+      structureDrift.push({
+        kind: "scratch-structure-drift",
+        rel: laneRel,
+        detail: "top-level .scratch directory must be actionable, parked, or done",
+      });
+      continue;
+    }
+
+    const laneDir = join(SCRATCH, lane.name);
+    for (const feature of readdirSync(laneDir, { withFileTypes: true })) {
+      if (!feature.isDirectory()) continue;
+      const dir = join(laneDir, feature.name);
+      const prdFile = join(dir, "PRD.md");
+      const issuesDir = join(dir, "issues");
+      const issueFiles = [];
+      if (existsSync(issuesDir)) {
+        for (const entry of readdirSync(issuesDir, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith(".md")) {
+            issueFiles.push(join(issuesDir, entry.name));
+          }
         }
       }
+      features.push({
+        name: feature.name,
+        disposition: lane.name,
+        prdFile: existsSync(prdFile) ? prdFile : null,
+        issueFiles,
+      });
     }
-    features.push({
-      name: feature.name,
-      prdFile: existsSync(prdFile) ? prdFile : null,
-      issueFiles,
-    });
   }
-  return features;
+  return { features, structureDrift };
 }
 
 function main() {
+  const currentBranch = git("branch --show-current");
   const mergedBranches = new Set(
     git("branch --merged HEAD")
       .split("\n")
@@ -111,10 +135,11 @@ function main() {
   // Recent main history subjects, to spot branches that merged then got deleted.
   const historyText = git("log --oneline -n 1000");
 
-  const drift = [];
+  const { features, structureDrift } = findFeatures();
+  const drift = [...structureDrift];
   let checked = 0;
 
-  for (const feature of findFeatures()) {
+  for (const feature of features) {
     const issueStatuses = [];
 
     for (const file of feature.issueFiles) {
@@ -170,10 +195,36 @@ function main() {
     // ---- PRD status consistency -------------------------------------------
     if (feature.prdFile) {
       const rel = feature.prdFile.slice(ROOT.length + 1).replace(/\\/g, "/");
-      const prdStatus = (readField(readFileSync(feature.prdFile, "utf8"), "Status") || "").toLowerCase();
+      const prdText = readFileSync(feature.prdFile, "utf8");
+      const prdStatus = (readField(prdText, "Status") || "").toLowerCase();
+      const prdDisposition = (readField(prdText, "Disposition") || "").toLowerCase();
       if (!prdStatus) {
         drift.push({ kind: "missing-prd-status", rel, detail: "PRD has no Status: line" });
-      } else if (issueStatuses.length > 0) {
+      }
+      if (!prdDisposition) {
+        drift.push({ kind: "missing-prd-disposition", rel, detail: "PRD has no Disposition: line" });
+      } else if (prdDisposition !== feature.disposition) {
+        drift.push({
+          kind: "prd-disposition-drift",
+          rel,
+          detail: `Disposition is ${prdDisposition} but PRD lives under .scratch/${feature.disposition}`,
+        });
+      }
+      if (prdDisposition === "done" && prdStatus && !TERMINAL.has(prdStatus)) {
+        drift.push({
+          kind: "prd-disposition-drift",
+          rel,
+          detail: `Disposition is done but PRD Status is ${prdStatus}`,
+        });
+      } else if (prdDisposition !== "done" && TERMINAL.has(prdStatus)) {
+        drift.push({
+          kind: "prd-disposition-drift",
+          rel,
+          detail: `PRD Status is ${prdStatus} but Disposition is ${prdDisposition || "missing"}`,
+        });
+      }
+
+      if (prdStatus && issueStatuses.length > 0) {
         const allTerminal = issueStatuses.every((s) => TERMINAL.has(s));
         const anyDone = issueStatuses.includes("done");
         if (allTerminal && prdStatus !== "done" && prdStatus !== "wontfix") {
@@ -196,7 +247,7 @@ function main() {
   }
 
   // Non-fatal: merged local branches the lifecycle says to delete.
-  const staleBranches = [...mergedBranches].filter((b) => b !== "main" && b !== "master");
+  const staleBranches = [...mergedBranches].filter((b) => b !== "main" && b !== "master" && b !== currentBranch);
   if (staleBranches.length > 0) {
     console.warn(
       `Warning: ${staleBranches.length} local branch(es) already merged into main should be deleted ` +

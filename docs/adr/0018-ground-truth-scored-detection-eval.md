@@ -15,7 +15,7 @@ downloader; the human stays the truth authority. §Considered-Options #4's
 circularity premise is superseded — seeding from a different model breaks the
 self-reference on unverified frames.
 
-Amended by `.scratch/calibration-analyze-split/PRD.md` and ADR 0020
+Amended by `.scratch/done/pose-calibration-analyze-split/PRD.md` and ADR 0020
 (calibration freshness): calibration no longer runs a throwaway MediaPipe pass;
 the Detection Frame set is a uniform 100 ms arithmetic grid keyed to video
 duration and sent directly to ViTPose at setup-confirm time. Detection + scoring
@@ -26,7 +26,7 @@ video-keyed in carry-forward semantics, while freshness/pairing is hash-chained
 and surfaced (stale + re-seed), not silently discarded.
 
 Amended by the calibration flag-only review change
-(`.scratch/calibration-flag-review/PRD.md`): authoring is inverted from *dragging
+(`.scratch/done/pose-calibration-flag-review/PRD.md`): authoring is inverted from *dragging
 every joint* to a *flag-only review* pass. Every **Detection Frame** arrives
 **auto-accepted** from the ViTPose seed (`review: "auto"`); the human's only input
 is a per-frame three-way flag (Auto / Wrong / Absent), and one **Accept & save
@@ -42,7 +42,7 @@ itself. `ground-truth.json` gains a required per-frame **`review`** and a top-le
 Considered-Options / Consequences notes below reflect the shipped model.
 
 Amended by the forward-fill review change
-(`.scratch/calibration-wrong-forward-fill/PRD.md`): the per-frame flag becomes a
+(`.scratch/done/pose-calibration-wrong-forward-fill/PRD.md`): the per-frame flag becomes a
 **forward-fill over a segment model**, and the manual **Absent** flag is retired.
 Working review state is now a set of **control points** (Detection Frame index →
 `Wrong | Auto`); each frame's effective flag is *derived* as the value of the

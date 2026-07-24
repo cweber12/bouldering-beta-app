@@ -3,7 +3,7 @@
 Date: 2026-07-18
 Status: accepted
 Amends: 0018 (staleness), 0019 (seed consumption); supersedes the video-identity
-pairing direction of `.scratch/calibration-analyze-split/issues/06`.
+pairing direction of `.scratch/done/pose-calibration-analyze-split/issues/06`.
 
 ## Context
 
@@ -13,7 +13,7 @@ the run's stamped `setupHash` equals the truth's self-reported `setupHash`
 `setup.json`). On 2026-07-18 the harness reported 22 run/truth pairs across 16
 bundles skipped on `setupHash mismatch` while the scanner UI showed every one of
 those bundles as healthy (harness issue #21, handoff
-`.scratch/calibration-freshness/scanner-calibration-freshness.md`).
+`.scratch/done/pose-calibration-freshness/scanner-calibration-freshness.md`).
 
 Two scanner-side causes:
 

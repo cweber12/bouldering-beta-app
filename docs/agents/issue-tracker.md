@@ -4,9 +4,20 @@ Issues and PRDs for this repo live as markdown files in `.scratch/`.
 
 ## Conventions
 
-- One feature per directory: `.scratch/<feature-slug>/`
-- The PRD is `.scratch/<feature-slug>/PRD.md`
-- Implementation issues are `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01`
+- PRDs are grouped by disposition directory:
+  - `.scratch/actionable/<domain>-<feature-slug>/`
+  - `.scratch/parked/<domain>-<feature-slug>/`
+  - `.scratch/done/<domain>-<feature-slug>/`
+- The folder name starts with the PRD's primary domain, followed by the feature
+  slug. Use the shallow `<disposition>/<domain>-<feature-slug>` shape instead
+  of creating domain subdirectories.
+- The PRD is `.scratch/<disposition>/<domain>-<feature-slug>/PRD.md`
+- Cross-PRD priority and implementation sequence live in `.scratch/ROADMAP.md`.
+  The roadmap is the source of truth for ordering work across PRDs; do not try
+  to maintain global sequence by duplicating rank fields across every PRD.
+- Implementation issues are
+  `.scratch/<disposition>/<domain>-<feature-slug>/issues/<NN>-<slug>.md`,
+  numbered from `01`
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Two more tracking lines are added as an issue moves through implementation, directly under `Status:`:
   - `Branch:` — the branch the work lives on, written when implementation starts (status moves to `in-progress`). Work committed directly to `main` (rare; batch/doc commits) records `Branch: main`.
@@ -35,13 +46,42 @@ The PRD's own `Status:` line tracks the feature as a whole:
 Moving the last issue to `done` and moving the PRD to `done` happen in the same
 commit. The drift audit checks PRD/issue consistency.
 
+### PRD disposition and roadmap
+
+PRD actionability is tracked separately from lifecycle:
+
+- `Disposition: actionable` — the PRD may be selected for implementation. Both
+  `ready-for-agent` and `in-progress` PRDs live under `.scratch/actionable/`;
+  use `Status:` to distinguish them.
+- `Disposition: parked` — the PRD is intentionally deferred; do not start work
+  from it until the disposition changes.
+- `Disposition: done` — the PRD is complete and retained for history.
+
+When a PRD's disposition changes, move the whole PRD folder to the matching
+lane, update the PRD's `Disposition:` line in the same commit, and rewrite any
+`.scratch/...` references that pointed at the old path. The drift audit checks
+that the PRD metadata agrees with its lane.
+
+Use `.scratch/ROADMAP.md` to choose work across PRDs. It groups PRDs by current
+planning lane and gives each listed PRD a priority. The PRD's primary domain is
+visible in its folder name. If a PRD says `Disposition: parked`, it belongs
+under `.scratch/parked/` and the roadmap's parked lane even if its `Status:` is
+otherwise `ready-for-agent`.
+
+Roadmap priorities use the following vocabulary:
+
+- `P0` — unblocker or correctness issue that should preempt planned work.
+- `P1` — next planned product/build work.
+- `P2` — valuable but not sequenced yet.
+- `P3` — parked, speculative, or revisit-later work.
+
 ### Superseded issues
 
 When a newer PRD replaces an issue rather than implementing it, close it as:
 
 ```text
 Status: wontfix
-Superseded-by: .scratch/<new-feature>/issues/<NN>-<slug>.md
+Superseded-by: .scratch/<disposition>/<domain>-<new-feature>/issues/<NN>-<slug>.md
 ```
 
 with a short blockquote note under the tracking block saying what superseded it
@@ -82,7 +122,9 @@ Before ending a PRD work session, run the drift audit (`node scripts/audit-issue
 
 ## When a skill says "publish to the issue tracker"
 
-Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+Create a new actionable PRD folder under
+`.scratch/actionable/<domain>-<feature-slug>/` (creating the directory if
+needed), unless the user explicitly asks to park it.
 
 ## When a skill says "fetch the relevant ticket"
 
