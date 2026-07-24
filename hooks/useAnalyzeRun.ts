@@ -21,7 +21,11 @@ import { getAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import { buildHarnessPayloads, postDetectionRun } from "@/utils/harnessPayloads";
 import { loadGroundTruth, type GroundTruth } from "@/utils/harnessGroundTruth";
 import { truthIsStale } from "@/utils/harnessFreshness";
-import { scoreRunAgainstGroundTruth, type DetectionScoring } from "@/utils/harnessScoring";
+import {
+  detectorEvidenceFrames,
+  scoreRunAgainstGroundTruth,
+  type DetectionScoring,
+} from "@/utils/harnessScoring";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
 import { DEFAULT_TIER, getTierConfig, type QualityTier } from "@/utils/poseTiers";
 import type { ScanDiagnostics } from "@/pipeline/analysis/diagnostics";
@@ -153,15 +157,15 @@ export function useAnalyzeRun(
     !!groundTruth && !!setup && truthIsStale(groundTruth.setupHash, setup.setupHash);
 
   // Scoring vs Ground Truth over the probed-frame domain: the base-timeline
-  // probes (missing / flip-discarded included) plus the accepted frames, so a
-  // probe that found nothing scores `missing` while grid frames the run never
-  // visited stay outside the domain. Null when the video has no accepted truth
-  // (or only stale truth) — the run then renders and posts unscored.
+  // probes (missing / flip-discarded included) plus raw detector-evidence frames
+  // from Adaptive Refinement. The posted payload may be dense/interpolated for
+  // corpus diagnostics, but scoring must not let inferred continuity widen the
+  // probed domain or count as detector evidence.
   const scoring = useMemo(() => {
     if (!groundTruth || !runAttempt || truthStale) return null;
     return scoreRunAgainstGroundTruth({
       groundTruth,
-      run: { probes: runFrames, frames: runAttempt.frames },
+      run: { probes: runFrames, frames: detectorEvidenceFrames(runAttempt.frames) },
     });
   }, [groundTruth, runAttempt, runFrames, truthStale]);
 
@@ -251,7 +255,7 @@ export function useAnalyzeRun(
         },
         {
           emitLivePreview: false,
-          frameOutput: "detected",
+          frameOutput: "interpolated",
           detectHolds: false,
           generateThumbnail: false,
         },
