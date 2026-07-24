@@ -126,10 +126,15 @@ auto-rendered WebM stays pose-only (static, so a baked-in Holds layer could not
 be toggled off). The dev Analyze harness posts `detectorAttempts[]` as the
 backend evidence stream for accepted, missing, flip-rejected, and
 quality-rejected detector attempts while keeping playback frames separate. It
-skips the animated scan-loading x-ray, and its Detection Preview adds a
-detection-frame filmstrip and stepper — a scrolling row of frame thumbnails,
-each bordered by its detection status (detected / weak / missing / flip) — for
-jumping through sampled frames and flagged stretches.
+posts scanner-owned evidence only: `setup.json.analysisInputs` remain advisory
+condition metadata, Ground Truth remains authoritative for expected climber
+presence and pose, and backend recommendation semantics stay outside
+beta-scanner. Older `frames[]`-only payloads are legacy/proxy detector evidence;
+when `detectorAttempts[]` is missing, the detector-attempt stream is unknown, not
+implicitly successful. Dev Analyze skips the animated scan-loading x-ray, and its
+Detection Preview adds a detection-frame filmstrip and stepper — a scrolling row
+of frame thumbnails, each bordered by its detection status (detected / weak /
+missing / flip) — for jumping through sampled frames and flagged stretches.
 
 ### Adaptive overlay contrast
 

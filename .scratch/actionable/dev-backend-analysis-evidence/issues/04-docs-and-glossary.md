@@ -1,6 +1,7 @@
 # Docs and glossary alignment
 
-Status: ready-for-agent
+Status: in-progress
+Branch: chore/docs-glossary-evidence
 Type: AFK
 
 ## Parent
@@ -23,4 +24,5 @@ Update project documentation so future agents understand the distinction between
 ## Comments
 
 - No ADR is required unless the implementation makes a hard-to-reverse payload compatibility decision that would surprise future readers.
+- This documentation pass clarifies backend analysis inputs only. beta-scanner exports detector evidence and advisory setup metadata; recommendation semantics stay owned by the external backend analysis service.
 

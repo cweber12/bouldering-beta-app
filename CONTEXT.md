@@ -84,6 +84,20 @@ carrying an **Interpolated Landmark**, not a detection event).
 _Avoid_: sample, video frame (ambiguous — most video frames are not Detection
 Frames).
 
+**Detector Attempt**:
+A backend-analysis evidence row exported by dev Analyze for one MediaPipe attempt
+on the scanner's 100 ms sampled timeline. It records the scanner-owned facts
+around that attempt: timestamp, accepted/missing/rejected status, raw selected
+keypoints when MediaPipe produced a candidate, accepted keypoints only when the
+scanner kept the pose, normalized search/detection regions, reacquire outcome,
+candidate-selection counts, and observed frame conditions. It is evidence for
+backend analysis, not a recommendation or scoring interpretation; the backend
+compares it with **Ground Truth** and decides what it means. Older payloads that
+only contain `frames[]` are legacy/proxy detector evidence, and a payload missing
+`detectorAttempts[]` means the attempt stream is unknown, not that every detector
+attempt succeeded.
+_Avoid_: playback frame, pose frame, recommendation input (too broad).
+
 **Landmark Flip**:
 A frame in which the pose model mislabels the **Climber**'s left/right sides
 (e.g. `left_shoulder` jumps to the right side of the body) without the body
@@ -107,13 +121,15 @@ geometry) rather than detected, so the skeleton stays whole through brief
 dropouts/occlusion. Carried at reduced confidence; rendered dimmed (in the
 **Skeleton** pass only — the **Silhouette** never dims) when the gap is too large
 to estimate reliably. Distinct from an **Interpolated Landmark**.
+Not direct detector evidence and not exported as a **Detector Attempt** keypoint.
 _Avoid_: predicted point, fake landmark.
 
 **Interpolated Landmark**:
 A keypoint produced by routine densification _between two confident detected
 samples_ (turning sparse pose frames into dense playback frames). It inherits the
 confidence of its endpoints and is **never dimmed** — interpolation is not a
-source of uncertainty, unlike an **Estimated Landmark**.
+source of uncertainty, unlike an **Estimated Landmark**. It belongs to continuity
+and playback output, not the **Detector Attempt** evidence stream.
 _Avoid_: estimated, inferred (those imply reduced confidence).
 
 ### Capture mode
@@ -396,7 +412,9 @@ probe) so the harness recomputes region stats under the new hash; the suggested
 labels in its response prefill the label form for the User to verify rather than
 author, and every label save records per-label provenance under
 `setup.json.analysisInputsProvenance` (`auto-accepted` / `human-overridden` /
-`human-authored`). The
+`human-authored`). The labels in `setup.json.analysisInputs` are advisory corpus
+metadata for later analysis; they do not define expected **Climber** presence or
+pose, which remains the responsibility of the video's **Ground Truth**. The
 scaffold run is discarded; calibration saves no scored run. Stored as `setup.json`
 in the Test Video's bundle, beside the `ground-truth.json` **Ground Truth**.
 _Avoid_: seed (the identity seed, `climberPoint`, is just one field of the
