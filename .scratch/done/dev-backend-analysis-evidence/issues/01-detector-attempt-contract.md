@@ -7,7 +7,7 @@ Merged: 4fc6f61
 
 ## Parent
 
-- `.scratch/actionable/dev-backend-analysis-evidence/PRD.md`
+- `.scratch/done/dev-backend-analysis-evidence/PRD.md`
 
 ## What to build
 

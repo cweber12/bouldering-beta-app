@@ -36,7 +36,6 @@ Actionable PRDs that are not first in line.
 | 1 | `.scratch/actionable/dev-detection-annotation-ui/PRD.md` | `P2` |
 | 2 | `.scratch/actionable/pose-pipeline-contract-authority/PRD.md` | `P2` |
 | 3 | `.scratch/actionable/ui-public-landing-replay-curation/PRD.md` | `P2` |
-| 4 | `.scratch/actionable/dev-backend-analysis-evidence/PRD.md` | `P2` |
 
 ## Parked
 
@@ -54,6 +53,7 @@ Completed PRDs retained for history.
 | PRD | Merged |
 | --- | --- |
 | `.scratch/done/auth-login-reliability/PRD.md` | see issue files |
+| `.scratch/done/dev-backend-analysis-evidence/PRD.md` | see issue files |
 | `.scratch/done/map-interaction-outdoor-style/PRD.md` | see issue files |
 | `.scratch/done/pose-batch-reseed-stale-truth/PRD.md` | see issue files |
 | `.scratch/done/pose-calibration-analyze-split/PRD.md` | see issue files |

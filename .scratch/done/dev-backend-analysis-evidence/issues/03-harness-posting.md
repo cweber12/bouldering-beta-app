@@ -7,7 +7,7 @@ Type: AFK
 
 ## Parent
 
-- `.scratch/actionable/dev-backend-analysis-evidence/PRD.md`
+- `.scratch/done/dev-backend-analysis-evidence/PRD.md`
 
 ## What to build
 

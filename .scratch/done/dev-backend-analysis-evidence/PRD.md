@@ -1,7 +1,7 @@
 # Backend Analysis Evidence Payload
 
-Status: in-progress
-Disposition: actionable
+Status: done
+Disposition: done
 
 Spec inputs: GitHub issue comment `cweber12/beta-scan-analysis#68` comment `5071900098`; grilled decisions from 2026-07-24; `beta-scan-analysis/docs/handoffs/scanner-detector-attempt-evidence.md`.
 Glossary: CONTEXT.md - **Detection Frame**, **Climber**, **Adaptive Crop**, **Adaptive Refinement**, **Ground Truth**, **Detection Error**, **Scan Setup**, **Test Video**.
