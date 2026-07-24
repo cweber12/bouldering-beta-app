@@ -14,11 +14,84 @@
  * Framework-agnostic — no React imports.
  */
 
-import type { PoseFrame } from "@/pipeline/pose/poseDetection";
-import type { ScanDiagnostics, ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
+import type { FrameConditions, ScanDiagnostics, ReferenceFrameMeta } from "@/pipeline/analysis/diagnostics";
+import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { DetectionScoring } from "@/utils/harnessScoring";
 
-/** The `pose` half: full diagnostics record + the dense pose frames. */
+/** Normalized full-frame search region. Use this value instead of `null` for full-frame attempts. */
+export const DETECTOR_ATTEMPT_FULL_FRAME_REGION = { x: 0, y: 0, w: 1, h: 1 } as const;
+
+/** A normalized video-frame rectangle. */
+export interface DetectorAttemptRegion {
+  /** X origin normalized to [0, 1] relative to the frame width. */
+  x: number;
+  /** Y origin normalized to [0, 1] relative to the frame height. */
+  y: number;
+  /** Width normalized to [0, 1] relative to the frame width. */
+  w: number;
+  /** Height normalized to [0, 1] relative to the frame height. */
+  h: number;
+}
+
+export type DetectorAttemptStatus = "accepted" | "missing" | "flipRejected" | "qualityRejected";
+export type DetectorAttemptSelectionMethod = "tap" | "tracked" | "strongest";
+
+interface DetectorAttemptBase {
+  /** Video timestamp in seconds on the dev Analyze 100 ms grid. */
+  timestamp: number;
+  status: DetectorAttemptStatus;
+  /** First normalized rectangle fed to MediaPipe; full-frame attempts use the explicit full-frame region. */
+  initialSearchRegion: DetectorAttemptRegion | null;
+  /** Normalized rectangle that produced `rawKeypoints`; `null` when no pose was selected. */
+  detectionRegion: DetectorAttemptRegion | null;
+  /** True when the initial adaptive crop missed and a full-frame fallback was tried. */
+  reacquireAttempted: boolean;
+  /** True only when full-frame fallback found and accepted the Climber. */
+  reacquired: boolean;
+  /** Selected MediaPipe Climber pose before scanner-side rejection or mutation; empty when none was selected. */
+  rawKeypoints: Keypoint[];
+  /** Pixel conditions for `initialSearchRegion`; `null` when unavailable. */
+  searchConditions: FrameConditions | null;
+  /** Pixel conditions for the fallback full-frame region; `null` when fallback did not run or is unavailable. */
+  reacquireConditions: FrameConditions | null;
+  candidateCount: number;
+  rejectedCandidateCount: number;
+  selectionMethod: DetectorAttemptSelectionMethod;
+}
+
+export interface AcceptedDetectorAttempt extends DetectorAttemptBase {
+  status: "accepted";
+  detectionRegion: DetectorAttemptRegion;
+  /** Scanner-accepted keypoints after detector gates; present only for accepted attempts. */
+  acceptedKeypoints: Keypoint[];
+}
+
+export interface MissingDetectorAttempt extends DetectorAttemptBase {
+  status: "missing";
+  rawKeypoints: [];
+  detectionRegion: null;
+  acceptedKeypoints?: never;
+}
+
+export interface FlipRejectedDetectorAttempt extends DetectorAttemptBase {
+  status: "flipRejected";
+  detectionRegion: DetectorAttemptRegion;
+  acceptedKeypoints?: never;
+}
+
+export interface QualityRejectedDetectorAttempt extends DetectorAttemptBase {
+  status: "qualityRejected";
+  detectionRegion: DetectorAttemptRegion;
+  acceptedKeypoints?: never;
+}
+
+export type DetectorAttempt =
+  | AcceptedDetectorAttempt
+  | MissingDetectorAttempt
+  | FlipRejectedDetectorAttempt
+  | QualityRejectedDetectorAttempt;
+
+/** The `pose` half: full diagnostics record + dense pose frames, with optional detector attempts. */
 export interface HarnessPosePayload {
   setupHash: string;
   /**
@@ -29,6 +102,11 @@ export interface HarnessPosePayload {
   /** The probed-frame scoring block (utils/harnessScoring.ts), or null. */
   scoring: DetectionScoring | null;
   diagnostics: ScanDiagnostics;
+  /**
+   * Analysis-only MediaPipe attempt evidence. Omitted on legacy/current runs
+   * until the detector-attempt capture path supplies a canonical stream.
+   */
+  detectorAttempts?: DetectorAttempt[];
   frames: PoseFrame[];
 }
 
@@ -44,18 +122,20 @@ export interface HarnessOrbPayload {
 export function buildHarnessPayloads(args: {
   diagnostics: ScanDiagnostics;
   frames: PoseFrame[];
+  detectorAttempts?: DetectorAttempt[];
   referenceFrameMeta: ReferenceFrameMeta | null;
   setupHash: string;
   /** Scoring vs the video's Ground Truth; null posts the run unscored. */
   scoring?: DetectionScoring | null;
 }): { pose: HarnessPosePayload; orb: HarnessOrbPayload } {
-  const { diagnostics, frames, referenceFrameMeta, setupHash, scoring = null } = args;
+  const { diagnostics, frames, detectorAttempts, referenceFrameMeta, setupHash, scoring = null } = args;
   return {
     pose: {
       setupHash,
       groundTruthHash: scoring?.groundTruthHash ?? null,
       scoring,
       diagnostics,
+      ...(detectorAttempts ? { detectorAttempts } : {}),
       frames,
     },
     orb: {
