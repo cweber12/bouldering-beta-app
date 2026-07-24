@@ -9,14 +9,14 @@ the calibration authoring scaffold from a throwaway MediaPipe detection run;
 this ADR replaced that seed's **poses** with **ViTPose++** run on the downloader
 and superseded ADR 0018 §Considered-Options #4's premise about circularity.
 
-Further amended by `.scratch/calibration-analyze-split/PRD.md`: calibration no
+Further amended by `.scratch/done/pose-calibration-analyze-split/PRD.md`: calibration no
 longer runs a throwaway MediaPipe pass at all. The Detection Frame set is now a
 uniform 100 ms arithmetic grid from video duration, sent to the ViTPose job
 immediately after setup confirm. Production detection moved to the explicit
 Analyze step, separate from truth authoring.
 
 Amended by the calibration flag-only review change
-(`.scratch/calibration-flag-review/PRD.md`): the authoring interaction is now a
+(`.scratch/done/pose-calibration-flag-review/PRD.md`): the authoring interaction is now a
 flag-only review (Auto / Wrong / Absent) over an **auto-accepted** ViTPose seed,
 not landmark dragging — so ViTPose's role shifts from *seed that reduces dragging*
 to *the truth being attested*. Consequently the "**ViTPose is not a hard
@@ -122,7 +122,7 @@ a stronger reference model.
   = `vitpose.json`, one frame per requested timestamp, **echoing that timestamp
   verbatim** so beta-scanner's 1 ms seed-match aligns frame-for-frame — the
   ViTPose run is not a denser grid). Full handoff spec:
-  `.scratch/ground-truth-detection-eval/downloader-vitpose-contract.md`.
+  `.scratch/actionable/pose-ground-truth-detection-eval/downloader-vitpose-contract.md`.
 - **Calibration runs one model for authoring.** ViTPose seeds the review over a
    deterministic arithmetic grid; calibration no longer runs a throwaway
    MediaPipe detection pass.

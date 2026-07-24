@@ -172,6 +172,22 @@ matched against it (ORB + homography) and the skeleton overlay is projected onto
 it. One per Route, optional, shared by every Run of the Route.
 _Avoid_: route image, background photo.
 
+**Landing Replay Playlist**:
+The curated, public set of replay-safe clips shown on the landing-page x-ray
+demo. It is shared globally (the same source for every visitor), built from
+selected **Run**s, and cycled continuously by the hero replay loop.
+_Avoid_: user feed, latest uploads (those imply per-user or automatic inclusion).
+
+**Landing Replay Curation**:
+The explicit editorial action of choosing multiple **Run**s to include in the
+**Landing Replay Playlist**. Inclusion is manual, not automatic.
+_Avoid_: auto-publish, latest-only mode.
+
+**Landing Replay Curation Page**:
+The dedicated development surface where a maintainer performs **Landing Replay
+Curation** and publishes the selected set.
+_Avoid_: account settings, profile tools.
+
 ### Overlay & review
 
 **Detection Preview**:
@@ -403,6 +419,16 @@ _Avoid_: broken / failed (a _job_ fails; the _bundle_ is Untrackable); dead
 (it is kept for a later pass, not discarded); quarantined (fine in prose, but the
 state is Untrackable).
 
+### Planning tracker
+
+**Status** (tracker):
+The implementation lifecycle state of a PRD or issue.
+_Avoid_: priority, actionability, parked state.
+
+**Disposition**:
+The actionability state of a PRD: actionable, parked, or done.
+_Avoid_: Status, lifecycle.
+
 ## Relationships
 
 - A scan has exactly one **Climber** and zero or more **Bystanders**.
@@ -451,3 +477,6 @@ state is Untrackable).
   the skeleton projected onto the Route Photo — resolved: **Detection Preview**
   (video-pixel, no homography) vs **Route Overlay** (projected onto the Route
   Photo). A bare "stuck on the preview" is ambiguous between the two.
+- "status" was used to mean both implementation progress and whether a PRD should
+  be picked up — resolved: **Status** is lifecycle only; **Disposition** is PRD
+  actionability.

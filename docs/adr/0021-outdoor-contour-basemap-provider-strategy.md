@@ -7,7 +7,7 @@ Status: accepted
 
 Route discovery and Run review both lean on the Leaflet map (`ClimbsMap`,
 `MapPicker`, shared bootstrap in `utils/leaflet.ts`). The PRD
-`.scratch/map-interaction-outdoor-style/PRD.md` asks the map to look like a
+`.scratch/done/map-interaction-outdoor-style/PRD.md` asks the map to look like a
 "professional outdoor navigation surface" that "harmonizes with the app theme",
 while staying free-tier friendly and avoiding a map-engine migration.
 
