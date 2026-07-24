@@ -209,6 +209,13 @@ export interface DetectionRunInput {
   frames: readonly PoseFrame[];
 }
 
+/** Frames that represent detector evidence, not scanner-inferred continuity. */
+export function detectorEvidenceFrames(frames: readonly PoseFrame[]): PoseFrame[] {
+  return frames.filter(
+    (frame) => frame.source === undefined || frame.source === "raw" || frame.source === "limbExpanded",
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Timestamp pairing
 // ---------------------------------------------------------------------------

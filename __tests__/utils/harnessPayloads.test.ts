@@ -21,7 +21,7 @@ const diagnostics = {
   result: { orb: orbSummary },
 } as unknown as ScanDiagnostics;
 
-const frames: PoseFrame[] = [{ timestamp: 0, keypoints: [] }];
+const frames: PoseFrame[] = [{ timestamp: 0, source: "raw", keypoints: [] }];
 const referenceFrameMeta = {
   width: 720,
   height: 1280,
@@ -57,6 +57,7 @@ describe("buildHarnessPayloads", () => {
     expect(pose.setupHash).toBe("hash1");
     expect(pose.diagnostics).toBe(diagnostics);
     expect(pose.frames).toBe(frames);
+    expect(pose.frames[0].source).toBe("raw");
   });
 
   it("posts unscored when no scoring block is supplied", () => {
@@ -147,6 +148,7 @@ describe("postDetectionRun", () => {
     expect(body.pose.setupHash).toBe("setup-hash");
     expect(body.pose.diagnostics.appVersion).toBe("abc1234");
     expect(body.pose.groundTruthHash).toBe("gt-hash-9");
+    expect(body.pose.frames[0].source).toBe("raw");
     expect(body.pose.scoring.rollup.verified.counts.absentOk).toBe(1);
     expect(body.orb.appVersion).toBe("abc1234");
   });

@@ -10,7 +10,7 @@
  * This module is framework-agnostic — no React imports.
  */
 
-import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
+import type { PoseFrame, Keypoint, PoseFrameSource } from "@/pipeline/pose/poseDetection";
 import { MP_KP_NAMES, MP_SKELETON_EDGES, type PoseBackend } from "@/utils/poseConstants";
 
 // ---------------------------------------------------------------------------
@@ -234,6 +234,10 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function frameSource(frame: PoseFrame, fallback: PoseFrameSource): PoseFrameSource {
+  return frame.source ?? fallback;
+}
+
 /** Catmull-Rom spline evaluation for a single scalar. */
 function catmullRom(p0: number, p1: number, p2: number, p3: number, t: number): number {
   const t2 = t * t;
@@ -404,10 +408,13 @@ export function interpolatePoseFrames(
   maxBridgeGap = DEFAULT_MAX_BRIDGE_GAP,
 ): PoseFrame[] {
   if (processedFrames.length === 0) {
-    return allTimestamps.map((timestamp) => ({ timestamp, keypoints: [] }));
+    return allTimestamps.map((timestamp) => ({ timestamp, source: "interpolated", keypoints: [] }));
   }
 
   const timelines = buildKeypointTimelines(processedFrames);
+  const sourceByTimestamp = new Map(
+    processedFrames.map((frame) => [frame.timestamp, frameSource(frame, "raw")]),
+  );
 
   return allTimestamps.map((timestamp) => {
     const keypoints: Keypoint[] = [];
@@ -415,7 +422,7 @@ export function interpolatePoseFrames(
       const kp = sampleKeypoint(name, samples, timestamp, maxBridgeGap);
       if (kp) keypoints.push(kp);
     }
-    return { timestamp, keypoints };
+    return { timestamp, source: sourceByTimestamp.get(timestamp) ?? "interpolated", keypoints };
   });
 }
 
@@ -464,6 +471,7 @@ export function estimateMissingLandmarks(
     if (missing.length === 0 || missing.length > maxEstimatable) return frame;
 
     const estimated: Keypoint[] = [...frame.keypoints];
+    let addedAny = false;
 
     for (const name of missing) {
       // 1. Temporal: nearest prev/next frames that contain the keypoint.
@@ -497,6 +505,7 @@ export function estimateMissingLandmarks(
           y: lerp(prevKp.y, nextKp.y, t),
           score: Math.min(prevKp.score, nextKp.score) * 0.8,
         });
+        addedAny = true;
         continue;
       }
 
@@ -522,6 +531,7 @@ export function estimateMissingLandmarks(
                 y: currentNeighbor.y + (refTarget.y - refNeighbor.y),
                 score: currentNeighbor.score * 0.6,
               });
+              addedAny = true;
               found = true;
               break;
             }
@@ -534,12 +544,14 @@ export function estimateMissingLandmarks(
       // 3. Single temporal neighbour — limited extrapolation (max 2 frames).
       if (prevKp && prevDist <= 2) {
         estimated.push({ ...prevKp, name, score: prevKp.score * 0.5 });
+        addedAny = true;
       } else if (nextKp && nextDist <= 2) {
         estimated.push({ ...nextKp, name, score: nextKp.score * 0.5 });
+        addedAny = true;
       }
     }
 
-    return { ...frame, keypoints: estimated };
+    return { ...frame, source: addedAny ? "filled" : frame.source, keypoints: estimated };
   });
 }
 
@@ -721,7 +733,7 @@ export function fillPersistentGaps(
       added.push(filled);
     }
 
-    return { ...frame, keypoints: [...frame.keypoints, ...added] };
+    return { ...frame, source: "filled", keypoints: [...frame.keypoints, ...added] };
   });
 }
 

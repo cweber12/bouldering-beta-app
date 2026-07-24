@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type PoseFrame } from "@/pipeline/pose/poseDetection";
+import { type PoseFrame, type PoseFrameSource } from "@/pipeline/pose/poseDetection";
 import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
 import {
   extractFeatures,
@@ -109,6 +109,24 @@ export const ORB_PREVIEW_UPDATE_INTERVAL_SEC = 0.75;
 /** Gate ORB preview refreshes to a bounded display cadence. */
 export function shouldEmitOrbPreview(currentTimeSec: number, lastEmitTimeSec: number): boolean {
   return lastEmitTimeSec < 0 || currentTimeSec - lastEmitTimeSec >= ORB_PREVIEW_UPDATE_INTERVAL_SEC;
+}
+
+function detectorFrameSource(frame: PoseFrame): PoseFrameSource {
+  return findMissingLimbs(frame.keypoints).length > 0 ? "limbExpanded" : "raw";
+}
+
+export function tagFlipDiscardedFrames(
+  frames: PoseFrame[],
+  flippedTimestamps: number[],
+): PoseFrame[] {
+  if (flippedTimestamps.length === 0) return frames;
+
+  const flipped = new Set(flippedTimestamps);
+  return frames.map((frame) => {
+    if (!flipped.has(frame.timestamp)) return frame;
+    if (frame.source === "raw" || frame.source === "limbExpanded") return frame;
+    return { ...frame, source: "flipDiscarded" };
+  });
 }
 
 /**
@@ -734,6 +752,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             let landmarkBox: CropBox | null = null; // deriveClimberCrop, for the dev crop trace
             if (chosen) {
               chosen.timestamp = video.currentTime;
+              chosen.source = detectorFrameSource(chosen);
               detected.push(chosen);
               keypointCount = chosen.keypoints.length;
               avgConfidence =
@@ -750,7 +769,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               }
               // ADR 0014: count frames where a missing limb pushed the crop out via
               // a reach disk, so the constants can be tuned against real Runs.
-              if (findMissingLimbs(chosen.keypoints).length > 0) limbExpandedFrames++;
+              if (chosen.source === "limbExpanded") limbExpandedFrames++;
             }
 
             // Diagnostics: one row per pose-detection frame (wasFlip filled in
@@ -951,6 +970,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               const candidate = detectClimber(null, prevCentroid, REACQUIRE_GATE);
               if (!candidate) continue;
               candidate.timestamp = video.currentTime;
+              candidate.source = detectorFrameSource(candidate);
 
               // Flip gate: don't accept a re-detected frame that is itself a
               // glitch flip relative to the last accepted pose.
@@ -1021,7 +1041,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // makes rotating limbs stretch/snap and occluded joints bend the wrong
         // way (see ADR 0015).
         const goodFrames = filterLandmarks(kept, 0.3, detection.filterTolerance);
-        const frames =
+        const processedFrames =
           frameOutput === "detected"
             ? goodFrames
             : constrainSkeleton(
@@ -1039,6 +1059,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 goodFrames,
                 backend,
               );
+        const frames = tagFlipDiscardedFrames(processedFrames, flipScan.flippedTimestamps);
 
         // Author Holds at scan time in the Run's own video space (Fixed Capture
         // only). The result is persisted with the Run and editable on the
