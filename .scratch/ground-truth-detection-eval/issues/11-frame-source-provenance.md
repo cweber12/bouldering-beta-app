@@ -1,8 +1,9 @@
 # Frame Source Provenance Export
 
-Status: in-progress
+Status: done
 Type: agent
 Branch: fix/corpus-frame-source-provenance
+Merged: 917bfa0
 
 ## Parent
 
@@ -25,11 +26,17 @@ Accepted values:
 
 ## Acceptance Criteria
 
-- [ ] `PoseFrame` exposes a typed `source` field with the accepted values.
-- [ ] Raw detector frames, flip-discarded samples, interpolation output, persistent fills, and limb-expanded accepted frames are tagged.
-- [ ] Harness detection payloads include the source-tagged frames without schema stripping.
-- [ ] Unit tests cover representative source assignment and preservation.
-- [ ] Type-check, lint, targeted tests, and issue drift audit pass.
+- [x] `PoseFrame` exposes a typed `source` field with the accepted values.
+- [x] Raw detector frames, flip-discarded samples, interpolation output, persistent fills, and limb-expanded accepted frames are tagged.
+- [x] Harness detection payloads include the source-tagged frames without schema stripping.
+- [x] Unit tests cover representative source assignment and preservation.
+- [x] Type-check, lint, targeted tests, and issue drift audit pass.
+
+## Comments
+
+- Corpus Analyze now posts dense source-tagged frames while scoring remains
+  limited to raw detector-evidence frames, preserving probed-frame scoring
+  semantics.
 
 ## Watch-outs
 
