@@ -22,7 +22,7 @@ import { buildHarnessPayloads, postDetectionRun } from "@/utils/harnessPayloads"
 import { loadGroundTruth, type GroundTruth } from "@/utils/harnessGroundTruth";
 import { truthIsStale } from "@/utils/harnessFreshness";
 import {
-  detectorEvidenceFrames,
+  detectorEvidenceFromPayload,
   scoreRunAgainstGroundTruth,
   type DetectionScoring,
 } from "@/utils/harnessScoring";
@@ -166,12 +166,14 @@ export function useAnalyzeRun(
   // corpus diagnostics, but scoring must not let inferred continuity widen the
   // probed domain or count as detector evidence.
   const scoring = useMemo(() => {
-    if (!groundTruth || !runAttempt || truthStale) return null;
+    if (!groundTruth || !runAttempt || truthStale || detectorAttempts === null) return null;
+    const evidence = detectorEvidenceFromPayload({ detectorAttempts });
+    if (!evidence.run) return null;
     return scoreRunAgainstGroundTruth({
       groundTruth,
-      run: { probes: runFrames, frames: detectorEvidenceFrames(runAttempt.frames) },
+      run: evidence.run,
     });
-  }, [groundTruth, runAttempt, runFrames, truthStale]);
+  }, [groundTruth, runAttempt, detectorAttempts, truthStale]);
 
   // Load the video bytes + the Scan Setup the run will replay + any truth.
   useEffect(() => {
@@ -299,6 +301,7 @@ export function useAnalyzeRun(
   // diagnostics record). One POST per run.
   useEffect(() => {
     if (phase !== "result" || !runDiag || !setup) return;
+    if (detectorAttempts === null) return;
     if (postedRunRef.current === runDiag.scanId) return;
     postedRunRef.current = runDiag.scanId;
     let cancelled = false;
@@ -308,7 +311,7 @@ export function useAnalyzeRun(
         const { pose, orb } = buildHarnessPayloads({
           diagnostics: runDiag,
           frames: runAttempt?.frames ?? [],
-          detectorAttempts: detectorAttempts ?? undefined,
+          detectorAttempts,
           referenceFrameMeta: runAttempt?.referenceFrameMeta ?? null,
           setupHash: setup.setupHash,
           scoring,

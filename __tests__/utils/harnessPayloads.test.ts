@@ -54,6 +54,34 @@ const detectorAttempts = [
     rejectedCandidateCount: 0,
     selectionMethod: "strongest",
   },
+  {
+    timestamp: 0.2,
+    status: "flipRejected",
+    initialSearchRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    detectionRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    reacquireAttempted: false,
+    reacquired: false,
+    rawKeypoints: [{ name: "nose", x: 0.55, y: 0.3, score: 0.8 }],
+    searchConditions: null,
+    reacquireConditions: null,
+    candidateCount: 1,
+    rejectedCandidateCount: 0,
+    selectionMethod: "tracked",
+  },
+  {
+    timestamp: 0.3,
+    status: "qualityRejected",
+    initialSearchRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    detectionRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    reacquireAttempted: false,
+    reacquired: false,
+    rawKeypoints: [{ name: "nose", x: 0.45, y: 0.2, score: 0.2 }],
+    searchConditions: null,
+    reacquireConditions: null,
+    candidateCount: 1,
+    rejectedCandidateCount: 0,
+    selectionMethod: "tracked",
+  },
 ] satisfies DetectorAttempt[];
 const referenceFrameMeta = {
   width: 720,
@@ -114,6 +142,14 @@ describe("buildHarnessPayloads", () => {
       detectionRegion: null,
       rawKeypoints: [],
       selectionMethod: "strongest",
+    });
+    expect(pose.detectorAttempts?.[2]).toMatchObject({
+      status: "flipRejected",
+      rawKeypoints: detectorAttempts[2].rawKeypoints,
+    });
+    expect(pose.detectorAttempts?.[3]).toMatchObject({
+      status: "qualityRejected",
+      rawKeypoints: detectorAttempts[3].rawKeypoints,
     });
   });
 
@@ -219,6 +255,8 @@ describe("postDetectionRun", () => {
     expect(body.pose.detectorAttempts).toEqual(detectorAttempts);
     expect(body.pose.detectorAttempts[0].acceptedKeypoints).toEqual(detectorAttempts[0].acceptedKeypoints);
     expect(body.pose.detectorAttempts[1].acceptedKeypoints).toBeUndefined();
+    expect(body.pose.detectorAttempts[2].rawKeypoints).toEqual(detectorAttempts[2].rawKeypoints);
+    expect(body.pose.detectorAttempts[3].status).toBe("qualityRejected");
   });
 
   it("returns the run id the downloader assigned", async () => {

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   scoreRunAgainstGroundTruth,
   computeBodyScale,
+  detectorEvidenceFromPayload,
   detectorEvidenceFrames,
   findScoredRow,
   DRIFT_MIN,
@@ -14,6 +15,7 @@ import {
   type GroundTruthJoint,
 } from "@/utils/harnessGroundTruth";
 import type { PoseFrame, Keypoint } from "@/pipeline/pose/poseDetection";
+import type { DetectorAttempt } from "@/utils/harnessPayloads";
 
 // ---------------------------------------------------------------------------
 // Synthetic fixtures. A full 13-joint upright pose whose torso segments give a
@@ -81,6 +83,34 @@ function runPose(
   return { timestamp, keypoints };
 }
 
+function detectorAttempt(
+  timestamp: number,
+  status: DetectorAttempt["status"],
+): DetectorAttempt {
+  const region = { x: 0, y: 0, w: 1, h: 1 };
+  const rawKeypoints = status === "missing" ? [] : runPose(timestamp).keypoints;
+  const base = {
+    timestamp,
+    initialSearchRegion: region,
+    detectionRegion: status === "missing" ? null : region,
+    reacquireAttempted: false,
+    reacquired: false,
+    rawKeypoints,
+    searchConditions: null,
+    reacquireConditions: null,
+    candidateCount: rawKeypoints.length > 0 ? 1 : 0,
+    rejectedCandidateCount: 0,
+    selectionMethod: "tracked" as const,
+  };
+  if (status === "accepted") {
+    return { ...base, status, detectionRegion: region, acceptedKeypoints: rawKeypoints };
+  }
+  if (status === "missing") {
+    return { ...base, status, detectionRegion: null, rawKeypoints: [] };
+  }
+  return { ...base, status, detectionRegion: region };
+}
+
 const BODY_SCALE = computeBodyScale(gtFrame(0, 0))!;
 
 function run(frames: PoseFrame[], probes?: { timestamp: number }[]): DetectionRunInput {
@@ -108,6 +138,65 @@ describe("detectorEvidenceFrames", () => {
       "raw",
       "limbExpanded",
     ]);
+  });
+});
+
+describe("detectorEvidenceFromPayload", () => {
+  it("prefers detector attempts and ignores dense playback frames as current evidence", () => {
+    const denseFrames: PoseFrame[] = [
+      { ...runPose(0), source: "raw" },
+      { ...runPose(0.1), source: "interpolated" },
+      { ...runPose(0.2), source: "filled" },
+      { ...runPose(0.3), source: "flipDiscarded" },
+    ];
+    const attempts: DetectorAttempt[] = [
+      detectorAttempt(0, "accepted"),
+      detectorAttempt(0.1, "missing"),
+      detectorAttempt(0.2, "flipRejected"),
+      detectorAttempt(0.3, "qualityRejected"),
+    ];
+
+    const evidence = detectorEvidenceFromPayload({ detectorAttempts: attempts, frames: denseFrames });
+
+    expect(evidence.kind).toBe("detectorAttempts");
+    expect(evidence.run?.probes.map((probe) => probe.timestamp)).toEqual([0, 0.1, 0.2, 0.3]);
+    expect(evidence.run?.frames.map((frame) => frame.timestamp)).toEqual([0]);
+
+    const result = score(
+      [gtFrame(0, 0), gtFrame(1, 0.1), gtFrame(2, 0.2), gtFrame(3, 0.3)],
+      evidence.run!,
+    );
+    expect(result.rollup.verified.counts.good).toBe(1);
+    expect(result.rollup.verified.counts.missing).toBe(3);
+  });
+
+  it("keeps older frames-only runs readable as legacy proxy evidence", () => {
+    const evidence = detectorEvidenceFromPayload({
+      frames: [
+        { ...runPose(0), source: "raw" },
+        { ...runPose(0.1), source: "interpolated" },
+        { ...runPose(0.2), source: "filled" },
+        { ...runPose(0.3), source: "limbExpanded" },
+      ],
+    });
+
+    expect(evidence.kind).toBe("legacyFrames");
+    expect(evidence.run?.probes.map((probe) => probe.timestamp)).toEqual([0, 0.3]);
+    expect(evidence.run?.frames.map((frame) => frame.timestamp)).toEqual([0, 0.3]);
+
+    const result = score(
+      [gtFrame(0, 0), gtFrame(1, 0.1), gtFrame(2, 0.3)],
+      evidence.run!,
+    );
+    expect(result.rows.map((row) => row.timestamp)).toEqual([0, 0.3]);
+    expect(result.rollup.verified.counts.good).toBe(2);
+  });
+
+  it("represents a missing attempt stream without legacy frames as unknown", () => {
+    const evidence = detectorEvidenceFromPayload({});
+
+    expect(evidence.kind).toBe("unknown");
+    expect(evidence.run).toBeNull();
   });
 });
 

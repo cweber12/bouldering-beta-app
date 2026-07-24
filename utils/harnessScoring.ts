@@ -26,6 +26,7 @@
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { GroundTruthFrame } from "@/utils/harnessGroundTruth";
+import type { DetectorAttempt } from "@/utils/harnessPayloads";
 
 // ---------------------------------------------------------------------------
 // Thresholds — named starter constants (issue-08 grilled design), to be tuned
@@ -209,11 +210,57 @@ export interface DetectionRunInput {
   frames: readonly PoseFrame[];
 }
 
+export type DetectionRunEvidenceKind = "detectorAttempts" | "legacyFrames" | "unknown";
+
+export interface DetectionRunEvidence {
+  /**
+   * `detectorAttempts` is the current backend evidence stream. `legacyFrames`
+   * means an older run only carried accepted pose frames as proxy evidence.
+   * `unknown` means no detector-attempt stream was posted and no legacy proxy is
+   * available; callers must not infer success from that absence.
+   */
+  kind: DetectionRunEvidenceKind;
+  run: DetectionRunInput | null;
+}
+
 /** Frames that represent detector evidence, not scanner-inferred continuity. */
 export function detectorEvidenceFrames(frames: readonly PoseFrame[]): PoseFrame[] {
   return frames.filter(
     (frame) => frame.source === undefined || frame.source === "raw" || frame.source === "limbExpanded",
   );
+}
+
+/** Build the scoring-domain evidence from a backend-facing pose payload. */
+export function detectorEvidenceFromPayload(data: {
+  detectorAttempts?: readonly DetectorAttempt[] | null;
+  frames?: readonly PoseFrame[] | null;
+}): DetectionRunEvidence {
+  if (data.detectorAttempts) {
+    return {
+      kind: "detectorAttempts",
+      run: {
+        probes: data.detectorAttempts.map((attempt) => ({ timestamp: attempt.timestamp })),
+        frames: data.detectorAttempts.flatMap((attempt): PoseFrame[] =>
+          attempt.status === "accepted"
+            ? [{ timestamp: attempt.timestamp, keypoints: attempt.acceptedKeypoints }]
+            : [],
+        ),
+      },
+    };
+  }
+
+  if (data.frames) {
+    const frames = detectorEvidenceFrames(data.frames);
+    return {
+      kind: "legacyFrames",
+      run: {
+        probes: frames.map((frame) => ({ timestamp: frame.timestamp })),
+        frames,
+      },
+    };
+  }
+
+  return { kind: "unknown", run: null };
 }
 
 // ---------------------------------------------------------------------------
