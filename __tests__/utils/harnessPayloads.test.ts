@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   buildHarnessPayloads,
+  DETECTOR_ATTEMPT_FULL_FRAME_REGION,
   postDetectionRun,
+  type DetectorAttempt,
   type HarnessOrbPayload,
   type HarnessPosePayload,
 } from "@/utils/harnessPayloads";
@@ -22,6 +24,37 @@ const diagnostics = {
 } as unknown as ScanDiagnostics;
 
 const frames: PoseFrame[] = [{ timestamp: 0, source: "raw", keypoints: [] }];
+const detectorAttempts = [
+  {
+    timestamp: 0,
+    status: "accepted",
+    initialSearchRegion: { x: 0.1, y: 0.2, w: 0.4, h: 0.5 },
+    detectionRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    reacquireAttempted: true,
+    reacquired: true,
+    rawKeypoints: [{ name: "nose", x: 0.5, y: 0.25, score: 0.9 }],
+    acceptedKeypoints: [{ name: "nose", x: 0.5, y: 0.25, score: 0.9 }],
+    searchConditions: null,
+    reacquireConditions: null,
+    candidateCount: 1,
+    rejectedCandidateCount: 0,
+    selectionMethod: "tracked",
+  },
+  {
+    timestamp: 0.1,
+    status: "missing",
+    initialSearchRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+    detectionRegion: null,
+    reacquireAttempted: false,
+    reacquired: false,
+    rawKeypoints: [],
+    searchConditions: null,
+    reacquireConditions: null,
+    candidateCount: 0,
+    rejectedCandidateCount: 0,
+    selectionMethod: "strongest",
+  },
+] satisfies DetectorAttempt[];
 const referenceFrameMeta = {
   width: 720,
   height: 1280,
@@ -58,6 +91,30 @@ describe("buildHarnessPayloads", () => {
     expect(pose.diagnostics).toBe(diagnostics);
     expect(pose.frames).toBe(frames);
     expect(pose.frames[0].source).toBe("raw");
+  });
+
+  it("preserves detector attempts when the analysis path supplies them", () => {
+    const { pose } = buildHarnessPayloads({
+      diagnostics,
+      frames,
+      detectorAttempts,
+      referenceFrameMeta,
+      setupHash: "hash1",
+    });
+    expect(pose.detectorAttempts).toBe(detectorAttempts);
+    expect(pose.detectorAttempts?.[0]).toMatchObject({
+      status: "accepted",
+      reacquireAttempted: true,
+      reacquired: true,
+      detectionRegion: DETECTOR_ATTEMPT_FULL_FRAME_REGION,
+      selectionMethod: "tracked",
+    });
+    expect(pose.detectorAttempts?.[1]).toMatchObject({
+      status: "missing",
+      detectionRegion: null,
+      rawKeypoints: [],
+      selectionMethod: "strongest",
+    });
   });
 
   it("posts unscored when no scoring block is supplied", () => {
@@ -151,6 +208,17 @@ describe("postDetectionRun", () => {
     expect(body.pose.frames[0].source).toBe("raw");
     expect(body.pose.scoring.rollup.verified.counts.absentOk).toBe(1);
     expect(body.orb.appVersion).toBe("abc1234");
+  });
+
+  it("relays detector attempts without schema stripping", async () => {
+    const fetchMock = stubFetch({ ok: true, status: 200, body: { run_id: "run-2" } });
+    await run({ ...pose, detectorAttempts });
+
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(init.body);
+    expect(body.pose.detectorAttempts).toEqual(detectorAttempts);
+    expect(body.pose.detectorAttempts[0].acceptedKeypoints).toEqual(detectorAttempts[0].acceptedKeypoints);
+    expect(body.pose.detectorAttempts[1].acceptedKeypoints).toBeUndefined();
   });
 
   it("returns the run id the downloader assigned", async () => {

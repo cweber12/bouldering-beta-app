@@ -1,7 +1,8 @@
 # Detector attempt contract
 
-Status: ready-for-agent
+Status: in-progress
 Type: AFK
+Branch: feat/detector-attempt-contract
 
 ## Parent
 
