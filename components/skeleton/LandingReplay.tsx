@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReplayClock } from "@/hooks/useReplayClock";
+import { useReplayImages, type ItemImages } from "@/hooks/useReplayImages";
 import {
   computeStableBodyScale,
   drawSkeleton,
@@ -232,18 +233,6 @@ function buildGeometry(item: LandingReplayItem, stage: StageSize): ReplayGeometr
 // ---------------------------------------------------------------------------
 
 /**
- * One item's decoded backdrops. Either may still be absent — a decode in flight,
- * or an item authored without a wall still — and the frame composes the same way
- * regardless; the missing backdrop simply leaves the stage dark behind the figure.
- */
-interface ItemImages {
-  /** The video-space wall still, drawn in the source plane through phases 1-3. */
-  frame?: HTMLImageElement;
-  /** The Route Photo, drawn in the photo plane from phase 3 on. */
-  photo?: HTMLImageElement;
-}
-
-/**
  * Paint one replay item at `elapsedMs` of its own clip into `ctx`.
  *
  * Pure function of the clock value: it reads no component state and leaves no
@@ -389,9 +378,6 @@ interface LandingReplayProps {
 
 export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
   const [items, setItems] = useState<LandingReplayItem[]>([]);
-  // Keyed by item id rather than index, so a decode can never land on the wrong
-  // clip and there is nothing to reset when the playlist arrives.
-  const [images, setImages] = useState<Record<string, ItemImages>>({});
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Own wake layer: composited once at the frame's trail alpha, because
@@ -429,27 +415,12 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
     };
   }, []);
 
-  // Decode every item's embedded images up front, so a handoff never waits on a
-  // decode. Until one resolves its clip still runs; that backdrop simply stays
-  // dark, which is also what an item with no wall still looks like throughout.
-  useEffect(() => {
-    if (items.length === 0) return;
-    let mounted = true;
-    const decode = (src: string, slot: keyof ItemImages, id: string) => {
-      const img = new window.Image();
-      img.onload = () => {
-        if (mounted) setImages((prev) => ({ ...prev, [id]: { ...prev[id], [slot]: img } }));
-      };
-      img.src = src;
-    };
-    for (const item of items) {
-      decode(item.photo.webp, "photo", item.id);
-      if (item.source.webp) decode(item.source.webp, "frame", item.id);
-    }
-    return () => {
-      mounted = false;
-    };
-  }, [items]);
+  // The embedded backdrops, decoded in play order rather than all at once: item
+  // 0's pair gates the opening frame and the rest queue behind it, each landing
+  // long before its own slot opens. Until one resolves its clip still runs, that
+  // backdrop simply staying dark — which is also what an item authored with no
+  // wall still looks like throughout.
+  const images = useReplayImages(items);
 
   // One stage shape for the whole playlist, taken from the first item's source
   // plane — see stageSize. Geometry is contained into it, so both are memoised
