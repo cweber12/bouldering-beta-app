@@ -1,6 +1,7 @@
 # 17 - Playlist cycling, curated assets, and docs
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/landing-replay-playlist
 
 ## Parent
 
@@ -23,27 +24,70 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
 
 ## Acceptance criteria
 
-- [ ] Landing hero loads one global playlist asset containing 1-5 items and
+- [x] Landing hero loads one global playlist asset containing 1-5 items and
       plays them in file order for all visitors.
-- [ ] Item handoff is deterministic: each item runs 8 seconds and hands off via
+- [x] Item handoff is deterministic: each item runs 8 seconds and hands off via
       an approximately 300 ms crossfade, driven by the same replay clock from
       issue 16.
-- [ ] Cycling wraps to the first item and continues indefinitely while the
+- [x] Cycling wraps to the first item and continues indefinitely while the
       clock runs.
 - [ ] Use the private authoring route from issue 15 with real maintainer Runs
       and Route Photos to curate 1-5 clips, and check the exported playlist
       asset into the repo.
 - [ ] Verify the checked-in asset's content surface is privacy-safe (labels
       only, no identity, notes, coordinates, keys, descriptors, or homography).
-- [ ] Update README for the authoring workflow, the asset location, and the
+- [x] Update README for the authoring workflow, the asset location, and the
       rollback path (revert the asset file).
-- [ ] Confirm legacy planning slices 01-14 remain superseded and linked for
+- [x] Confirm legacy planning slices 01-14 remain superseded and linked for
       traceability.
 - [ ] Run end-to-end regression checks: phase behavior, cycling and handoff,
       graceful degradation when the asset is absent, reduced-motion output, and
       pause/play keyboard access.
-- [ ] Tests cover ordered cycling, handoff timing, and wrap behavior.
+- [x] Tests cover ordered cycling, handoff timing, and wrap behavior.
 
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
+
+## Comments
+
+Cycling, docs and the QA harness landed on `feat/landing-replay-playlist`. The
+three unticked criteria all wait on the same thing — **curation itself**, which
+needs the maintainer's signed-in browser, their saved Runs in S3, and their Route
+Photos. None of that is reachable from an agent session, so no
+`public/landing-replay.json` is checked in and the hero still degrades to the
+page's text content (verified). Everything else is done and passing:
+
+- Handoff model: every item owns one 8s slot on the one replay clock, and the
+  first 300 ms of each slot is the crossfade — the incoming clip plays from
+  `t = 0` while the outgoing one holds **its own final frame** (the finished Route
+  Overlay) and fades out beneath it. Letting the outgoing clock run on instead
+  would wrap it straight back to its starfield. Arithmetic:
+  `composePlaylistLayers` in `pipeline/overlay/landingReplayFrame.ts`.
+- Slots are counted from the clock's origin, not within the current cycle, so the
+  cold start is distinguishable from the wrap that lands on the same item: the
+  hero opens on item 0 rather than dissolving in from the last item. The same
+  property is what keeps reduced motion parked on item 0's finished overlay —
+  `staticElapsedMs` of one clip length is slot 1 at local 0, i.e. the previous
+  item held at its end.
+- The renderer draws straight to the stage away from a handoff and only pays for
+  the offscreen layer during the crossfade, so a per-item fade can never disturb
+  the phase alphas inside an item.
+- `readReplayPlaylist` reads file order and caps at `REPLAY_PLAYLIST_MAX` (5),
+  dropping any item that fails the existing guard rather than rejecting the file.
+- QA that does not need real content is automated instead of manual:
+  ordered cycling, handoff timing, wrap, pause freeze/resume across the cycling,
+  the over-long playlist cap, the layer compositing (via a recording 2D context —
+  jsdom's `getContext` is null, so this path was otherwise untestable), keyboard
+  reachability of the pause control, and the asset-absent degradation.
+- `__tests__/pipeline/landingReplayAsset.test.ts` is the standing gate on the
+  privacy criterion: it skips while no asset exists and, the moment one is
+  committed, asserts v1/1-5 items, unique ids, contract-only keys, labels-only
+  text, no private Run field names anywhere in the JSON, and clip-relative times.
+  Confirmed it both passes on a well-formed asset and fails on a planted `notes`
+  field before being removed again.
+
+To finish the issue: author 1-5 clips on `/dev/landing-clip`, concatenate the
+exported `items` arrays into `public/landing-replay.json`, run
+`npx vitest run __tests__/pipeline/landingReplayAsset.test.ts` (now un-skipped),
+and walk the hero once in a browser for the phase/handoff/reduced-motion pass.

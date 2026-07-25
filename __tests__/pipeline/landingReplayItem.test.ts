@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   isReplayItem,
+  readReplayPlaylist,
   LANDING_REPLAY_VERSION,
   REPLAY_CLIP_SECONDS,
+  REPLAY_PLAYLIST_MAX,
   type LandingReplayItem,
 } from "@/pipeline/overlay/landingReplayItem";
 
@@ -26,9 +28,10 @@ function validItem(): LandingReplayItem {
 }
 
 describe("contract constants", () => {
-  it("pins version 1 and an 8-second clip", () => {
+  it("pins version 1, an 8-second clip and a 5-item playlist", () => {
     expect(LANDING_REPLAY_VERSION).toBe(1);
     expect(REPLAY_CLIP_SECONDS).toBe(8);
+    expect(REPLAY_PLAYLIST_MAX).toBe(5);
   });
 });
 
@@ -77,5 +80,47 @@ describe("isReplayItem", () => {
     const item = validItem();
     const loose = { ...item, poses: [...item.poses, { t: "late" }] };
     expect(isReplayItem(loose)).toBe(true);
+  });
+});
+
+describe("readReplayPlaylist", () => {
+  /** `count` distinct items, so file order is observable in the result. */
+  function playlist(count: number): { version: number; items: LandingReplayItem[] } {
+    return {
+      version: 1,
+      items: Array.from({ length: count }, (_, i) => ({ ...validItem(), id: `clip-${i}` })),
+    };
+  }
+
+  it("reads items in file order — the only ordering there is", () => {
+    const items = readReplayPlaylist(playlist(3));
+    expect(items.map((i) => i.id)).toEqual(["clip-0", "clip-1", "clip-2"]);
+  });
+
+  it("caps the playlist at five items", () => {
+    const items = readReplayPlaylist(playlist(8));
+    expect(items).toHaveLength(REPLAY_PLAYLIST_MAX);
+    expect(items[0].id).toBe("clip-0");
+    expect(items[4].id).toBe("clip-4");
+  });
+
+  it("drops a hand-edited item rather than crashing on it", () => {
+    const file = playlist(3);
+    const items = readReplayPlaylist({
+      ...file,
+      items: [{ ...file.items[0], poses: [] }, file.items[1], null],
+    });
+    expect(items.map((i) => i.id)).toEqual(["clip-1"]);
+  });
+
+  it("reads an absent, empty or malformed file as an empty playlist", () => {
+    for (const value of [null, undefined, {}, { items: null }, { items: [] }, 4, "x", []]) {
+      expect(readReplayPlaylist(value)).toEqual([]);
+    }
+  });
+
+  it("does not negotiate on version", () => {
+    expect(readReplayPlaylist({ version: 99, items: playlist(1).items })).toHaveLength(1);
+    expect(readReplayPlaylist({ items: playlist(1).items })).toHaveLength(1);
   });
 });

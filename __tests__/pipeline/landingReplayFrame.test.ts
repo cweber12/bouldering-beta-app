@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  HANDOFF_MS,
   PHASE_1_END,
   PHASE_2_END,
   PHASE_3_END,
   clipProgress,
+  composePlaylistLayers,
   composeReplayFrame,
   containRect,
   morphKeypoints,
@@ -126,6 +128,122 @@ describe("composeReplayFrame", () => {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(1);
       }
+    }
+  });
+});
+
+describe("composePlaylistLayers", () => {
+  const COUNT = 3;
+  const layers = (elapsed: number) => composePlaylistLayers(elapsed, COUNT, DURATION);
+  /** The layer actually carrying the stage at this instant. */
+  const showing = (elapsed: number) => layers(elapsed).reduce((a, b) => (b.alpha >= a.alpha ? b : a));
+
+  it("starts on the first item rather than fading in from the last", () => {
+    expect(layers(0)).toEqual([{ index: 0, elapsedMs: 0, alpha: 1 }]);
+    expect(layers(HANDOFF_MS / 2)).toEqual([
+      { index: 0, elapsedMs: HANDOFF_MS / 2, alpha: 1 },
+    ]);
+  });
+
+  it("plays items in file order, one clip-length slot each", () => {
+    expect(showing(1000).index).toBe(0);
+    expect(showing(DURATION + 1000).index).toBe(1);
+    expect(showing(2 * DURATION + 1000).index).toBe(2);
+  });
+
+  it("advances each item's own clip within its slot", () => {
+    expect(layers(2000)).toEqual([{ index: 0, elapsedMs: 2000, alpha: 1 }]);
+    expect(layers(DURATION + 2000)).toEqual([{ index: 1, elapsedMs: 2000, alpha: 1 }]);
+  });
+
+  it("shows exactly one item at full opacity away from a handoff", () => {
+    for (let ms = HANDOFF_MS; ms < DURATION; ms += 100) {
+      expect(layers(ms)).toEqual([{ index: 0, elapsedMs: ms, alpha: 1 }]);
+    }
+  });
+
+  it("crossfades the handoff over ~300ms, back to front, alphas summing to 1", () => {
+    const mid = layers(DURATION + HANDOFF_MS / 2);
+    expect(mid).toHaveLength(2);
+    // Outgoing first (painted beneath), incoming second.
+    expect(mid[0].index).toBe(0);
+    expect(mid[1].index).toBe(1);
+    expect(mid[0].alpha).toBeCloseTo(0.5, 6);
+    expect(mid[1].alpha).toBeCloseTo(0.5, 6);
+    expect(mid[0].alpha + mid[1].alpha).toBeCloseTo(1, 6);
+
+    // The outgoing item holds its own final frame; the incoming one starts at 0.
+    expect(mid[0].elapsedMs).toBe(DURATION);
+    expect(mid[1].elapsedMs).toBeCloseTo(HANDOFF_MS / 2, 6);
+  });
+
+  it("completes the handoff exactly at the crossfade width", () => {
+    expect(layers(DURATION + HANDOFF_MS - 1)).toHaveLength(2);
+    expect(layers(DURATION + HANDOFF_MS)).toEqual([
+      { index: 1, elapsedMs: HANDOFF_MS, alpha: 1 },
+    ]);
+  });
+
+  it("opens each slot on the previous item's finished Route Overlay", () => {
+    // Also the reduced-motion park: elapsed = one clip shows item 0's last frame.
+    expect(layers(DURATION)).toEqual([{ index: 0, elapsedMs: DURATION, alpha: 1 }]);
+    expect(layers(2 * DURATION)).toEqual([{ index: 1, elapsedMs: DURATION, alpha: 1 }]);
+  });
+
+  it("wraps to the first item and keeps cycling indefinitely", () => {
+    const cycle = COUNT * DURATION;
+    expect(showing(cycle + 1000).index).toBe(0);
+    expect(showing(cycle + DURATION + 1000).index).toBe(1);
+    expect(showing(7 * cycle + 2 * DURATION + 1000).index).toBe(2);
+
+    // The wrap is a handoff like any other: item 2 hands off to item 0.
+    const wrap = layers(cycle + HANDOFF_MS / 2);
+    expect(wrap.map((l) => l.index)).toEqual([COUNT - 1, 0]);
+  });
+
+  it("is periodic — the same point of any cycle composes identically", () => {
+    const cycle = COUNT * DURATION;
+    // From the second cycle on; the first has no predecessor to hand off from.
+    for (let ms = cycle; ms < 2 * cycle; ms += 250) {
+      expect(layers(ms + 4 * cycle)).toEqual(layers(ms));
+    }
+  });
+
+  it("never leaves the stage empty or over-painted", () => {
+    for (let ms = 0; ms < 4 * COUNT * DURATION; ms += 37) {
+      const stack = layers(ms);
+      expect(stack.length).toBeGreaterThan(0);
+      expect(stack.length).toBeLessThanOrEqual(2);
+      let total = 0;
+      for (const layer of stack) {
+        expect(layer.index).toBeGreaterThanOrEqual(0);
+        expect(layer.index).toBeLessThan(COUNT);
+        expect(layer.alpha).toBeGreaterThan(0);
+        expect(layer.alpha).toBeLessThanOrEqual(1);
+        expect(layer.elapsedMs).toBeGreaterThanOrEqual(0);
+        expect(layer.elapsedMs).toBeLessThanOrEqual(DURATION);
+        total += layer.alpha;
+      }
+      expect(total).toBeCloseTo(1, 6);
+    }
+  });
+
+  it("loops a single-item playlist by crossfading it with itself", () => {
+    const one = (ms: number) => composePlaylistLayers(ms, 1, DURATION);
+    expect(one(2000)).toEqual([{ index: 0, elapsedMs: 2000, alpha: 1 }]);
+    const wrap = one(DURATION + HANDOFF_MS / 2);
+    expect(wrap.map((l) => l.index)).toEqual([0, 0]);
+    expect(wrap[0].elapsedMs).toBe(DURATION); // the finished overlay, fading out
+    expect(wrap[1].elapsedMs).toBeCloseTo(HANDOFF_MS / 2, 6); // the fresh starfield
+  });
+
+  it("is inert for an empty playlist and safe on degenerate inputs", () => {
+    expect(composePlaylistLayers(1000, 0, DURATION)).toEqual([]);
+    expect(composePlaylistLayers(1000, 2, 0)).toEqual([{ index: 0, elapsedMs: 0, alpha: 1 }]);
+    expect(composePlaylistLayers(-1000, COUNT, DURATION)[0].alpha).toBeGreaterThan(0);
+    // A handoff wider than the clip degrades to a permanent crossfade, not NaN.
+    for (const layer of composePlaylistLayers(100, COUNT, DURATION, DURATION * 5)) {
+      expect(Number.isFinite(layer.alpha)).toBe(true);
     }
   });
 });

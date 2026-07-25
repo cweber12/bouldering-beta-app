@@ -5,8 +5,11 @@
  *
  * The renderer only lerps and crossfades (see the PRD's design invariant), and
  * this module is where all of that arithmetic lives so it can be pinned down by
- * tests without a canvas. Three things happen here:
+ * tests without a canvas. Four things happen here:
  *
+ *  - **Playlist cycling.** The same clock decides which item is on screen: every
+ *    item owns one clip-length slot, the first 300 ms of each slot crossfades from
+ *    the previous item, and the cycle wraps to the first item indefinitely.
  *  - **Phase windows.** One 8-second item runs four fixed windows — 0-30%,
  *    30-45%, 45-80%, 80-100% — and each window is expressed as a set of alphas
  *    plus a single `morph` factor. Windows are fractions of the clip, never
@@ -117,6 +120,73 @@ export function composeReplayFrame(elapsedMs: number, durationMs: number): Repla
     trailAlpha: 1 - migrate,
     morph: smoothstep(migrate),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Playlist cycling — which item (or pair of items) the stage shows
+// ---------------------------------------------------------------------------
+
+/** Width of the crossfade that hands one item off to the next. */
+export const HANDOFF_MS = 300;
+
+/** One item drawn at one instant: which clip, how far into it, at what opacity. */
+export interface ReplayLayer {
+  /** Playlist index — items play in file order, and file order is the only order. */
+  index: number;
+  /** Elapsed milliseconds *within that item's own clip*, for {@link composeReplayFrame}. */
+  elapsedMs: number;
+  /** Stage opacity in (0,1]. Across a handoff the two layers' alphas sum to 1. */
+  alpha: number;
+}
+
+/**
+ * Project the one replay clock onto the playlist.
+ *
+ * Each item owns a `durationMs` slot on the clock, and the cycle is
+ * `itemCount × durationMs` long, so cycling wraps back to the first item and
+ * continues for as long as the clock runs. The first `handoffMs` of every slot is
+ * a crossfade: the incoming item plays from `t = 0` while the outgoing one holds
+ * its **own final frame** — the finished Route Overlay, the payoff of its clip —
+ * and fades out beneath it. Holding rather than advancing is deliberate: the
+ * clip's last frame is already static except for the figure, whereas letting the
+ * outgoing clock run on would wrap it straight back to its starfield.
+ *
+ * The return is paint order, back to front, and never longer than two entries.
+ * Two boundary cases carry weight:
+ *
+ *  - The **first** slot has no predecessor to fade from, so the hero simply
+ *    starts on the first item rather than dissolving in from the last one.
+ *  - Every later slot *opens* on its predecessor alone at full opacity, which is
+ *    what lets the clock park on exactly `durationMs` and show the first item's
+ *    finished Route Overlay — the frame reduced motion holds.
+ */
+export function composePlaylistLayers(
+  elapsedMs: number,
+  itemCount: number,
+  durationMs: number,
+  handoffMs: number = HANDOFF_MS,
+): ReplayLayer[] {
+  if (itemCount <= 0) return [];
+  if (durationMs <= 0) return [{ index: 0, elapsedMs: 0, alpha: 1 }];
+
+  const handoff = Math.max(0, Math.min(handoffMs, durationMs));
+  // Slots are counted from the clock's origin, not from the current cycle, so a
+  // cold start is distinguishable from the wrap that lands on the same item.
+  const slot = Math.floor(Math.max(0, elapsedMs) / durationMs);
+  const local = Math.max(0, elapsedMs) - slot * durationMs;
+  const index = slot % itemCount;
+
+  // How far through the handoff we are; 1 once the crossfade has finished.
+  const arrived = slot === 0 || handoff === 0 ? 1 : Math.min(1, local / handoff);
+  const incoming: ReplayLayer = { index, elapsedMs: local, alpha: arrived };
+  if (arrived >= 1) return [incoming];
+
+  const outgoing: ReplayLayer = {
+    index: (index + itemCount - 1) % itemCount,
+    elapsedMs: durationMs,
+    alpha: 1 - arrived,
+  };
+  return arrived > 0 ? [outgoing, incoming] : [outgoing];
 }
 
 // ---------------------------------------------------------------------------

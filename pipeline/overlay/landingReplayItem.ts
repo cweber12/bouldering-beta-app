@@ -26,6 +26,13 @@ export const LANDING_REPLAY_VERSION = 1;
 export const REPLAY_CLIP_SECONDS = 8;
 
 /**
+ * How many items the hero will play. The playlist is a curated 1-5 clips; a file
+ * carrying more is read up to this cap rather than rejected, because a playlist
+ * that grew by one item past the cap is a curation slip, not a broken asset.
+ */
+export const REPLAY_PLAYLIST_MAX = 5;
+
+/**
  * Where the checked-in playlist lives — one static JSON in `public/`, served
  * from the same origin as the page's own JavaScript. The maintainer authors it
  * on `/dev/landing-clip` and commits it here; rollback is reverting the file.
@@ -151,6 +158,23 @@ export function isReplayItem(value: unknown): value is LandingReplayItem {
   if (!Array.isArray(pose.source) || !Array.isArray(pose.photo)) return false;
 
   return true;
+}
+
+/**
+ * Read the fetched playlist into the items the hero will cycle through, in file
+ * order — the only ordering there is. Anything that fails {@link isReplayItem} is
+ * dropped rather than crashing the hero, and the list is capped at
+ * {@link REPLAY_PLAYLIST_MAX}; a file that is missing, is not an object, or has no
+ * usable items reads as an empty playlist, which degrades the hero to the page's
+ * text content.
+ *
+ * `version` is deliberately not gated on: producer and consumer are the same
+ * commit of the same repo, so there is no negotiation to do (see the PRD).
+ */
+export function readReplayPlaylist(value: unknown): LandingReplayItem[] {
+  const items = (value as { items?: unknown } | null | undefined)?.items;
+  if (!Array.isArray(items)) return [];
+  return items.filter(isReplayItem).slice(0, REPLAY_PLAYLIST_MAX);
 }
 
 function isDims(value: unknown): boolean {
