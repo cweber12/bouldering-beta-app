@@ -3,6 +3,7 @@ import {
   HANDOFF_MS,
   PHASE_1_END,
   PHASE_1_MID,
+  REPLAY_WINDOWS,
   PHASE_2_END,
   PHASE_3_END,
   clipProgress,
@@ -49,7 +50,7 @@ describe("composeReplayFrame", () => {
     expect(open.phase).toBe(1);
     expect(open.frameAlpha).toBe(0); // the cold open is still dark
     expect(open.starfieldAlpha).toBe(0);
-    expect(open.trailAlpha).toBe(1);
+    expect(open.trailAlpha).toBe(0); // and carries no motion trail yet
 
     const rising = composeReplayFrame(at(PHASE_1_MID / 2), DURATION);
     expect(rising.frameAlpha).toBeCloseTo(0.5, 6);
@@ -70,18 +71,27 @@ describe("composeReplayFrame", () => {
     expect(full.matchAlpha).toBeCloseTo(0, 6);
     expect(full.photoAlpha).toBe(0);
     expect(full.morph).toBe(0);
-    expect(full.trailAlpha).toBe(1);
   });
 
-  it("cross-dissolves the still into the Route Photo across phase 3", () => {
-    const mid = composeReplayFrame(at((PHASE_2_END + PHASE_3_END) / 2), DURATION);
-    expect(mid.frameAlpha).toBeCloseTo(0.5, 3);
-    // The two real photographs hand over without the stage ever showing through.
-    expect(mid.frameAlpha + mid.photoAlpha).toBeCloseTo(1, 6);
+  it("recedes the still to black, holding the starfield beat on nothing", () => {
+    // The still goes down across phase 2 and the photo has not started, so there
+    // is a real gap where the wall exists only as ORB points.
+    const gone = composeReplayFrame(at(REPLAY_WINDOWS.still.out[1]), DURATION);
+    expect(gone.frameAlpha).toBeCloseTo(0, 6);
+    expect(gone.photoAlpha).toBe(0);
+    expect(gone.matchAlpha).toBeGreaterThan(0);
 
-    const done = composeReplayFrame(at(PHASE_3_END), DURATION);
-    expect(done.frameAlpha).toBeCloseTo(0, 6);
-    expect(done.photoAlpha).toBe(1);
+    const beforePhoto = composeReplayFrame(at(REPLAY_WINDOWS.photo[0]), DURATION);
+    expect(beforePhoto.frameAlpha).toBe(0);
+    expect(beforePhoto.photoAlpha).toBe(0);
+  });
+
+  it("bounds the black beat so the real wall is still in mind when the photo lands", () => {
+    // Long enough to read the migration, short enough to remember the still.
+    const blackFrom = REPLAY_WINDOWS.still.out[1];
+    const blackTo = REPLAY_WINDOWS.photo[0];
+    expect(blackTo - blackFrom).toBeGreaterThan(0.05);
+    expect(blackTo - blackFrom).toBeLessThan(0.25);
   });
 
   it("crosses into phase 2 with no visible step", () => {
@@ -113,23 +123,49 @@ describe("composeReplayFrame", () => {
     expect(f.morph).toBe(0);
   });
 
-  it("raises the photo and carries the morph across phase 3", () => {
+  it("keeps the photo behind the migration it sits under", () => {
     const mid = composeReplayFrame(at((PHASE_2_END + PHASE_3_END) / 2), DURATION);
     expect(mid.phase).toBe(3);
-    expect(mid.photoAlpha).toBeCloseTo(0.5, 3);
     expect(mid.morph).toBeGreaterThan(0);
     expect(mid.morph).toBeLessThan(1);
     expect(mid.matchAlpha).toBeCloseTo(1, 6); // still fully present
-    expect(mid.trailAlpha).toBeCloseTo(0.5, 3);
+    // The whole point: half way through the travel the photo is barely there, so
+    // the matched points are legible against the dark rather than washed out.
+    expect(mid.photoAlpha).toBeLessThan(0.25);
+    expect(mid.photoAlpha).toBeLessThan(mid.morph);
   });
 
-  it("crosses into phase 4 with the morph complete and the photo full", () => {
+  it("lets the photo lag the morph the whole way across phase 3", () => {
+    for (let p = PHASE_2_END; p <= PHASE_3_END; p += 0.01) {
+      const f = composeReplayFrame(at(p), DURATION);
+      expect(f.photoAlpha).toBeLessThanOrEqual(f.morph + 1e-9);
+    }
+  });
+
+  it("crosses into phase 4 with the morph complete and the photo still arriving", () => {
     const f = composeReplayFrame(at(PHASE_3_END), DURATION);
     expect(f.phase).toBe(4);
     expect(f.morph).toBe(1);
-    expect(f.photoAlpha).toBe(1);
     expect(f.matchAlpha).toBeCloseTo(1, 6);
     expect(f.trailAlpha).toBeCloseTo(0, 6);
+    // The points land first; the photo finishes committing underneath them.
+    expect(f.photoAlpha).toBeGreaterThan(0.5);
+    expect(f.photoAlpha).toBeLessThan(1);
+    expect(composeReplayFrame(DURATION, DURATION).photoAlpha).toBe(1);
+  });
+
+  it("confines the motion trail to the x-ray beat", () => {
+    // Absent on the real video still at the open...
+    expect(composeReplayFrame(at(PHASE_1_MID / 2), DURATION).trailAlpha).toBe(0);
+    // …up across the black beat…
+    const black = composeReplayFrame(at(REPLAY_WINDOWS.wake.in[1]), DURATION);
+    expect(black.trailAlpha).toBeCloseTo(1, 6);
+    // …and gone again once the figure has landed on the wall.
+    expect(composeReplayFrame(at(REPLAY_WINDOWS.wake.out[1]), DURATION).trailAlpha).toBeCloseTo(
+      0,
+      6,
+    );
+    expect(composeReplayFrame(DURATION, DURATION).trailAlpha).toBe(0);
   });
 
   it("retires the matched points across phase 4 so the Route Overlay stands alone", () => {

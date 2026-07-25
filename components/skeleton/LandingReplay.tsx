@@ -40,13 +40,14 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 // dwell time. The phases below are fractions of the *screen* window; pose and
 // Hold times are captured seconds.
 //
-//   0-15%   the wall still rises out of the dark stage behind the figure
-//   15-30%  the ORB starfield ignites on that still — the scanner reading it
-//   30-45%  the ambient starfield fades out; the matched wall features emerge
-//   45-80%  the still hands the backdrop to the Route Photo while the matched
-//           points and the Skeleton migrate into its space — the payoff, so it
-//           gets the longest window
-//   80-100% the matched points retire and the Route Overlay stands alone
+//   0-12%   the wall still rises out of the dark stage behind the figure
+//   12-30%  the ORB starfield ignites on that still — the scanner reading it
+//   30-46%  the still recedes to black while the ambient field thins to the
+//           matched wall features: the x-ray beat, with no photograph under it
+//   46-84%  the matched points and the Skeleton migrate into Route Photo space,
+//           the Route Photo itself rising late and slow beneath them — the
+//           payoff, so it gets the longest window
+//   84-100% the matched points retire and the Route Overlay stands alone
 //
 // The hero deliberately draws **no Holds**: they are a secondary feature, and a
 // ring lighting up mid-morph reads as clutter against the one thing this clip is

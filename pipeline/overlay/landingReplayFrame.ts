@@ -10,10 +10,10 @@
  *  - **Playlist cycling.** The same clock decides which item is on screen: every
  *    item owns one clip-length slot, the first 300 ms of each slot crossfades from
  *    the previous item, and the cycle wraps to the first item indefinitely.
- *  - **Phase windows.** One item's screen window runs four fixed windows — 0-30%,
- *    30-45%, 45-80%, 80-100% — and each window is expressed as a set of alphas
- *    plus a single `morph` factor. Windows are fractions of the clip, never
- *    wall-clock offsets, so pausing cannot desynchronise them.
+ *  - **Phase windows.** One item's screen window runs four fixed phases, each
+ *    expressed as a set of alphas plus a single `morph` factor, and all of them
+ *    built from the crossfades in {@link REPLAY_WINDOWS}. Windows are fractions of
+ *    the clip, never wall-clock offsets, so pausing cannot desynchronise them.
  *  - **Pose sampling by time.** The pose plays continuously across all four
  *    phases, sampled at the clip-relative second the clock is on. Phases change
  *    the *space* the figure is drawn in, never the playback rate.
@@ -37,18 +37,51 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * End of phase 1's opening beat: the wall still rises out of the dark stage
- * behind the figure, and only then does the starfield ignite on it. Splitting
- * phase 1 in two is what keeps the cold open — the hero still starts on the dark
- * stage rather than cutting straight to a photograph.
+ * Every crossfade in the clip, as `[start, end]` fractions of the screen window.
+ *
+ * They are listed together because the composition is really one storyboard, and
+ * the interesting decisions are all in how these windows *overlap*:
+ *
+ *  - The wall still **recedes to black** (`still.out`) well before the Route Photo
+ *    arrives (`photo`), rather than cross-dissolving straight into it. The gap is
+ *    the black starfield beat — the scanner's abstraction of the wall, with
+ *    nothing photographic left to lean on. It is bounded on purpose: long enough
+ *    to read the matched points travelling, short enough that the visitor still
+ *    remembers the real wall when the Route Photo answers it.
+ *  - The photo's window starts *after* the morph has begun and runs past its end,
+ *    eased so it stays faint through the middle. If the photo arrives at the same
+ *    rate as the points, it covers the very migration it is supposed to explain.
+ *  - The wake arrives with the black and clears as the figure lands on the wall,
+ *    so the motion trail belongs to the x-ray beat rather than the photographic
+ *    ones at either end.
  */
-export const PHASE_1_MID = 0.15;
+export const REPLAY_WINDOWS = {
+  /** The video-space wall still: up out of black, then back down to it. */
+  still: { in: [0, 0.12], out: [0.3, 0.44] },
+  /** The ambient ORB field igniting on the still, then thinning to the matches. */
+  starfield: { in: [0.12, 0.3], out: [0.3, 0.46] },
+  /** The matched subset — up as the ambient field thins, retired at the very end. */
+  match: { in: [0.3, 0.46], out: [0.84, 1] },
+  /** Points and Skeleton travelling from source space into Route Photo space. */
+  morph: [0.46, 0.84],
+  /** The Route Photo: late and slow, so the migration stays legible under it. */
+  photo: [0.52, 0.9],
+  /** The motion trail: arrives with the black beat, gone once the figure lands. */
+  wake: { in: [0.24, 0.4], out: [0.52, 0.78] },
+} as const;
+
+/**
+ * End of phase 1's opening beat: the wall still has fully arrived, and only then
+ * does the starfield ignite on it. Splitting phase 1 in two is what keeps the cold
+ * open — the hero starts on the dark stage rather than cutting to a photograph.
+ */
+export const PHASE_1_MID = REPLAY_WINDOWS.still.in[1];
 /** End of phase 1 (wall still + starfield + video-space pose) as a fraction of the clip. */
-export const PHASE_1_END = 0.3;
-/** End of phase 2 (starfield fades out, matched source points emerge). */
-export const PHASE_2_END = 0.45;
-/** End of phase 3 (Route Photo appears, points + Skeleton morph into its space). */
-export const PHASE_3_END = 0.8;
+export const PHASE_1_END = REPLAY_WINDOWS.starfield.in[1];
+/** End of phase 2 (still recedes to black, starfield thins to the matched points). */
+export const PHASE_2_END = REPLAY_WINDOWS.morph[0];
+/** End of phase 3 (the migration into Route Photo space). */
+export const PHASE_3_END = REPLAY_WINDOWS.morph[1];
 
 /** Which of the four fixed windows a clip progress falls in. */
 export type ReplayPhase = 1 | 2 | 3 | 4;
@@ -64,18 +97,18 @@ export interface ReplayFrameComposition {
   clipSeconds: number;
   phase: ReplayPhase;
   /**
-   * The video-space wall still behind the figure: rises through phase 1's
-   * opening beat, holds, then hands over to the Route Photo across phase 3.
-   * Zero throughout when the item carries no still.
+   * The video-space wall still behind the figure: rises through phase 1's opening
+   * beat, then recedes to black across phase 2, leaving the starfield beat with no
+   * photograph under it. Zero throughout when the item carries no still.
    */
   frameAlpha: number;
   /** ORB wall starfield, drawn in source space. */
   starfieldAlpha: number;
   /** Paired wall features — the points that visibly migrate during the morph. */
   matchAlpha: number;
-  /** The Route Photo backdrop. */
+  /** The Route Photo backdrop — deliberately behind the morph it sits under. */
   photoAlpha: number;
-  /** The motion trail behind the live figure. */
+  /** The motion trail behind the live figure, confined to the x-ray beat. */
   trailAlpha: number;
   /** 0 = draw in source video space, 1 = draw in Route Photo space. */
   morph: number;
@@ -91,6 +124,12 @@ function ramp(t: number, from: number, to: number): number {
  *  while still hitting exactly 0 and 1 on the phase-3 boundaries. */
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
+}
+
+/** Quadratic ease-in: the Route Photo stays faint for most of its window and
+ *  only commits at the end, so it never covers the migration mid-travel. */
+function easeIn(t: number): number {
+  return t * t;
 }
 
 /**
@@ -114,8 +153,10 @@ export function clipProgress(elapsedMs: number, durationMs: number): number {
  * Every ramp is continuous at its boundary — phase 2 opens with the starfield
  * still at full and the matched points still at zero, phase 3 opens with the
  * photo hidden and the morph at zero, phase 4 opens with the morph complete —
- * so a boundary crossing never shows a visible step. Phase 1 runs two ramps of
- * its own: the wall still arrives, then the starfield ignites on top of it.
+ * so a boundary crossing never shows a visible step. Several ramps deliberately
+ * cross phase boundaries — the still recedes into phase 2, the photo rises out of
+ * phase 3 — because the storyboard is continuous and the phase numbers are only a
+ * way to talk about it.
  *
  * `durationMs` is **screen** time and `captureSeconds` is how much climbing the
  * clip holds; the phases are fractions of the former and `clipSeconds` runs on
@@ -131,30 +172,32 @@ export function composeReplayFrame(
   const phase: ReplayPhase =
     progress < PHASE_1_END ? 1 : progress < PHASE_2_END ? 2 : progress < PHASE_3_END ? 3 : 4;
 
-  // Phase 1 opens on the dark stage and raises the wall still behind the figure.
-  const arrive = ramp(progress, 0, PHASE_1_MID);
-  // The starfield then ignites on that still, over the rest of phase 1.
-  const ignite = ramp(progress, PHASE_1_MID, PHASE_1_END);
-  // Phase 2 swaps the ambient wall field for the matched subset of it.
-  const swap = ramp(progress, PHASE_1_END, PHASE_2_END);
-  // Phase 3 raises the Route Photo and carries everything into its space.
-  const migrate = ramp(progress, PHASE_2_END, PHASE_3_END);
+  const w = REPLAY_WINDOWS;
+  // Phase 1 opens on the dark stage and raises the wall still behind the figure,
+  // then ignites the starfield on it.
+  const arrive = ramp(progress, ...w.still.in);
+  const ignite = ramp(progress, ...w.starfield.in);
+  // Phase 2 takes the still back down to black and swaps the ambient wall field
+  // for the matched subset of it.
+  const recede = ramp(progress, ...w.still.out);
+  const swap = ramp(progress, ...w.starfield.out);
+  // Phase 3 carries everything into Route Photo space; the photo itself follows.
+  const migrate = ramp(progress, ...w.morph);
   // Phase 4 retires the scaffolding so the Route Overlay stands alone.
-  const settle = ramp(progress, PHASE_3_END, 1);
+  const settle = ramp(progress, ...w.match.out);
 
   return {
     progress,
     clipSeconds: progress * captureSeconds,
     phase,
-    // The still hands the backdrop to the Route Photo across phase 3, so the two
-    // real photographs cross-dissolve rather than either cutting.
-    frameAlpha: arrive * (1 - migrate),
+    frameAlpha: arrive * (1 - recede),
     starfieldAlpha: ignite * (1 - swap),
     matchAlpha: swap * (1 - settle),
-    photoAlpha: migrate,
-    // The wake belongs to the x-ray half of the story; it clears as the figure
-    // arrives on the wall so the final frame reads like a real exported overlay.
-    trailAlpha: 1 - migrate,
+    photoAlpha: easeIn(ramp(progress, ...w.photo)),
+    // The wake belongs to the x-ray beat: it arrives with the black and clears as
+    // the figure lands on the wall, so the frames at either end — the real video
+    // still and the finished Route Overlay — are free of it.
+    trailAlpha: ramp(progress, ...w.wake.in) * (1 - ramp(progress, ...w.wake.out)),
     morph: smoothstep(migrate),
   };
 }

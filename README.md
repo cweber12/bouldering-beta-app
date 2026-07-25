@@ -445,9 +445,12 @@ to drag much past that.
 
 Each clip may also carry a **wall still** — an uncropped frame lifted from the
 run's own video, sharing its coordinate space. The hero opens on the dark stage,
-raises that still behind the skeleton, ignites the ORB starfield on it, and then
-cross-dissolves it into the route photo as the morph carries the figure across,
-so the payoff connects two real photographs. The still is optional: a clip
+raises that still behind the skeleton, and ignites the ORB starfield on it. The
+still then recedes to black for the x-ray beat, where the wall exists only as
+matched ORB points travelling into route-photo space; the route photo itself
+rises late and eased beneath them, so it never covers the migration it explains.
+That black gap is bounded on purpose — long enough to read the points moving,
+short enough that the real wall is still in mind when the photo answers it. The still is optional: a clip
 authored without one opens on the dark stage instead. The stage takes its shape
 from the first item's source plane, so landscape footage is not letterboxed into
 a portrait frame, and it holds that shape for the whole playlist so a handoff

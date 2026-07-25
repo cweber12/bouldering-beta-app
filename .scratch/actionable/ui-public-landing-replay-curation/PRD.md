@@ -94,12 +94,13 @@ The pose plays continuously across the whole clip. Phases control only *which
 space* the figure is drawn in and what else is on screen — they never change
 playback speed.
 
-1. 0-15%: the wall still rises out of the dark stage behind the video-space
-   Skeleton; 15-30%: the starfield ignites on that still
-2. 30-45%: starfield fades while matched source points emerge
-3. 45-80%: the wall still cross-dissolves into the Route Photo while matched
-   points and Skeleton morph toward Route Photo space
-4. 80-100%: matched points fade out while the Route Overlay completes
+1. 0-12%: the wall still rises out of the dark stage behind the video-space
+   Skeleton; 12-30%: the starfield ignites on that still
+2. 30-46%: the still recedes to black while the starfield thins to the matched
+   source points — the x-ray beat, with no photograph under it
+3. 46-84%: matched points and Skeleton morph toward Route Photo space, the Route
+   Photo rising late (52-90%) and eased beneath them
+4. 84-100%: matched points fade out while the Route Overlay completes
 
 The morph (phase 3) is the payoff, so it gets the largest share.
 
@@ -149,6 +150,13 @@ Dependency summary:
 - The hero stage takes its shape from the first item's source plane rather than a
   fixed portrait, so landscape footage is not letterboxed into a strip. One shape
   for the whole playlist, so a handoff never reflows.
+- The wall still **recedes to black** rather than cross-dissolving into the Route
+  Photo, and the photo's fade lags the morph. Both exist so the matched points are
+  readable while they travel: a photo arriving at the migration's own rate covers
+  the thing it is there to explain. The black gap is bounded so the real wall is
+  still in mind when the Route Photo answers it.
+- The motion trail is confined to the x-ray beat — absent on the opening video
+  still and on the finished Route Overlay, present through the black.
 - The hero draws **no Holds**. They are a secondary feature and a ring revealing
   mid-morph competes with the payoff. Items still carry them, so this is a
   render decision, not a contract change.

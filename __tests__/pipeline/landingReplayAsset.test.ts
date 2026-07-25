@@ -96,14 +96,24 @@ describe.skipIf(!present)("checked-in landing replay asset", () => {
       for (const value of Object.values(item.label)) expect(typeof value).toBe("string");
       expect(Object.keys(item.photo).sort()).toEqual(["h", "w", "webp"]);
       expect(item.photo.webp.startsWith("data:image/webp")).toBe(true);
+      // The wall still is optional, but when present it is a WebP like the photo.
+      expect(Object.keys(item.source).sort()).toEqual(
+        item.source.webp ? ["h", "w", "webp"] : ["h", "w"],
+      );
+      if (item.source.webp) expect(item.source.webp.startsWith("data:image/webp")).toBe(true);
     }
   });
 
   it("carries no private Run surface", () => {
     for (const item of items) {
-      // The WebP payload is opaque base64 — scanning it for words would only
-      // produce chance matches, so it is checked by prefix above and dropped here.
-      const scanned = JSON.stringify({ ...item, photo: { w: item.photo.w, h: item.photo.h } });
+      // Both WebP payloads are opaque base64 — scanning them for words only
+      // produces chance matches (a real asset hit "s3" inside the wall still), so
+      // they are checked by prefix above and dropped from the text scan here.
+      const scanned = JSON.stringify({
+        ...item,
+        source: { w: item.source.w, h: item.source.h },
+        photo: { w: item.photo.w, h: item.photo.h },
+      });
       for (const marker of PRIVATE_MARKERS) {
         expect(scanned).not.toContain(marker);
       }
