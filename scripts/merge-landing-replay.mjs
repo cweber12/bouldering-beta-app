@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * scripts/merge-landing-replay.mjs
  *
@@ -7,6 +6,12 @@
  * Run via:
  *   node scripts/merge-landing-replay.mjs clip-a.json clip-b.json clip-c.json
  *   node scripts/merge-landing-replay.mjs --out tmp/playlist.json clip-a.json
+ *
+ * No shebang, matching every other script in this directory: these are invoked
+ * as `node scripts/<name>.mjs`, never as executables. It is not cosmetic —
+ * `__tests__/scripts/mergeLandingReplay.test.ts` imports this module, and Vite
+ * hoists its import interop above line 1, so a shebang there parses as an
+ * `Invalid Character` and takes the whole suite down at collection.
  *
  * **Argument order is play order.** The hero plays `items` in array order and
  * offers no reorder UI, so the order typed on the command line is the order a
