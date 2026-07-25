@@ -86,13 +86,11 @@ describe("composeReplayFrame", () => {
     expect(beforePhoto.photoAlpha).toBe(0);
   });
 
-  it("spends the majority of the clip on the change of coordinate space", () => {
+  it("keeps the change of coordinate space quick — a snap, not a drift", () => {
     const [from, to] = REPLAY_WINDOWS.morph;
-    // The morph is the payoff and the one beat that cannot be read at a glance,
-    // so it outweighs everything around it put together.
-    expect(to - from).toBeGreaterThan(0.5);
-    expect(PHASE_1_END).toBeLessThan(to - from);
-    expect(1 - PHASE_3_END).toBeLessThan(to - from);
+    expect(to - from).toBeLessThan(0.3);
+    // The beat that sets the migration up runs longer than the migration itself.
+    expect(to - from).toBeLessThan(from);
   });
 
   it("bounds the black beat so the real wall is still in mind when the photo lands", () => {
