@@ -171,18 +171,19 @@ white joint is a neutral anchor and is exempt from adaptation.
 
 ## Pages
 
-| Route               | Purpose                                                                                                                                                              | Auth required |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| `/`                 | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary              | No            |
-| `/login`            | Sign in / sign up with email & password                                                                                                                              | No            |
-| `/scan`             | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                        | Yes           |
-| `/compare`          | Redirect into the route console (below); preserved for older links                                                                                                  | Yes           |
+| Route                                    | Purpose                                                                                                                                                                                                                                                                                                                     | Auth required |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
+| `/`                                      | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary                                                                                                                                                                     | No            |
+| `/login`                                 | Sign in / sign up with email & password                                                                                                                                                                                                                                                                                     | No            |
+| `/scan`                                  | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                                                                                                                                                                               | Yes           |
+| `/compare`                               | Redirect into the route console (below); preserved for older links                                                                                                                                                                                                                                                          | Yes           |
 | `/route/[userId]/[state]/[area]/[route]` | Route console — open one run (single view) or compare 2–4 runs side-by-side/overlaid, with route-photo matching and per-run start-time alignment. Guest runs from **another user** can be overlaid (cross-user comparison): selectable anchor photo, side-by-side fallback when alignment fails, and a colour + name legend | Yes           |
-| `/people`           | Search other climbers by name or email, open their public profile, then choose a climb to view or compare                                                          | Yes           |
-| `/profile`          | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow | Yes           |
-| `/profile/[userId]` | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                              | Yes           |
-| `/docs`             | Usage guide                                                                                                                                                          | No            |
-| `/dev/map-drag`     | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                   | No            |
+| `/people`                                | Search other climbers by name or email, open their public profile, then choose a climb to view or compare                                                                                                                                                                                                                   | Yes           |
+| `/profile`                               | View own profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal; edit mode for profile fields, search & follow                                                                                                                                                        | Yes           |
+| `/profile/[userId]`                      | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                                                                                                       | Yes           |
+| `/docs`                                  | Usage guide                                                                                                                                                                                                                                                                                                                 | No            |
+| `/dev/map-drag`                          | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                                                                                                                                                                          | No            |
+| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose an 8-second window, attach a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
 
 ## Interactive crop boxes
 
@@ -380,22 +381,22 @@ The Firebase Admin private key can be downloaded from the Firebase console:
 
 ### API routes
 
-| Route                                 | Method          | Purpose                                            |
-| ------------------------------------- | --------------- | -------------------------------------------------- |
-| `/api/s3/put`                         | POST            | Upload run JSON                                    |
-| `/api/s3/get`                         | GET             | Download run JSON by key                           |
-| `/api/s3/list`                        | GET             | List objects/prefixes (pagination, delimiter)      |
-| `/api/s3/delete`                      | DELETE          | Remove a run                                       |
-| `/api/auth/session`                   | POST/DELETE     | Create/destroy Firebase session cookie             |
-| `/api/profile`                        | GET/PUT         | Read/update own profile                            |
-| `/api/profile/[userId]`               | GET             | Read any user's public profile                     |
-| `/api/profile/[userId]/climbs`        | GET             | List any user's climbs (raw S3 keys)               |
-| `/api/profile/[userId]/climbs/page`   | GET             | Paginated climb summaries with thumbnails, filters |
-| `/api/profile/[userId]/climbs/detail` | GET             | Single climb detail by S3 key                      |
-| `/api/profile/[userId]/climbs/attempt`| GET             | Full run data (pose frames) or route photo, cross-user (prefix-gated) |
-| `/api/profile/[userId]/pins`          | GET             | GPS pins for a user's climbs (map view)            |
-| `/api/profile/follow`                 | GET/POST/DELETE | List/add/remove followed users                     |
-| `/api/profile/search`                 | GET             | Search users by name or email                      |
+| Route                                  | Method          | Purpose                                                               |
+| -------------------------------------- | --------------- | --------------------------------------------------------------------- |
+| `/api/s3/put`                          | POST            | Upload run JSON                                                       |
+| `/api/s3/get`                          | GET             | Download run JSON by key                                              |
+| `/api/s3/list`                         | GET             | List objects/prefixes (pagination, delimiter)                         |
+| `/api/s3/delete`                       | DELETE          | Remove a run                                                          |
+| `/api/auth/session`                    | POST/DELETE     | Create/destroy Firebase session cookie                                |
+| `/api/profile`                         | GET/PUT         | Read/update own profile                                               |
+| `/api/profile/[userId]`                | GET             | Read any user's public profile                                        |
+| `/api/profile/[userId]/climbs`         | GET             | List any user's climbs (raw S3 keys)                                  |
+| `/api/profile/[userId]/climbs/page`    | GET             | Paginated climb summaries with thumbnails, filters                    |
+| `/api/profile/[userId]/climbs/detail`  | GET             | Single climb detail by S3 key                                         |
+| `/api/profile/[userId]/climbs/attempt` | GET             | Full run data (pose frames) or route photo, cross-user (prefix-gated) |
+| `/api/profile/[userId]/pins`           | GET             | GPS pins for a user's climbs (map view)                               |
+| `/api/profile/follow`                  | GET/POST/DELETE | List/add/remove followed users                                        |
+| `/api/profile/search`                  | GET             | Search users by name or email                                         |
 
 ## Stack
 

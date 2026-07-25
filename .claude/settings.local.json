@@ -26,7 +26,11 @@
       "Bash(node scripts/audit-issues.mjs)",
       "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }')",
       "Bash(npm run *)",
-      "Bash(PROBE_EMAIL=\"cole.weber12@yahoo.com\" PROBE_PASSWORD=\"123456\" node \"C:/Users/coled/AppData/Local/Temp/claude/c--Projects--current-projects-beta-scanner/1d3277a2-74d6-4fd0-a56e-bf13f6920815/scratchpad/probe-login-roundtrip.mjs\")"
+      "Bash(PROBE_EMAIL=\"cole.weber12@yahoo.com\" PROBE_PASSWORD=\"123456\" node \"C:/Users/coled/AppData/Local/Temp/claude/c--Projects--current-projects-beta-scanner/1d3277a2-74d6-4fd0-a56e-bf13f6920815/scratchpad/probe-login-roundtrip.mjs\")",
+      "PowerShell(git fetch origin 2>&1)",
+      "PowerShell(git switch main)",
+      "PowerShell(git pull --ff-only)",
+      "PowerShell(git switch -c feat/landing-replay-clip-export)"
     ]
   }
 }

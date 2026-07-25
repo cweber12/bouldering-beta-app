@@ -66,6 +66,58 @@ export async function compressImageToDataUrl(file: File): Promise<string> {
   });
 }
 
+/** A WebP-encoded image plus the pixel dimensions it was encoded at. */
+export interface WebpEncodeResult {
+  /** `data:image/webp;base64,…` */
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Resize and WebP-compress a File to a base64 data URL, returning the encoded
+ * dimensions alongside it.
+ *
+ * Used by the landing-clip authoring route, which embeds the Route Photo
+ * directly in the exported replay item — WebP at a capped longest edge keeps a
+ * checked-in playlist to a sane size while staying legible as a hero backdrop.
+ * Aspect ratio is preserved, so normalized photo coordinates computed at match
+ * resolution map onto the encoded image unchanged.
+ */
+export async function compressImageToWebpDataUrl(
+  file: File,
+  maxEdge = 1280,
+  quality = 0.75,
+): Promise<WebpEncodeResult> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("canvas context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve({
+        dataUrl: canvas.toDataURL("image/webp", quality),
+        width: canvas.width,
+        height: canvas.height,
+      });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image load failed"));
+    };
+    img.src = url;
+  });
+}
+
 /**
  * Convert a data URL string to a File object.
  */
