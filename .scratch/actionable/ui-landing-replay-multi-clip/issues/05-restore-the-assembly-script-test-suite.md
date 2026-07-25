@@ -1,7 +1,8 @@
 # 05 - Restore the assembly script's test suite
 
-Status: in-progress
+Status: done
 Branch: fix/merge-script-shebang
+Merged: 0a44437
 
 ## Parent
 

@@ -1,7 +1,8 @@
 # 03 - Deferred decode for later clips
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-deferred-decode
+Merged: 834b449
 
 ## Parent
 
