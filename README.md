@@ -423,17 +423,27 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-The landing-page live demo replays a saved run's ORB starfield + pose as the
-scan loading animation, reading `public/landing-demo.json` as the default (a
-placeholder ships in the repo). Regenerate it from a folder of Save-to-device
-run files with:
+### Landing replay
 
-```powershell
-npm run make:landing-demo -- ./RouteData
-```
+The landing hero plays curated 8-second replay clips from
+`public/landing-replay.json` — one static asset every visitor sees, played in
+file order. Each clip runs four fixed phases: the ORB starfield with the
+video-space skeleton, the matched wall features emerging, the route photo rising
+while points and skeleton morph into its space, and the finished route overlay
+with holds revealing on their own times.
 
-It picks the newest Fixed-Capture run (one with `orbFeatures`), projects it to
-the slim replay shape, and writes `public/landing-demo.json`.
+Clips are authored by the maintainer on the unlinked development-only route
+`/dev/landing-clip`: pick a saved Fixed-Capture run, choose the 8-second window,
+attach the route photo, run the existing ORB match, and download one
+`{ version: 1, items: [ … ] }` file. Merge the item into
+`public/landing-replay.json` by hand and commit it — nothing is written to the
+repo or to S3 from the UI. Rollback is reverting that file.
+
+The exported item is pure geometry (both coordinate spaces baked, labels only —
+no identity, notes, coordinates, keys, descriptors, or homography), so the hero
+only lerps and crossfades: no OpenCV, no MediaPipe, no homography at runtime. If
+the asset is missing or malformed the hero renders nothing and the page degrades
+to its text content.
 
 ## Code quality
 

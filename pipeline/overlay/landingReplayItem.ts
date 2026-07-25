@@ -25,6 +25,15 @@ export const LANDING_REPLAY_VERSION = 1;
 /** Fixed clip width in seconds. The playlist animation maps 1:1 onto it. */
 export const REPLAY_CLIP_SECONDS = 8;
 
+/**
+ * Where the checked-in playlist lives — one static JSON in `public/`, served
+ * from the same origin as the page's own JavaScript. The maintainer authors it
+ * on `/dev/landing-clip` and commits it here; rollback is reverting the file.
+ * There is no fallback asset and no second load path: if this fetch fails, the
+ * hero renders nothing and the landing page degrades to its text content.
+ */
+export const LANDING_REPLAY_ASSET_PATH = "/landing-replay.json";
+
 /** Public label for a clip. Deliberately the only Run metadata that ships. */
 export interface ReplayLabel {
   area: string;

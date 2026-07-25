@@ -1,0 +1,247 @@
+import { describe, expect, it } from "vitest";
+import {
+  PHASE_1_END,
+  PHASE_2_END,
+  PHASE_3_END,
+  clipProgress,
+  composeReplayFrame,
+  containRect,
+  morphKeypoints,
+  sampleReplayPose,
+  toStage,
+} from "@/pipeline/overlay/landingReplayFrame";
+import type { ReplayPose } from "@/pipeline/overlay/landingReplayItem";
+
+const DURATION = 8000;
+
+/** Elapsed ms landing on a given clip progress. */
+const at = (progress: number) => progress * DURATION;
+
+describe("clipProgress", () => {
+  it("maps elapsed time onto [0,1] within one clip", () => {
+    expect(clipProgress(0, DURATION)).toBe(0);
+    expect(clipProgress(2000, DURATION)).toBeCloseTo(0.25, 6);
+    expect(clipProgress(6000, DURATION)).toBeCloseTo(0.75, 6);
+  });
+
+  it("wraps past the clip length so a single clock can loop", () => {
+    expect(clipProgress(10_000, DURATION)).toBeCloseTo(0.25, 6);
+  });
+
+  it("reads a whole number of clips as the end of a clip, not the start", () => {
+    // This is what lets the reduced-motion clock park on the duration and show
+    // the finished Route Overlay rather than snapping back to the starfield.
+    expect(clipProgress(DURATION, DURATION)).toBe(1);
+    expect(clipProgress(2 * DURATION, DURATION)).toBe(1);
+  });
+
+  it("is inert for a zero-length clip", () => {
+    expect(clipProgress(1234, 0)).toBe(0);
+  });
+});
+
+describe("composeReplayFrame", () => {
+  it("opens phase 1 on the starfield with the figure in source space", () => {
+    const f = composeReplayFrame(at(0.1), DURATION);
+    expect(f.phase).toBe(1);
+    expect(f.starfieldAlpha).toBe(1);
+    expect(f.matchAlpha).toBe(0);
+    expect(f.photoAlpha).toBe(0);
+    expect(f.morph).toBe(0);
+    expect(f.trailAlpha).toBe(1);
+  });
+
+  it("crosses into phase 2 with no visible step", () => {
+    const before = composeReplayFrame(at(PHASE_1_END - 0.0001), DURATION);
+    const boundary = composeReplayFrame(at(PHASE_1_END), DURATION);
+    expect(before.phase).toBe(1);
+    expect(boundary.phase).toBe(2);
+    expect(boundary.starfieldAlpha).toBeCloseTo(1, 3);
+    expect(boundary.matchAlpha).toBeCloseTo(0, 3);
+    expect(boundary.photoAlpha).toBe(0);
+    expect(boundary.morph).toBe(0);
+  });
+
+  it("fades the starfield out as the matched points come up through phase 2", () => {
+    const mid = composeReplayFrame(at((PHASE_1_END + PHASE_2_END) / 2), DURATION);
+    expect(mid.phase).toBe(2);
+    expect(mid.starfieldAlpha).toBeCloseTo(0.5, 3);
+    expect(mid.matchAlpha).toBeCloseTo(0.5, 3);
+    expect(mid.photoAlpha).toBe(0);
+    expect(mid.morph).toBe(0); // the figure is still in source space
+  });
+
+  it("crosses into phase 3 with the starfield gone, matches up, morph not started", () => {
+    const f = composeReplayFrame(at(PHASE_2_END), DURATION);
+    expect(f.phase).toBe(3);
+    expect(f.starfieldAlpha).toBeCloseTo(0, 6);
+    expect(f.matchAlpha).toBeCloseTo(1, 6);
+    expect(f.photoAlpha).toBe(0);
+    expect(f.morph).toBe(0);
+  });
+
+  it("raises the photo and carries the morph across phase 3", () => {
+    const mid = composeReplayFrame(at((PHASE_2_END + PHASE_3_END) / 2), DURATION);
+    expect(mid.phase).toBe(3);
+    expect(mid.photoAlpha).toBeCloseTo(0.5, 3);
+    expect(mid.morph).toBeGreaterThan(0);
+    expect(mid.morph).toBeLessThan(1);
+    expect(mid.matchAlpha).toBeCloseTo(1, 6); // still fully present
+    expect(mid.trailAlpha).toBeCloseTo(0.5, 3);
+  });
+
+  it("crosses into phase 4 with the morph complete and the photo full", () => {
+    const f = composeReplayFrame(at(PHASE_3_END), DURATION);
+    expect(f.phase).toBe(4);
+    expect(f.morph).toBe(1);
+    expect(f.photoAlpha).toBe(1);
+    expect(f.matchAlpha).toBeCloseTo(1, 6);
+    expect(f.trailAlpha).toBeCloseTo(0, 6);
+  });
+
+  it("retires the matched points across phase 4 so the Route Overlay stands alone", () => {
+    const mid = composeReplayFrame(at((PHASE_3_END + 1) / 2), DURATION);
+    expect(mid.matchAlpha).toBeCloseTo(0.5, 3);
+
+    const end = composeReplayFrame(DURATION, DURATION);
+    expect(end.phase).toBe(4);
+    expect(end.progress).toBe(1);
+    expect(end.starfieldAlpha).toBe(0);
+    expect(end.matchAlpha).toBe(0);
+    expect(end.trailAlpha).toBe(0);
+    expect(end.photoAlpha).toBe(1);
+    expect(end.morph).toBe(1);
+  });
+
+  it("reports clip-relative seconds that advance with the clock", () => {
+    expect(composeReplayFrame(0, DURATION).clipSeconds).toBe(0);
+    expect(composeReplayFrame(2000, DURATION).clipSeconds).toBeCloseTo(2, 6);
+    expect(composeReplayFrame(DURATION, DURATION).clipSeconds).toBeCloseTo(8, 6);
+  });
+
+  it("keeps every alpha and the morph inside [0,1] across the whole clip", () => {
+    for (let ms = 0; ms <= DURATION; ms += 25) {
+      const f = composeReplayFrame(ms, DURATION);
+      for (const v of [f.starfieldAlpha, f.matchAlpha, f.photoAlpha, f.trailAlpha, f.morph]) {
+        expect(v).toBeGreaterThanOrEqual(0);
+        expect(v).toBeLessThanOrEqual(1);
+      }
+    }
+  });
+});
+
+describe("containRect", () => {
+  it("letterboxes a portrait plane into a portrait stage", () => {
+    const r = containRect(1080, 1920, 506, 900);
+    expect(r.w).toBeCloseTo(506, 3);
+    expect(r.h).toBeCloseTo(899.55, 1);
+    expect(r.x).toBeCloseTo(0, 3);
+    expect(r.y).toBeGreaterThanOrEqual(0);
+  });
+
+  it("pillarboxes a landscape plane into the same stage", () => {
+    const r = containRect(1600, 1200, 506, 900);
+    expect(r.w).toBeCloseTo(506, 3);
+    expect(r.h).toBeCloseTo(379.5, 1);
+    expect(r.y).toBeCloseTo((900 - 379.5) / 2, 1);
+  });
+
+  it("gives both coordinate planes fixed placements, so the morph cannot reflow", () => {
+    const source = containRect(1080, 1920, 506, 900);
+    const photo = containRect(1200, 1600, 506, 900);
+    // Independent of any clock value — computed once per item, per plane.
+    expect(containRect(1080, 1920, 506, 900)).toEqual(source);
+    expect(source).not.toEqual(photo);
+    // Both stay inside the stage.
+    for (const r of [source, photo]) {
+      expect(r.x).toBeGreaterThanOrEqual(0);
+      expect(r.y).toBeGreaterThanOrEqual(0);
+      expect(r.x + r.w).toBeLessThanOrEqual(506 + 1e-9);
+      expect(r.y + r.h).toBeLessThanOrEqual(900 + 1e-9);
+    }
+  });
+
+  it("survives a zero dimension rather than emitting NaN", () => {
+    const r = containRect(0, 0, 506, 900);
+    expect(Number.isFinite(r.w)).toBe(true);
+    expect(Number.isFinite(r.h)).toBe(true);
+  });
+
+  it("maps normalized points into the plane's rectangle", () => {
+    const r = containRect(1000, 1000, 500, 900);
+    expect(toStage(r, 0, 0)).toEqual({ x: 0, y: 200 });
+    expect(toStage(r, 1, 1)).toEqual({ x: 500, y: 700 });
+    expect(toStage(r, 0.5, 0.5)).toEqual({ x: 250, y: 450 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+function pose(t: number, sx: number, px: number): ReplayPose {
+  return {
+    t,
+    source: [{ n: "left_wrist", x: sx, y: sx, s: 0.9 }],
+    photo: [{ n: "left_wrist", x: px, y: px, s: 0.9 }],
+  };
+}
+
+const POSES: ReplayPose[] = [pose(0, 0, 0.5), pose(1, 0.2, 0.6), pose(3, 0.6, 0.8)];
+
+describe("sampleReplayPose", () => {
+  it("returns null with nothing to sample", () => {
+    expect(sampleReplayPose([], 0)).toBeNull();
+  });
+
+  it("samples by elapsed time, not by index", () => {
+    const half = sampleReplayPose(POSES, 0.5)!;
+    expect(half.source.left_wrist.x).toBeCloseTo(0.1, 6);
+    expect(half.photo.left_wrist.x).toBeCloseTo(0.55, 6);
+
+    // Half way between samples 1 and 3 in *time* is t = 2, not the midpoint of
+    // the sample list — uneven spacing must not warp the playback rate.
+    const two = sampleReplayPose(POSES, 2)!;
+    expect(two.source.left_wrist.x).toBeCloseTo(0.4, 6);
+    expect(two.photo.left_wrist.x).toBeCloseTo(0.7, 6);
+  });
+
+  it("blends both coordinate spaces with the same factor", () => {
+    const a = sampleReplayPose(POSES, 0.25)!;
+    const sourceAlpha = (a.source.left_wrist.x - 0) / 0.2;
+    const photoAlpha = (a.photo.left_wrist.x - 0.5) / 0.1;
+    expect(sourceAlpha).toBeCloseTo(photoAlpha, 6);
+  });
+
+  it("clamps outside the clip instead of wrapping", () => {
+    expect(sampleReplayPose(POSES, -5)!.source.left_wrist.x).toBe(0);
+    expect(sampleReplayPose(POSES, 99)!.source.left_wrist.x).toBe(0.6);
+  });
+
+  it("carries confidence through for Estimated-Landmark dimming", () => {
+    expect(sampleReplayPose(POSES, 0.5)!.source.left_wrist.score).toBeCloseTo(0.9, 6);
+  });
+
+  it("advances monotonically as the clock does", () => {
+    let prev = -Infinity;
+    for (let t = 0; t <= 3; t += 0.1) {
+      const x = sampleReplayPose(POSES, t)!.source.left_wrist.x;
+      expect(x).toBeGreaterThanOrEqual(prev - 1e-9);
+      prev = x;
+    }
+  });
+});
+
+describe("morphKeypoints", () => {
+  const source = { left_wrist: { x: 0, y: 0 } };
+  const photo = { left_wrist: { x: 100, y: 200 } };
+
+  it("returns each space untouched at the ends of the morph", () => {
+    expect(morphKeypoints(source, photo, 0)).toBe(source);
+    expect(morphKeypoints(source, photo, 1)).toBe(photo);
+  });
+
+  it("interpolates between the two baked spaces in between", () => {
+    const mid = morphKeypoints(source, photo, 0.25);
+    expect(mid.left_wrist.x).toBeCloseTo(25, 6);
+    expect(mid.left_wrist.y).toBeCloseTo(50, 6);
+  });
+});
