@@ -81,6 +81,22 @@ describe("buildLandingReplayItem — output shape", () => {
     }
   });
 
+  it("carries the wall still when one is attached, and omits it when not", () => {
+    expect(buildLandingReplayItem(params()).source).toEqual({ w: 200, h: 400 });
+    expect("webp" in buildLandingReplayItem(params()).source).toBe(false);
+
+    const withStill = buildLandingReplayItem(
+      params({ source: { ...SOURCE, webp: "data:image/webp;base64,BBBB" } }),
+    );
+    expect(withStill.source).toEqual({
+      w: 200,
+      h: 400,
+      webp: "data:image/webp;base64,BBBB",
+    });
+    // Both shapes are playable — the still is an enhancement, not a requirement.
+    expect(isReplayItem(withStill)).toBe(true);
+  });
+
   it("wraps items in the versioned envelope", () => {
     const item = buildLandingReplayItem(params());
     expect(buildLandingReplayFile([item])).toEqual({
@@ -221,7 +237,7 @@ describe("buildLandingReplayItem — clip-relative rebasing", () => {
   it("rebases Hold times to the window and drops Holds first used after it", () => {
     const holds: AuthoredHold[] = [
       { x: 10, y: 20, kind: "hand", side: "left", firstUseTime: 11.5 },
-      { x: 30, y: 40, kind: "foot", side: "right", firstUseTime: 25 },
+      { x: 30, y: 40, kind: "foot", side: "right", firstUseTime: 35 },
     ];
     const item = buildLandingReplayItem(params({ holds, windowStart: 10 }));
     expect(item.holds).toEqual([{ x: 0.1, y: 0.1, kind: "hand", side: "left", t: 1.5 }]);

@@ -63,6 +63,14 @@ describe("isReplayItem", () => {
     expect(isReplayItem({ ...validItem(), label: undefined })).toBe(false);
   });
 
+  it("accepts an item with or without the optional wall still", () => {
+    const item = validItem();
+    expect(isReplayItem(item)).toBe(true);
+    expect(
+      isReplayItem({ ...item, source: { ...item.source, webp: "data:image/webp;base64,AA==" } }),
+    ).toBe(true);
+  });
+
   it("rejects malformed dimensions", () => {
     expect(isReplayItem({ ...validItem(), source: { w: "1080", h: 1920 } })).toBe(false);
     expect(isReplayItem({ ...validItem(), photo: { w: 1, h: 2 } })).toBe(false);

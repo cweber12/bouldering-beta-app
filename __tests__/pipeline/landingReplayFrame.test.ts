@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   HANDOFF_MS,
   PHASE_1_END,
+  PHASE_1_MID,
   PHASE_2_END,
   PHASE_3_END,
   clipProgress,
@@ -43,14 +44,44 @@ describe("clipProgress", () => {
 });
 
 describe("composeReplayFrame", () => {
-  it("opens phase 1 on the starfield with the figure in source space", () => {
-    const f = composeReplayFrame(at(0.1), DURATION);
-    expect(f.phase).toBe(1);
-    expect(f.starfieldAlpha).toBe(1);
-    expect(f.matchAlpha).toBe(0);
-    expect(f.photoAlpha).toBe(0);
-    expect(f.morph).toBe(0);
-    expect(f.trailAlpha).toBe(1);
+  it("opens on the dark stage and raises the wall still behind the figure", () => {
+    const open = composeReplayFrame(0, DURATION);
+    expect(open.phase).toBe(1);
+    expect(open.frameAlpha).toBe(0); // the cold open is still dark
+    expect(open.starfieldAlpha).toBe(0);
+    expect(open.trailAlpha).toBe(1);
+
+    const rising = composeReplayFrame(at(PHASE_1_MID / 2), DURATION);
+    expect(rising.frameAlpha).toBeCloseTo(0.5, 6);
+    expect(rising.starfieldAlpha).toBe(0); // nothing ignites until the still lands
+  });
+
+  it("ignites the starfield on the still across the rest of phase 1", () => {
+    const landed = composeReplayFrame(at(PHASE_1_MID), DURATION);
+    expect(landed.frameAlpha).toBe(1);
+    expect(landed.starfieldAlpha).toBe(0);
+
+    const half = composeReplayFrame(at((PHASE_1_MID + PHASE_1_END) / 2), DURATION);
+    expect(half.frameAlpha).toBe(1);
+    expect(half.starfieldAlpha).toBeCloseTo(0.5, 6);
+
+    const full = composeReplayFrame(at(PHASE_1_END), DURATION);
+    expect(full.starfieldAlpha).toBeCloseTo(1, 6);
+    expect(full.matchAlpha).toBeCloseTo(0, 6);
+    expect(full.photoAlpha).toBe(0);
+    expect(full.morph).toBe(0);
+    expect(full.trailAlpha).toBe(1);
+  });
+
+  it("cross-dissolves the still into the Route Photo across phase 3", () => {
+    const mid = composeReplayFrame(at((PHASE_2_END + PHASE_3_END) / 2), DURATION);
+    expect(mid.frameAlpha).toBeCloseTo(0.5, 3);
+    // The two real photographs hand over without the stage ever showing through.
+    expect(mid.frameAlpha + mid.photoAlpha).toBeCloseTo(1, 6);
+
+    const done = composeReplayFrame(at(PHASE_3_END), DURATION);
+    expect(done.frameAlpha).toBeCloseTo(0, 6);
+    expect(done.photoAlpha).toBe(1);
   });
 
   it("crosses into phase 2 with no visible step", () => {
@@ -108,6 +139,7 @@ describe("composeReplayFrame", () => {
     const end = composeReplayFrame(DURATION, DURATION);
     expect(end.phase).toBe(4);
     expect(end.progress).toBe(1);
+    expect(end.frameAlpha).toBe(0);
     expect(end.starfieldAlpha).toBe(0);
     expect(end.matchAlpha).toBe(0);
     expect(end.trailAlpha).toBe(0);
@@ -144,7 +176,14 @@ describe("composeReplayFrame", () => {
   it("keeps every alpha and the morph inside [0,1] across the whole clip", () => {
     for (let ms = 0; ms <= DURATION; ms += 25) {
       const f = composeReplayFrame(ms, DURATION);
-      for (const v of [f.starfieldAlpha, f.matchAlpha, f.photoAlpha, f.trailAlpha, f.morph]) {
+      for (const v of [
+        f.frameAlpha,
+        f.starfieldAlpha,
+        f.matchAlpha,
+        f.photoAlpha,
+        f.trailAlpha,
+        f.morph,
+      ]) {
         expect(v).toBeGreaterThanOrEqual(0);
         expect(v).toBeLessThanOrEqual(1);
       }

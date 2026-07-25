@@ -33,6 +33,7 @@ import {
   type ReplayPhoto,
   type ReplayPoint,
   type ReplayPose,
+  type ReplaySource,
 } from "@/pipeline/overlay/landingReplayItem";
 
 /** A Hold as the authoring route holds it: photo pixels, absolute video time. */
@@ -51,8 +52,12 @@ export interface BuildLandingReplayItemParams {
   /** Stable clip id (e.g. `run-1750000000-boulder-problem`). */
   id: string;
   label: ReplayLabel;
-  /** Source video pixel dimensions — the space ORB and pose coordinates live in. */
-  source: ReplayDims;
+  /**
+   * Source video pixel dimensions — the space ORB and pose coordinates live in —
+   * plus, optionally, a WebP still of the wall taken from that same video. The
+   * still is what the hero opens on, so the figure starts on the real wall.
+   */
+  source: ReplaySource;
   /** The embedded WebP and its pixel dimensions — what the hero actually draws. */
   photo: ReplayPhoto;
   /**
@@ -230,7 +235,9 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
     id,
     label: { area: label.area, route: label.route, rating: label.rating },
     duration: r3(windowSeconds),
-    source: { w: source.w, h: source.h },
+    source: source.webp
+      ? { w: source.w, h: source.h, webp: source.webp }
+      : { w: source.w, h: source.h },
     photo: { w: photo.w, h: photo.h, webp: photo.webp },
     starfield,
     matches: pairedMatches,

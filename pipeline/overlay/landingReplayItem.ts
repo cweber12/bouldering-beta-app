@@ -36,7 +36,7 @@ export const LANDING_REPLAY_VERSION = 1;
  * How much video one clip captures, in seconds — the authoring window's fixed
  * width. Runs whose detected pose track is shorter than this cannot be authored.
  */
-export const REPLAY_CAPTURE_SECONDS = 14;
+export const REPLAY_CAPTURE_SECONDS = 20;
 
 /**
  * How long the hero spends playing one clip, in seconds. Shorter than the
@@ -44,7 +44,7 @@ export const REPLAY_CAPTURE_SECONDS = 14;
  * (~1.4×): more of the ascent for barely more dwell time. It also bounds the
  * phase windows — much past 10s and the phase-3 morph starts to drag.
  */
-export const REPLAY_ANIMATION_SECONDS = 10;
+export const REPLAY_ANIMATION_SECONDS = 12;
 
 /**
  * Minimum spacing between exported pose samples, in captured seconds.
@@ -90,6 +90,23 @@ export interface ReplayDims {
 export interface ReplayPhoto extends ReplayDims {
   /** `data:image/webp;base64,…` — the compressed Route Photo. */
   webp: string;
+}
+
+/**
+ * The source video plane: its pixel space, plus optionally a still of the wall
+ * taken from that same video.
+ *
+ * The still shares the source video's coordinate space — it *is* a frame of it —
+ * so the phase-1 figure stands on the wall it was actually climbing rather than
+ * on an empty stage, and phase 3 dissolves one real photograph into another.
+ *
+ * It is optional: a playlist authored without one still plays, opening on the
+ * dark stage as the hero originally did. That keeps an already-curated asset
+ * valid rather than failing the guard the day the field is added.
+ */
+export interface ReplaySource extends ReplayDims {
+  /** `data:image/webp;base64,…` — the compressed video-space wall still. */
+  webp?: string;
 }
 
 /** A normalized `[0,1]` point. */
@@ -153,8 +170,11 @@ export interface LandingReplayItem {
    * is what sets the item's playback rate.
    */
   duration: number;
-  /** Source video pixel dimensions — the space `starfield`/`matches.s*`/`poses[].source` normalize against. */
-  source: ReplayDims;
+  /**
+   * Source video pixel dimensions — the space `starfield`/`matches.s*`/
+   * `poses[].source` normalize against — plus the optional wall still.
+   */
+  source: ReplaySource;
   /** Route Photo pixel dimensions + the embedded WebP. */
   photo: ReplayPhoto;
   /** Wall ORB keypoints from the source reference frame, normalized. */

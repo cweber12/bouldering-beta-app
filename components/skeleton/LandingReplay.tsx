@@ -35,19 +35,24 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 // the scanner's x-ray view of the climb resolves into the Route Overlay on the
 // real wall.
 //
-// An item captures more climbing than it spends showing it: ~14 captured seconds
-// over a 10-second window, so the figure runs at ~1.4×. Detection is 2 Hz and the
+// An item captures more climbing than it spends showing it: ~20 captured seconds
+// over a 12-second window, so the figure runs at ~1.7×. Detection is 2 Hz and the
 // stored track is interpolated up from there, so the speed-up costs no motion
 // that was ever measured — it buys a longer look at the ascent for the same
 // dwell time. The phases below are fractions of the *screen* window; pose and
 // Hold times are captured seconds.
 //
-//   0-30%   starfield + the video-space figure and its motion trail
+//   0-15%   the wall still rises out of the dark stage behind the figure
+//   15-30%  the ORB starfield ignites on that still — the scanner reading it
 //   30-45%  the ambient starfield fades out; the matched wall features emerge
-//   45-80%  the Route Photo rises while the matched points and the Skeleton
-//           migrate into its space — the payoff, so it gets the longest window
+//   45-80%  the still hands the backdrop to the Route Photo while the matched
+//           points and the Skeleton migrate into its space — the payoff, so it
+//           gets the longest window
 //   80-100% the matched points retire and the Route Overlay stands alone, Holds
 //           revealing on their own clip-relative times
+//
+// An item may carry no wall still (the field is optional), in which case phases
+// 1-2 play against the dark stage as the hero originally did.
 //
 // Every visitor sees the same playlist and the hero is passive: no previous/next,
 // no per-visitor ordering, one pause/play control. Items hand off with a 300 ms
@@ -76,16 +81,36 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
  */
 const DURATION_MS = REPLAY_ANIMATION_SECONDS * 1000;
 
-/**
- * The stage is a fixed portrait frame, not the item's own aspect: both
- * coordinate planes are contained inside it up front, so neither the phase-3
- * morph nor (later) an item handoff can reflow the layout.
- */
-const STAGE_ASPECT = { w: 9, h: 16 } as const;
 /** Longest-edge resolution of the internal render canvas (CSS stretches to fit). */
 const CANVAS_BASE = 900;
-const CANVAS_H = CANVAS_BASE;
-const CANVAS_W = Math.round((CANVAS_BASE * STAGE_ASPECT.w) / STAGE_ASPECT.h);
+/** Stage shape before a playlist loads, and when one carries no usable dimensions. */
+const FALLBACK_ASPECT = { w: 9, h: 16 } as const;
+
+/** The stage's pixel size and the CSS aspect it presents. */
+interface StageSize {
+  w: number;
+  h: number;
+}
+
+/**
+ * The stage takes the **first item's source plane** and holds it for the whole
+ * playlist.
+ *
+ * It is one shape for the run of the page, not the aspect of whichever item is
+ * showing: both coordinate planes are contained inside it up front, so neither
+ * the phase-3 morph nor an item handoff can reflow the layout. But it is no
+ * longer hard-coded portrait — curated footage is as often landscape, and a 16:9
+ * clip letterboxed into a 9:16 box renders as a strip a quarter of the frame
+ * high. The source plane wins over the Route Photo's because phases 1-2 are the
+ * video's own wall still, and that is what should fill the frame.
+ */
+function stageSize(items: readonly LandingReplayItem[]): StageSize {
+  const first = items[0]?.source;
+  const w = first && first.w > 0 ? first.w : FALLBACK_ASPECT.w;
+  const h = first && first.h > 0 ? first.h : FALLBACK_ASPECT.h;
+  const scale = CANVAS_BASE / Math.max(w, h);
+  return { w: Math.round(w * scale), h: Math.round(h * scale) };
+}
 
 /** Faint neutral starfield colour (warm stone), matching the scan x-ray stage. */
 const STARFIELD_COLOR = "rgba(232, 228, 222, 0.38)";
@@ -176,9 +201,9 @@ interface ReplayGeometry {
   photoScale: number;
 }
 
-function buildGeometry(item: LandingReplayItem): ReplayGeometry {
-  const sourceRect = containRect(item.source.w, item.source.h, CANVAS_W, CANVAS_H);
-  const photoRect = containRect(item.photo.w, item.photo.h, CANVAS_W, CANVAS_H);
+function buildGeometry(item: LandingReplayItem, stage: StageSize): ReplayGeometry {
+  const sourceRect = containRect(item.source.w, item.source.h, stage.w, stage.h);
+  const photoRect = containRect(item.photo.w, item.photo.h, stage.w, stage.h);
 
   return {
     sourceRect,
@@ -202,13 +227,13 @@ function buildGeometry(item: LandingReplayItem): ReplayGeometry {
     }),
     sourceScale: computeStableBodyScale(
       item.poses.map((p) => ({ keypoints: stageFromList(p.source, sourceRect) })),
-      CANVAS_W,
-      CANVAS_H,
+      stage.w,
+      stage.h,
     ),
     photoScale: computeStableBodyScale(
       item.poses.map((p) => ({ keypoints: stageFromList(p.photo, photoRect) })),
-      CANVAS_W,
-      CANVAS_H,
+      stage.w,
+      stage.h,
     ),
   };
 }
@@ -216,6 +241,18 @@ function buildGeometry(item: LandingReplayItem): ReplayGeometry {
 // ---------------------------------------------------------------------------
 // Drawing one item at one instant
 // ---------------------------------------------------------------------------
+
+/**
+ * One item's decoded backdrops. Either may still be absent — a decode in flight,
+ * or an item authored without a wall still — and the frame composes the same way
+ * regardless; the missing backdrop simply leaves the stage dark behind the figure.
+ */
+interface ItemImages {
+  /** The video-space wall still, drawn in the source plane through phases 1-3. */
+  frame?: HTMLImageElement;
+  /** The Route Photo, drawn in the photo plane from phase 3 on. */
+  photo?: HTMLImageElement;
+}
 
 /**
  * Paint one replay item at `elapsedMs` of its own clip into `ctx`.
@@ -231,15 +268,24 @@ function drawReplayItem(
   elapsedMs: number,
   item: LandingReplayItem,
   geometry: ReplayGeometry,
-  photo: HTMLImageElement | null,
+  images: ItemImages,
   wake: HTMLCanvasElement,
+  stage: StageSize,
 ): void {
   const frame = composeReplayFrame(elapsedMs, DURATION_MS, item.duration);
   const { sourceRect, photoRect } = geometry;
 
-  // 1 — the ambient wall field, in source space.
+  // 1 — the wall still from the source video, rising behind the figure.
+  if (images.frame && frame.frameAlpha > 0) {
+    ctx.save();
+    ctx.globalAlpha = frame.frameAlpha;
+    ctx.drawImage(images.frame, sourceRect.x, sourceRect.y, sourceRect.w, sourceRect.h);
+    ctx.restore();
+  }
+
+  // 2 — the ambient wall field igniting on it, in the same source space.
   if (frame.starfieldAlpha > 0) {
-    const r = Math.max(1, Math.min(CANVAS_W, CANVAS_H) * 0.0024);
+    const r = Math.max(1, Math.min(stage.w, stage.h) * 0.0024);
     ctx.save();
     ctx.globalAlpha = frame.starfieldAlpha;
     ctx.fillStyle = STARFIELD_COLOR;
@@ -251,17 +297,17 @@ function drawReplayItem(
     ctx.restore();
   }
 
-  // 2 — the Route Photo rising through phase 3.
-  if (photo && frame.photoAlpha > 0) {
+  // 3 — the Route Photo rising through phase 3 as the still hands over.
+  if (images.photo && frame.photoAlpha > 0) {
     ctx.save();
     ctx.globalAlpha = frame.photoAlpha;
-    ctx.drawImage(photo, photoRect.x, photoRect.y, photoRect.w, photoRect.h);
+    ctx.drawImage(images.photo, photoRect.x, photoRect.y, photoRect.w, photoRect.h);
     ctx.restore();
   }
 
-  // 3 — the matched features, migrating from source space to photo space.
+  // 4 — the matched features, migrating from source space to photo space.
   if (frame.matchAlpha > 0) {
-    const r = Math.max(1.5, Math.min(CANVAS_W, CANVAS_H) * 0.004);
+    const r = Math.max(1.5, Math.min(stage.w, stage.h) * 0.004);
     ctx.save();
     ctx.globalAlpha = frame.matchAlpha;
     ctx.fillStyle = MATCH_COLOR;
@@ -289,11 +335,11 @@ function drawReplayItem(
     );
   };
 
-  // 4 — the wake: superseded poses on their own layer, composited at one alpha.
+  // 5 — the wake: superseded poses on their own layer, composited at one alpha.
   if (frame.trailAlpha > 0) {
     const wctx = wake.getContext("2d");
     if (wctx) {
-      wctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+      wctx.clearRect(0, 0, stage.w, stage.h);
       for (let k = TRAIL_COUNT - 1; k >= 0; k--) {
         const t = frame.clipSeconds - (k + 1) * TRAIL_STEP_S;
         if (t < 0) continue; // before the clip opened — nothing to trail yet
@@ -315,7 +361,7 @@ function drawReplayItem(
     }
   }
 
-  // 5 — Holds, beneath the figure, revealing on their clip-relative times.
+  // 6 — Holds, beneath the figure, revealing on their clip-relative times.
   if (frame.photoAlpha > 0 && geometry.holds.length > 0) {
     ctx.save();
     ctx.globalAlpha = frame.photoAlpha;
@@ -323,20 +369,21 @@ function drawReplayItem(
     ctx.restore();
   }
 
-  // 6 — the live figure, on top in every phase.
+  // 7 — the live figure, on top in every phase.
   const live = figureAt(frame.clipSeconds);
   if (live) drawSkeleton(ctx, live, { bodyScale });
 }
 
-/** An offscreen stage-sized canvas, created on first use. */
-function ensureCanvas(ref: React.MutableRefObject<HTMLCanvasElement | null>): HTMLCanvasElement {
-  if (!ref.current) {
-    const canvas = document.createElement("canvas");
-    canvas.width = CANVAS_W;
-    canvas.height = CANVAS_H;
-    ref.current = canvas;
-  }
-  return ref.current;
+/** An offscreen stage-sized canvas, created on first use and resized with the stage. */
+function ensureCanvas(
+  ref: React.MutableRefObject<HTMLCanvasElement | null>,
+  stage: StageSize,
+): HTMLCanvasElement {
+  const canvas = ref.current ?? document.createElement("canvas");
+  if (canvas.width !== stage.w) canvas.width = stage.w;
+  if (canvas.height !== stage.h) canvas.height = stage.h;
+  ref.current = canvas;
+  return canvas;
 }
 
 /** The item the caption belongs to: the most opaque layer, incoming on a tie. */
@@ -363,7 +410,7 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
   const [items, setItems] = useState<LandingReplayItem[]>([]);
   // Keyed by item id rather than index, so a decode can never land on the wrong
   // clip and there is nothing to reset when the playlist arrives.
-  const [photos, setPhotos] = useState<Record<string, HTMLImageElement>>({});
+  const [images, setImages] = useState<Record<string, ItemImages>>({});
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Own wake layer: composited once at the frame's trail alpha, because
@@ -401,25 +448,33 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
     };
   }, []);
 
-  // Decode every item's embedded Route Photo up front, so a handoff never waits
-  // on a decode. Until one resolves its clip's morph still runs; the backdrop
-  // simply stays dark.
+  // Decode every item's embedded images up front, so a handoff never waits on a
+  // decode. Until one resolves its clip still runs; that backdrop simply stays
+  // dark, which is also what an item with no wall still looks like throughout.
   useEffect(() => {
     if (items.length === 0) return;
     let mounted = true;
-    for (const item of items) {
+    const decode = (src: string, slot: keyof ItemImages, id: string) => {
       const img = new window.Image();
       img.onload = () => {
-        if (mounted) setPhotos((prev) => ({ ...prev, [item.id]: img }));
+        if (mounted) setImages((prev) => ({ ...prev, [id]: { ...prev[id], [slot]: img } }));
       };
-      img.src = item.photo.webp;
+      img.src = src;
+    };
+    for (const item of items) {
+      decode(item.photo.webp, "photo", item.id);
+      if (item.source.webp) decode(item.source.webp, "frame", item.id);
     }
     return () => {
       mounted = false;
     };
   }, [items]);
 
-  const geometries = useMemo(() => items.map(buildGeometry), [items]);
+  // One stage shape for the whole playlist, taken from the first item's source
+  // plane — see stageSize. Geometry is contained into it, so both are memoised
+  // together and nothing reflows once a clip is running.
+  const stage = useMemo(() => stageSize(items), [items]);
+  const geometries = useMemo(() => items.map((i) => buildGeometry(i, stage)), [items, stage]);
 
   // Which item (or crossfading pair) the one clock puts on the stage right now.
   const layers = useMemo(
@@ -433,8 +488,8 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx || layers.length === 0) return;
 
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-    const wake = ensureCanvas(wakeRef);
+    ctx.clearRect(0, 0, stage.w, stage.h);
+    const wake = ensureCanvas(wakeRef, stage);
 
     // Away from a handoff there is one item at full opacity: draw it straight at
     // the stage and skip the layer blit entirely.
@@ -443,32 +498,32 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
       const item = items[index];
       const geometry = geometries[index];
       if (item && geometry) {
-        drawReplayItem(ctx, clipMs, item, geometry, photos[item.id] ?? null, wake);
+        drawReplayItem(ctx, clipMs, item, geometry, images[item.id] ?? {}, wake, stage);
       }
       return;
     }
 
     // Mid-handoff: each item composites as a whole at its own alpha, back to front.
-    const layer = ensureCanvas(layerRef);
+    const layer = ensureCanvas(layerRef, stage);
     const lctx = layer.getContext("2d");
     if (!lctx) return;
     for (const { index, elapsedMs: clipMs, alpha } of layers) {
       const item = items[index];
       const geometry = geometries[index];
       if (!item || !geometry) continue;
-      lctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-      drawReplayItem(lctx, clipMs, item, geometry, photos[item.id] ?? null, wake);
+      lctx.clearRect(0, 0, stage.w, stage.h);
+      drawReplayItem(lctx, clipMs, item, geometry, images[item.id] ?? {}, wake, stage);
       ctx.save();
       ctx.globalAlpha = alpha;
       ctx.drawImage(layer, 0, 0);
       ctx.restore();
     }
-  }, [layers, items, photos, geometries]);
+  }, [layers, items, images, geometries, stage]);
 
-  // Portrait frame sized like the scan flow: fill the width but cap the height so
-  // the stage never overflows on first paint.
+  // Sized like the scan flow: fill the width but cap the height so the stage never
+  // overflows on first paint.
   const stageStyle = useMemo(() => {
-    const { w, h } = STAGE_ASPECT;
+    const { w, h } = stage;
     if (maxHeight) {
       const ratio = (w / h).toFixed(6);
       return {
@@ -478,7 +533,7 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
       } as const;
     }
     return mediaContainerStyle(w, h);
-  }, [maxHeight]);
+  }, [maxHeight, stage]);
 
   // The caption follows whichever item is currently the more visible of the two.
   const captioned = dominantLayer(layers);
@@ -495,8 +550,8 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
       >
         <canvas
           ref={canvasRef}
-          width={CANVAS_W}
-          height={CANVAS_H}
+          width={stage.w}
+          height={stage.h}
           className="absolute inset-0 h-full w-full object-fill"
           aria-hidden="true"
         />

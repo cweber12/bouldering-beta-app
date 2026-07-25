@@ -36,7 +36,14 @@ import {
 // Phase windows
 // ---------------------------------------------------------------------------
 
-/** End of phase 1 (starfield + video-space pose) as a fraction of the clip. */
+/**
+ * End of phase 1's opening beat: the wall still rises out of the dark stage
+ * behind the figure, and only then does the starfield ignite on it. Splitting
+ * phase 1 in two is what keeps the cold open — the hero still starts on the dark
+ * stage rather than cutting straight to a photograph.
+ */
+export const PHASE_1_MID = 0.15;
+/** End of phase 1 (wall still + starfield + video-space pose) as a fraction of the clip. */
 export const PHASE_1_END = 0.3;
 /** End of phase 2 (starfield fades out, matched source points emerge). */
 export const PHASE_2_END = 0.45;
@@ -56,6 +63,12 @@ export interface ReplayFrameComposition {
    */
   clipSeconds: number;
   phase: ReplayPhase;
+  /**
+   * The video-space wall still behind the figure: rises through phase 1's
+   * opening beat, holds, then hands over to the Route Photo across phase 3.
+   * Zero throughout when the item carries no still.
+   */
+  frameAlpha: number;
   /** ORB wall starfield, drawn in source space. */
   starfieldAlpha: number;
   /** Paired wall features — the points that visibly migrate during the morph. */
@@ -101,7 +114,8 @@ export function clipProgress(elapsedMs: number, durationMs: number): number {
  * Every ramp is continuous at its boundary — phase 2 opens with the starfield
  * still at full and the matched points still at zero, phase 3 opens with the
  * photo hidden and the morph at zero, phase 4 opens with the morph complete —
- * so a boundary crossing never shows a visible step.
+ * so a boundary crossing never shows a visible step. Phase 1 runs two ramps of
+ * its own: the wall still arrives, then the starfield ignites on top of it.
  *
  * `durationMs` is **screen** time and `captureSeconds` is how much climbing the
  * clip holds; the phases are fractions of the former and `clipSeconds` runs on
@@ -117,6 +131,10 @@ export function composeReplayFrame(
   const phase: ReplayPhase =
     progress < PHASE_1_END ? 1 : progress < PHASE_2_END ? 2 : progress < PHASE_3_END ? 3 : 4;
 
+  // Phase 1 opens on the dark stage and raises the wall still behind the figure.
+  const arrive = ramp(progress, 0, PHASE_1_MID);
+  // The starfield then ignites on that still, over the rest of phase 1.
+  const ignite = ramp(progress, PHASE_1_MID, PHASE_1_END);
   // Phase 2 swaps the ambient wall field for the matched subset of it.
   const swap = ramp(progress, PHASE_1_END, PHASE_2_END);
   // Phase 3 raises the Route Photo and carries everything into its space.
@@ -128,7 +146,10 @@ export function composeReplayFrame(
     progress,
     clipSeconds: progress * captureSeconds,
     phase,
-    starfieldAlpha: 1 - swap,
+    // The still hands the backdrop to the Route Photo across phase 3, so the two
+    // real photographs cross-dissolve rather than either cutting.
+    frameAlpha: arrive * (1 - migrate),
+    starfieldAlpha: ignite * (1 - swap),
     matchAlpha: swap * (1 - settle),
     photoAlpha: migrate,
     // The wake belongs to the x-ray half of the story; it clears as the figure

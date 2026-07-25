@@ -15,8 +15,8 @@ checked-in replay artifacts while keeping the public hero stable and passive.
 Curate a playlist of short clips drawn from different Runs, and deliver it as a
 single static asset:
 
-1. In a hidden development-only route, pick a saved Run and a 14-second window
-   of it, attach a Route Photo, and run the existing ORB match.
+1. In a hidden development-only route, pick a saved Run and a 20-second window
+   of it, attach a wall still and a Route Photo, and run the existing ORB match.
 2. Export that clip as one JSON item and check it into the repo.
 3. The landing hero fetches one playlist asset and plays its items in file
    order.
@@ -47,8 +47,9 @@ photo points in Route Photo space — so nothing depends on render resolution.
     {
       "id": "run-1750000000-boulder-problem",
       "label": { "area": "…", "route": "…", "rating": "V4" },
-      "duration": 14,
-      "source": { "w": 1080, "h": 1920 },
+      "duration": 20,
+      // `webp` is the optional wall still, in this same coordinate space
+      "source": { "w": 1080, "h": 1920, "webp": "data:image/webp;base64,…" },
       "photo": { "w": 1200, "h": 1600, "webp": "data:image/webp;base64,…" },
       "starfield": [{ "x": 0.12, "y": 0.44 }],
       "matches": [{ "sx": 0.12, "sy": 0.44, "px": 0.31, "py": 0.52 }],
@@ -72,13 +73,13 @@ clip's first frame), spanning `duration`.
 ### Capture, screen time, and playback rate
 
 Captured seconds and screen seconds are separate quantities. A clip captures
-**14 seconds** of climbing and the hero spends **10 seconds** showing it, so the
-figure plays at ~1.4×. That is what makes a clip read as a climb rather than a
+**20 seconds** of climbing and the hero spends **12 seconds** showing it, so the
+figure plays at ~1.7×. That is what makes a clip read as a climb rather than a
 fragment: pose detection runs at 2 Hz and the stored track is bone-space
 interpolated up from there, so replaying above 1× discards no motion that was
 ever measured — it buys a longer window of the ascent for the same hero dwell.
 
-Screen time is capped at 10s deliberately: the phase windows are fractions of it,
+Screen time is capped at 12s deliberately: the phase windows are fractions of it,
 and much past that the phase-3 morph starts to drag.
 
 Poses export at **5 Hz**, not the stored track's 10 Hz. The renderer samples by
@@ -93,10 +94,11 @@ The pose plays continuously across the whole clip. Phases control only *which
 space* the figure is drawn in and what else is on screen — they never change
 playback speed.
 
-1. 0-30%: starfield + video-space Skeleton
+1. 0-15%: the wall still rises out of the dark stage behind the video-space
+   Skeleton; 15-30%: the starfield ignites on that still
 2. 30-45%: starfield fades while matched source points emerge
-3. 45-80%: Route Photo appears while matched points and Skeleton morph toward
-   Route Photo space
+3. 45-80%: the wall still cross-dissolves into the Route Photo while matched
+   points and Skeleton morph toward Route Photo space
 4. 80-100%: matched points fade out while the Route Overlay completes and Holds
    reveal on their `t`
 
@@ -140,9 +142,16 @@ Dependency summary:
 - Route Photo is embedded in the export as compressed WebP data.
 - Playlist holds 1-5 items; **order is array order in the checked-in file**.
   Reordering means editing the file.
-- Capture window (14s) and screen window (10s) are separate constants, so the
+- Capture window (20s) and screen window (12s) are separate constants, so the
   clip's playback rate falls out of the pair rather than being its own knob.
   Items carry their own captured `duration`, so the rate is per item.
+- Each item may carry an uncropped **wall still** from its own video, in the
+  source coordinate space, so phase 1 opens on the real wall. Optional by
+  design: an item without one opens on the dark stage, and an already-curated
+  asset stays valid.
+- The hero stage takes its shape from the first item's source plane rather than a
+  fixed portrait, so landscape footage is not letterboxed into a strip. One shape
+  for the whole playlist, so a handoff never reflows.
 - Public labels include only `area`, Route name, and `rating`.
 - Hero is passive: no previous/next navigation; one pause/play control for
   motion compliance.

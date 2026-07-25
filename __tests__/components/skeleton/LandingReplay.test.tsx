@@ -41,7 +41,7 @@ function itemNamed(id: string, route: string): LandingReplayItem {
   return { ...ITEM, id, label: { ...ITEM.label, route } };
 }
 
-const CLIP_MS = 10_000; // screen time per item (REPLAY_ANIMATION_SECONDS)
+const CLIP_MS = 12_000; // screen time per item (REPLAY_ANIMATION_SECONDS)
 const HANDOFF_MS = 300;
 
 let reducedMotion: boolean;
@@ -242,6 +242,39 @@ describe("LandingReplay", () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(container.querySelector("figure")).toBeNull();
+  });
+
+  it("shapes the stage from the first item's source plane, not a fixed portrait", async () => {
+    const landscape: LandingReplayItem = { ...ITEM, source: { w: 1280, h: 720 } };
+    stubPlaylist({ version: 1, items: [landscape] });
+    const { container } = render(<LandingReplay />);
+    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+
+    // Landscape footage must not letterbox into a portrait box; the stage follows it.
+    const canvas = container.querySelector("canvas") as HTMLCanvasElement;
+    expect(canvas.width / canvas.height).toBeCloseTo(1280 / 720, 2);
+    expect(Math.max(canvas.width, canvas.height)).toBe(900);
+  });
+
+  it("holds one stage shape across a playlist of mixed aspects", async () => {
+    stubPlaylist({
+      version: 1,
+      items: [
+        { ...ITEM, source: { w: 1280, h: 720 } },
+        { ...itemNamed("clip-b", "Crimp Ladder"), source: { w: 1080, h: 1920 } },
+      ],
+    });
+    const { container } = render(<LandingReplay />);
+    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    const canvas = container.querySelector("canvas") as HTMLCanvasElement;
+    const before = { w: canvas.width, h: canvas.height };
+
+    advance(0);
+    advance(CLIP_MS + HANDOFF_MS); // hand off to the portrait item
+    expect(captionedRoute(container)).toBe("Crimp Ladder");
+
+    // The handoff must not reflow the layout, whatever the incoming item's shape.
+    expect({ w: canvas.width, h: canvas.height }).toEqual(before);
   });
 
   it("cycles the playlist in file order and wraps to the first item", async () => {
