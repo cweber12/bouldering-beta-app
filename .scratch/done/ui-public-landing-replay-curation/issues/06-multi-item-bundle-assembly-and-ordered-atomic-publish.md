@@ -1,11 +1,11 @@
 # 06 - Multi-item bundle assembly and ordered atomic publish
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -25,8 +25,8 @@ Extend single-item publish into full multi-item editorial publish. The system sh
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/04-multi-select-and-manual-reorder-curation-workspace.md
-- .scratch/actionable/ui-public-landing-replay-curation/issues/05-single-item-replay-bundle-assembly-and-publish.md
+- .scratch/done/ui-public-landing-replay-curation/issues/04-multi-select-and-manual-reorder-curation-workspace.md
+- .scratch/done/ui-public-landing-replay-curation/issues/05-single-item-replay-bundle-assembly-and-publish.md
 
 ## Superseded notes
 

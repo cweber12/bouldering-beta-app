@@ -1,11 +1,11 @@
 # 10 - Landing four-phase renderer and real fallback
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -30,7 +30,7 @@ Build landing-specific replay rendering that executes the four-phase visual stor
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
+- .scratch/done/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
 
 ## Superseded notes
 

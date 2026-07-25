@@ -1,11 +1,11 @@
 # 01 - Global playlist read path and landing fallback
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 

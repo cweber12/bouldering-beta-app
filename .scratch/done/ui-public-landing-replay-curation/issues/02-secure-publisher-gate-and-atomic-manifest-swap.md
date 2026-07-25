@@ -1,11 +1,11 @@
 # 02 - Secure publisher gate and atomic manifest swap
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -26,7 +26,7 @@ Deliver a guarded publish path for global Landing Replay Playlist updates. Publi
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/01-global-playlist-read-path-and-landing-fallback.md
+- .scratch/done/ui-public-landing-replay-curation/issues/01-global-playlist-read-path-and-landing-fallback.md
 
 ## Superseded notes
 

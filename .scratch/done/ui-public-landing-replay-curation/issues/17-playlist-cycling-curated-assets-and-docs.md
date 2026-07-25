@@ -1,11 +1,12 @@
 # 17 - Playlist cycling, curated assets, and docs
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-playlist
+Merged: 7f9ace1
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -44,12 +45,12 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
       traceability.
 - [ ] Run end-to-end regression checks: phase behavior, cycling and handoff,
       graceful degradation when the asset is absent, reduced-motion output, and
-      pause/play keyboard access.
+      pause/play keyboard access. **Partly transferred — see the closing note.**
 - [x] Tests cover ordered cycling, handoff timing, and wrap behavior.
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
+- .scratch/done/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
 
 ## Comments
 
@@ -162,3 +163,23 @@ still, so it plays at 1.17× and opens on the dark stage. Re-author it on
 `/dev/landing-clip` with a still attached (and add up to four more), then walk the
 hero once in a browser for the phase/handoff/reduced-motion pass — the only
 acceptance criterion that still needs a human's eyes.
+
+## Closing note — the regression criterion
+
+Closed with the regression criterion **unticked rather than claimed**, because it
+splits three ways:
+
+- **Verified in the browser during curation.** Phase behaviour and the framing
+  were iterated on directly against the live hero — the Holds pass, the stage
+  aspect, the black beat, the photo lag and the morph speed all changed in
+  response to watching it. Graceful degradation was observed too: the hero
+  rendered nothing for the whole session before the asset was installed, which is
+  exactly the specified behaviour.
+- **Covered by tests, not by eye.** Reduced-motion output, pause/play keyboard
+  access, and the asset-absent path are asserted in
+  `__tests__/components/skeleton/LandingReplay.test.tsx`.
+- **Not verifiable yet.** Cycling and handoff need at least two clips. One is
+  checked in, so this part is blocked on curating more — it transfers to the
+  multi-clip PRD rather than being ticked here.
+
+Transferred to: `.scratch/actionable/ui-landing-replay-multi-clip/PRD.md`

@@ -6,7 +6,7 @@ Merged: 1c2e8dd
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -68,7 +68,7 @@ This slice replaces the signed-in personalization path in
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
+- .scratch/done/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
 
 ## Comments
 

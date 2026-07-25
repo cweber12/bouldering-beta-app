@@ -1,11 +1,11 @@
 # 08 - Playlist cycling across curated items plus QA and docs
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/14-curate-showcase-assets-docs-and-final-qa.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/14-curate-showcase-assets-docs-and-final-qa.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -25,8 +25,8 @@ Complete the end-to-end curated hero experience by implementing deterministic cy
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/06-multi-item-bundle-assembly-and-ordered-atomic-publish.md
-- .scratch/actionable/ui-public-landing-replay-curation/issues/07-hero-four-phase-playback-driver-and-stage-rendering.md
+- .scratch/done/ui-public-landing-replay-curation/issues/06-multi-item-bundle-assembly-and-ordered-atomic-publish.md
+- .scratch/done/ui-public-landing-replay-curation/issues/07-hero-four-phase-playback-driver-and-stage-rendering.md
 
 ## Superseded notes
 

@@ -1,11 +1,11 @@
 # 05 - Single-item replay bundle assembly and publish
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -25,8 +25,8 @@ Deliver end-to-end assembly and publish of one eligible Run into a replay-safe b
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/02-secure-publisher-gate-and-atomic-manifest-swap.md
-- .scratch/actionable/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
+- .scratch/done/ui-public-landing-replay-curation/issues/02-secure-publisher-gate-and-atomic-manifest-swap.md
+- .scratch/done/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
 
 ## Superseded notes
 

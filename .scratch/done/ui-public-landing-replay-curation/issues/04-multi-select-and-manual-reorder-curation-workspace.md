@@ -1,11 +1,11 @@
 # 04 - Multi-select and manual reorder curation workspace
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -26,7 +26,7 @@ Deliver a dedicated Landing Replay Curation Page where maintainers can build an 
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
+- .scratch/done/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
 
 ## Superseded notes
 

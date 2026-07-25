@@ -1,11 +1,11 @@
 # 07 - Hero four-phase playback driver and stage rendering
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/10-landing-four-phase-renderer-and-real-fallback.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/10-landing-four-phase-renderer-and-real-fallback.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -25,7 +25,7 @@ Deliver deterministic four-phase replay rendering for a published bundle item. T
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/05-single-item-replay-bundle-assembly-and-publish.md
+- .scratch/done/ui-public-landing-replay-curation/issues/05-single-item-replay-bundle-assembly-and-publish.md
 
 ## Superseded notes
 

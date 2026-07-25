@@ -1,7 +1,7 @@
 # PRD: Public Landing Replay Curation
 
-Status: in-progress
-Disposition: actionable
+Status: done
+Disposition: done
 
 ## Problem Statement
 
@@ -110,7 +110,7 @@ abstracted to points, and the finished Route Overlay.
 
 ## User Stories
 
-See issue slices 15-17 in `.scratch/actionable/ui-public-landing-replay-curation/issues/`.
+See issue slices 15-17 in `.scratch/done/ui-public-landing-replay-curation/issues/`.
 
 ## Branch and Start Order
 

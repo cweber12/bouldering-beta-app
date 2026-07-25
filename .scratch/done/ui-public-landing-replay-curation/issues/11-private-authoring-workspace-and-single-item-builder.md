@@ -1,11 +1,11 @@
 # 11 - Private authoring workspace and single-item builder
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -31,7 +31,7 @@ Create a hidden development-only authoring workspace for private maintainer use.
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
+- .scratch/done/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
 
 ## Superseded notes
 

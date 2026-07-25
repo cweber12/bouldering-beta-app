@@ -1,11 +1,11 @@
 # 13 - Global playlist reader, passive cycling, and fallback
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -29,8 +29,8 @@ Switch landing replay consumption to a global checked-in playlist reader with pa
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/10-landing-four-phase-renderer-and-real-fallback.md
-- .scratch/actionable/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
+- .scratch/done/ui-public-landing-replay-curation/issues/10-landing-four-phase-renderer-and-real-fallback.md
+- .scratch/done/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
 
 ## Superseded notes
 

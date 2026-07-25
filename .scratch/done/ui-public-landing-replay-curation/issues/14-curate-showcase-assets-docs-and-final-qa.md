@@ -1,11 +1,11 @@
 # 14 - Curate showcase assets, docs, and final QA
 
 Status: wontfix
-Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
+Superseded-by: .scratch/done/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
 
 ## Parent
 
-- .scratch/actionable/ui-public-landing-replay-curation/PRD.md
+- .scratch/done/ui-public-landing-replay-curation/PRD.md
 
 ## What to build
 
@@ -28,7 +28,7 @@ Run the human-assisted finalization pass: curate real showcase content with the 
 
 ## Blocked by
 
-- .scratch/actionable/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
+- .scratch/done/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
 
 ## Superseded notes
 
