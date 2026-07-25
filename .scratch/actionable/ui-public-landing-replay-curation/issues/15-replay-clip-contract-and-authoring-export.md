@@ -1,7 +1,8 @@
 # 15 - Replay clip contract and authoring export
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-clip-export
+Merged: d55760b
 
 ## Parent
 

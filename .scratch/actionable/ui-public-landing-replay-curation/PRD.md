@@ -1,6 +1,6 @@
 # PRD: Public Landing Replay Curation
 
-Status: ready-for-agent
+Status: in-progress
 Disposition: actionable
 
 ## Problem Statement
