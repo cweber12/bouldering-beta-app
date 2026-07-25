@@ -54,20 +54,27 @@ import {
  *  - The wake arrives with the black and clears as the figure lands on the wall,
  *    so the motion trail belongs to the x-ray beat rather than the photographic
  *    ones at either end.
+ *
+ * The `morph` window takes **57% of the clip** — it is the payoff, and the change
+ * of coordinate space is the one thing here that cannot be read at a glance. Its
+ * budget comes out of the three beats around it, since the clip's length is fixed:
+ * the wall still holds a little less, the swap to matched points is quicker, and
+ * the finished Route Overlay stands alone for about a second before the handoff
+ * (which itself holds that final frame for another 300 ms).
  */
 export const REPLAY_WINDOWS = {
   /** The video-space wall still: up out of black, then back down to it. */
-  still: { in: [0, 0.12], out: [0.3, 0.44] },
+  still: { in: [0, 0.1], out: [0.26, 0.34] },
   /** The ambient ORB field igniting on the still, then thinning to the matches. */
-  starfield: { in: [0.12, 0.3], out: [0.3, 0.46] },
+  starfield: { in: [0.1, 0.26], out: [0.26, 0.34] },
   /** The matched subset — up as the ambient field thins, retired at the very end. */
-  match: { in: [0.3, 0.46], out: [0.84, 1] },
+  match: { in: [0.26, 0.34], out: [0.91, 1] },
   /** Points and Skeleton travelling from source space into Route Photo space. */
-  morph: [0.46, 0.84],
+  morph: [0.34, 0.91],
   /** The Route Photo: late and slow, so the migration stays legible under it. */
-  photo: [0.52, 0.9],
+  photo: [0.45, 0.95],
   /** The motion trail: arrives with the black beat, gone once the figure lands. */
-  wake: { in: [0.24, 0.4], out: [0.52, 0.78] },
+  wake: { in: [0.2, 0.32], out: [0.45, 0.82] },
 } as const;
 
 /**

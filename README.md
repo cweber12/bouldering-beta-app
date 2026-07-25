@@ -449,6 +449,8 @@ raises that still behind the skeleton, and ignites the ORB starfield on it. The
 still then recedes to black for the x-ray beat, where the wall exists only as
 matched ORB points travelling into route-photo space; the route photo itself
 rises late and eased beneath them, so it never covers the migration it explains.
+That migration takes the majority of the clip — it is the payoff, and the change
+of coordinate space is the one beat that cannot be read at a glance.
 That black gap is bounded on purpose — long enough to read the points moving,
 short enough that the real wall is still in mind when the photo answers it. The still is optional: a clip
 authored without one opens on the dark stage instead. The stage takes its shape

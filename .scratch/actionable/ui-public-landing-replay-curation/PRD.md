@@ -94,15 +94,18 @@ The pose plays continuously across the whole clip. Phases control only *which
 space* the figure is drawn in and what else is on screen — they never change
 playback speed.
 
-1. 0-12%: the wall still rises out of the dark stage behind the video-space
-   Skeleton; 12-30%: the starfield ignites on that still
-2. 30-46%: the still recedes to black while the starfield thins to the matched
+1. 0-10%: the wall still rises out of the dark stage behind the video-space
+   Skeleton; 10-26%: the starfield ignites on that still
+2. 26-34%: the still recedes to black while the starfield thins to the matched
    source points — the x-ray beat, with no photograph under it
-3. 46-84%: matched points and Skeleton morph toward Route Photo space, the Route
-   Photo rising late (52-90%) and eased beneath them
-4. 84-100%: matched points fade out while the Route Overlay completes
+3. 34-91%: matched points and Skeleton morph toward Route Photo space, the Route
+   Photo rising late (45-95%) and eased beneath them
+4. 91-100%: matched points fade out while the Route Overlay completes
 
-The morph (phase 3) is the payoff, so it gets the largest share.
+The morph (phase 3) is the payoff, so it takes the **majority of the clip** —
+57%, against 26% for the opening wall and 9% for the finished overlay. The change
+of coordinate space is the one beat that cannot be read at a glance, and the clip
+length is fixed, so its budget comes out of the beats on either side.
 
 ## User Stories
 
