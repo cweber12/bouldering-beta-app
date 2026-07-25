@@ -99,12 +99,9 @@ playback speed.
 2. 30-45%: starfield fades while matched source points emerge
 3. 45-80%: the wall still cross-dissolves into the Route Photo while matched
    points and Skeleton morph toward Route Photo space
-4. 80-100%: matched points fade out while the Route Overlay completes and Holds
-   reveal on their `t`
+4. 80-100%: matched points fade out while the Route Overlay completes
 
-The morph (phase 3) is the payoff, so it gets the largest share. Holds reveal
-progressively through phases 3-4 using the existing `holdsOverlay` reveal
-behaviour.
+The morph (phase 3) is the payoff, so it gets the largest share.
 
 ## User Stories
 
@@ -152,6 +149,9 @@ Dependency summary:
 - The hero stage takes its shape from the first item's source plane rather than a
   fixed portrait, so landscape footage is not letterboxed into a strip. One shape
   for the whole playlist, so a handoff never reflows.
+- The hero draws **no Holds**. They are a secondary feature and a ring revealing
+  mid-morph competes with the payoff. Items still carry them, so this is a
+  render decision, not a contract change.
 - Public labels include only `area`, Route name, and `rating`.
 - Hero is passive: no previous/next navigation; one pause/play control for
   motion compliance.

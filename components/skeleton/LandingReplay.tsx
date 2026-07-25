@@ -2,8 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useReplayClock } from "@/hooks/useReplayClock";
-import type { Hold } from "@/pipeline/holds/holdDetection";
-import { drawHolds } from "@/pipeline/holds/holdsOverlay";
 import {
   computeStableBodyScale,
   drawSkeleton,
@@ -48,8 +46,12 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 //   45-80%  the still hands the backdrop to the Route Photo while the matched
 //           points and the Skeleton migrate into its space — the payoff, so it
 //           gets the longest window
-//   80-100% the matched points retire and the Route Overlay stands alone, Holds
-//           revealing on their own clip-relative times
+//   80-100% the matched points retire and the Route Overlay stands alone
+//
+// The hero deliberately draws **no Holds**: they are a secondary feature, and a
+// ring lighting up mid-morph reads as clutter against the one thing this clip is
+// for — the Skeleton arriving on the wall. Items still carry them, so re-enabling
+// is a call to drawHolds, not a re-curation.
 //
 // An item may carry no wall still (the field is optional), in which case phases
 // 1-2 play against the dark stage as the hero originally did.
@@ -194,8 +196,6 @@ interface ReplayGeometry {
   starfield: { x: number; y: number }[];
   /** Matched features: where each one sits in each space, in stage pixels. */
   matches: { from: { x: number; y: number }; to: { x: number; y: number } }[];
-  /** Holds in stage pixels, revealing on their clip-relative `firstUseTime`. */
-  holds: Hold[];
   /** Stable body scale per space, so limb widths never pulse with the movement. */
   sourceScale: number;
   photoScale: number;
@@ -213,18 +213,6 @@ function buildGeometry(item: LandingReplayItem, stage: StageSize): ReplayGeometr
       from: toStage(sourceRect, m.sx, m.sy),
       to: toStage(photoRect, m.px, m.py),
     })),
-    holds: item.holds.map((h, i) => {
-      const p = toStage(photoRect, h.x, h.y);
-      return {
-        id: `hold-${i}`,
-        order: i + 1,
-        kind: h.kind,
-        side: h.side,
-        x: p.x,
-        y: p.y,
-        firstUseTime: h.t,
-      };
-    }),
     sourceScale: computeStableBodyScale(
       item.poses.map((p) => ({ keypoints: stageFromList(p.source, sourceRect) })),
       stage.w,
@@ -361,15 +349,7 @@ function drawReplayItem(
     }
   }
 
-  // 6 — Holds, beneath the figure, revealing on their clip-relative times.
-  if (frame.photoAlpha > 0 && geometry.holds.length > 0) {
-    ctx.save();
-    ctx.globalAlpha = frame.photoAlpha;
-    drawHolds(ctx, geometry.holds, frame.clipSeconds, undefined, bodyScale);
-    ctx.restore();
-  }
-
-  // 7 — the live figure, on top in every phase.
+  // 6 — the live figure, on top in every phase.
   const live = figureAt(frame.clipSeconds);
   if (live) drawSkeleton(ctx, live, { bodyScale });
 }
@@ -542,7 +522,7 @@ export default function LandingReplay({ maxHeight }: LandingReplayProps = {}) {
   const { area, route, rating } = items[captioned.index].label;
 
   return (
-    <figure className="flex flex-col items-center gap-3">
+    <figure className="flex w-full flex-col items-center gap-3">
       <div
         ref={stageRef}
         className="relative mx-auto w-full overflow-hidden rounded-md border border-edge/40 bg-scan-stage"

@@ -113,6 +113,20 @@ The first authored clip surfaced four things, all now fixed:
   photographs hand over without the stage showing through. Optional by design:
   the already-curated clip stays valid and simply opens dark.
 
+### Curation round 2 — hero framing and Holds
+
+- **The hero rendered at a fraction of its column.** The `<figure>` sits in a
+  `flex flex-col items-center` parent, so with no explicit width it shrink-to-fits
+  and the stage's own `w-full` resolved against the *caption's* text width — the
+  hero was as wide as "Maze of Death · Bishop V12". `w-full` on the figure fixes
+  it; the height cap now only binds on portrait clips, which would otherwise run
+  taller than the pitch beside them.
+- **Holds are gone from the hero.** A ring lighting up mid-morph competes with the
+  one thing the clip is for — the Skeleton arriving on the wall — and made the
+  transition read as cluttered. Items still carry `holds`, so this is a render
+  decision, not a contract change or a re-curation; re-enabling is a `drawHolds`
+  call. A mocked-module test asserts the hero never calls it.
+
 ### Clip timing revision (8s → 14s → 20s captured / 12s on screen)
 
 An 8-second clip did not capture enough of an ascent to read as a climb. The fix

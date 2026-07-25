@@ -430,7 +430,9 @@ The landing hero plays a curated playlist of replay clips from
 file order. Each clip runs four fixed phases: the ORB starfield with the
 video-space skeleton, the matched wall features emerging, the route photo rising
 while points and skeleton morph into its space, and the finished route overlay
-with holds revealing on their own times.
+standing alone. The hero draws no holds — they are a secondary feature, and a
+ring lighting up mid-morph competes with the skeleton arriving on the wall. Items
+still carry them, so re-enabling is a call to `drawHolds`, not a re-curation.
 
 A clip captures **20 seconds** of climbing and the hero spends **12 seconds**
 showing it, so the figure plays back at ~1.7× — enough of the ascent to read as a

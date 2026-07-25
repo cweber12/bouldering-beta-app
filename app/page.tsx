@@ -131,9 +131,10 @@ export default function Home() {
             </ul>
           </div>
 
-          {/* Curated replay */}
+          {/* Curated replay — fills its column; the cap only binds on portrait
+              clips, which would otherwise run taller than the pitch beside them. */}
           <div className="flex w-full flex-col items-center gap-3">
-            <LandingReplay maxHeight="clamp(340px, 62vh, 600px)" />
+            <LandingReplay maxHeight="clamp(340px, 70vh, 680px)" />
           </div>
         </div>
       </section>

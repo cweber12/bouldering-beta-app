@@ -2,7 +2,10 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import LandingReplay from "@/components/skeleton/LandingReplay";
+import { drawHolds } from "@/pipeline/holds/holdsOverlay";
 import type { LandingReplayItem } from "@/pipeline/overlay/landingReplayItem";
+
+vi.mock("@/pipeline/holds/holdsOverlay", () => ({ drawHolds: vi.fn() }));
 
 // ---------------------------------------------------------------------------
 // The canvas is a no-op by default (the global setup stubs getContext to null),
@@ -242,6 +245,29 @@ describe("LandingReplay", () => {
 
     await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
     expect(container.querySelector("figure")).toBeNull();
+  });
+
+  it("stretches to its container instead of shrink-wrapping the caption", async () => {
+    stubPlaylist({ version: 1, items: [ITEM] });
+    const { container } = render(<LandingReplay />);
+    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+
+    // A class assertion rather than a layout one, because jsdom computes no
+    // layout — but this is the exact regression: the figure sits in a
+    // `flex flex-col items-center` parent, so without an explicit width it
+    // shrink-to-fits and the stage's own `w-full` resolves against the caption's
+    // text width, rendering the hero at a fraction of its column.
+    expect(container.querySelector("figure")?.className).toContain("w-full");
+  });
+
+  it("draws no Holds — they are a secondary feature the hero leaves out", async () => {
+    stubPlaylist({ version: 1, items: [ITEM] });
+    render(<LandingReplay />);
+    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+
+    advance(0);
+    advance(CLIP_MS * 0.9); // deep into phase 4, where Holds used to be revealed
+    expect(drawHolds).not.toHaveBeenCalled();
   });
 
   it("shapes the stage from the first item's source plane, not a fixed portrait", async () => {
