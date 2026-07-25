@@ -36,6 +36,7 @@ Actionable PRDs that are not first in line.
 | 1 | `.scratch/actionable/dev-detection-annotation-ui/PRD.md` | `P2` |
 | 2 | `.scratch/actionable/pose-pipeline-contract-authority/PRD.md` | `P2` |
 | 3 | `.scratch/actionable/ui-public-landing-replay-curation/PRD.md` | `P2` |
+| 4 | `.scratch/actionable/scan-pipeline-isolation-testability/PRD.md` | `P2` |
 
 ## Parked
 
