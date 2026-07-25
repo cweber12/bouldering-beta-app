@@ -17,12 +17,14 @@
  */
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
-import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
+import type { OrbFeatures, OrbKeypoint, OrbMatch } from "@/pipeline/matching/orbDetector";
 import { MP_KP_NAMES } from "@/utils/poseConstants";
 import {
   LANDING_REPLAY_VERSION,
   REPLAY_CAPTURE_SECONDS,
+  REPLAY_COORD_DECIMALS,
   REPLAY_POSE_INTERVAL_SECONDS,
+  REPLAY_STARFIELD_MAX,
   type LandingReplayFile,
   type LandingReplayItem,
   type ReplayDims,
@@ -87,6 +89,12 @@ export interface BuildLandingReplayItemParams {
    */
   poseIntervalSeconds?: number;
   /**
+   * How many wall features reach the exported starfield, strongest ORB response
+   * first. Defaults to {@link REPLAY_STARFIELD_MAX}; pass `Infinity` to export
+   * every extracted keypoint.
+   */
+  starfieldMax?: number;
+  /**
    * Projects a **source video pixel** point into Route Photo pixel space —
    * built by the caller from the matcher's gated homography, so the matrix
    * itself never reaches this module (nor the export).
@@ -96,13 +104,16 @@ export interface BuildLandingReplayItemParams {
   holds: readonly AuthoredHold[];
 }
 
-/** Round a normalized coordinate to 4 dp — keeps the checked-in JSON small. */
-function r4(v: number): number {
-  return Math.round(v * 1e4) / 1e4;
+/** Digits every coordinate is rounded to — see {@link REPLAY_COORD_DECIMALS}. */
+const COORD_SCALE = 10 ** REPLAY_COORD_DECIMALS;
+
+/** Round a normalized coordinate — the single biggest lever on a checked-in clip. */
+function rc(v: number): number {
+  return Math.round(v * COORD_SCALE) / COORD_SCALE;
 }
 
 /** Round a clip-relative time to 3 dp (millisecond resolution). */
-function r3(v: number): number {
+function rt(v: number): number {
   return Math.round(v * 1e3) / 1e3;
 }
 
@@ -139,6 +150,26 @@ function decimate(frames: PoseFrame[], interval: number): PoseFrame[] {
   return kept;
 }
 
+/**
+ * The `limit` strongest keypoints, back in extraction order.
+ *
+ * Selection is by `response` — the corner strength ORB scored each keypoint with —
+ * so a thinned starfield is a weaker version of the *whole* wall rather than a
+ * complete version of one corner of it, which is what slicing the first N would
+ * ship. Ties break on the original index so the choice is deterministic, and the
+ * survivors are re-ordered back to extraction order: nothing downstream reads the
+ * array in order, and keeping it stable keeps the diff on a re-export readable.
+ */
+function strongestKeypoints(keypoints: readonly OrbKeypoint[], limit: number): OrbKeypoint[] {
+  if (keypoints.length <= limit) return [...keypoints];
+  return keypoints
+    .map((kp, index) => ({ kp, index }))
+    .sort((a, b) => b.kp.response - a.kp.response || a.index - b.index)
+    .slice(0, Math.max(0, limit))
+    .sort((a, b) => a.index - b.index)
+    .map((entry) => entry.kp);
+}
+
 /** Guard against a zero/absent dimension turning every coordinate into NaN. */
 function safeDim(v: number): number {
   return v > 0 ? v : 1;
@@ -152,6 +183,11 @@ function safeDim(v: number): number {
  *   re-timed so the first frame of the window sits at `t = 0`.
  * - Holds first used at or before the window's end are kept; one already in use
  *   when the window opens reveals at `t = 0` rather than at a negative time.
+ *
+ * Payload rules, because this file is checked into the repo and fetched before
+ * the hero draws anything:
+ * - The starfield keeps the strongest {@link REPLAY_STARFIELD_MAX} responses.
+ * - Every coordinate is rounded to {@link REPLAY_COORD_DECIMALS}; times are not.
  */
 export function buildLandingReplayItem(params: BuildLandingReplayItemParams): LandingReplayItem {
   const {
@@ -167,6 +203,7 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
     windowStart,
     windowSeconds = REPLAY_CAPTURE_SECONDS,
     poseIntervalSeconds = REPLAY_POSE_INTERVAL_SECONDS,
+    starfieldMax = REPLAY_STARFIELD_MAX,
     project,
     holds,
   } = params;
@@ -177,10 +214,12 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
   const ph = safeDim(photoSpace?.h ?? photo.h);
   const windowEnd = windowStart + windowSeconds;
 
-  const starfield: ReplayPoint[] = refFeatures.keypoints.map((kp) => ({
-    x: r4(kp.pt.x / sw),
-    y: r4(kp.pt.y / sh),
-  }));
+  const starfield: ReplayPoint[] = strongestKeypoints(refFeatures.keypoints, starfieldMax).map(
+    (kp) => ({
+      x: rc(kp.pt.x / sw),
+      y: rc(kp.pt.y / sh),
+    }),
+  );
 
   // `queryIdx` indexes the reference (source) keypoints and `trainIdx` the query
   // (photo) keypoints — the same convention computeHomography reads them by.
@@ -190,10 +229,10 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
     const qry = queryFeatures.keypoints[m.trainIdx];
     if (!ref || !qry) continue;
     pairedMatches.push({
-      sx: r4(ref.pt.x / sw),
-      sy: r4(ref.pt.y / sh),
-      px: r4(qry.pt.x / pw),
-      py: r4(qry.pt.y / ph),
+      sx: rc(ref.pt.x / sw),
+      sy: rc(ref.pt.y / sh),
+      px: rc(qry.pt.x / pw),
+      py: rc(qry.pt.y / ph),
     });
   }
 
@@ -213,28 +252,28 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
       const index = KP_INDEX_BY_NAME.get(kp.name);
       if (index === undefined) continue;
       const score = r2(kp.score);
-      sourceKp.push([index, r4(kp.x), r4(kp.y), score]);
+      sourceKp.push([index, rc(kp.x), rc(kp.y), score]);
       const projected = project(kp.x * sw, kp.y * sh);
-      photoKp.push([index, r4(projected.x / pw), r4(projected.y / ph), score]);
+      photoKp.push([index, rc(projected.x / pw), rc(projected.y / ph), score]);
     }
-    return { t: r3(frame.timestamp - windowStart), source: sourceKp, photo: photoKp };
+    return { t: rt(frame.timestamp - windowStart), source: sourceKp, photo: photoKp };
   });
 
   const replayHolds: ReplayHold[] = holds
     .filter((h) => h.firstUseTime <= windowEnd)
     .map((h) => ({
-      x: r4(h.x / pw),
-      y: r4(h.y / ph),
+      x: rc(h.x / pw),
+      y: rc(h.y / ph),
       kind: h.kind,
       side: h.side,
-      t: r3(Math.max(0, h.firstUseTime - windowStart)),
+      t: rt(Math.max(0, h.firstUseTime - windowStart)),
     }))
     .sort((a, b) => a.t - b.t);
 
   return {
     id,
     label: { area: label.area, route: label.route, rating: label.rating },
-    duration: r3(windowSeconds),
+    duration: rt(windowSeconds),
     source: source.webp
       ? { w: source.w, h: source.h, webp: source.webp }
       : { w: source.w, h: source.h },

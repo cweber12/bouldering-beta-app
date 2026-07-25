@@ -57,6 +57,29 @@ export const REPLAY_ANIMATION_SECONDS = 12;
 export const REPLAY_POSE_INTERVAL_SECONDS = 0.2;
 
 /**
+ * How many wall features one clip exports as its ambient starfield.
+ *
+ * The hero draws each point as a ~2 px dot on a ~900 px stage, so the 3000
+ * keypoints ORB returns are far past what reads as texture — they are weight
+ * without picture. The cap keeps the **strongest** responses rather than the
+ * first ones encountered: ORB returns keypoints in detection order, so a
+ * first-N slice would ship an arbitrary corner of the wall instead of a thinner
+ * version of the whole one.
+ */
+export const REPLAY_STARFIELD_MAX = 800;
+
+/**
+ * Decimal places every normalized coordinate is exported at.
+ *
+ * At 3 dp one step is ~2 px on a 1080-tall stage — below what a ~2 px dot or a
+ * skeleton bone can express, and the renderer interpolates between samples
+ * anyway. Clip-relative times are **not** rounded to this: they keep millisecond
+ * resolution, because a pose's time is what its interpolation is measured
+ * against rather than something drawn.
+ */
+export const REPLAY_COORD_DECIMALS = 3;
+
+/**
  * How many items the hero will play. The playlist is a curated 1-5 clips; a file
  * carrying more is read up to this cap rather than rejected, because a playlist
  * that grew by one item past the cap is a curation slip, not a broken asset.
@@ -177,7 +200,10 @@ export interface LandingReplayItem {
   source: ReplaySource;
   /** Route Photo pixel dimensions + the embedded WebP. */
   photo: ReplayPhoto;
-  /** Wall ORB keypoints from the source reference frame, normalized. */
+  /**
+   * Wall ORB keypoints from the source reference frame, normalized — the
+   * strongest {@link REPLAY_STARFIELD_MAX} of them, in extraction order.
+   */
   starfield: ReplayPoint[];
   /** Paired wall features — the points that visibly migrate during the morph. */
   matches: ReplayMatch[];

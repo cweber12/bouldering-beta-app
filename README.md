@@ -488,6 +488,15 @@ Clips are authored by the maintainer on the unlinked development-only route
    landmarks encoded as `[index, x, y, score]`, which keeps a 20s clip lighter
    than the original 8s one.
 
+The export is trimmed for a file every visitor downloads before the hero draws
+anything. The starfield keeps the **800 strongest** ORB responses rather than all
+~3000 — selected by response, not by detection order, so a thinned field is a
+weaker version of the whole wall rather than an arbitrary corner of it — every
+coordinate is rounded to **3 dp** (~2 px on a 1080-tall stage, below what a 2 px
+dot or a skeleton bone can express), and both embedded images are WebP at
+**quality 0.6, longest edge 960**. Clip-relative times keep millisecond
+resolution. Together that is ~350 KB per clip instead of ~685 KB.
+
 Then save it as `public/landing-replay.json` — or, for more than one clip,
 concatenate the `items` arrays by hand in the order you want them played — and
 commit it. **A downloaded export is not live until it is at that path**; the hero
