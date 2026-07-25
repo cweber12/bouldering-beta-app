@@ -1,6 +1,7 @@
 # 14 - Curate showcase assets, docs, and final QA
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
 
 ## Parent
 
@@ -28,3 +29,9 @@ Run the human-assisted finalization pass: curate real showcase content with the 
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
+
+## Superseded notes
+
+Folded into issue 17 rather than kept as a standalone finalization slice.
+Curation, check-in, docs, and QA now land with the cycling behavior they
+validate, so the playlist surface is never merged without its content.

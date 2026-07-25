@@ -1,6 +1,7 @@
 # 10 - Landing four-phase renderer and real fallback
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/16-landing-four-phase-renderer-and-replay-clock.md
 
 ## Parent
 
@@ -30,3 +31,12 @@ Build landing-specific replay rendering that executes the four-phase visual stor
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
+
+## Superseded notes
+
+Replaced by issue 16. The four-phase spec survives with re-weighted windows
+(0-30/30-45/45-80/80-100) so the morph gets the largest share, plus Holds
+reveal. The real-data fallback item is dropped along with the fallback artifact;
+the hero degrades to its text content instead. Pause/play moves into a single
+`useReplayClock` shared with the offscreen and hidden-tab inputs that issue 13
+had specified separately.

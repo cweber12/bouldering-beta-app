@@ -5,70 +5,153 @@ Disposition: actionable
 
 ## Problem Statement
 
-The landing replay currently mixes a bundled demo path with signed-in user sampling and does not provide a deterministic, portfolio-grade public sequence. We need a private maintainer workflow that turns known-good Runs into checked-in replay artifacts while keeping the public hero stable, passive, and resilient.
+The landing replay currently mixes a bundled demo path with signed-in user
+sampling and does not provide a deterministic, portfolio-grade public sequence.
+We need a private maintainer workflow that turns known-good Runs into
+checked-in replay artifacts while keeping the public hero stable and passive.
 
 ## Solution
 
-Replace runtime publishing with static artifact delivery:
+Curate a playlist of short clips drawn from different Runs, and deliver it as a
+single static asset:
 
-1. Build curated replay items in a hidden development-only authoring workspace.
-2. Export a versioned global playlist asset plus a standalone real-data fallback asset.
-3. Check those assets into the repo and deliver through normal deployment.
-4. Render a four-phase 8-second visual story per item in fixed editorial order on the landing hero.
+1. In a hidden development-only route, pick a saved Run and an 8-second window
+   of it, attach a Route Photo, and run the existing ORB match.
+2. Export that clip as one JSON item and check it into the repo.
+3. The landing hero fetches one playlist asset and plays its items in file
+   order.
 
-Each replay item follows fixed phase timing:
+### Design invariant: the exported item is pure geometry
 
-1. 0-45%: starfield + video-space Skeleton
-2. 45-62%: starfield fades while matched source points emerge
-3. 62-80%: Route Photo appears while ORB and Skeleton morph toward Route Overlay
-4. 80-100%: matched points fade out while Route Overlay Skeleton completes
+Everything expensive — ORB matching, homography, Hold projection, Skeleton
+transform — runs **once at authoring time, in the browser**, using the pipeline
+and hooks that already exist. The exported item stores only the *results*.
+
+At runtime the landing renderer **only lerps and crossfades**. No OpenCV, no
+MediaPipe, no homography, no pose interpolation on the landing page. Phase 3's
+"morph into Route space" is a plain interpolation between two saved coordinate
+arrays.
+
+This invariant is what keeps the renderer small, and it is the reason the
+authoring step must save both coordinate spaces rather than one plus a matrix.
+
+### Item contract (v1)
+
+Every coordinate is normalized `[0,1]` — source points in source video space,
+photo points in Route Photo space — so nothing depends on render resolution.
+
+```jsonc
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "run-1750000000-boulder-problem",
+      "label": { "area": "…", "route": "…", "rating": "V4" },
+      "source": { "w": 1080, "h": 1920 },
+      "photo": { "w": 1200, "h": 1600, "webp": "data:image/webp;base64,…" },
+      "starfield": [{ "x": 0.12, "y": 0.44 }],
+      "matches": [{ "sx": 0.12, "sy": 0.44, "px": 0.31, "py": 0.52 }],
+      "poses": [
+        {
+          "t": 0.0,
+          "source": [{ "n": "left_wrist", "x": 0.4, "y": 0.3, "s": 0.9 }],
+          "photo": [{ "n": "left_wrist", "x": 0.5, "y": 0.4, "s": 0.9 }]
+        }
+      ],
+      "holds": [{ "x": 0.3, "y": 0.5, "kind": "hand", "side": "left", "t": 1.2 }]
+    }
+  ]
+}
+```
+
+`poses[].t` and `holds[].t` are **clip-relative seconds** (0 at the clip's first
+frame), so the 8-second clip maps 1:1 onto the 8-second animation.
+
+### Phase timing
+
+The pose plays continuously across the whole 8 seconds. Phases control only
+*which space* the figure is drawn in and what else is on screen — they never
+change playback speed.
+
+1. 0-30%: starfield + video-space Skeleton
+2. 30-45%: starfield fades while matched source points emerge
+3. 45-80%: Route Photo appears while matched points and Skeleton morph toward
+   Route Photo space
+4. 80-100%: matched points fade out while the Route Overlay completes and Holds
+   reveal on their `t`
+
+The morph (phase 3) is the payoff, so it gets the largest share. Holds reveal
+progressively through phases 3-4 using the existing `holdsOverlay` reveal
+behaviour.
 
 ## User Stories
 
-See issue slices 09-14 in `.scratch/actionable/ui-public-landing-replay-curation/issues/`.
+See issue slices 15-17 in `.scratch/actionable/ui-public-landing-replay-curation/issues/`.
 
 ## Branch and Start Order
 
 Use one issue per branch, branched from `main`, in this order:
 
-1. Start issue 09 first.
-	Branch: `feat/landing-replay-contract-projection`
-2. Start issues 10 and 11 after issue 09 lands.
-	Branches: `feat/landing-replay-renderer` and `feat/landing-replay-authoring-workspace`
-3. Start issue 12 after issue 11 lands.
-	Branch: `feat/landing-replay-static-export`
-4. Start issue 13 after both issues 10 and 12 land.
-	Branch: `feat/landing-replay-reader-cycling`
-5. Start issue 14 after issue 13 lands.
-	Branch: `docs/landing-replay-curation-qa`
+1. Start issue 15 first.
+   Branch: `feat/landing-replay-clip-export`
+2. Start issue 16 after issue 15 lands.
+   Branch: `feat/landing-replay-renderer`
+3. Start issue 17 after issue 16 lands.
+   Branch: `feat/landing-replay-playlist`
 
 Dependency summary:
 
-- 09 has no blockers.
-- 10 blocked by 09.
-- 11 blocked by 09.
-- 12 blocked by 11.
-- 13 blocked by 10 and 12.
-- 14 blocked by 13.
+- 15 has no blockers.
+- 16 blocked by 15.
+- 17 blocked by 16.
 
 ## Implementation Decisions
 
-- One global playlist for all visitors. Remove signed-in personalized landing replay behavior.
-- Curation is private maintainer tooling, not a user-facing product surface.
-- No runtime publish endpoint, no allowlist role, no atomic manifest swap.
+- One global playlist for all visitors. Remove signed-in personalized landing
+  replay behavior.
+- Curation is private maintainer tooling on a hidden `/dev` route, not a
+  user-facing product surface.
+- No runtime publish endpoint, no allowlist role, no repository writes from the
+  UI. The authoring route downloads a file; the maintainer commits it.
+- Authoring composes what already exists: `useImageMatcher` (ORB match + gated
+  homography), `buildSkeletonFrames` (photo-space Skeleton), `useHolds`
+  (photo-space Holds). The new code is a clip-window picker and a serializer.
 - Source material is maintainer-owned, known-good Fixed Capture Runs.
-- Route Photo is reattached during authoring and embedded in export as compressed WebP data.
-- Playlist contains 1-5 manually ordered items with one designated fallback item.
+- Route Photo is embedded in the export as compressed WebP data.
+- Playlist holds 1-5 items; **order is array order in the checked-in file**.
+  Reordering means editing the file.
 - Public labels include only `area`, Route name, and `rating`.
-- Hero is passive: no previous/next navigation; include a minimal pause/play control for motion compliance.
+- Hero is passive: no previous/next navigation; one pause/play control for
+  motion compliance.
 - Reduced motion starts on a static final Route Overlay frame.
+
+### Deliberately excluded
+
+These were specified in the superseded slices 09-14 and are dropped as
+ceremony disproportionate to a static file that ships in the same bundle as the
+page reading it:
+
+- **No standalone fallback artifact and no fallback load path.** The playlist is
+  one JSON in `public/`, same origin as the page's own JavaScript. If it fails
+  to load, everything else already failed. The hero degrades to its text
+  content.
+- **No version negotiation, no strict parser, no export round-trip
+  validation, no per-item skip.** Producer and consumer are the same commit of
+  the same repo. Keep the `version: 1` field and a single `isReplayItem()`
+  guard so a hand-edit cannot crash the hero.
+- **No reorder UI and no designated default item.** Order is file order; the
+  default disappeared with the fallback artifact.
+- **No approval gating or candidate eligibility filtering.** One maintainer, one
+  dev route — "approval" is clicking Export.
 
 ## Testing Decisions
 
-- Verify contract parsing, projection correctness, privacy-safe export shape, and deterministic phase timing.
-- Verify pause/play freezes and resumes the full replay clock without jumps.
-- Verify item-skip fallback logic and real-data fallback resilience.
-- Verify private authoring flow (window selection, photo rematch, approval, export).
+- Verify the serializer's output shape, coordinate normalization, and
+  clip-relative rebasing of pose and Hold timestamps.
+- Verify deterministic phase composition at each boundary.
+- Verify one replay clock: pause/play, offscreen, hidden tab, and reduced motion
+  all freeze and resume the same elapsed value with no jump.
+- Verify cycling advances in file order with a stable handoff.
 
 ## Out of Scope
 
@@ -81,6 +164,7 @@ Dependency summary:
 
 ## Further Notes
 
-- Keep schema versioning explicit and strict at the root contract.
-- Leave shared scan loading renderer behavior stable; use landing-specific rendering where needed.
-- Keep old issue slices for traceability with `wontfix` + `Superseded-by` pointers.
+- Keep old issue slices 01-14 for traceability with `wontfix` +
+  `Superseded-by` pointers.
+- Leave the shared scan loading renderer (`XrayStage`) behavior stable; the
+  landing renderer is landing-specific.

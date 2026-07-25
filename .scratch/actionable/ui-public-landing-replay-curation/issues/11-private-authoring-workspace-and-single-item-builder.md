@@ -1,6 +1,7 @@
 # 11 - Private authoring workspace and single-item builder
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
 
 ## Parent
 
@@ -31,3 +32,12 @@ Create a hidden development-only authoring workspace for private maintainer use.
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
+
+## Superseded notes
+
+Replaced by issue 15. This slice specified a workspace as if the matching flow
+had to be built; `RouteConsole`, `useImageMatcher`, `buildSkeletonFrames`, and
+`useHolds` already do the work, so the new slice is a clip-window picker plus a
+serializer over those. Explicit approval gating and candidate eligibility
+filtering are dropped — one maintainer on a hidden dev route, where approval is
+clicking Export.

@@ -1,6 +1,7 @@
 # 13 - Global playlist reader, passive cycling, and fallback
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md
 
 ## Parent
 
@@ -30,3 +31,12 @@ Switch landing replay consumption to a global checked-in playlist reader with pa
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/10-landing-four-phase-renderer-and-real-fallback.md
 - .scratch/actionable/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
+
+## Superseded notes
+
+Replaced by issue 17. Ordered cycling and the ~300 ms handoff survive. Dropped:
+the fallback asset path, per-item skip on malformed items, and the all-items-
+invalid degradation ladder — the hero simply degrades to its text content. The
+offscreen/hidden-tab suspension requirement moves into the single
+`useReplayClock` in issue 16 rather than being specified against a clock owned
+by another slice.

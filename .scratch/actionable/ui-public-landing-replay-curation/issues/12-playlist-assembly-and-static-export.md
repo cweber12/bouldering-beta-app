@@ -1,6 +1,7 @@
 # 12 - Playlist assembly and static export
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
 
 ## Parent
 
@@ -29,3 +30,11 @@ Assemble approved replay items into deterministic static artifacts for deploymen
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
+
+## Superseded notes
+
+Export moves into issue 15; playlist order into issue 17. Dropped: the second
+standalone fallback artifact (one same-origin JSON needs no fallback sibling),
+the reorder UI and designated-default step (order is array order in a
+checked-in file), and export round-trip validation (nothing crosses a version
+boundary).

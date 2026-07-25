@@ -1,6 +1,7 @@
 # 09 - Versioned replay contract and projection
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/15-replay-clip-contract-and-authoring-export.md
 
 ## Parent
 
@@ -29,3 +30,11 @@ Define and implement the v1 checked-in replay artifact contract and projection p
 ## Blocked by
 
 None - can start immediately
+
+## Superseded notes
+
+Replaced by issue 15, which merges the contract into the authoring slice that
+produces it. Version negotiation, strict version-aware parsing, and independent
+malformed-item rejection are dropped: producer and consumer are the same commit
+of the same repo, so a TypeScript type plus one narrow runtime guard covers the
+risk. The projection requirement survives as the PRD's pure-geometry invariant.
