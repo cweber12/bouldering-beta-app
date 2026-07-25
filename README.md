@@ -469,6 +469,14 @@ scrolling offscreen, and hiding the tab) freezes and resumes everything together
 Reduced motion starts parked on the first clip's finished route overlay and stays
 there until the visitor presses play.
 
+The playlist arrives in **one request**, but its embedded images are decoded in
+play order rather than all at once: the first clip's two backdrops gate the
+opening frame, and each later clip's queue behind the one before it — landing
+well inside the twelve seconds before its own slot opens. A three-clip playlist
+therefore opens as fast as a one-clip one. A backdrop still in flight, or one
+that fails to decode, leaves that clip playing against the dark stage rather than
+delaying anything.
+
 #### Authoring a clip
 
 Clips are authored by the maintainer on the unlinked development-only route

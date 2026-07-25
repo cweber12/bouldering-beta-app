@@ -44,6 +44,11 @@ function itemNamed(id: string, route: string): LandingReplayItem {
   return { ...ITEM, id, label: { ...ITEM.label, route } };
 }
 
+/** The same clip, authored with the optional video-space wall still. */
+function itemWithStill(item: LandingReplayItem, webp: string): LandingReplayItem {
+  return { ...item, source: { ...item.source, webp } };
+}
+
 const CLIP_MS = 12_000; // screen time per item (REPLAY_ANIMATION_SECONDS)
 const HANDOFF_MS = 300;
 
@@ -166,6 +171,45 @@ function stubRecordingContexts(): BlitLog {
   } as unknown as HTMLCanvasElement["getContext"];
 
   return log;
+}
+
+// ---------------------------------------------------------------------------
+// Deferred decode — an Image stub that stays pending until the test loads it,
+// which is what makes "the later clips have not decoded yet" a state the hero
+// can actually be observed rendering in. jsdom never loads images anyway; the
+// stub adds the request order and a way to settle one clip's pair at a time.
+// ---------------------------------------------------------------------------
+
+/** Images requested by the decode chain, in request order. */
+let requested: PendingImage[];
+
+class PendingImage {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  private value = "";
+
+  get src(): string {
+    return this.value;
+  }
+
+  set src(next: string) {
+    this.value = next;
+    requested.push(this);
+  }
+}
+
+/** Serve pending images and start recording request order. */
+function stubPendingImages(): void {
+  requested = [];
+  vi.stubGlobal("Image", PendingImage);
+}
+
+/** Load the given images and let the chain publish them. */
+async function loadImages(images: readonly PendingImage[]): Promise<void> {
+  await act(async () => {
+    for (const img of images) img.onload?.();
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+  });
 }
 
 describe("LandingReplay", () => {
@@ -422,6 +466,48 @@ describe("LandingReplay", () => {
     // stage itself, and only its own internal blits (the motion wake) remain.
     expect(after.length).toBeGreaterThan(0);
     expect(after.some((b) => b.source === layer)).toBe(false);
+  });
+
+  it("opens on the first clip while the later ones are still undecoded", async () => {
+    const blits = stubRecordingContexts();
+    stubPendingImages();
+    const first = itemWithStill(ITEM, "still-a");
+    stubPlaylist({
+      version: 1,
+      items: [
+        first,
+        itemWithStill(itemNamed("clip-b", "Crimp Ladder"), "still-b"),
+        itemWithStill(itemNamed("clip-c", "Sloper Traverse"), "still-c"),
+      ],
+    });
+    const { container } = render(<LandingReplay />);
+    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+
+    // Only the clip that is about to play has been asked for. The four images
+    // belonging to clips twelve and twenty-four seconds out are not competing
+    // with the two that gate the opening frame.
+    expect(requested.map((img) => img.src)).toEqual([first.photo.webp, "still-a"]);
+
+    // …and the hero is already up and painting with all three still pending.
+    const stage = container.querySelector("canvas") as HTMLCanvasElement;
+    advance(0);
+    advance(CLIP_MS * 0.05);
+    expect(captionedRoute(container)).toBe("Slab Master");
+
+    // Those opening frames ran against the dark stage — the still is drawn only
+    // once it is decoded, and its absence is not what holds the hero up.
+    const opening = [...requested];
+    const still = opening.find((img) => img.src === "still-a");
+    expect((blits.get(stage) ?? []).some((b) => b.source === still)).toBe(false);
+
+    // Item 0's pair lands; its wall still reaches the stage while items 1 and 2
+    // are still undecoded, and only then does the next clip's decode start.
+    await loadImages(opening);
+    const mark = (blits.get(stage) ?? []).length;
+    advance(CLIP_MS * 0.05);
+
+    expect((blits.get(stage) ?? []).slice(mark).some((b) => b.source === still)).toBe(true);
+    expect(requested.slice(2).map((img) => img.src)).toEqual([ITEM.photo.webp, "still-b"]);
   });
 
   it("keeps the pause control keyboard reachable and operable", async () => {
