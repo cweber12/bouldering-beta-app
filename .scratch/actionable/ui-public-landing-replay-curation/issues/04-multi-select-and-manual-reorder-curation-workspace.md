@@ -1,6 +1,7 @@
 # 04 - Multi-select and manual reorder curation workspace
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
 
 ## Parent
 
@@ -26,3 +27,7 @@ Deliver a dedicated Landing Replay Curation Page where maintainers can build an 
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
+
+## Superseded notes
+
+Workspace remains, but flow changed to one-item-at-a-time authoring and approval before list assembly.

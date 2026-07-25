@@ -1,6 +1,7 @@
 # 02 - Secure publisher gate and atomic manifest swap
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
 
 ## Parent
 
@@ -26,3 +27,7 @@ Deliver a guarded publish path for global Landing Replay Playlist updates. Publi
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/01-global-playlist-read-path-and-landing-fallback.md
+
+## Superseded notes
+
+Removed by plan change to checked-in static artifacts. No runtime publisher API, allowlist, or manifest swap remains in scope.

@@ -1,6 +1,7 @@
 # 06 - Multi-item bundle assembly and ordered atomic publish
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/12-playlist-assembly-and-static-export.md
 
 ## Parent
 
@@ -26,3 +27,7 @@ Extend single-item publish into full multi-item editorial publish. The system sh
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/04-multi-select-and-manual-reorder-curation-workspace.md
 - .scratch/actionable/ui-public-landing-replay-curation/issues/05-single-item-replay-bundle-assembly-and-publish.md
+
+## Superseded notes
+
+Ordered assembly remains, but activation semantics changed from runtime atomic publish to checked-in deterministic export artifacts.

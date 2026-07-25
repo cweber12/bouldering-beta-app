@@ -1,6 +1,7 @@
 # 05 - Single-item replay bundle assembly and publish
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/09-versioned-replay-contract-and-projection.md
 
 ## Parent
 
@@ -26,3 +27,7 @@ Deliver end-to-end assembly and publish of one eligible Run into a replay-safe b
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/02-secure-publisher-gate-and-atomic-manifest-swap.md
 - .scratch/actionable/ui-public-landing-replay-curation/issues/03-curation-preflight-eligibility-fixed-capture-route-photo-starfield.md
+
+## Superseded notes
+
+Single-item assembly remains, but runtime publish activation is removed. Contract/projection now live in issue 09 and authoring flow in issue 11.

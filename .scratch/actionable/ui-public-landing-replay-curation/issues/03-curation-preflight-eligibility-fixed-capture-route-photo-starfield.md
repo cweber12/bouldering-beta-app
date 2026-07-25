@@ -1,6 +1,7 @@
 # 03 - Curation preflight eligibility for Fixed Capture, Route Photo, and starfield
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/11-private-authoring-workspace-and-single-item-builder.md
 
 ## Parent
 
@@ -26,3 +27,7 @@ Deliver a preflight eligibility validator for Landing Replay Curation that check
 ## Blocked by
 
 - .scratch/actionable/ui-public-landing-replay-curation/issues/01-global-playlist-read-path-and-landing-fallback.md
+
+## Superseded notes
+
+Eligibility moved into lightweight authoring-step validation (known-good Run selection, route-photo rematch success, and required labels) rather than a standalone multi-run preflight subsystem.

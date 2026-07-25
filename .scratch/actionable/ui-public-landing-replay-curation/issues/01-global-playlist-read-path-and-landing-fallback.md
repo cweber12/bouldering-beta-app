@@ -1,6 +1,7 @@
 # 01 - Global playlist read path and landing fallback
 
-Status: ready-for-agent
+Status: wontfix
+Superseded-by: .scratch/actionable/ui-public-landing-replay-curation/issues/13-global-playlist-reader-passive-cycling-and-fallback.md
 
 ## Parent
 
@@ -25,3 +26,7 @@ Deliver an end-to-end landing replay read path for a versioned public Landing Re
 ## Blocked by
 
 None - can start immediately
+
+## Superseded notes
+
+Replaced by the static-asset reader model in issue 13. Runtime contract loading remains, but signed-in/unauthenticated split and old fallback assumptions were revised.
