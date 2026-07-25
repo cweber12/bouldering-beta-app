@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   isReplayItem,
+  readReplayPlaylist,
   LANDING_REPLAY_VERSION,
-  REPLAY_CLIP_SECONDS,
+  REPLAY_ANIMATION_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
+  REPLAY_PLAYLIST_MAX,
   type LandingReplayItem,
 } from "@/pipeline/overlay/landingReplayItem";
 
@@ -10,6 +13,7 @@ function validItem(): LandingReplayItem {
   return {
     id: "run-1750000000-boulder-problem",
     label: { area: "Chaos Canyon", route: "Boulder Problem", rating: "V4" },
+    duration: 14,
     source: { w: 1080, h: 1920 },
     photo: { w: 1200, h: 1600, webp: "data:image/webp;base64,AAAA" },
     starfield: [{ x: 0.12, y: 0.44 }],
@@ -17,8 +21,8 @@ function validItem(): LandingReplayItem {
     poses: [
       {
         t: 0,
-        source: [{ n: "left_wrist", x: 0.4, y: 0.3, s: 0.9 }],
-        photo: [{ n: "left_wrist", x: 0.5, y: 0.4, s: 0.9 }],
+        source: [[15, 0.4, 0.3, 0.9]],
+        photo: [[15, 0.5, 0.4, 0.9]],
       },
     ],
     holds: [{ x: 0.3, y: 0.5, kind: "hand", side: "left", t: 1.2 }],
@@ -26,9 +30,13 @@ function validItem(): LandingReplayItem {
 }
 
 describe("contract constants", () => {
-  it("pins version 1 and an 8-second clip", () => {
+  it("pins version 1, a 5-item playlist, and a capture window wider than the screen one", () => {
     expect(LANDING_REPLAY_VERSION).toBe(1);
-    expect(REPLAY_CLIP_SECONDS).toBe(8);
+    expect(REPLAY_PLAYLIST_MAX).toBe(5);
+    // The gap between these two is the playback rate — clips show more climbing
+    // than they spend screen time on.
+    expect(REPLAY_CAPTURE_SECONDS).toBeGreaterThan(REPLAY_ANIMATION_SECONDS);
+    expect(REPLAY_CAPTURE_SECONDS / REPLAY_ANIMATION_SECONDS).toBeLessThanOrEqual(2);
   });
 });
 
@@ -43,10 +51,24 @@ describe("isReplayItem", () => {
     }
   });
 
+  it("rejects an item with no usable captured duration", () => {
+    expect(isReplayItem({ ...validItem(), duration: undefined })).toBe(false);
+    expect(isReplayItem({ ...validItem(), duration: "14" })).toBe(false);
+    expect(isReplayItem({ ...validItem(), duration: 0 })).toBe(false);
+  });
+
   it("rejects an item missing its id or label strings", () => {
     expect(isReplayItem({ ...validItem(), id: 7 })).toBe(false);
     expect(isReplayItem({ ...validItem(), label: { area: "a" } })).toBe(false);
     expect(isReplayItem({ ...validItem(), label: undefined })).toBe(false);
+  });
+
+  it("accepts an item with or without the optional wall still", () => {
+    const item = validItem();
+    expect(isReplayItem(item)).toBe(true);
+    expect(
+      isReplayItem({ ...item, source: { ...item.source, webp: "data:image/webp;base64,AA==" } }),
+    ).toBe(true);
   });
 
   it("rejects malformed dimensions", () => {
@@ -77,5 +99,47 @@ describe("isReplayItem", () => {
     const item = validItem();
     const loose = { ...item, poses: [...item.poses, { t: "late" }] };
     expect(isReplayItem(loose)).toBe(true);
+  });
+});
+
+describe("readReplayPlaylist", () => {
+  /** `count` distinct items, so file order is observable in the result. */
+  function playlist(count: number): { version: number; items: LandingReplayItem[] } {
+    return {
+      version: 1,
+      items: Array.from({ length: count }, (_, i) => ({ ...validItem(), id: `clip-${i}` })),
+    };
+  }
+
+  it("reads items in file order — the only ordering there is", () => {
+    const items = readReplayPlaylist(playlist(3));
+    expect(items.map((i) => i.id)).toEqual(["clip-0", "clip-1", "clip-2"]);
+  });
+
+  it("caps the playlist at five items", () => {
+    const items = readReplayPlaylist(playlist(8));
+    expect(items).toHaveLength(REPLAY_PLAYLIST_MAX);
+    expect(items[0].id).toBe("clip-0");
+    expect(items[4].id).toBe("clip-4");
+  });
+
+  it("drops a hand-edited item rather than crashing on it", () => {
+    const file = playlist(3);
+    const items = readReplayPlaylist({
+      ...file,
+      items: [{ ...file.items[0], poses: [] }, file.items[1], null],
+    });
+    expect(items.map((i) => i.id)).toEqual(["clip-1"]);
+  });
+
+  it("reads an absent, empty or malformed file as an empty playlist", () => {
+    for (const value of [null, undefined, {}, { items: null }, { items: [] }, 4, "x", []]) {
+      expect(readReplayPlaylist(value)).toEqual([]);
+    }
+  });
+
+  it("does not negotiate on version", () => {
+    expect(readReplayPlaylist({ version: 99, items: playlist(1).items })).toHaveLength(1);
+    expect(readReplayPlaylist({ items: playlist(1).items })).toHaveLength(1);
   });
 });

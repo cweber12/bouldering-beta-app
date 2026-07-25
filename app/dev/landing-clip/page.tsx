@@ -4,8 +4,8 @@
  * Dev-only landing-replay clip authoring route.
  *
  * Private maintainer tooling: turn one saved Fixed Capture Run into one checked-in
- * replay item. The flow is pick a Run → choose an 8-second window → attach a Route
- * Photo → run the existing ORB match → download the JSON.
+ * replay item. The flow is pick a Run → choose the clip window → attach the wall still
+ * and the Route Photo → run the existing ORB match → download the JSON.
  *
  * Everything expensive happens here, once: the ORB match and gated homography come
  * from {@link useImageMatcher}, the photo-space Holds from {@link useHolds}, and the
@@ -28,11 +28,16 @@ import { saveAttempt, type RouteAttempt } from "@/storage/sessionStore";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import {
   buildTransformedKeypoints,
+  computeStableBodyScale,
   drawSkeleton,
   type OverlayPoint,
 } from "@/pipeline/overlay/skeletonOverlay";
+import { drawHolds } from "@/pipeline/holds/holdsOverlay";
 import { applyHomographyMatrix } from "@/pipeline/matching/homography";
-import { REPLAY_CLIP_SECONDS } from "@/pipeline/overlay/landingReplayItem";
+import {
+  REPLAY_ANIMATION_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
+} from "@/pipeline/overlay/landingReplayItem";
 import {
   buildLandingReplayItem,
   buildLandingReplayFile,
@@ -42,6 +47,13 @@ import { capToPixelBudget, compressImageToWebpDataUrl } from "@/utils/imageHelpe
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 
 const IS_DEV = process.env.NODE_ENV === "development";
+
+/**
+ * How fast the hero replays a clip: the captured window over the screen window.
+ * The segment preview below runs at this rate so the curator judges the clip the
+ * way visitors will see it, not in real time.
+ */
+const PLAYBACK_RATE = REPLAY_CAPTURE_SECONDS / REPLAY_ANIMATION_SECONDS;
 
 /** Height in CSS px of the main preview canvases. */
 const PREVIEW_H = 300;
@@ -157,15 +169,29 @@ interface OverlayCanvasProps {
   height: number;
   /** Optional backdrop drawn beneath the skeleton (the Route Photo). */
   background?: HTMLImageElement | null;
-  /** Holds in normalized [0,1] space, drawn as rings. */
-  holds?: Array<{ x: number; y: number; kind: "hand" | "foot" }>;
+  /** Holds in normalized [0,1] space, with the clip-relative time each reveals at. */
+  holds?: Array<{ x: number; y: number; kind: "hand" | "foot"; side: "left" | "right"; t: number }>;
+  /** Clip-relative seconds the Holds pass is gated by. */
+  holdsTime?: number;
 }
 
 /**
  * Draws one pose (and optionally a backdrop + Holds) from normalized coordinates.
  * Both preview spaces — source video and Route Photo — reduce to the same call.
+ *
+ * Holds go through the real {@link drawHolds}, **beneath** the Skeleton, exactly as
+ * every shipping surface renders them: same ADR-0012 ring colours, same clustering,
+ * same progressive reveal. A hand-rolled preview marker would let the curator
+ * approve a look the hero never produces.
  */
-function OverlayCanvas({ points, aspect, height, background, holds }: OverlayCanvasProps) {
+function OverlayCanvas({
+  points,
+  aspect,
+  height,
+  background,
+  holds,
+  holdsTime = 0,
+}: OverlayCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ratio = aspect.h > 0 ? aspect.w / aspect.h : 3 / 4;
   const width = Math.max(1, Math.round(height * ratio));
@@ -182,15 +208,31 @@ function OverlayCanvas({ points, aspect, height, background, holds }: OverlayCan
     for (const [name, pt] of Object.entries(points)) {
       scaled[name] = { x: pt.x * canvas.width, y: pt.y * canvas.height, score: pt.score };
     }
-    if (Object.keys(scaled).length > 0) drawSkeleton(ctx, scaled);
-    for (const hold of holds ?? []) {
-      ctx.beginPath();
-      ctx.arc(hold.x * canvas.width, hold.y * canvas.height, 7, 0, Math.PI * 2);
-      ctx.strokeStyle = hold.kind === "hand" ? "#38bdf8" : "#fb923c";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+    const frames = Object.keys(scaled).length > 0 ? [{ keypoints: scaled }] : [];
+    const bodyScale =
+      frames.length > 0
+        ? computeStableBodyScale(frames, canvas.width, canvas.height)
+        : Math.min(canvas.width, canvas.height) * 0.15;
+
+    if (holds && holds.length > 0) {
+      drawHolds(
+        ctx,
+        holds.map((hold, i) => ({
+          id: `hold-${i}`,
+          order: i + 1,
+          kind: hold.kind,
+          side: hold.side,
+          x: hold.x * canvas.width,
+          y: hold.y * canvas.height,
+          firstUseTime: hold.t,
+        })),
+        holdsTime,
+        undefined,
+        bodyScale,
+      );
     }
-  }, [points, background, holds, width, height]);
+    if (frames.length > 0) drawSkeleton(ctx, scaled, { bodyScale });
+  }, [points, background, holds, holdsTime, width, height]);
 
   return (
     <canvas
@@ -227,9 +269,13 @@ export default function LandingClipPage() {
 
   // Window start as an offset from the Run's first detected frame, in seconds.
   const [windowOffset, setWindowOffset] = useState(0);
-  // Playhead within the window, clip-relative seconds in [0, REPLAY_CLIP_SECONDS].
+  // Playhead within the window, clip-relative seconds in [0, REPLAY_CAPTURE_SECONDS].
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
+
+  const [frameFile, setFrameFile] = useState<File | null>(null);
+  const [frameImage, setFrameImage] = useState<HTMLImageElement | null>(null);
+  const [frameAspectWarning, setFrameAspectWarning] = useState<string | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [photoImage, setPhotoImage] = useState<HTMLImageElement | null>(null);
@@ -270,9 +316,9 @@ export default function LandingClipPage() {
   const firstTs = frames.length > 0 ? frames[0].timestamp : 0;
   const lastTs = frames.length > 0 ? frames[frames.length - 1].timestamp : 0;
   const trackDuration = Math.max(0, lastTs - firstTs);
-  const maxOffset = Math.max(0, trackDuration - REPLAY_CLIP_SECONDS);
+  const maxOffset = Math.max(0, trackDuration - REPLAY_CAPTURE_SECONDS);
   const windowStart = firstTs + Math.min(windowOffset, maxOffset);
-  const windowEnd = windowStart + REPLAY_CLIP_SECONDS;
+  const windowEnd = windowStart + REPLAY_CAPTURE_SECONDS;
 
   // A Panning Capture has no single frame-0 reference to build a starfield or a
   // single gated homography from — Fixed Capture only, per the PRD's source rule.
@@ -284,8 +330,8 @@ export default function LandingClipPage() {
         ? "This Run has no reference ORB features, so it has no wall starfield to export."
         : frames.length === 0
           ? "This Run has no detected pose frames."
-          : trackDuration < REPLAY_CLIP_SECONDS
-            ? `This Run's pose track is only ${trackDuration.toFixed(1)}s — shorter than the ${REPLAY_CLIP_SECONDS}s clip.`
+          : trackDuration < REPLAY_CAPTURE_SECONDS
+            ? `This Run's pose track is only ${trackDuration.toFixed(1)}s — shorter than the ${REPLAY_CAPTURE_SECONDS}s clip.`
             : null;
 
   const videoW = attempt?.videoMeta.width ?? 9;
@@ -328,14 +374,20 @@ export default function LandingClipPage() {
     [holds, firstTs],
   );
 
+  // Normalized, clip-relative Holds. The reveal gate is drawHolds's own, driven by
+  // the playhead, so the preview reveals exactly when the hero will.
   const previewHolds = useMemo(
     () =>
       photoDims
-        ? absoluteHolds
-            .filter((h) => h.firstUseTime <= windowStart + playhead)
-            .map((h) => ({ x: h.x / photoDims.w, y: h.y / photoDims.h, kind: h.kind }))
+        ? absoluteHolds.map((h) => ({
+            x: h.x / photoDims.w,
+            y: h.y / photoDims.h,
+            kind: h.kind,
+            side: h.side,
+            t: Math.max(0, h.firstUseTime - windowStart),
+          }))
         : [],
-    [absoluteHolds, photoDims, windowStart, playhead],
+    [absoluteHolds, photoDims, windowStart],
   );
 
   const aligned = matchStatus === "done" && Boolean(matchResult?.homography);
@@ -350,7 +402,7 @@ export default function LandingClipPage() {
     const tick = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      setPlayhead((t) => (t + dt) % REPLAY_CLIP_SECONDS);
+      setPlayhead((t) => (t + dt * PLAYBACK_RATE) % REPLAY_CAPTURE_SECONDS);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -367,6 +419,9 @@ export default function LandingClipPage() {
       setWindowOffset(0);
       setPlayhead(0);
       setPlaying(false);
+      setFrameFile(null);
+      setFrameImage(null);
+      setFrameAspectWarning(null);
       resetMatch();
       setExportedName(null);
       try {
@@ -380,6 +435,41 @@ export default function LandingClipPage() {
       }
     },
     [downloadAttempt, resetMatch],
+  );
+
+  /**
+   * Attach the wall still — a frame lifted from the source video, so it shares the
+   * Run's video coordinate space and the phase-1 Skeleton lands on it exactly.
+   * Only the aspect is checked: a still cropped differently from the video would
+   * put the figure in the wrong place, and that is invisible until the hero runs.
+   */
+  const attachFrame = useCallback(
+    (file: File | null) => {
+      setFrameFile(file);
+      setFrameImage(null);
+      setFrameAspectWarning(null);
+      setExportedName(null);
+      if (!file || !attempt) return;
+
+      const url = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => {
+        setFrameImage(img);
+        const videoRatio = attempt.videoMeta.width / attempt.videoMeta.height;
+        const frameRatio = img.naturalWidth / img.naturalHeight;
+        if (Math.abs(videoRatio - frameRatio) > 0.02) {
+          setFrameAspectWarning(
+            `This still is ${img.naturalWidth}×${img.naturalHeight}, a different shape from the ` +
+              `${attempt.videoMeta.width}×${attempt.videoMeta.height} video. It must be an uncropped ` +
+              `frame of the same video or the Skeleton will not line up with the wall.`,
+          );
+        }
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => URL.revokeObjectURL(url);
+      img.src = url;
+    },
+    [attempt],
   );
 
   const attachPhoto = useCallback(
@@ -416,11 +506,16 @@ export default function LandingClipPage() {
     setExportError(null);
     try {
       const webp = await compressImageToWebpDataUrl(imageFile);
+      const frameWebp = frameFile ? await compressImageToWebpDataUrl(frameFile) : null;
       const h = matchResult.homography;
       const item = buildLandingReplayItem({
         id: `${attempt.id}-${slugify(attempt.route)}`,
         label: { area: attempt.area, route: attempt.route, rating: attempt.rating ?? "" },
-        source: { w: attempt.videoMeta.width, h: attempt.videoMeta.height },
+        source: {
+          w: attempt.videoMeta.width,
+          h: attempt.videoMeta.height,
+          ...(frameWebp ? { webp: frameWebp.dataUrl } : {}),
+        },
         photo: { w: webp.width, h: webp.height, webp: webp.dataUrl },
         photoSpace: photoDims,
         refFeatures: attempt.orbFeatures!,
@@ -448,7 +543,7 @@ export default function LandingClipPage() {
     } finally {
       setExporting(false);
     }
-  }, [attempt, imageFile, photoDims, matchResult, windowStart, absoluteHolds]);
+  }, [attempt, imageFile, frameFile, photoDims, matchResult, windowStart, absoluteHolds]);
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -476,8 +571,9 @@ export default function LandingClipPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-fg">Landing replay clip authoring</h1>
         <p className="text-sm text-fg-muted">
-          Pick a Fixed Capture Run, choose an {REPLAY_CLIP_SECONDS}-second window, attach the Route
-          Photo, then export one replay item to check into the repo.
+          Pick a Fixed Capture Run, choose an {REPLAY_CAPTURE_SECONDS}-second window, attach the
+          Route Photo, then export one replay item to check into the repo. The hero plays that
+          window over {REPLAY_ANIMATION_SECONDS}s, so it runs at {PLAYBACK_RATE.toFixed(1)}×.
         </p>
       </header>
 
@@ -545,12 +641,13 @@ export default function LandingClipPage() {
       {attempt && !unsupportedReason && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-fg">
-            2 · Clip window ({REPLAY_CLIP_SECONDS}s fixed)
+            2 · Clip window ({REPLAY_CAPTURE_SECONDS}s captured → {REPLAY_ANIMATION_SECONDS}s on
+            screen)
           </h2>
           <label className="flex flex-col gap-1 text-xs text-fg-muted">
             <span>
               Starts at {windowOffset.toFixed(1)}s of {trackDuration.toFixed(1)}s (window{" "}
-              {windowOffset.toFixed(1)}–{(windowOffset + REPLAY_CLIP_SECONDS).toFixed(1)}s)
+              {windowOffset.toFixed(1)}–{(windowOffset + REPLAY_CAPTURE_SECONDS).toFixed(1)}s)
             </span>
             <input
               type="range"
@@ -582,7 +679,7 @@ export default function LandingClipPage() {
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs text-fg-muted">
-                Segment playback · t = {playhead.toFixed(2)}s
+                Segment playback at {PLAYBACK_RATE.toFixed(1)}× · t = {playhead.toFixed(2)}s
               </span>
               <OverlayCanvas
                 points={sourcePoints}
@@ -603,7 +700,7 @@ export default function LandingClipPage() {
             <input
               type="range"
               min={0}
-              max={REPLAY_CLIP_SECONDS}
+              max={REPLAY_CAPTURE_SECONDS}
               step={0.05}
               value={playhead}
               onChange={(e) => {
@@ -616,10 +713,49 @@ export default function LandingClipPage() {
         </section>
       )}
 
-      {/* 3 — Route Photo + match */}
+      {/* 3 — Wall still from the source video */}
       {attempt && !unsupportedReason && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold text-fg">3 · Route Photo</h2>
+          <h2 className="text-sm font-semibold text-fg">3 · Wall still (optional)</h2>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="text-fg-muted">
+              A frame lifted from this Run&apos;s video — the hero opens on it, so the Skeleton
+              starts on the real wall before morphing to the Route Photo. It must be an uncropped
+              frame of the same video ({videoW}×{videoH}); without one the clip opens on the dark
+              stage instead.
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => attachFrame(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs text-fg file:mr-3 file:rounded-md file:border-0 file:bg-surface-alt file:px-3 file:py-1.5 file:text-fg"
+            />
+          </label>
+          {frameAspectWarning && (
+            <p className="rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-sm text-caution">
+              {frameAspectWarning}
+            </p>
+          )}
+          {frameImage && (
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-fg-muted">
+                Video space at t = {playhead.toFixed(2)}s — this is the hero&apos;s opening frame
+              </span>
+              <OverlayCanvas
+                points={sourcePoints}
+                aspect={{ w: videoW, h: videoH }}
+                height={PREVIEW_H}
+                background={frameImage}
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 4 — Route Photo + match */}
+      {attempt && !unsupportedReason && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-fg">4 · Route Photo</h2>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="text-fg-muted">
               {cvReady ? "Attach the Route Photo to match against" : "Loading OpenCV…"}
@@ -657,6 +793,7 @@ export default function LandingClipPage() {
                   height={PREVIEW_H}
                   background={photoImage}
                   holds={previewHolds}
+                  holdsTime={playhead}
                 />
               </div>
             </>
@@ -664,10 +801,10 @@ export default function LandingClipPage() {
         </section>
       )}
 
-      {/* 4 — Export */}
+      {/* 5 — Export */}
       {attempt && !unsupportedReason && (
         <section className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-fg">4 · Export</h2>
+          <h2 className="text-sm font-semibold text-fg">5 · Export</h2>
           <button
             type="button"
             onClick={() => void handleExport()}
@@ -677,8 +814,11 @@ export default function LandingClipPage() {
             {exporting ? "Building…" : "Download replay item"}
           </button>
           <p className="text-xs text-fg-muted">
-            Downloads a {`{ version: 1, items: [ … ] }`} file with this one clip. Merge it into the
-            checked-in playlist by hand — nothing is written to the repo or to S3.
+            Downloads a {`{ version: 1, items: [ … ] }`} file with this one clip
+            {frameFile ? ", wall still included" : " (no wall still attached)"}. Save it as{" "}
+            <code className="font-mono">public/landing-replay.json</code>, or merge its{" "}
+            <code className="font-mono">items</code> into the existing playlist by hand — nothing is
+            written to the repo or to S3.
           </p>
           {exportError && (
             <p className="rounded-md border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger">

@@ -15,8 +15,8 @@ checked-in replay artifacts while keeping the public hero stable and passive.
 Curate a playlist of short clips drawn from different Runs, and deliver it as a
 single static asset:
 
-1. In a hidden development-only route, pick a saved Run and an 8-second window
-   of it, attach a Route Photo, and run the existing ORB match.
+1. In a hidden development-only route, pick a saved Run and a 20-second window
+   of it, attach a wall still and a Route Photo, and run the existing ORB match.
 2. Export that clip as one JSON item and check it into the repo.
 3. The landing hero fetches one playlist asset and plays its items in file
    order.
@@ -47,15 +47,18 @@ photo points in Route Photo space — so nothing depends on render resolution.
     {
       "id": "run-1750000000-boulder-problem",
       "label": { "area": "…", "route": "…", "rating": "V4" },
-      "source": { "w": 1080, "h": 1920 },
+      "duration": 20,
+      // `webp` is the optional wall still, in this same coordinate space
+      "source": { "w": 1080, "h": 1920, "webp": "data:image/webp;base64,…" },
       "photo": { "w": 1200, "h": 1600, "webp": "data:image/webp;base64,…" },
       "starfield": [{ "x": 0.12, "y": 0.44 }],
       "matches": [{ "sx": 0.12, "sy": 0.44, "px": 0.31, "py": 0.52 }],
       "poses": [
         {
           "t": 0.0,
-          "source": [{ "n": "left_wrist", "x": 0.4, "y": 0.3, "s": 0.9 }],
-          "photo": [{ "n": "left_wrist", "x": 0.5, "y": 0.4, "s": 0.9 }]
+          // [BlazePose landmark index, x, y, score]
+          "source": [[15, 0.4, 0.3, 0.9]],
+          "photo": [[15, 0.5, 0.4, 0.9]]
         }
       ],
       "holds": [{ "x": 0.3, "y": 0.5, "kind": "hand", "side": "left", "t": 1.2 }]
@@ -64,25 +67,46 @@ photo points in Route Photo space — so nothing depends on render resolution.
 }
 ```
 
-`poses[].t` and `holds[].t` are **clip-relative seconds** (0 at the clip's first
-frame), so the 8-second clip maps 1:1 onto the 8-second animation.
+`poses[].t` and `holds[].t` are **clip-relative captured seconds** (0 at the
+clip's first frame), spanning `duration`.
+
+### Capture, screen time, and playback rate
+
+Captured seconds and screen seconds are separate quantities. A clip captures
+**20 seconds** of climbing and the hero spends **12 seconds** showing it, so the
+figure plays at ~1.7×. That is what makes a clip read as a climb rather than a
+fragment: pose detection runs at 2 Hz and the stored track is bone-space
+interpolated up from there, so replaying above 1× discards no motion that was
+ever measured — it buys a longer window of the ascent for the same hero dwell.
+
+Screen time is capped at 12s deliberately: the phase windows are fractions of it,
+and much past that the phase-3 morph starts to drag.
+
+Poses export at **5 Hz**, not the stored track's 10 Hz. The renderer samples by
+time and interpolates, and the stored 10 Hz was itself inferred from 2 Hz
+detections, so the halved payload costs nothing visible. Landmarks serialize as
+`[index, x, y, score]` rather than named objects for the same reason — the names
+outweighed the geometry they labelled.
 
 ### Phase timing
 
-The pose plays continuously across the whole 8 seconds. Phases control only
-*which space* the figure is drawn in and what else is on screen — they never
-change playback speed.
+The pose plays continuously across the whole clip. Phases control only *which
+space* the figure is drawn in and what else is on screen — they never change
+playback speed.
 
-1. 0-30%: starfield + video-space Skeleton
-2. 30-45%: starfield fades while matched source points emerge
-3. 45-80%: Route Photo appears while matched points and Skeleton morph toward
-   Route Photo space
-4. 80-100%: matched points fade out while the Route Overlay completes and Holds
-   reveal on their `t`
+1. 0-12%: the wall still rises out of the dark stage behind the video-space
+   Skeleton; 12-30%: the starfield ignites on that still
+2. 30-56%: the still recedes to black while the starfield thins to the matched
+   source points — the x-ray beat, with no photograph under it
+3. 56-81%: matched points and Skeleton morph toward Route Photo space, the Route
+   Photo rising late (60-85%) and eased beneath them
+4. 81-100%: matched points fade out while the Route Overlay completes
 
-The morph (phase 3) is the payoff, so it gets the largest share. Holds reveal
-progressively through phases 3-4 using the existing `holdsOverlay` reveal
-behaviour.
+The morph (phase 3) is deliberately **quick** — 25% of the clip, where the x-ray
+beat that sets it up takes 26% and the finished overlay holds for 19%. The change
+of coordinate space reads as a snap into place rather than a drift, and the time
+it does not spend goes to the two beats a viewer needs a moment with: the wall
+abstracted to points, and the finished Route Overlay.
 
 ## User Stories
 
@@ -120,6 +144,26 @@ Dependency summary:
 - Route Photo is embedded in the export as compressed WebP data.
 - Playlist holds 1-5 items; **order is array order in the checked-in file**.
   Reordering means editing the file.
+- Capture window (20s) and screen window (12s) are separate constants, so the
+  clip's playback rate falls out of the pair rather than being its own knob.
+  Items carry their own captured `duration`, so the rate is per item.
+- Each item may carry an uncropped **wall still** from its own video, in the
+  source coordinate space, so phase 1 opens on the real wall. Optional by
+  design: an item without one opens on the dark stage, and an already-curated
+  asset stays valid.
+- The hero stage takes its shape from the first item's source plane rather than a
+  fixed portrait, so landscape footage is not letterboxed into a strip. One shape
+  for the whole playlist, so a handoff never reflows.
+- The wall still **recedes to black** rather than cross-dissolving into the Route
+  Photo, and the photo's fade lags the morph. Both exist so the matched points are
+  readable while they travel: a photo arriving at the migration's own rate covers
+  the thing it is there to explain. The black gap is bounded so the real wall is
+  still in mind when the Route Photo answers it.
+- The motion trail is confined to the x-ray beat — absent on the opening video
+  still and on the finished Route Overlay, present through the black.
+- The hero draws **no Holds**. They are a secondary feature and a ring revealing
+  mid-morph competes with the payoff. Items still carry them, so this is a
+  render decision, not a contract change.
 - Public labels include only `area`, Route name, and `rating`.
 - Hero is passive: no previous/next navigation; one pause/play control for
   motion compliance.

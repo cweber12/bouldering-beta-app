@@ -5,12 +5,15 @@
  *
  * The renderer only lerps and crossfades (see the PRD's design invariant), and
  * this module is where all of that arithmetic lives so it can be pinned down by
- * tests without a canvas. Three things happen here:
+ * tests without a canvas. Four things happen here:
  *
- *  - **Phase windows.** One 8-second item runs four fixed windows — 0-30%,
- *    30-45%, 45-80%, 80-100% — and each window is expressed as a set of alphas
- *    plus a single `morph` factor. Windows are fractions of the clip, never
- *    wall-clock offsets, so pausing cannot desynchronise them.
+ *  - **Playlist cycling.** The same clock decides which item is on screen: every
+ *    item owns one clip-length slot, the first 300 ms of each slot crossfades from
+ *    the previous item, and the cycle wraps to the first item indefinitely.
+ *  - **Phase windows.** One item's screen window runs four fixed phases, each
+ *    expressed as a set of alphas plus a single `morph` factor, and all of them
+ *    built from the crossfades in {@link REPLAY_WINDOWS}. Windows are fractions of
+ *    the clip, never wall-clock offsets, so pausing cannot desynchronise them.
  *  - **Pose sampling by time.** The pose plays continuously across all four
  *    phases, sampled at the clip-relative second the clock is on. Phases change
  *    the *space* the figure is drawn in, never the playback rate.
@@ -23,18 +26,68 @@
  */
 
 import { lerpKeypoints, type OverlayPoint } from "@/pipeline/overlay/skeletonOverlay";
-import type { ReplayKeypoint, ReplayPose } from "@/pipeline/overlay/landingReplayItem";
+import {
+  replayKeypointName,
+  type ReplayKeypoint,
+  type ReplayPose,
+} from "@/pipeline/overlay/landingReplayItem";
 
 // ---------------------------------------------------------------------------
 // Phase windows
 // ---------------------------------------------------------------------------
 
-/** End of phase 1 (starfield + video-space pose) as a fraction of the clip. */
-export const PHASE_1_END = 0.3;
-/** End of phase 2 (starfield fades out, matched source points emerge). */
-export const PHASE_2_END = 0.45;
-/** End of phase 3 (Route Photo appears, points + Skeleton morph into its space). */
-export const PHASE_3_END = 0.8;
+/**
+ * Every crossfade in the clip, as `[start, end]` fractions of the screen window.
+ *
+ * They are listed together because the composition is really one storyboard, and
+ * the interesting decisions are all in how these windows *overlap*:
+ *
+ *  - The wall still **recedes to black** (`still.out`) well before the Route Photo
+ *    arrives (`photo`), rather than cross-dissolving straight into it. The gap is
+ *    the black starfield beat — the scanner's abstraction of the wall, with
+ *    nothing photographic left to lean on. It is bounded on purpose: long enough
+ *    to read the matched points travelling, short enough that the visitor still
+ *    remembers the real wall when the Route Photo answers it.
+ *  - The photo's window starts *after* the morph has begun and runs past its end,
+ *    eased so it stays faint through the middle. If the photo arrives at the same
+ *    rate as the points, it covers the very migration it is supposed to explain.
+ *  - The wake arrives with the black and clears as the figure lands on the wall,
+ *    so the motion trail belongs to the x-ray beat rather than the photographic
+ *    ones at either end.
+ *
+ * The `morph` is deliberately **quick** — a quarter of the clip, where the beat
+ * that sets it up takes rather more. The change of coordinate space reads as a
+ * snap into place rather than a drift, and the time it does not spend goes to the
+ * x-ray beat before it and the finished Route Overlay after it, which are the two
+ * things a viewer actually needs a moment with.
+ */
+export const REPLAY_WINDOWS = {
+  /** The video-space wall still: up out of black, then back down to it. */
+  still: { in: [0, 0.12], out: [0.3, 0.44] },
+  /** The ambient ORB field igniting on the still, then thinning to the matches. */
+  starfield: { in: [0.12, 0.3], out: [0.3, 0.56] },
+  /** The matched subset — up as the ambient field thins, retired at the very end. */
+  match: { in: [0.3, 0.56], out: [0.81, 1] },
+  /** Points and Skeleton travelling from source space into Route Photo space. */
+  morph: [0.56, 0.81],
+  /** The Route Photo: late and slow, so the migration stays legible under it. */
+  photo: [0.6, 0.85],
+  /** The motion trail: arrives with the black beat, gone once the figure lands. */
+  wake: { in: [0.24, 0.4], out: [0.6, 0.77] },
+} as const;
+
+/**
+ * End of phase 1's opening beat: the wall still has fully arrived, and only then
+ * does the starfield ignite on it. Splitting phase 1 in two is what keeps the cold
+ * open — the hero starts on the dark stage rather than cutting to a photograph.
+ */
+export const PHASE_1_MID = REPLAY_WINDOWS.still.in[1];
+/** End of phase 1 (wall still + starfield + video-space pose) as a fraction of the clip. */
+export const PHASE_1_END = REPLAY_WINDOWS.starfield.in[1];
+/** End of phase 2 (still recedes to black, starfield thins to the matched points). */
+export const PHASE_2_END = REPLAY_WINDOWS.morph[0];
+/** End of phase 3 (the migration into Route Photo space). */
+export const PHASE_3_END = REPLAY_WINDOWS.morph[1];
 
 /** Which of the four fixed windows a clip progress falls in. */
 export type ReplayPhase = 1 | 2 | 3 | 4;
@@ -43,16 +96,25 @@ export type ReplayPhase = 1 | 2 | 3 | 4;
 export interface ReplayFrameComposition {
   /** Clip progress in [0,1]. */
   progress: number;
-  /** Clip-relative seconds — what pose sampling and Hold reveal read. */
+  /**
+   * Clip-relative **captured** seconds — what pose sampling and Hold reveal read.
+   * Scaled by the item's playback rate, so it runs ahead of screen time.
+   */
   clipSeconds: number;
   phase: ReplayPhase;
+  /**
+   * The video-space wall still behind the figure: rises through phase 1's opening
+   * beat, then recedes to black across phase 2, leaving the starfield beat with no
+   * photograph under it. Zero throughout when the item carries no still.
+   */
+  frameAlpha: number;
   /** ORB wall starfield, drawn in source space. */
   starfieldAlpha: number;
   /** Paired wall features — the points that visibly migrate during the morph. */
   matchAlpha: number;
-  /** The Route Photo backdrop. */
+  /** The Route Photo backdrop — deliberately behind the morph it sits under. */
   photoAlpha: number;
-  /** The motion trail behind the live figure. */
+  /** The motion trail behind the live figure, confined to the x-ray beat. */
   trailAlpha: number;
   /** 0 = draw in source video space, 1 = draw in Route Photo space. */
   morph: number;
@@ -68,6 +130,12 @@ function ramp(t: number, from: number, to: number): number {
  *  while still hitting exactly 0 and 1 on the phase-3 boundaries. */
 function smoothstep(t: number): number {
   return t * t * (3 - 2 * t);
+}
+
+/** Quadratic ease-in: the Route Photo stays faint for most of its window and
+ *  only commits at the end, so it never covers the migration mid-travel. */
+function easeIn(t: number): number {
+  return t * t;
 }
 
 /**
@@ -91,32 +159,120 @@ export function clipProgress(elapsedMs: number, durationMs: number): number {
  * Every ramp is continuous at its boundary — phase 2 opens with the starfield
  * still at full and the matched points still at zero, phase 3 opens with the
  * photo hidden and the morph at zero, phase 4 opens with the morph complete —
- * so a boundary crossing never shows a visible step.
+ * so a boundary crossing never shows a visible step. Several ramps deliberately
+ * cross phase boundaries — the still recedes into phase 2, the photo rises out of
+ * phase 3 — because the storyboard is continuous and the phase numbers are only a
+ * way to talk about it.
+ *
+ * `durationMs` is **screen** time and `captureSeconds` is how much climbing the
+ * clip holds; the phases are fractions of the former and `clipSeconds` runs on
+ * the latter. Passing a capture window wider than the animation is what plays the
+ * ascent above 1×; omitting it plays real time.
  */
-export function composeReplayFrame(elapsedMs: number, durationMs: number): ReplayFrameComposition {
+export function composeReplayFrame(
+  elapsedMs: number,
+  durationMs: number,
+  captureSeconds: number = durationMs / 1000,
+): ReplayFrameComposition {
   const progress = clipProgress(elapsedMs, durationMs);
   const phase: ReplayPhase =
     progress < PHASE_1_END ? 1 : progress < PHASE_2_END ? 2 : progress < PHASE_3_END ? 3 : 4;
 
-  // Phase 2 swaps the ambient wall field for the matched subset of it.
-  const swap = ramp(progress, PHASE_1_END, PHASE_2_END);
-  // Phase 3 raises the Route Photo and carries everything into its space.
-  const migrate = ramp(progress, PHASE_2_END, PHASE_3_END);
+  const w = REPLAY_WINDOWS;
+  // Phase 1 opens on the dark stage and raises the wall still behind the figure,
+  // then ignites the starfield on it.
+  const arrive = ramp(progress, ...w.still.in);
+  const ignite = ramp(progress, ...w.starfield.in);
+  // Phase 2 takes the still back down to black and swaps the ambient wall field
+  // for the matched subset of it.
+  const recede = ramp(progress, ...w.still.out);
+  const swap = ramp(progress, ...w.starfield.out);
+  // Phase 3 carries everything into Route Photo space; the photo itself follows.
+  const migrate = ramp(progress, ...w.morph);
   // Phase 4 retires the scaffolding so the Route Overlay stands alone.
-  const settle = ramp(progress, PHASE_3_END, 1);
+  const settle = ramp(progress, ...w.match.out);
 
   return {
     progress,
-    clipSeconds: (progress * durationMs) / 1000,
+    clipSeconds: progress * captureSeconds,
     phase,
-    starfieldAlpha: 1 - swap,
+    frameAlpha: arrive * (1 - recede),
+    starfieldAlpha: ignite * (1 - swap),
     matchAlpha: swap * (1 - settle),
-    photoAlpha: migrate,
-    // The wake belongs to the x-ray half of the story; it clears as the figure
-    // arrives on the wall so the final frame reads like a real exported overlay.
-    trailAlpha: 1 - migrate,
+    photoAlpha: easeIn(ramp(progress, ...w.photo)),
+    // The wake belongs to the x-ray beat: it arrives with the black and clears as
+    // the figure lands on the wall, so the frames at either end — the real video
+    // still and the finished Route Overlay — are free of it.
+    trailAlpha: ramp(progress, ...w.wake.in) * (1 - ramp(progress, ...w.wake.out)),
     morph: smoothstep(migrate),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Playlist cycling — which item (or pair of items) the stage shows
+// ---------------------------------------------------------------------------
+
+/** Width of the crossfade that hands one item off to the next. */
+export const HANDOFF_MS = 300;
+
+/** One item drawn at one instant: which clip, how far into it, at what opacity. */
+export interface ReplayLayer {
+  /** Playlist index — items play in file order, and file order is the only order. */
+  index: number;
+  /** Elapsed milliseconds *within that item's own clip*, for {@link composeReplayFrame}. */
+  elapsedMs: number;
+  /** Stage opacity in (0,1]. Across a handoff the two layers' alphas sum to 1. */
+  alpha: number;
+}
+
+/**
+ * Project the one replay clock onto the playlist.
+ *
+ * Each item owns a `durationMs` slot on the clock, and the cycle is
+ * `itemCount × durationMs` long, so cycling wraps back to the first item and
+ * continues for as long as the clock runs. The first `handoffMs` of every slot is
+ * a crossfade: the incoming item plays from `t = 0` while the outgoing one holds
+ * its **own final frame** — the finished Route Overlay, the payoff of its clip —
+ * and fades out beneath it. Holding rather than advancing is deliberate: the
+ * clip's last frame is already static except for the figure, whereas letting the
+ * outgoing clock run on would wrap it straight back to its starfield.
+ *
+ * The return is paint order, back to front, and never longer than two entries.
+ * Two boundary cases carry weight:
+ *
+ *  - The **first** slot has no predecessor to fade from, so the hero simply
+ *    starts on the first item rather than dissolving in from the last one.
+ *  - Every later slot *opens* on its predecessor alone at full opacity, which is
+ *    what lets the clock park on exactly `durationMs` and show the first item's
+ *    finished Route Overlay — the frame reduced motion holds.
+ */
+export function composePlaylistLayers(
+  elapsedMs: number,
+  itemCount: number,
+  durationMs: number,
+  handoffMs: number = HANDOFF_MS,
+): ReplayLayer[] {
+  if (itemCount <= 0) return [];
+  if (durationMs <= 0) return [{ index: 0, elapsedMs: 0, alpha: 1 }];
+
+  const handoff = Math.max(0, Math.min(handoffMs, durationMs));
+  // Slots are counted from the clock's origin, not from the current cycle, so a
+  // cold start is distinguishable from the wrap that lands on the same item.
+  const slot = Math.floor(Math.max(0, elapsedMs) / durationMs);
+  const local = Math.max(0, elapsedMs) - slot * durationMs;
+  const index = slot % itemCount;
+
+  // How far through the handoff we are; 1 once the crossfade has finished.
+  const arrived = slot === 0 || handoff === 0 ? 1 : Math.min(1, local / handoff);
+  const incoming: ReplayLayer = { index, elapsedMs: local, alpha: arrived };
+  if (arrived >= 1) return [incoming];
+
+  const outgoing: ReplayLayer = {
+    index: (index + itemCount - 1) % itemCount,
+    elapsedMs: durationMs,
+    alpha: 1 - arrived,
+  };
+  return arrived > 0 ? [outgoing, incoming] : [outgoing];
 }
 
 // ---------------------------------------------------------------------------
@@ -166,10 +322,13 @@ export interface SampledReplayPose {
   photo: Record<string, OverlayPoint>;
 }
 
-/** Keypoint array → the name-keyed map the overlay drawing helpers expect. */
+/** Encoded keypoints → the name-keyed map the overlay drawing helpers expect. */
 function toMap(keypoints: readonly ReplayKeypoint[]): Record<string, OverlayPoint> {
   const out: Record<string, OverlayPoint> = {};
-  for (const kp of keypoints) out[kp.n] = { x: kp.x, y: kp.y, score: kp.s };
+  for (const kp of keypoints) {
+    const name = replayKeypointName(kp);
+    if (name) out[name] = { x: kp[1], y: kp[2], score: kp[3] };
+  }
   return out;
 }
 

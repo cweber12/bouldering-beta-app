@@ -173,7 +173,7 @@ white joint is a neutral anchor and is exempt from adaptation.
 
 | Route                                    | Purpose                                                                                                                                                                                                                                                                                                                     | Auth required |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| `/`                                      | Landing page — intro, live x-ray demo (replays the scan loading animation from a saved run; signed-in users see their latest), and how-it-works summary                                                                                                                                                                     | No            |
+| `/`                                      | Landing page — intro, the curated replay hero (the same playlist for every visitor, signed in or not), and how-it-works summary                                                                                                                                                                                             | No            |
 | `/login`                                 | Sign in / sign up with email & password                                                                                                                                                                                                                                                                                     | No            |
 | `/scan`                                  | Scan a climbing video, preview landmarks, optionally overlay on a route photo                                                                                                                                                                                                                                               | Yes           |
 | `/compare`                               | Redirect into the route console (below); preserved for older links                                                                                                                                                                                                                                                          | Yes           |
@@ -183,7 +183,7 @@ white joint is a neutral anchor and is exempt from adaptation.
 | `/profile/[userId]`                      | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                                                                                                       | Yes           |
 | `/docs`                                  | Usage guide                                                                                                                                                                                                                                                                                                                 | No            |
 | `/dev/map-drag`                          | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                                                                                                                                                                          | No            |
-| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose an 8-second window, attach a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
+| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose a 20-second window, attach an optional wall still and a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
 
 ## Interactive crop boxes
 
@@ -425,25 +425,83 @@ Open <http://localhost:3000>.
 
 ### Landing replay
 
-The landing hero plays curated 8-second replay clips from
+The landing hero plays a curated playlist of replay clips from
 `public/landing-replay.json` — one static asset every visitor sees, played in
 file order. Each clip runs four fixed phases: the ORB starfield with the
 video-space skeleton, the matched wall features emerging, the route photo rising
 while points and skeleton morph into its space, and the finished route overlay
-with holds revealing on their own times.
+standing alone. The hero draws no holds — they are a secondary feature, and a
+ring lighting up mid-morph competes with the skeleton arriving on the wall. Items
+still carry them, so re-enabling is a call to `drawHolds`, not a re-curation.
+
+A clip captures **20 seconds** of climbing and the hero spends **12 seconds**
+showing it, so the figure plays back at ~1.7× — enough of the ascent to read as a
+climb rather than a fragment. That speed-up is free in fidelity terms: pose
+detection runs at 2 Hz and the stored track is bone-space interpolated up from
+there, so replaying above 1× discards nothing that was ever measured. Each item
+carries its own captured `duration`, so the rate is per item; screen time stays
+at 12s because the phase windows are fractions of it and the phase-3 morph starts
+to drag much past that.
+
+Each clip may also carry a **wall still** — an uncropped frame lifted from the
+run's own video, sharing its coordinate space. The hero opens on the dark stage,
+raises that still behind the skeleton, and ignites the ORB starfield on it. The
+still then recedes to black for the x-ray beat, where the wall exists only as
+matched ORB points travelling into route-photo space; the route photo itself
+rises late and eased beneath them, so it never covers the migration it explains.
+The migration itself is quick — the change of coordinate space reads as a snap
+into place, and the clip spends its time instead on the x-ray beat that sets it up
+and the finished overlay that answers it.
+That black gap is bounded on purpose — long enough to read the points moving,
+short enough that the real wall is still in mind when the photo answers it. The still is optional: a clip
+authored without one opens on the dark stage instead. The stage takes its shape
+from the first item's source plane, so landscape footage is not letterboxed into
+a portrait frame, and it holds that shape for the whole playlist so a handoff
+never reflows the layout.
+
+Cycling is deliberately thin. Items play in **array order** — reordering means
+editing the file — and the playlist is read up to five items. Each item runs its
+full window and hands off with a 300 ms crossfade in which the outgoing clip
+holds its finished route overlay while the next one opens on its starfield; after
+the last item the cycle wraps to the first and continues indefinitely. Phases,
+cycling and handoff all run off one clock, so the single pause/play control (and
+scrolling offscreen, and hiding the tab) freezes and resumes everything together.
+Reduced motion starts parked on the first clip's finished route overlay and stays
+there until the visitor presses play.
+
+#### Authoring a clip
 
 Clips are authored by the maintainer on the unlinked development-only route
-`/dev/landing-clip`: pick a saved Fixed-Capture run, choose the 8-second window,
-attach the route photo, run the existing ORB match, and download one
-`{ version: 1, items: [ … ] }` file. Merge the item into
-`public/landing-replay.json` by hand and commit it — nothing is written to the
-repo or to S3 from the UI. Rollback is reverting that file.
+`/dev/landing-clip`:
+
+1. Pick a saved Fixed-Capture run (panning captures, runs with no reference ORB
+   features, and pose tracks shorter than the 20s window are rejected with a
+   notice).
+2. Choose the 20-second window with the slider, checking the endpoint thumbnails
+   and segment playback (which runs at the hero's playback rate, not real time).
+3. Optionally attach the wall still — an uncropped frame of the same video. The
+   route is warned if its aspect does not match the video's, because a cropped
+   still puts the skeleton in the wrong place.
+4. Attach the route photo and let the existing ORB match run; export unlocks only
+   once alignment succeeds.
+5. Download the `{ version: 1, items: [ … ] }` file. Poses export at 5 Hz with
+   landmarks encoded as `[index, x, y, score]`, which keeps a 20s clip lighter
+   than the original 8s one.
+
+Then save it as `public/landing-replay.json` — or, for more than one clip,
+concatenate the `items` arrays by hand in the order you want them played — and
+commit it. **A downloaded export is not live until it is at that path**; the hero
+fetches `/landing-replay.json` and nothing else. Nothing is
+written to the repo or to S3 from the UI, so **rollback is reverting that one
+file** (`git revert` the commit, or `git checkout <sha> -- public/landing-replay.json`).
 
 The exported item is pure geometry (both coordinate spaces baked, labels only —
 no identity, notes, coordinates, keys, descriptors, or homography), so the hero
-only lerps and crossfades: no OpenCV, no MediaPipe, no homography at runtime. If
-the asset is missing or malformed the hero renders nothing and the page degrades
-to its text content.
+only lerps and crossfades: no OpenCV, no MediaPipe, no homography at runtime.
+`__tests__/pipeline/landingReplayAsset.test.ts` re-checks that content surface
+against the checked-in file whenever one is present. If the asset is missing, or
+every item in it fails the runtime guard, the hero renders nothing and the page
+degrades to its text content.
 
 ## Code quality
 

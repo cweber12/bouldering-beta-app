@@ -5,7 +5,12 @@ import {
   type AuthoredHold,
   type BuildLandingReplayItemParams,
 } from "@/pipeline/overlay/landingReplaySerializer";
-import { isReplayItem, LANDING_REPLAY_VERSION } from "@/pipeline/overlay/landingReplayItem";
+import {
+  isReplayItem,
+  LANDING_REPLAY_VERSION,
+  REPLAY_CAPTURE_SECONDS,
+} from "@/pipeline/overlay/landingReplayItem";
+import { MP_KP } from "@/utils/poseConstants";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { OrbFeatures } from "@/pipeline/matching/orbDetector";
 
@@ -70,10 +75,26 @@ describe("buildLandingReplayItem — output shape", () => {
   it("gives every pose both coordinate spaces with matching landmark names", () => {
     const item = buildLandingReplayItem(params());
     for (const pose of item.poses) {
-      expect(pose.source.map((k) => k.n)).toEqual(pose.photo.map((k) => k.n));
+      expect(pose.source.map((k) => k[0])).toEqual(pose.photo.map((k) => k[0]));
       expect(pose.source).toHaveLength(1);
       expect(pose.photo).toHaveLength(1);
     }
+  });
+
+  it("carries the wall still when one is attached, and omits it when not", () => {
+    expect(buildLandingReplayItem(params()).source).toEqual({ w: 200, h: 400 });
+    expect("webp" in buildLandingReplayItem(params()).source).toBe(false);
+
+    const withStill = buildLandingReplayItem(
+      params({ source: { ...SOURCE, webp: "data:image/webp;base64,BBBB" } }),
+    );
+    expect(withStill.source).toEqual({
+      w: 200,
+      h: 400,
+      webp: "data:image/webp;base64,BBBB",
+    });
+    // Both shapes are playable — the still is an enhancement, not a requirement.
+    expect(isReplayItem(withStill)).toBe(true);
   });
 
   it("wraps items in the versioned envelope", () => {
@@ -82,6 +103,58 @@ describe("buildLandingReplayItem — output shape", () => {
       version: LANDING_REPLAY_VERSION,
       items: [item],
     });
+  });
+});
+
+describe("buildLandingReplayItem — capture window and pose density", () => {
+  /** A frame every 100ms, matching the stored Run track's cadence. */
+  function track(from: number, to: number): PoseFrame[] {
+    const frames: PoseFrame[] = [];
+    for (let t = from; t <= to + 1e-9; t = Math.round((t + 0.1) * 1e3) / 1e3) {
+      frames.push(frame(t));
+    }
+    return frames;
+  }
+
+  it("records the captured span, which is what sets the item's playback rate", () => {
+    expect(buildLandingReplayItem(params()).duration).toBe(REPLAY_CAPTURE_SECONDS);
+    expect(buildLandingReplayItem(params({ windowSeconds: 12 })).duration).toBe(12);
+  });
+
+  it("thins the 10Hz stored track to the export interval", () => {
+    const item = buildLandingReplayItem(params({ frames: track(10, 24), windowStart: 10 }));
+    // 14s at 10Hz is 141 frames; at the 0.2s export interval it is 71.
+    expect(item.poses).toHaveLength(71);
+    for (let i = 1; i < item.poses.length; i++) {
+      expect(item.poses[i].t - item.poses[i - 1].t).toBeGreaterThanOrEqual(0.2 - 1e-9);
+    }
+  });
+
+  it("still opens and closes the clip on real detections", () => {
+    const item = buildLandingReplayItem(
+      params({ frames: [frame(10), frame(10.05), frame(10.1), frame(10.15)], windowStart: 10 }),
+    );
+    expect(item.poses[0].t).toBe(0);
+    expect(item.poses[item.poses.length - 1].t).toBe(0.15);
+  });
+
+  it("exports every stored frame when the interval is zero", () => {
+    const item = buildLandingReplayItem(
+      params({ frames: track(10, 11), windowStart: 10, poseIntervalSeconds: 0 }),
+    );
+    expect(item.poses).toHaveLength(11);
+  });
+
+  it("drops a landmark the topology cannot name, since nothing could draw it", () => {
+    const odd: PoseFrame = {
+      timestamp: 10,
+      keypoints: [
+        { name: "left_wrist", x: 0.5, y: 0.25, score: 0.9 },
+        { name: "third_arm", x: 0.1, y: 0.1, score: 0.9 },
+      ],
+    };
+    const item = buildLandingReplayItem(params({ frames: [odd], windowStart: 10 }));
+    expect(item.poses[0].source).toEqual([[MP_KP.LEFT_WRIST, 0.5, 0.25, 0.9]]);
   });
 });
 
@@ -109,9 +182,10 @@ describe("buildLandingReplayItem — coordinate normalization", () => {
 
   it("keeps source keypoints normalized and projects photo keypoints through `project`", () => {
     const item = buildLandingReplayItem(params({ frames: [frame(10, 0.5, 0.25)] }));
-    expect(item.poses[0].source[0]).toEqual({ n: "left_wrist", x: 0.5, y: 0.25, s: 0.9 });
+    // Landmarks encode as [index, x, y, score] — left_wrist is BlazePose 15.
+    expect(item.poses[0].source[0]).toEqual([MP_KP.LEFT_WRIST, 0.5, 0.25, 0.9]);
     // (0.5·200, 0.25·400) = (100, 100) → half-scale (50, 50) → /(100, 200).
-    expect(item.poses[0].photo[0]).toEqual({ n: "left_wrist", x: 0.5, y: 0.25, s: 0.9 });
+    expect(item.poses[0].photo[0]).toEqual([MP_KP.LEFT_WRIST, 0.5, 0.25, 0.9]);
   });
 
   it("normalizes photo coordinates against `photoSpace` when the WebP is downscaled", () => {
@@ -124,7 +198,7 @@ describe("buildLandingReplayItem — coordinate normalization", () => {
     );
     // Dimensions reported are the WebP's; coordinates measured in match space.
     expect(item.photo.w).toBe(50);
-    expect(item.poses[0].photo[0].x).toBe(0.5);
+    expect(item.poses[0].photo[0][1]).toBe(0.5);
     expect(item.matches[0].px).toBe(0.1);
   });
 
@@ -142,7 +216,8 @@ describe("buildLandingReplayItem — clip-relative rebasing", () => {
     const item = buildLandingReplayItem(
       params({ frames: [frame(8), frame(10), frame(14), frame(18), frame(19)], windowStart: 10 }),
     );
-    expect(item.poses.map((p) => p.t)).toEqual([0, 4, 8]);
+    // Default window is REPLAY_CAPTURE_SECONDS wide, so 8 is before it and 24 ends it.
+    expect(item.poses.map((p) => p.t)).toEqual([0, 4, 8, 9]);
   });
 
   it("orders poses chronologically regardless of input order", () => {
@@ -162,7 +237,7 @@ describe("buildLandingReplayItem — clip-relative rebasing", () => {
   it("rebases Hold times to the window and drops Holds first used after it", () => {
     const holds: AuthoredHold[] = [
       { x: 10, y: 20, kind: "hand", side: "left", firstUseTime: 11.5 },
-      { x: 30, y: 40, kind: "foot", side: "right", firstUseTime: 25 },
+      { x: 30, y: 40, kind: "foot", side: "right", firstUseTime: 35 },
     ];
     const item = buildLandingReplayItem(params({ holds, windowStart: 10 }));
     expect(item.holds).toEqual([{ x: 0.1, y: 0.1, kind: "hand", side: "left", t: 1.5 }]);
@@ -230,6 +305,7 @@ describe("buildLandingReplayItem — private-field exclusion", () => {
 
   it("exposes exactly the contract's top-level fields", () => {
     expect(Object.keys(buildLandingReplayItem(params())).sort()).toEqual([
+      "duration",
       "holds",
       "id",
       "label",
