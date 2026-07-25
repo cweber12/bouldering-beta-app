@@ -75,6 +75,21 @@ export interface WebpEncodeResult {
 }
 
 /**
+ * Longest edge, in pixels, an image embedded in a landing replay clip is
+ * encoded at. The hero draws it letterboxed into a stage under ~900 px tall, so
+ * 960 is already above what any visitor sees — and the two embedded images are
+ * where a checked-in clip's weight actually is.
+ */
+export const REPLAY_WEBP_MAX_EDGE = 960;
+
+/**
+ * WebP quality for those images. The Route Photo is the frame the whole clip
+ * resolves onto, so this is the one payload lever with a visible cost; 0.6 is
+ * where the wall still reads as a photograph rather than as artefacts.
+ */
+export const REPLAY_WEBP_QUALITY = 0.6;
+
+/**
  * Resize and WebP-compress a File to a base64 data URL, returning the encoded
  * dimensions alongside it.
  *
@@ -86,8 +101,8 @@ export interface WebpEncodeResult {
  */
 export async function compressImageToWebpDataUrl(
   file: File,
-  maxEdge = 1280,
-  quality = 0.75,
+  maxEdge = REPLAY_WEBP_MAX_EDGE,
+  quality = REPLAY_WEBP_QUALITY,
 ): Promise<WebpEncodeResult> {
   return new Promise((resolve, reject) => {
     const img = new Image();

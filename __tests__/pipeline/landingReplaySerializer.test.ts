@@ -9,6 +9,7 @@ import {
   isReplayItem,
   LANDING_REPLAY_VERSION,
   REPLAY_CAPTURE_SECONDS,
+  REPLAY_STARFIELD_MAX,
 } from "@/pipeline/overlay/landingReplayItem";
 import { MP_KP } from "@/utils/poseConstants";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
@@ -22,9 +23,15 @@ import type { OrbFeatures } from "@/pipeline/matching/orbDetector";
 const SOURCE = { w: 200, h: 400 };
 const PHOTO = { w: 100, h: 200, webp: "data:image/webp;base64,AAAA" };
 
-function orbFeatures(points: Array<{ x: number; y: number }>): OrbFeatures {
+function orbFeatures(points: Array<{ x: number; y: number; response?: number }>): OrbFeatures {
   return {
-    keypoints: points.map((pt) => ({ pt, size: 1, angle: 0, response: 0, octave: 0 })),
+    keypoints: points.map(({ x, y, response = 0 }) => ({
+      pt: { x, y },
+      size: 1,
+      angle: 0,
+      response,
+      octave: 0,
+    })),
     descriptors: null,
   } as unknown as OrbFeatures;
 }
@@ -208,6 +215,110 @@ describe("buildLandingReplayItem — coordinate normalization", () => {
       expect(Number.isFinite(point.x)).toBe(true);
       expect(Number.isFinite(point.y)).toBe(true);
     }
+  });
+});
+
+describe("buildLandingReplayItem — starfield cap", () => {
+  /** `count` keypoints whose response rises with their index, spread across the wall. */
+  function wall(count: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      x: (i % 20) * 10,
+      y: Math.floor(i / 20) * 10,
+      response: i,
+    }));
+  }
+
+  it("keeps the strongest responses, not the first ones ORB happened to find", () => {
+    const item = buildLandingReplayItem(
+      params({
+        // Detection order is deliberately the opposite of response order, so a
+        // first-N slice and a strongest-N selection cannot agree.
+        refFeatures: orbFeatures([
+          { x: 20, y: 40, response: 1 },
+          { x: 40, y: 80, response: 9 },
+          { x: 60, y: 120, response: 5 },
+        ]),
+        matches: [],
+        starfieldMax: 2,
+      }),
+    );
+    expect(item.starfield).toEqual([
+      { x: 0.2, y: 0.2 },
+      { x: 0.3, y: 0.3 },
+    ]);
+  });
+
+  it("defaults to the contract's cap and exports every keypoint below it", () => {
+    const over = buildLandingReplayItem(
+      params({ refFeatures: orbFeatures(wall(REPLAY_STARFIELD_MAX + 200)), matches: [] }),
+    );
+    expect(over.starfield).toHaveLength(REPLAY_STARFIELD_MAX);
+
+    const under = buildLandingReplayItem(
+      params({ refFeatures: orbFeatures(wall(REPLAY_STARFIELD_MAX - 1)), matches: [] }),
+    );
+    expect(under.starfield).toHaveLength(REPLAY_STARFIELD_MAX - 1);
+  });
+
+  it("leaves the survivors in extraction order, so a re-export diffs cleanly", () => {
+    const item = buildLandingReplayItem(
+      params({
+        refFeatures: orbFeatures([
+          { x: 20, y: 40, response: 3 },
+          { x: 40, y: 80, response: 1 },
+          { x: 60, y: 120, response: 2 },
+        ]),
+        matches: [],
+        starfieldMax: 2,
+      }),
+    );
+    expect(item.starfield).toEqual([
+      { x: 0.1, y: 0.1 },
+      { x: 0.3, y: 0.3 },
+    ]);
+  });
+
+  it("does not disturb the matched pairs, which index the uncapped keypoints", () => {
+    const item = buildLandingReplayItem(params({ starfieldMax: 1 }));
+    expect(item.starfield).toHaveLength(1);
+    expect(item.matches).toEqual([{ sx: 0.5, sy: 0.5, px: 0.1, py: 0.1 }]);
+  });
+});
+
+describe("buildLandingReplayItem — exported precision", () => {
+  it("rounds pose and starfield coordinates alike to 3 dp", () => {
+    const item = buildLandingReplayItem(
+      params({
+        refFeatures: orbFeatures([{ x: 12.3456, y: 98.7654 }]),
+        matches: [],
+        frames: [frame(10, 0.123456, 0.987654)],
+        // (0.123456·200, 0.987654·400) = (24.6912, 395.0616) → half → /(100, 200).
+        project: (x, y) => ({ x: x / 2, y: y / 2 }),
+      }),
+    );
+    expect(item.starfield).toEqual([{ x: 0.062, y: 0.247 }]);
+    expect(item.poses[0].source[0]).toEqual([MP_KP.LEFT_WRIST, 0.123, 0.988, 0.9]);
+    expect(item.poses[0].photo[0]).toEqual([MP_KP.LEFT_WRIST, 0.123, 0.988, 0.9]);
+  });
+
+  it("rounds Hold coordinates the same way", () => {
+    const holds: AuthoredHold[] = [
+      { x: 12.3456, y: 98.7654, kind: "hand", side: "left", firstUseTime: 11 },
+    ];
+    const item = buildLandingReplayItem(params({ holds, windowStart: 10 }));
+    expect(item.holds[0].x).toBe(0.123);
+    expect(item.holds[0].y).toBe(0.494);
+  });
+
+  it("keeps clip-relative times at millisecond resolution", () => {
+    const holds: AuthoredHold[] = [
+      { x: 10, y: 20, kind: "hand", side: "left", firstUseTime: 11.06253 },
+    ];
+    const item = buildLandingReplayItem(
+      params({ frames: [frame(10), frame(10.43718)], holds, windowStart: 10 }),
+    );
+    expect(item.poses.map((p) => p.t)).toEqual([0, 0.437]);
+    expect(item.holds[0].t).toBe(1.063);
   });
 });
 
