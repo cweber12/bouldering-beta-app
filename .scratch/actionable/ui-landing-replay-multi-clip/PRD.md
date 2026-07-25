@@ -1,6 +1,6 @@
 # PRD: Landing Replay Multi-Clip Playlist
 
-Status: ready-for-agent
+Status: in-progress
 Disposition: actionable
 
 ## Problem Statement

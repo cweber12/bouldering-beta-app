@@ -1,7 +1,8 @@
 # 01 - Export payload trim
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-payload-trim
+Merged: cf82393
 
 ## Parent
 
