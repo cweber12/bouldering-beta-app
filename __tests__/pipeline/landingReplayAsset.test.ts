@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   LANDING_REPLAY_VERSION,
+  REPLAY_ASPECT_TOLERANCE,
   REPLAY_CAPTURE_SECONDS,
   REPLAY_PLAYLIST_MAX,
   isReplayItem,
@@ -40,6 +41,16 @@ const ITEM_KEYS = [
   "holds",
 ] as const;
 const LABEL_KEYS = ["area", "route", "rating"] as const;
+
+/**
+ * The PRD's payload budget, in bytes: ~400 KB a clip and ≤ 1.2 MB for the whole
+ * curated set. Every visitor downloads this file in one request before the hero
+ * draws anything, so the ceiling is the point of the budget rather than a
+ * guideline — a fourth clip that busts it is a curation decision to make out
+ * loud, not something to notice later in devtools.
+ */
+const ITEM_BYTES_MAX = 420 * 1024;
+const ASSET_BYTES_MAX = 1.2 * 1024 * 1024;
 
 /**
  * Field names from the Run's private surface. None of them may appear anywhere in
@@ -86,6 +97,34 @@ describe.skipIf(!present)("checked-in landing replay asset", () => {
     for (const item of items) {
       expect(item.duration).toBeGreaterThan(0);
       expect(item.duration).toBeLessThanOrEqual(REPLAY_CAPTURE_SECONDS);
+    }
+  });
+
+  it("stays inside the payload budget, per clip and for the whole playlist", () => {
+    // Compared as an object so a failure names the clip that busts the budget
+    // rather than reporting a bare number.
+    for (const item of items) {
+      const bytes = Buffer.byteLength(JSON.stringify(item), "utf8");
+      expect({ id: item.id, overBudget: bytes > ITEM_BYTES_MAX }).toEqual({
+        id: item.id,
+        overBudget: false,
+      });
+    }
+    expect(Buffer.byteLength(raw, "utf8")).toBeLessThanOrEqual(ASSET_BYTES_MAX);
+  });
+
+  it("holds one stage shape, so no item letterboxes behind the first", () => {
+    // The stage takes its shape from items[0].source and keeps it for the whole
+    // playlist so a handoff cannot reflow the page. Mixed aspects still *play* —
+    // the assembly script warns and writes — but a mixed-aspect asset is not
+    // something to discover on the landing page, so the gate refuses it.
+    const stage = items[0].source.w / items[0].source.h;
+    for (const [index, item] of items.entries()) {
+      const aspect = item.source.w / item.source.h;
+      expect({
+        index,
+        letterboxed: Math.abs(aspect - stage) / stage > REPLAY_ASPECT_TOLERANCE,
+      }).toEqual({ index, letterboxed: false });
     }
   });
 
