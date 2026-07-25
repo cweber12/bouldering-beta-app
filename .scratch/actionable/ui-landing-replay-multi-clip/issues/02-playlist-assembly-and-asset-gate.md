@@ -1,7 +1,8 @@
 # 02 - Playlist assembly and multi-item asset gate
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-assembly
+Merged: 25a417f
 
 ## Parent
 
