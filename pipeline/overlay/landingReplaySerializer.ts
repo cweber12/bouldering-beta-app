@@ -18,9 +18,11 @@
 
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { OrbFeatures, OrbMatch } from "@/pipeline/matching/orbDetector";
+import { MP_KP_NAMES } from "@/utils/poseConstants";
 import {
   LANDING_REPLAY_VERSION,
-  REPLAY_CLIP_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
+  REPLAY_POSE_INTERVAL_SECONDS,
   type LandingReplayFile,
   type LandingReplayItem,
   type ReplayDims,
@@ -72,8 +74,13 @@ export interface BuildLandingReplayItemParams {
   frames: PoseFrame[];
   /** Clip window start, in absolute video seconds. */
   windowStart: number;
-  /** Clip window length. Defaults to {@link REPLAY_CLIP_SECONDS}. */
+  /** Clip window length. Defaults to {@link REPLAY_CAPTURE_SECONDS}. */
   windowSeconds?: number;
+  /**
+   * Minimum spacing between exported poses, in seconds. Defaults to
+   * {@link REPLAY_POSE_INTERVAL_SECONDS}; pass 0 to export every stored frame.
+   */
+  poseIntervalSeconds?: number;
   /**
    * Projects a **source video pixel** point into Route Photo pixel space —
    * built by the caller from the matcher's gated homography, so the matrix
@@ -92,6 +99,39 @@ function r4(v: number): number {
 /** Round a clip-relative time to 3 dp (millisecond resolution). */
 function r3(v: number): number {
   return Math.round(v * 1e3) / 1e3;
+}
+
+/** Round a confidence score to 2 dp — it only drives Estimated-Landmark dimming. */
+function r2(v: number): number {
+  return Math.round(v * 1e2) / 1e2;
+}
+
+/** Landmark name → BlazePose index, for the export's positional encoding. */
+const KP_INDEX_BY_NAME = new Map<string, number>(
+  Object.entries(MP_KP_NAMES).map(([index, name]) => [name, Number(index)]),
+);
+
+/**
+ * Thin `frames` to at most one sample every `interval` seconds.
+ *
+ * The renderer samples poses by time and interpolates, and the stored track was
+ * itself bone-space interpolated up from 2 Hz detections, so this drops bytes
+ * rather than motion. The first and last frames of the window are always kept, so
+ * the clip still opens and closes on real detections.
+ */
+function decimate(frames: PoseFrame[], interval: number): PoseFrame[] {
+  if (interval <= 0 || frames.length <= 2) return frames;
+  const kept: PoseFrame[] = [];
+  let last = -Infinity;
+  for (const frame of frames) {
+    if (frame.timestamp - last >= interval - 1e-9) {
+      kept.push(frame);
+      last = frame.timestamp;
+    }
+  }
+  const final = frames[frames.length - 1];
+  if (kept[kept.length - 1] !== final) kept.push(final);
+  return kept;
 }
 
 /** Guard against a zero/absent dimension turning every coordinate into NaN. */
@@ -120,7 +160,8 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
     matches,
     frames,
     windowStart,
-    windowSeconds = REPLAY_CLIP_SECONDS,
+    windowSeconds = REPLAY_CAPTURE_SECONDS,
+    poseIntervalSeconds = REPLAY_POSE_INTERVAL_SECONDS,
     project,
     holds,
   } = params;
@@ -151,18 +192,25 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
     });
   }
 
-  const windowed = frames
-    .filter((f) => f.timestamp >= windowStart && f.timestamp <= windowEnd)
-    .sort((a, b) => a.timestamp - b.timestamp);
+  const windowed = decimate(
+    frames
+      .filter((f) => f.timestamp >= windowStart && f.timestamp <= windowEnd)
+      .sort((a, b) => a.timestamp - b.timestamp),
+    poseIntervalSeconds,
+  );
 
   const poses: ReplayPose[] = windowed.map((frame) => {
     const sourceKp: ReplayKeypoint[] = [];
     const photoKp: ReplayKeypoint[] = [];
     for (const kp of frame.keypoints) {
-      const score = r4(kp.score);
-      sourceKp.push({ n: kp.name, x: r4(kp.x), y: r4(kp.y), s: score });
+      // A landmark the topology does not name has no index to encode, and the
+      // renderer could not draw it either — drop it rather than ship an orphan.
+      const index = KP_INDEX_BY_NAME.get(kp.name);
+      if (index === undefined) continue;
+      const score = r2(kp.score);
+      sourceKp.push([index, r4(kp.x), r4(kp.y), score]);
       const projected = project(kp.x * sw, kp.y * sh);
-      photoKp.push({ n: kp.name, x: r4(projected.x / pw), y: r4(projected.y / ph), s: score });
+      photoKp.push([index, r4(projected.x / pw), r4(projected.y / ph), score]);
     }
     return { t: r3(frame.timestamp - windowStart), source: sourceKp, photo: photoKp };
   });
@@ -181,6 +229,7 @@ export function buildLandingReplayItem(params: BuildLandingReplayItemParams): La
   return {
     id,
     label: { area: label.area, route: label.route, rating: label.rating },
+    duration: r3(windowSeconds),
     source: { w: source.w, h: source.h },
     photo: { w: photo.w, h: photo.h, webp: photo.webp },
     starfield,

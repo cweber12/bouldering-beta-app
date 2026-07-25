@@ -10,7 +10,7 @@
  *  - **Playlist cycling.** The same clock decides which item is on screen: every
  *    item owns one clip-length slot, the first 300 ms of each slot crossfades from
  *    the previous item, and the cycle wraps to the first item indefinitely.
- *  - **Phase windows.** One 8-second item runs four fixed windows — 0-30%,
+ *  - **Phase windows.** One item's screen window runs four fixed windows — 0-30%,
  *    30-45%, 45-80%, 80-100% — and each window is expressed as a set of alphas
  *    plus a single `morph` factor. Windows are fractions of the clip, never
  *    wall-clock offsets, so pausing cannot desynchronise them.
@@ -26,7 +26,11 @@
  */
 
 import { lerpKeypoints, type OverlayPoint } from "@/pipeline/overlay/skeletonOverlay";
-import type { ReplayKeypoint, ReplayPose } from "@/pipeline/overlay/landingReplayItem";
+import {
+  replayKeypointName,
+  type ReplayKeypoint,
+  type ReplayPose,
+} from "@/pipeline/overlay/landingReplayItem";
 
 // ---------------------------------------------------------------------------
 // Phase windows
@@ -46,7 +50,10 @@ export type ReplayPhase = 1 | 2 | 3 | 4;
 export interface ReplayFrameComposition {
   /** Clip progress in [0,1]. */
   progress: number;
-  /** Clip-relative seconds — what pose sampling and Hold reveal read. */
+  /**
+   * Clip-relative **captured** seconds — what pose sampling and Hold reveal read.
+   * Scaled by the item's playback rate, so it runs ahead of screen time.
+   */
   clipSeconds: number;
   phase: ReplayPhase;
   /** ORB wall starfield, drawn in source space. */
@@ -95,8 +102,17 @@ export function clipProgress(elapsedMs: number, durationMs: number): number {
  * still at full and the matched points still at zero, phase 3 opens with the
  * photo hidden and the morph at zero, phase 4 opens with the morph complete —
  * so a boundary crossing never shows a visible step.
+ *
+ * `durationMs` is **screen** time and `captureSeconds` is how much climbing the
+ * clip holds; the phases are fractions of the former and `clipSeconds` runs on
+ * the latter. Passing a capture window wider than the animation is what plays the
+ * ascent above 1×; omitting it plays real time.
  */
-export function composeReplayFrame(elapsedMs: number, durationMs: number): ReplayFrameComposition {
+export function composeReplayFrame(
+  elapsedMs: number,
+  durationMs: number,
+  captureSeconds: number = durationMs / 1000,
+): ReplayFrameComposition {
   const progress = clipProgress(elapsedMs, durationMs);
   const phase: ReplayPhase =
     progress < PHASE_1_END ? 1 : progress < PHASE_2_END ? 2 : progress < PHASE_3_END ? 3 : 4;
@@ -110,7 +126,7 @@ export function composeReplayFrame(elapsedMs: number, durationMs: number): Repla
 
   return {
     progress,
-    clipSeconds: (progress * durationMs) / 1000,
+    clipSeconds: progress * captureSeconds,
     phase,
     starfieldAlpha: 1 - swap,
     matchAlpha: swap * (1 - settle),
@@ -236,10 +252,13 @@ export interface SampledReplayPose {
   photo: Record<string, OverlayPoint>;
 }
 
-/** Keypoint array → the name-keyed map the overlay drawing helpers expect. */
+/** Encoded keypoints → the name-keyed map the overlay drawing helpers expect. */
 function toMap(keypoints: readonly ReplayKeypoint[]): Record<string, OverlayPoint> {
   const out: Record<string, OverlayPoint> = {};
-  for (const kp of keypoints) out[kp.n] = { x: kp.x, y: kp.y, score: kp.s };
+  for (const kp of keypoints) {
+    const name = replayKeypointName(kp);
+    if (name) out[name] = { x: kp[1], y: kp[2], score: kp[3] };
+  }
   return out;
 }
 

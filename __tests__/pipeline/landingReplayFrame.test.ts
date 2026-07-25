@@ -121,6 +121,26 @@ describe("composeReplayFrame", () => {
     expect(composeReplayFrame(DURATION, DURATION).clipSeconds).toBeCloseTo(8, 6);
   });
 
+  it("plays a wider capture window across the same screen window", () => {
+    // 14 captured seconds over an 8s animation: the figure runs at 1.75×.
+    const rate = 14 / 8;
+    expect(composeReplayFrame(0, DURATION, 14).clipSeconds).toBe(0);
+    expect(composeReplayFrame(2000, DURATION, 14).clipSeconds).toBeCloseTo(2 * rate, 6);
+    // The clip still lands exactly on its own last captured second at the end.
+    expect(composeReplayFrame(DURATION, DURATION, 14).clipSeconds).toBeCloseTo(14, 6);
+  });
+
+  it("leaves the phase windows on screen time, whatever the capture rate", () => {
+    for (const capture of [4, 8, 14, 30]) {
+      const f = composeReplayFrame(at(PHASE_2_END), DURATION, capture);
+      expect(f.phase).toBe(3);
+      expect(f.morph).toBe(0);
+      expect(f.progress).toBeCloseTo(PHASE_2_END, 6);
+      // Only the captured seconds move with the rate.
+      expect(f.clipSeconds).toBeCloseTo(PHASE_2_END * capture, 6);
+    }
+  });
+
   it("keeps every alpha and the morph inside [0,1] across the whole clip", () => {
     for (let ms = 0; ms <= DURATION; ms += 25) {
       const f = composeReplayFrame(ms, DURATION);
@@ -298,8 +318,8 @@ describe("containRect", () => {
 function pose(t: number, sx: number, px: number): ReplayPose {
   return {
     t,
-    source: [{ n: "left_wrist", x: sx, y: sx, s: 0.9 }],
-    photo: [{ n: "left_wrist", x: px, y: px, s: 0.9 }],
+    source: [[15, sx, sx, 0.9]],
+    photo: [[15, px, px, 0.9]],
   };
 }
 

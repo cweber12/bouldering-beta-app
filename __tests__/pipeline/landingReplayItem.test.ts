@@ -3,7 +3,8 @@ import {
   isReplayItem,
   readReplayPlaylist,
   LANDING_REPLAY_VERSION,
-  REPLAY_CLIP_SECONDS,
+  REPLAY_ANIMATION_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
   REPLAY_PLAYLIST_MAX,
   type LandingReplayItem,
 } from "@/pipeline/overlay/landingReplayItem";
@@ -12,6 +13,7 @@ function validItem(): LandingReplayItem {
   return {
     id: "run-1750000000-boulder-problem",
     label: { area: "Chaos Canyon", route: "Boulder Problem", rating: "V4" },
+    duration: 14,
     source: { w: 1080, h: 1920 },
     photo: { w: 1200, h: 1600, webp: "data:image/webp;base64,AAAA" },
     starfield: [{ x: 0.12, y: 0.44 }],
@@ -19,8 +21,8 @@ function validItem(): LandingReplayItem {
     poses: [
       {
         t: 0,
-        source: [{ n: "left_wrist", x: 0.4, y: 0.3, s: 0.9 }],
-        photo: [{ n: "left_wrist", x: 0.5, y: 0.4, s: 0.9 }],
+        source: [[15, 0.4, 0.3, 0.9]],
+        photo: [[15, 0.5, 0.4, 0.9]],
       },
     ],
     holds: [{ x: 0.3, y: 0.5, kind: "hand", side: "left", t: 1.2 }],
@@ -28,10 +30,13 @@ function validItem(): LandingReplayItem {
 }
 
 describe("contract constants", () => {
-  it("pins version 1, an 8-second clip and a 5-item playlist", () => {
+  it("pins version 1, a 5-item playlist, and a capture window wider than the screen one", () => {
     expect(LANDING_REPLAY_VERSION).toBe(1);
-    expect(REPLAY_CLIP_SECONDS).toBe(8);
     expect(REPLAY_PLAYLIST_MAX).toBe(5);
+    // The gap between these two is the playback rate — clips show more climbing
+    // than they spend screen time on.
+    expect(REPLAY_CAPTURE_SECONDS).toBeGreaterThan(REPLAY_ANIMATION_SECONDS);
+    expect(REPLAY_CAPTURE_SECONDS / REPLAY_ANIMATION_SECONDS).toBeLessThanOrEqual(2);
   });
 });
 
@@ -44,6 +49,12 @@ describe("isReplayItem", () => {
     for (const value of [null, undefined, 4, "item", true, []]) {
       expect(isReplayItem(value)).toBe(false);
     }
+  });
+
+  it("rejects an item with no usable captured duration", () => {
+    expect(isReplayItem({ ...validItem(), duration: undefined })).toBe(false);
+    expect(isReplayItem({ ...validItem(), duration: "14" })).toBe(false);
+    expect(isReplayItem({ ...validItem(), duration: 0 })).toBe(false);
   });
 
   it("rejects an item missing its id or label strings", () => {

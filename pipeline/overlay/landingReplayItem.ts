@@ -1,6 +1,6 @@
 /**
  * The **Landing Replay Item** contract (v1) — the checked-in, purely geometric
- * description of one curated 8-second replay clip.
+ * description of one curated replay clip.
  *
  * The design invariant behind this shape: everything expensive (ORB matching,
  * homography, Hold projection, Skeleton transform) runs **once at authoring
@@ -15,15 +15,46 @@
  * nothing depends on render resolution. `poses[].t` and `holds[].t` are
  * **clip-relative seconds** (0 at the window's first frame).
  *
+ * Captured seconds and screen seconds are **not** the same quantity. An item
+ * records how much climbing it captured ({@link LandingReplayItem.duration}) and
+ * the hero decides how long to spend showing it ({@link REPLAY_ANIMATION_SECONDS});
+ * the ratio is the playback rate. Detection runs at 2 Hz and the stored track is
+ * bone-space interpolated from there, so replaying above 1× discards no motion
+ * that was ever measured — it just buys a longer window of the ascent for the
+ * same hero dwell time.
+ *
  * This module is framework-agnostic — no React imports, no OpenCV. Keep it that
  * way: the landing renderer imports it.
  */
 
+import { MP_KP_NAMES } from "@/utils/poseConstants";
+
 /** Contract version stamped into the playlist wrapper. */
 export const LANDING_REPLAY_VERSION = 1;
 
-/** Fixed clip width in seconds. The playlist animation maps 1:1 onto it. */
-export const REPLAY_CLIP_SECONDS = 8;
+/**
+ * How much video one clip captures, in seconds — the authoring window's fixed
+ * width. Runs whose detected pose track is shorter than this cannot be authored.
+ */
+export const REPLAY_CAPTURE_SECONDS = 14;
+
+/**
+ * How long the hero spends playing one clip, in seconds. Shorter than the
+ * capture window, so the figure moves at `duration / REPLAY_ANIMATION_SECONDS`
+ * (~1.4×): more of the ascent for barely more dwell time. It also bounds the
+ * phase windows — much past 10s and the phase-3 morph starts to drag.
+ */
+export const REPLAY_ANIMATION_SECONDS = 10;
+
+/**
+ * Minimum spacing between exported pose samples, in captured seconds.
+ *
+ * The stored Run track is 10 Hz, but it was bone-space interpolated up from 2 Hz
+ * detections, so the motion above ~2 Hz is inferred rather than measured. The
+ * renderer samples poses by time and interpolates between them, so exporting at
+ * 5 Hz halves the payload and changes nothing anyone can see.
+ */
+export const REPLAY_POSE_INTERVAL_SECONDS = 0.2;
 
 /**
  * How many items the hero will play. The playlist is a curated 1-5 clips; a file
@@ -75,22 +106,31 @@ export interface ReplayMatch {
   py: number;
 }
 
-/** A pose landmark: name, normalized position, confidence score. */
-export interface ReplayKeypoint {
-  n: string;
-  x: number;
-  y: number;
-  s: number;
-}
+/**
+ * A pose landmark as `[index, x, y, score]`, where `index` is the BlazePose
+ * landmark index ({@link MP_KP_NAMES}).
+ *
+ * Landmark names are the single biggest cost in a checked-in playlist — the
+ * literal `"n":"left_foot_index"` outweighs the geometry it labels, 33 times per
+ * pose per coordinate space. Indices carry the same information at less than half
+ * the bytes, and carrying the index per entry (rather than 33 fixed slots) keeps
+ * a filtered-out landmark simply absent, exactly as the named form did.
+ */
+export type ReplayKeypoint = [index: number, x: number, y: number, score: number];
 
 /** One pose sample, in both coordinate spaces, at clip-relative time `t`. */
 export interface ReplayPose {
-  /** Clip-relative seconds (0 at the window's first frame). */
+  /** Clip-relative **captured** seconds (0 at the window's first frame). */
   t: number;
   /** Landmarks normalized against the source video dimensions. */
   source: ReplayKeypoint[];
   /** The same landmarks normalized against the Route Photo dimensions. */
   photo: ReplayKeypoint[];
+}
+
+/** The landmark name for an encoded keypoint, or null if the index is unknown. */
+export function replayKeypointName(keypoint: ReplayKeypoint): string | null {
+  return MP_KP_NAMES[keypoint[0] as keyof typeof MP_KP_NAMES] ?? null;
 }
 
 /** A Hold in Route Photo space, revealed at clip-relative time `t`. */
@@ -107,6 +147,12 @@ export interface ReplayHold {
 export interface LandingReplayItem {
   id: string;
   label: ReplayLabel;
+  /**
+   * Captured seconds this clip spans — the span `poses[].t` and `holds[].t` are
+   * measured in. The hero plays it over {@link REPLAY_ANIMATION_SECONDS}, so this
+   * is what sets the item's playback rate.
+   */
+  duration: number;
   /** Source video pixel dimensions — the space `starfield`/`matches.s*`/`poses[].source` normalize against. */
   source: ReplayDims;
   /** Route Photo pixel dimensions + the embedded WebP. */
@@ -137,6 +183,7 @@ export function isReplayItem(value: unknown): value is LandingReplayItem {
   const v = value as Record<string, unknown>;
 
   if (typeof v.id !== "string") return false;
+  if (typeof v.duration !== "number" || !(v.duration > 0)) return false;
 
   const label = v.label as Record<string, unknown> | undefined;
   if (!label || typeof label.area !== "string" || typeof label.route !== "string") return false;

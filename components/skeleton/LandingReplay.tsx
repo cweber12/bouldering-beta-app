@@ -11,8 +11,9 @@ import {
 } from "@/pipeline/overlay/skeletonOverlay";
 import {
   LANDING_REPLAY_ASSET_PATH,
-  REPLAY_CLIP_SECONDS,
+  REPLAY_ANIMATION_SECONDS,
   readReplayPlaylist,
+  replayKeypointName,
   type LandingReplayItem,
   type ReplayKeypoint,
 } from "@/pipeline/overlay/landingReplayItem";
@@ -30,9 +31,16 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 
 // ---------------------------------------------------------------------------
 // LandingReplay — the landing-page hero. It plays the curated playlist: 1-5
-// replay items, in the checked-in file's order, each an 8-second four-phase story
-// in which the scanner's x-ray view of the climb resolves into the Route Overlay
-// on the real wall.
+// replay items, in the checked-in file's order, each a four-phase story in which
+// the scanner's x-ray view of the climb resolves into the Route Overlay on the
+// real wall.
+//
+// An item captures more climbing than it spends showing it: ~14 captured seconds
+// over a 10-second window, so the figure runs at ~1.4×. Detection is 2 Hz and the
+// stored track is interpolated up from there, so the speed-up costs no motion
+// that was ever measured — it buys a longer look at the ascent for the same
+// dwell time. The phases below are fractions of the *screen* window; pose and
+// Hold times are captured seconds.
 //
 //   0-30%   starfield + the video-space figure and its motion trail
 //   30-45%  the ambient starfield fades out; the matched wall features emerge
@@ -61,8 +69,12 @@ import { mediaContainerStyle } from "@/utils/mediaContainerStyle";
 // text content — there is no fallback asset and no fallback load path.
 // ---------------------------------------------------------------------------
 
-/** Clip length in milliseconds — the window all four phases are fractions of. */
-const DURATION_MS = REPLAY_CLIP_SECONDS * 1000;
+/**
+ * Screen time per item, in milliseconds — the window all four phases are
+ * fractions of. Each item carries its own (longer) captured span, so the figure
+ * plays back at `item.duration / REPLAY_ANIMATION_SECONDS`.
+ */
+const DURATION_MS = REPLAY_ANIMATION_SECONDS * 1000;
 
 /**
  * The stage is a fixed portrait frame, not the item's own aspect: both
@@ -85,7 +97,11 @@ const TRAIL_COLOR = "#94a3b8";
 const STAGE_BG = "#0a0908";
 /** How many superseded poses form the wake. */
 const TRAIL_COUNT = 6;
-/** Spacing between wake samples, in clip seconds. */
+/**
+ * Spacing between wake samples, in **captured** seconds. Holding it in captured
+ * rather than screen time keeps the trail the same length behind the figure at
+ * any playback rate; the whole wake simply passes by faster.
+ */
 const TRAIL_STEP_S = 0.18;
 
 // ---------------------------------------------------------------------------
@@ -125,8 +141,10 @@ function stageFromList(
 ): Record<string, OverlayPoint> {
   const out: Record<string, OverlayPoint> = {};
   for (const kp of keypoints) {
-    const p = toStage(rect, kp.x, kp.y);
-    out[kp.n] = { x: p.x, y: p.y, score: kp.s };
+    const name = replayKeypointName(kp);
+    if (!name) continue;
+    const p = toStage(rect, kp[1], kp[2]);
+    out[name] = { x: p.x, y: p.y, score: kp[3] };
   }
   return out;
 }
@@ -216,7 +234,7 @@ function drawReplayItem(
   photo: HTMLImageElement | null,
   wake: HTMLCanvasElement,
 ): void {
-  const frame = composeReplayFrame(elapsedMs, DURATION_MS);
+  const frame = composeReplayFrame(elapsedMs, DURATION_MS, item.duration);
   const { sourceRect, photoRect } = geometry;
 
   // 1 — the ambient wall field, in source space.

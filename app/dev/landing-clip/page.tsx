@@ -4,7 +4,7 @@
  * Dev-only landing-replay clip authoring route.
  *
  * Private maintainer tooling: turn one saved Fixed Capture Run into one checked-in
- * replay item. The flow is pick a Run → choose an 8-second window → attach a Route
+ * replay item. The flow is pick a Run → choose a 14-second window → attach a Route
  * Photo → run the existing ORB match → download the JSON.
  *
  * Everything expensive happens here, once: the ORB match and gated homography come
@@ -32,7 +32,10 @@ import {
   type OverlayPoint,
 } from "@/pipeline/overlay/skeletonOverlay";
 import { applyHomographyMatrix } from "@/pipeline/matching/homography";
-import { REPLAY_CLIP_SECONDS } from "@/pipeline/overlay/landingReplayItem";
+import {
+  REPLAY_ANIMATION_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
+} from "@/pipeline/overlay/landingReplayItem";
 import {
   buildLandingReplayItem,
   buildLandingReplayFile,
@@ -42,6 +45,13 @@ import { capToPixelBudget, compressImageToWebpDataUrl } from "@/utils/imageHelpe
 import { formatRunTimestamp } from "@/utils/formatRunTimestamp";
 
 const IS_DEV = process.env.NODE_ENV === "development";
+
+/**
+ * How fast the hero replays a clip: the captured window over the screen window.
+ * The segment preview below runs at this rate so the curator judges the clip the
+ * way visitors will see it, not in real time.
+ */
+const PLAYBACK_RATE = REPLAY_CAPTURE_SECONDS / REPLAY_ANIMATION_SECONDS;
 
 /** Height in CSS px of the main preview canvases. */
 const PREVIEW_H = 300;
@@ -227,7 +237,7 @@ export default function LandingClipPage() {
 
   // Window start as an offset from the Run's first detected frame, in seconds.
   const [windowOffset, setWindowOffset] = useState(0);
-  // Playhead within the window, clip-relative seconds in [0, REPLAY_CLIP_SECONDS].
+  // Playhead within the window, clip-relative seconds in [0, REPLAY_CAPTURE_SECONDS].
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
 
@@ -270,9 +280,9 @@ export default function LandingClipPage() {
   const firstTs = frames.length > 0 ? frames[0].timestamp : 0;
   const lastTs = frames.length > 0 ? frames[frames.length - 1].timestamp : 0;
   const trackDuration = Math.max(0, lastTs - firstTs);
-  const maxOffset = Math.max(0, trackDuration - REPLAY_CLIP_SECONDS);
+  const maxOffset = Math.max(0, trackDuration - REPLAY_CAPTURE_SECONDS);
   const windowStart = firstTs + Math.min(windowOffset, maxOffset);
-  const windowEnd = windowStart + REPLAY_CLIP_SECONDS;
+  const windowEnd = windowStart + REPLAY_CAPTURE_SECONDS;
 
   // A Panning Capture has no single frame-0 reference to build a starfield or a
   // single gated homography from — Fixed Capture only, per the PRD's source rule.
@@ -284,8 +294,8 @@ export default function LandingClipPage() {
         ? "This Run has no reference ORB features, so it has no wall starfield to export."
         : frames.length === 0
           ? "This Run has no detected pose frames."
-          : trackDuration < REPLAY_CLIP_SECONDS
-            ? `This Run's pose track is only ${trackDuration.toFixed(1)}s — shorter than the ${REPLAY_CLIP_SECONDS}s clip.`
+          : trackDuration < REPLAY_CAPTURE_SECONDS
+            ? `This Run's pose track is only ${trackDuration.toFixed(1)}s — shorter than the ${REPLAY_CAPTURE_SECONDS}s clip.`
             : null;
 
   const videoW = attempt?.videoMeta.width ?? 9;
@@ -350,7 +360,7 @@ export default function LandingClipPage() {
     const tick = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      setPlayhead((t) => (t + dt) % REPLAY_CLIP_SECONDS);
+      setPlayhead((t) => (t + dt * PLAYBACK_RATE) % REPLAY_CAPTURE_SECONDS);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -476,8 +486,9 @@ export default function LandingClipPage() {
       <header className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-fg">Landing replay clip authoring</h1>
         <p className="text-sm text-fg-muted">
-          Pick a Fixed Capture Run, choose an {REPLAY_CLIP_SECONDS}-second window, attach the Route
-          Photo, then export one replay item to check into the repo.
+          Pick a Fixed Capture Run, choose an {REPLAY_CAPTURE_SECONDS}-second window, attach the
+          Route Photo, then export one replay item to check into the repo. The hero plays that
+          window over {REPLAY_ANIMATION_SECONDS}s, so it runs at {PLAYBACK_RATE.toFixed(1)}×.
         </p>
       </header>
 
@@ -545,12 +556,13 @@ export default function LandingClipPage() {
       {attempt && !unsupportedReason && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-semibold text-fg">
-            2 · Clip window ({REPLAY_CLIP_SECONDS}s fixed)
+            2 · Clip window ({REPLAY_CAPTURE_SECONDS}s captured → {REPLAY_ANIMATION_SECONDS}s on
+            screen)
           </h2>
           <label className="flex flex-col gap-1 text-xs text-fg-muted">
             <span>
               Starts at {windowOffset.toFixed(1)}s of {trackDuration.toFixed(1)}s (window{" "}
-              {windowOffset.toFixed(1)}–{(windowOffset + REPLAY_CLIP_SECONDS).toFixed(1)}s)
+              {windowOffset.toFixed(1)}–{(windowOffset + REPLAY_CAPTURE_SECONDS).toFixed(1)}s)
             </span>
             <input
               type="range"
@@ -582,7 +594,7 @@ export default function LandingClipPage() {
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs text-fg-muted">
-                Segment playback · t = {playhead.toFixed(2)}s
+                Segment playback at {PLAYBACK_RATE.toFixed(1)}× · t = {playhead.toFixed(2)}s
               </span>
               <OverlayCanvas
                 points={sourcePoints}
@@ -603,7 +615,7 @@ export default function LandingClipPage() {
             <input
               type="range"
               min={0}
-              max={REPLAY_CLIP_SECONDS}
+              max={REPLAY_CAPTURE_SECONDS}
               step={0.05}
               value={playhead}
               onChange={(e) => {

@@ -15,7 +15,7 @@ checked-in replay artifacts while keeping the public hero stable and passive.
 Curate a playlist of short clips drawn from different Runs, and deliver it as a
 single static asset:
 
-1. In a hidden development-only route, pick a saved Run and an 8-second window
+1. In a hidden development-only route, pick a saved Run and a 14-second window
    of it, attach a Route Photo, and run the existing ORB match.
 2. Export that clip as one JSON item and check it into the repo.
 3. The landing hero fetches one playlist asset and plays its items in file
@@ -47,6 +47,7 @@ photo points in Route Photo space — so nothing depends on render resolution.
     {
       "id": "run-1750000000-boulder-problem",
       "label": { "area": "…", "route": "…", "rating": "V4" },
+      "duration": 14,
       "source": { "w": 1080, "h": 1920 },
       "photo": { "w": 1200, "h": 1600, "webp": "data:image/webp;base64,…" },
       "starfield": [{ "x": 0.12, "y": 0.44 }],
@@ -54,8 +55,9 @@ photo points in Route Photo space — so nothing depends on render resolution.
       "poses": [
         {
           "t": 0.0,
-          "source": [{ "n": "left_wrist", "x": 0.4, "y": 0.3, "s": 0.9 }],
-          "photo": [{ "n": "left_wrist", "x": 0.5, "y": 0.4, "s": 0.9 }]
+          // [BlazePose landmark index, x, y, score]
+          "source": [[15, 0.4, 0.3, 0.9]],
+          "photo": [[15, 0.5, 0.4, 0.9]]
         }
       ],
       "holds": [{ "x": 0.3, "y": 0.5, "kind": "hand", "side": "left", "t": 1.2 }]
@@ -64,14 +66,32 @@ photo points in Route Photo space — so nothing depends on render resolution.
 }
 ```
 
-`poses[].t` and `holds[].t` are **clip-relative seconds** (0 at the clip's first
-frame), so the 8-second clip maps 1:1 onto the 8-second animation.
+`poses[].t` and `holds[].t` are **clip-relative captured seconds** (0 at the
+clip's first frame), spanning `duration`.
+
+### Capture, screen time, and playback rate
+
+Captured seconds and screen seconds are separate quantities. A clip captures
+**14 seconds** of climbing and the hero spends **10 seconds** showing it, so the
+figure plays at ~1.4×. That is what makes a clip read as a climb rather than a
+fragment: pose detection runs at 2 Hz and the stored track is bone-space
+interpolated up from there, so replaying above 1× discards no motion that was
+ever measured — it buys a longer window of the ascent for the same hero dwell.
+
+Screen time is capped at 10s deliberately: the phase windows are fractions of it,
+and much past that the phase-3 morph starts to drag.
+
+Poses export at **5 Hz**, not the stored track's 10 Hz. The renderer samples by
+time and interpolates, and the stored 10 Hz was itself inferred from 2 Hz
+detections, so the halved payload costs nothing visible. Landmarks serialize as
+`[index, x, y, score]` rather than named objects for the same reason — the names
+outweighed the geometry they labelled.
 
 ### Phase timing
 
-The pose plays continuously across the whole 8 seconds. Phases control only
-*which space* the figure is drawn in and what else is on screen — they never
-change playback speed.
+The pose plays continuously across the whole clip. Phases control only *which
+space* the figure is drawn in and what else is on screen — they never change
+playback speed.
 
 1. 0-30%: starfield + video-space Skeleton
 2. 30-45%: starfield fades while matched source points emerge
@@ -120,6 +140,9 @@ Dependency summary:
 - Route Photo is embedded in the export as compressed WebP data.
 - Playlist holds 1-5 items; **order is array order in the checked-in file**.
   Reordering means editing the file.
+- Capture window (14s) and screen window (10s) are separate constants, so the
+  clip's playback rate falls out of the pair rather than being its own knob.
+  Items carry their own captured `duration`, so the rate is per item.
 - Public labels include only `area`, Route name, and `rating`.
 - Hero is passive: no previous/next navigation; one pause/play control for
   motion compliance.

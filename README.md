@@ -183,7 +183,7 @@ white joint is a neutral anchor and is exempt from adaptation.
 | `/profile/[userId]`                      | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                                                                                                       | Yes           |
 | `/docs`                                  | Usage guide                                                                                                                                                                                                                                                                                                                 | No            |
 | `/dev/map-drag`                          | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                                                                                                                                                                          | No            |
-| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose an 8-second window, attach a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
+| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose a 14-second window, attach a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
 
 ## Interactive crop boxes
 
@@ -425,16 +425,25 @@ Open <http://localhost:3000>.
 
 ### Landing replay
 
-The landing hero plays a curated playlist of 8-second replay clips from
+The landing hero plays a curated playlist of replay clips from
 `public/landing-replay.json` — one static asset every visitor sees, played in
 file order. Each clip runs four fixed phases: the ORB starfield with the
 video-space skeleton, the matched wall features emerging, the route photo rising
 while points and skeleton morph into its space, and the finished route overlay
 with holds revealing on their own times.
 
+A clip captures **14 seconds** of climbing and the hero spends **10 seconds**
+showing it, so the figure plays back at ~1.4× — enough of the ascent to read as a
+climb rather than a fragment. That speed-up is free in fidelity terms: pose
+detection runs at 2 Hz and the stored track is bone-space interpolated up from
+there, so replaying above 1× discards nothing that was ever measured. Each item
+carries its own captured `duration`, so the rate is per item; screen time stays
+at 10s because the phase windows are fractions of it and the phase-3 morph starts
+to drag much past that.
+
 Cycling is deliberately thin. Items play in **array order** — reordering means
 editing the file — and the playlist is read up to five items. Each item runs its
-full 8 seconds and hands off with a 300 ms crossfade in which the outgoing clip
+full window and hands off with a 300 ms crossfade in which the outgoing clip
 holds its finished route overlay while the next one opens on its starfield; after
 the last item the cycle wraps to the first and continues indefinitely. Phases,
 cycling and handoff all run off one clock, so the single pause/play control (and
@@ -448,12 +457,15 @@ Clips are authored by the maintainer on the unlinked development-only route
 `/dev/landing-clip`:
 
 1. Pick a saved Fixed-Capture run (panning captures, runs with no reference ORB
-   features, and pose tracks shorter than 8s are rejected with a notice).
-2. Choose the 8-second window with the slider, checking the endpoint thumbnails
+   features, and pose tracks shorter than the 14s window are rejected with a
+   notice).
+2. Choose the 14-second window with the slider, checking the endpoint thumbnails
    and segment playback.
 3. Attach the route photo and let the existing ORB match run; export unlocks only
    once alignment succeeds.
-4. Download the `{ version: 1, items: [ … ] }` file.
+4. Download the `{ version: 1, items: [ … ] }` file. Poses export at 5 Hz with
+   landmarks encoded as `[index, x, y, score]`, which keeps a 14s clip lighter
+   than the old 8s one.
 
 Then merge the item into `public/landing-replay.json` by hand — concatenate the
 `items` arrays, in the order you want them played — and commit it. Nothing is

@@ -26,9 +26,10 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
 
 - [x] Landing hero loads one global playlist asset containing 1-5 items and
       plays them in file order for all visitors.
-- [x] Item handoff is deterministic: each item runs 8 seconds and hands off via
-      an approximately 300 ms crossfade, driven by the same replay clock from
-      issue 16.
+- [x] Item handoff is deterministic: each item runs its full clip and hands off
+      via an approximately 300 ms crossfade, driven by the same replay clock from
+      issue 16. (Clip length revised from 8s to 14s captured over 10s of screen
+      time — see the timing note below.)
 - [x] Cycling wraps to the first item and continues indefinitely while the
       clock runs.
 - [ ] Use the private authoring route from issue 15 with real maintainer Runs
@@ -86,6 +87,34 @@ page's text content (verified). Everything else is done and passing:
   text, no private Run field names anywhere in the JSON, and clip-relative times.
   Confirmed it both passes on a well-formed asset and fails on a planted `notes`
   field before being removed again.
+
+### Clip timing revision (8s → 14s captured / 10s on screen)
+
+An 8-second clip did not capture enough of an ascent to read as a climb. The fix
+separates two quantities the original constant conflated:
+
+- `REPLAY_CAPTURE_SECONDS = 14` — the authoring window, how much climbing a clip
+  holds. `REPLAY_ANIMATION_SECONDS = 10` — how long the hero spends showing it.
+  Their ratio is the playback rate (~1.4×), and items carry their own captured
+  `duration` so the rate is per item rather than global.
+- The speed-up costs no fidelity: detection is 2 Hz and the stored track is
+  bone-space interpolated up from there, so replaying above 1× discards nothing
+  that was ever measured. Screen time stays at 10s because the phase windows are
+  fractions of it — much past that and the phase-3 morph drags.
+- Phase windows stay on screen time; only `clipSeconds` (pose sampling and Hold
+  reveal) runs on captured time. `TRAIL_STEP_S` is deliberately left in captured
+  seconds, so the wake keeps the same length behind the figure and simply passes
+  by faster.
+- Payload paid for itself: poses export at 5 Hz instead of the stored 10 Hz, and
+  landmarks serialize as `[index, x, y, score]` instead of named objects. A 14s
+  clip is roughly 100 KB against the old 8s clip's ~250 KB — 75% more climbing at
+  40% of the bytes. Both are safe because the renderer samples poses by time and
+  interpolates.
+- The authoring route previews the segment at the hero's rate, not real time, so
+  the curator judges what visitors will see.
+
+The PRD's contract sketch, phase-timing section and implementation decisions were
+updated in the same commit.
 
 To finish the issue: author 1-5 clips on `/dev/landing-clip`, concatenate the
 exported `items` arrays into `public/landing-replay.json`, run

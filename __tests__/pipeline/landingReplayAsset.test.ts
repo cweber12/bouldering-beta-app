@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   LANDING_REPLAY_VERSION,
-  REPLAY_CLIP_SECONDS,
+  REPLAY_CAPTURE_SECONDS,
   REPLAY_PLAYLIST_MAX,
   isReplayItem,
   readReplayPlaylist,
@@ -31,6 +31,7 @@ const present = existsSync(ASSET_PATH);
 const ITEM_KEYS = [
   "id",
   "label",
+  "duration",
   "source",
   "photo",
   "starfield",
@@ -80,8 +81,12 @@ describe.skipIf(!present)("checked-in landing replay asset", () => {
     expect(readReplayPlaylist(file)).toHaveLength(items.length);
   });
 
-  it("gives each item a distinct id", () => {
+  it("gives each item a distinct id and a sane captured span", () => {
     expect(new Set(items.map((i) => i.id)).size).toBe(items.length);
+    for (const item of items) {
+      expect(item.duration).toBeGreaterThan(0);
+      expect(item.duration).toBeLessThanOrEqual(REPLAY_CAPTURE_SECONDS);
+    }
   });
 
   it("exposes only the contract's fields, and only labels as text", () => {
@@ -109,14 +114,16 @@ describe.skipIf(!present)("checked-in landing replay asset", () => {
     for (const item of items) {
       for (const pose of item.poses) {
         expect(pose.t).toBeGreaterThanOrEqual(0);
-        expect(pose.t).toBeLessThanOrEqual(REPLAY_CLIP_SECONDS);
-        for (const kp of [...pose.source, ...pose.photo]) {
-          expect(Number.isFinite(kp.x) && Number.isFinite(kp.y)).toBe(true);
+        expect(pose.t).toBeLessThanOrEqual(item.duration);
+        for (const [index, x, y] of [...pose.source, ...pose.photo]) {
+          expect(index).toBeGreaterThanOrEqual(0);
+          expect(index).toBeLessThan(33);
+          expect(Number.isFinite(x) && Number.isFinite(y)).toBe(true);
         }
       }
       for (const hold of item.holds) {
         expect(hold.t).toBeGreaterThanOrEqual(0);
-        expect(hold.t).toBeLessThanOrEqual(REPLAY_CLIP_SECONDS);
+        expect(hold.t).toBeLessThanOrEqual(item.duration);
       }
       for (const point of item.starfield) {
         expect(Number.isFinite(point.x) && Number.isFinite(point.y)).toBe(true);

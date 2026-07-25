@@ -16,6 +16,7 @@ import type { LandingReplayItem } from "@/pipeline/overlay/landingReplayItem";
 const ITEM: LandingReplayItem = {
   id: "run-1750000000-slab-master",
   label: { area: "Rocktown", route: "Slab Master", rating: "V4" },
+  duration: 14,
   source: { w: 1080, h: 1920 },
   photo: { w: 1200, h: 1600, webp: "data:image/webp;base64,AA==" },
   starfield: [{ x: 0.2, y: 0.3 }],
@@ -23,13 +24,13 @@ const ITEM: LandingReplayItem = {
   poses: [
     {
       t: 0,
-      source: [{ n: "left_wrist", x: 0.4, y: 0.3, s: 0.9 }],
-      photo: [{ n: "left_wrist", x: 0.5, y: 0.4, s: 0.9 }],
+      source: [[15, 0.4, 0.3, 0.9]],
+      photo: [[15, 0.5, 0.4, 0.9]],
     },
     {
-      t: 8,
-      source: [{ n: "left_wrist", x: 0.5, y: 0.2, s: 0.9 }],
-      photo: [{ n: "left_wrist", x: 0.6, y: 0.3, s: 0.9 }],
+      t: 14,
+      source: [[15, 0.5, 0.2, 0.9]],
+      photo: [[15, 0.6, 0.3, 0.9]],
     },
   ],
   holds: [{ x: 0.5, y: 0.4, kind: "hand", side: "left", t: 1.2 }],
@@ -40,7 +41,7 @@ function itemNamed(id: string, route: string): LandingReplayItem {
   return { ...ITEM, id, label: { ...ITEM.label, route } };
 }
 
-const CLIP_MS = 8000;
+const CLIP_MS = 10_000; // screen time per item (REPLAY_ANIMATION_SECONDS)
 const HANDOFF_MS = 300;
 
 let reducedMotion: boolean;
