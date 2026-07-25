@@ -3,15 +3,16 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import XrayReplayDemo from "@/components/skeleton/XrayReplayDemo";
+import LandingReplay from "@/components/skeleton/LandingReplay";
 
 // ---------------------------------------------------------------------------
 // Landing page — the public front door. One scroll answers "what is this?",
 // "does it work?", and "how do I start?":
-//   Hero (two-column pitch + live x-ray demo) → How it works → Output showcase
+//   Hero (two-column pitch + curated replay) → How it works → Output showcase
 //   (real overlay) → Feature highlights → closing CTA → footer.
-// Anonymous-friendly: the primary CTA adapts to auth state; the demo renders
-// the bundled default for signed-out visitors with zero wait.
+// Anonymous-friendly: the primary CTA adapts to auth state, and every visitor
+// sees the same curated replay. When the replay asset is missing the hero
+// renders nothing and this column simply drops out.
 // ---------------------------------------------------------------------------
 
 const ArrowIcon = () => (
@@ -130,14 +131,9 @@ export default function Home() {
             </ul>
           </div>
 
-          {/* Live x-ray demo */}
-          <div className="flex flex-col items-center gap-3 lg:items-end">
-            <div className="w-full">
-              <XrayReplayDemo maxHeight="clamp(340px, 62vh, 600px)" />
-            </div>
-            <p className="text-center text-label uppercase tracking-label text-fg-muted lg:text-right">
-              Live replay · ORB feature field + tracked pose
-            </p>
+          {/* Curated replay */}
+          <div className="flex w-full flex-col items-center gap-3">
+            <LandingReplay maxHeight="clamp(340px, 62vh, 600px)" />
           </div>
         </div>
       </section>
