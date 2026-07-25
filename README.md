@@ -183,7 +183,7 @@ white joint is a neutral anchor and is exempt from adaptation.
 | `/profile/[userId]`                      | View another user's public profile with 4×4 climb grid, filters, list/map toggle; click any climb card or map pin for full detail modal, including **Compare with mine** to overlay their run against one of your own                                                                                                       | Yes           |
 | `/docs`                                  | Usage guide                                                                                                                                                                                                                                                                                                                 | No            |
 | `/dev/map-drag`                          | Internal diagnostics page for verifying Leaflet mouse drag/pan behavior and map init race handling                                                                                                                                                                                                                          | No            |
-| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose a 20-second window, attach an optional wall still and a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                                                    | Yes           |
+| `/dev/landing-clip`                      | Development-only, unlinked maintainer tooling: pick a saved Fixed Capture run, choose a 20-second window, attach an optional wall still and a route photo, run the existing ORB match, and download one landing-replay clip (`{ version: 1, items: [ … ] }`) to check into the repo                                         | Yes           |
 
 ## Interactive crop boxes
 
@@ -497,12 +497,32 @@ dot or a skeleton bone can express), and both embedded images are WebP at
 **quality 0.6, longest edge 960**. Clip-relative times keep millisecond
 resolution. Together that is ~350 KB per clip instead of ~685 KB.
 
-Then save it as `public/landing-replay.json` — or, for more than one clip,
-concatenate the `items` arrays by hand in the order you want them played — and
-commit it. **A downloaded export is not live until it is at that path**; the hero
-fetches `/landing-replay.json` and nothing else. Nothing is
-written to the repo or to S3 from the UI, so **rollback is reverting that one
-file** (`git revert` the commit, or `git checkout <sha> -- public/landing-replay.json`).
+#### Assembling the playlist
+
+Exports are combined into the shipped asset by `scripts/merge-landing-replay.mjs`
+— **argument order is play order**:
+
+```powershell
+node scripts/merge-landing-replay.mjs clip-a.json clip-b.json clip-c.json
+# writes public/landing-replay.json; pass --out <path> to write elsewhere
+```
+
+It refuses, with a message rather than a stack trace, the mistakes that are
+silent once the file is checked in: a missing or unparseable input, an item the
+hero's runtime guard would drop, a duplicate id, and more than five items (the
+sixth would be dropped at load with no warning at all). It warns but still writes
+when an item's source aspect disagrees with item 0's, naming the item that will
+letterbox — item 0 sets the stage shape for the whole playlist. Finally it prints
+the written size with a per-clip breakdown, so the payload budget is visible at
+the moment it is spent. `__tests__/pipeline/landingReplayAsset.test.ts` re-checks
+the same invariants against whatever is committed, plus a ~400 KB per-clip and
+1.2 MB total ceiling.
+
+**A downloaded export is not live until it is at `public/landing-replay.json`**;
+the hero fetches `/landing-replay.json` and nothing else. Nothing is written to
+the repo or to S3 from the UI or from the merge script, so **rollback is
+reverting that one file** (`git revert` the commit, or
+`git checkout <sha> -- public/landing-replay.json`).
 
 The exported item is pure geometry (both coordinate spaces baked, labels only —
 no identity, notes, coordinates, keys, descriptors, or homography), so the hero

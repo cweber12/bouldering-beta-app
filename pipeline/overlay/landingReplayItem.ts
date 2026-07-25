@@ -87,6 +87,18 @@ export const REPLAY_COORD_DECIMALS = 3;
 export const REPLAY_PLAYLIST_MAX = 5;
 
 /**
+ * How far an item's source aspect may drift from item 0's before the playlist is
+ * treated as mixed-aspect.
+ *
+ * The stage takes its shape from `items[0].source` and holds it for the whole
+ * playlist, deliberately, so a handoff cannot reflow the page — which means any
+ * item that disagrees letterboxes. A couple of percent covers rounding between
+ * recording devices without covering a genuine orientation change; past that,
+ * the assembly script names the item and the asset gate fails.
+ */
+export const REPLAY_ASPECT_TOLERANCE = 0.02;
+
+/**
  * Where the checked-in playlist lives — one static JSON in `public/`, served
  * from the same origin as the page's own JavaScript. The maintainer authors it
  * on `/dev/landing-clip` and commits it here; rollback is reverting the file.
