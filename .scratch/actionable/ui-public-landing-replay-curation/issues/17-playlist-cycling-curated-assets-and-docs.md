@@ -28,7 +28,7 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
       plays them in file order for all visitors.
 - [x] Item handoff is deterministic: each item runs its full clip and hands off
       via an approximately 300 ms crossfade, driven by the same replay clock from
-      issue 16. (Clip length revised from 8s to 14s captured over 10s of screen
+      issue 16. (Clip length revised from 8s to 20s captured over 12s of screen
       time — see the timing note below.)
 - [x] Cycling wraps to the first item and continues indefinitely while the
       clock runs.
@@ -53,14 +53,12 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
 
 ## Comments
 
-Cycling, docs and the QA harness landed on `feat/landing-replay-playlist`. The
-three unticked criteria all wait on the same thing — **curation itself**, which
-needs the maintainer's signed-in browser, their saved Runs in S3, and their Route
-Photos. None of that is reachable from an agent session, so no
-`public/landing-replay.json` is checked in and the hero still degrades to the
-page's text content (verified). Everything else is done and passing:
+Cycling, docs and the QA harness landed on `feat/landing-replay-playlist`, and the
+first curated clip is checked in (see round 1 below). The one remaining criterion
+is the browser regression pass, which needs a human's eyes. Everything else is
+done and passing:
 
-- Handoff model: every item owns one 8s slot on the one replay clock, and the
+- Handoff model: every item owns one screen-length slot on the one replay clock,
   first 300 ms of each slot is the crossfade — the incoming clip plays from
   `t = 0` while the outgoing one holds **its own final frame** (the finished Route
   Overlay) and fades out beneath it. Letting the outgoing clock run on instead
