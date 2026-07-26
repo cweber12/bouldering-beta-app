@@ -11,9 +11,15 @@ import {
   expandCropBox,
   pickAcquisitionRegion,
   predictDetectionRegion,
+  agedIdentityGate,
+  buildReacquireLadder,
   DEFAULT_GATE,
   ABS_MIN_CROP_FRAC,
+  IDENTITY_GATE_AGE_STEP,
+  MAX_IDENTITY_GATE,
   REACH_MAX_EXPANSION,
+  REACQUIRE_GATE,
+  REACQUIRE_LADDER_SCALES,
   REGION_BASE_SLACK,
 } from "@/pipeline/tracking/climberTracker";
 import type { Keypoint, PoseFrame } from "@/pipeline/pose/poseDetection";
@@ -422,6 +428,116 @@ describe("pickAcquisitionRegion", () => {
 
   it("returns null (full-frame search) when neither a track nor a crop exists", () => {
     expect(pickAcquisitionRegion(null, null, 1280, 720)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildReacquireLadder — tight-first loss recovery (ADR 0024)
+// ---------------------------------------------------------------------------
+
+describe("buildReacquireLadder", () => {
+  const FRAME_W = 1000;
+  const FRAME_H = 1000;
+  const fullFrame = { x: 0, y: 0, width: FRAME_W, height: FRAME_H };
+  const last = { x: 400, y: 400, width: 100, height: 200 };
+
+  it("walks outward from the last box and ends on the full frame", () => {
+    const ladder = buildReacquireLadder(last, null, FRAME_W, FRAME_H);
+
+    expect(ladder).toHaveLength(REACQUIRE_LADDER_SCALES.length + 1);
+    // Tightest first: every rung is strictly larger than the one before it.
+    const areas = ladder.map((rung) => rung.width * rung.height);
+    for (let i = 1; i < areas.length; i++) expect(areas[i]).toBeGreaterThan(areas[i - 1]);
+    // The full frame is demoted to last resort, never the first move.
+    expect(ladder[ladder.length - 1]).toEqual(fullFrame);
+    expect(ladder[0].width).toBe(Math.round(last.width * REACQUIRE_LADDER_SCALES[0]));
+    expect(ladder[0].height).toBe(Math.round(last.height * REACQUIRE_LADDER_SCALES[0]));
+  });
+
+  it("keeps the tight rungs centred on the last box when the track is still", () => {
+    const [tight] = buildReacquireLadder(last, { x: 0, y: 0 }, FRAME_W, FRAME_H);
+    expect(tight.x + tight.width / 2).toBeCloseTo(last.x + last.width / 2, 5);
+    expect(tight.y + tight.height / 2).toBeCloseTo(last.y + last.height / 2, 5);
+  });
+
+  it("throws the rungs ahead along the track velocity", () => {
+    const velocity = { x: 0.05, y: -0.02 };
+    const [tight] = buildReacquireLadder(last, velocity, FRAME_W, FRAME_H);
+    expect(tight.x + tight.width / 2).toBeCloseTo(
+      last.x + last.width / 2 + velocity.x * FRAME_W,
+      5,
+    );
+    expect(tight.y + tight.height / 2).toBeCloseTo(
+      last.y + last.height / 2 + velocity.y * FRAME_H,
+      5,
+    );
+  });
+
+  it("clamps rungs to the frame by pinning the overflowing side", () => {
+    const corner = { x: 0, y: 0, width: 200, height: 200 };
+    const [tight] = buildReacquireLadder(corner, null, FRAME_W, FRAME_H);
+    expect(tight.x).toBe(0);
+    expect(tight.y).toBe(0);
+    // Pinned, not shrunk: the far side still grew by the full half-extent.
+    expect(tight.width).toBe(Math.round(100 + (200 * REACQUIRE_LADDER_SCALES[0]) / 2));
+  });
+
+  it("drops a scaled rung that already covers the frame instead of duplicating it", () => {
+    // A near-frame-sized box: every scaled rung clamps to the whole frame, so
+    // the ladder must collapse to the single full-frame rung rather than spend
+    // a MediaPipe pass per duplicate.
+    const wide = { x: 10, y: 10, width: FRAME_W - 20, height: FRAME_H - 20 };
+    expect(buildReacquireLadder(wide, null, FRAME_W, FRAME_H)).toEqual([fullFrame]);
+  });
+
+  it("skips a duplicate rung when two scales clamp to the same region", () => {
+    const ladder = buildReacquireLadder(last, null, FRAME_W, FRAME_H, [1.5, 1.5, 2.5]);
+    expect(ladder).toHaveLength(3); // 1.5, 2.5, full frame
+  });
+
+  it("searches the full frame alone when nothing has ever been tracked", () => {
+    expect(buildReacquireLadder(null, { x: 0.1, y: 0.1 }, FRAME_W, FRAME_H)).toEqual([fullFrame]);
+  });
+
+  it("bounds the extra inference the ladder can cost", () => {
+    // Acceptance: a missing frame costs at most `rungs - 1` extra passes.
+    const ladder = buildReacquireLadder(last, null, FRAME_W, FRAME_H);
+    expect(ladder.length - 1).toBe(REACQUIRE_LADDER_SCALES.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// agedIdentityGate — the gate loosens as the prediction goes stale (ADR 0024)
+// ---------------------------------------------------------------------------
+
+describe("agedIdentityGate", () => {
+  it("leaves a fresh prediction on today's gate", () => {
+    expect(agedIdentityGate(0)).toBe(REACQUIRE_GATE);
+    expect(agedIdentityGate(0, DEFAULT_GATE)).toBe(DEFAULT_GATE);
+  });
+
+  it("widens by one detection step of unobserved motion per miss", () => {
+    expect(agedIdentityGate(1, DEFAULT_GATE)).toBeCloseTo(DEFAULT_GATE + IDENTITY_GATE_AGE_STEP, 6);
+    expect(agedIdentityGate(2, DEFAULT_GATE)).toBeCloseTo(
+      DEFAULT_GATE + 2 * IDENTITY_GATE_AGE_STEP,
+      6,
+    );
+  });
+
+  it("saturates rather than growing without bound", () => {
+    expect(agedIdentityGate(100)).toBe(MAX_IDENTITY_GATE);
+  });
+
+  it("never tightens a base gate that already exceeds the ceiling", () => {
+    expect(agedIdentityGate(0, MAX_IDENTITY_GATE + 0.5)).toBe(MAX_IDENTITY_GATE + 0.5);
+  });
+
+  it("treats negative and fractional miss counts as whole misses", () => {
+    expect(agedIdentityGate(-3)).toBe(REACQUIRE_GATE);
+    expect(agedIdentityGate(1.9, DEFAULT_GATE)).toBeCloseTo(
+      DEFAULT_GATE + IDENTITY_GATE_AGE_STEP,
+      6,
+    );
   });
 });
 

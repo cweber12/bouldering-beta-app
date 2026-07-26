@@ -18,6 +18,8 @@ import { analyzeFrame, type FrameAnalysis } from "@/pipeline/analysis/frameAnaly
 import { applyOrbPreprocessing } from "@/pipeline/analysis/framePreprocessor";
 import { mapKeypointsToFullFrame, type CropBox } from "@/pipeline/tracking/cropDetector";
 import {
+  agedIdentityGate,
+  buildReacquireLadder,
   deriveClimberCrop,
   findMissingLimbs,
   pickAcquisitionRegion,
@@ -25,6 +27,8 @@ import {
   predictCentroid,
   selectClimberByPoint,
   selectClimberPose,
+  DEFAULT_GATE,
+  MISS_RESET_RUN,
   REACQUIRE_GATE,
   type Point,
 } from "@/pipeline/tracking/climberTracker";
@@ -712,6 +716,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // Climber-identity tracking state.
         const history: Point[] = []; // climber centroid trajectory (normalised, full frame)
         let lastClimberBox: CropBox | null = null; // adaptive crop derived from the last accepted pose
+        // Loss recovery (ADR 0024). `lastClimberBox` is cleared after a run of
+        // misses so acquisition falls back to the Climber Crop seed;
+        // `lastConfidentBox` survives that reset because the reacquire ladder
+        // still needs somewhere to start walking outward from.
+        let lastConfidentBox: CropBox | null = null;
+        let consecutiveMisses = 0;
         const tappedPoint = cropOptions.climberPoint ?? null;
 
         const mpTimestampBase = nextMpTimestampSec;
@@ -920,56 +930,84 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               last && predicted ? { predicted, last } : undefined,
             );
 
-            const initialDetection = detectClimber(region, predicted);
+            // The identity gate ages with the consecutive-miss run so a frozen
+            // prediction stops vetoing real candidates (ADR 0024). At zero
+            // misses this is exactly today's gate, so a fresh prediction still
+            // rejects bystanders.
+            const initialDetection = detectClimber(
+              region,
+              predicted,
+              agedIdentityGate(consecutiveMisses, DEFAULT_GATE),
+            );
             let chosen = initialDetection.selected;
             let candidateCount = initialDetection.candidateCount;
             let rejectedCandidateCount = initialDetection.rejectedCandidateCount;
             let selectionMethod = initialDetection.selectionMethod;
             let bestUnselectedScore = initialDetection.bestUnselectedCandidateScore;
-            const searchConditions =
-              shouldCollectDetectorAttempts
-                ? toFrameConditions(
-                    analyzeFrame(
-                      cv,
-                      ctx.getImageData(0, 0, videoWidth, videoHeight),
-                      region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight },
-                    ),
-                  )
-                : null;
+            const searchConditions = shouldCollectDetectorAttempts
+              ? toFrameConditions(
+                  analyzeFrame(
+                    cv,
+                    ctx.getImageData(0, 0, videoWidth, videoHeight),
+                    region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight },
+                  ),
+                )
+              : null;
 
-            // Lost inside a crop → widen to the full frame and re-acquire by
-            // identity rather than locking onto a bystander.
+            // Lost inside a crop → walk the tight-first reacquire ladder,
+            // selecting by identity rather than locking onto a bystander.
+            // Rungs step outward from the last confident box (thrown ahead by
+            // the track's velocity) and the full frame is the last resort, not
+            // the first move: the frame has already been searched at full-frame
+            // scale on exactly these misses, and the Climber that is missed is
+            // typically half the size of one that is accepted — a correctly
+            // placed tight crop is what lifts them back over MediaPipe's size
+            // floor (ADR 0024).
             let reacquired = false;
+            let reacquireRegion: CropBox | null = null;
             let reacquireConditions: ReturnType<typeof toFrameConditions> | null = null;
-            // The rungs the re-acquire walked, in search order. Today that is a
-            // single full-frame rung; the ladder fills it out.
+            // The rungs the re-acquire walked, in search order.
             const reacquireSteps: DetectorAttemptReacquireStep[] = [];
             if (!chosen && region) {
-              const reacquireDetection = detectClimber(null, predicted, REACQUIRE_GATE);
-              chosen = reacquireDetection.selected;
-              candidateCount += reacquireDetection.candidateCount;
-              rejectedCandidateCount += reacquireDetection.rejectedCandidateCount;
-              selectionMethod = reacquireDetection.selectionMethod;
-              bestUnselectedScore = mergeBestUnselectedScore(
-                bestUnselectedScore,
-                reacquireDetection.bestUnselectedCandidateScore,
+              const reacquireGate = agedIdentityGate(consecutiveMisses, REACQUIRE_GATE);
+              const ladder = buildReacquireLadder(
+                lastConfidentBox,
+                last && predicted ? { x: predicted.x - last.x, y: predicted.y - last.y } : null,
+                videoWidth,
+                videoHeight,
               );
-              reacquired = !!chosen;
-              reacquireSteps.push({
-                region: { ...DETECTOR_ATTEMPT_FULL_FRAME_REGION },
-                found: reacquired,
-              });
-              reacquireConditions =
-                shouldCollectDetectorAttempts
-                  ? toFrameConditions(
-                      analyzeFrame(cv, ctx.getImageData(0, 0, videoWidth, videoHeight), {
-                        x: 0,
-                        y: 0,
-                        width: videoWidth,
-                        height: videoHeight,
-                      }),
-                    )
-                  : null;
+              for (const rung of ladder) {
+                const rungDetection = detectClimber(rung, predicted, reacquireGate);
+                candidateCount += rungDetection.candidateCount;
+                rejectedCandidateCount += rungDetection.rejectedCandidateCount;
+                selectionMethod = rungDetection.selectionMethod;
+                bestUnselectedScore = mergeBestUnselectedScore(
+                  bestUnselectedScore,
+                  rungDetection.bestUnselectedCandidateScore,
+                );
+                reacquireSteps.push({
+                  region: normalizeDetectorAttemptRegion(rung, videoWidth, videoHeight),
+                  found: !!rungDetection.selected,
+                });
+                // Stop at the first rung that finds the Climber — the wider
+                // rungs are never searched, so a hit costs one extra pass.
+                if (rungDetection.selected) {
+                  chosen = rungDetection.selected;
+                  reacquired = true;
+                  reacquireRegion = rung;
+                  break;
+                }
+              }
+              reacquireConditions = shouldCollectDetectorAttempts
+                ? toFrameConditions(
+                    analyzeFrame(cv, ctx.getImageData(0, 0, videoWidth, videoHeight), {
+                      x: 0,
+                      y: 0,
+                      width: videoWidth,
+                      height: videoHeight,
+                    }),
+                  )
+                : null;
             }
 
             let avgConfidence = 0;
@@ -991,22 +1029,40 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               landmarkBox = box;
               if (box) {
                 lastClimberBox = box;
+                lastConfidentBox = box;
                 coverageSamples.push((box.width * box.height) / (videoWidth * videoHeight));
               }
               // ADR 0014: count frames where a missing limb pushed the crop out via
               // a reach disk, so the constants can be tuned against real Runs.
               if (chosen.source === "limbExpanded") limbExpandedFrames++;
+              consecutiveMisses = 0;
+            } else {
+              // A box that has missed MISS_RESET_RUN times in a row — on frames
+              // the ladder already searched outward from — is pointed at the
+              // wrong place. Clear it so acquisition falls back to the Climber
+              // Crop seed (not the full frame: the seed is what keeps a small or
+              // distant Climber above the size floor, ADR 0013).
+              consecutiveMisses++;
+              if (consecutiveMisses >= MISS_RESET_RUN) lastClimberBox = null;
             }
 
             if (shouldCollectDetectorAttempts) {
+              // The rung that actually found the Climber, not "the full frame" —
+              // with a ladder the reacquire region varies per attempt.
               const detectionRegion = chosen
-                ? reacquired
-                  ? normalizeDetectorAttemptRegion(null, videoWidth, videoHeight)
-                  : normalizeDetectorAttemptRegion(region, videoWidth, videoHeight)
+                ? normalizeDetectorAttemptRegion(
+                    reacquired ? reacquireRegion : region,
+                    videoWidth,
+                    videoHeight,
+                  )
                 : null;
               const baseAttempt = {
                 timestamp: video.currentTime,
-                initialSearchRegion: normalizeDetectorAttemptRegion(region, videoWidth, videoHeight),
+                initialSearchRegion: normalizeDetectorAttemptRegion(
+                  region,
+                  videoWidth,
+                  videoHeight,
+                ),
                 detectionRegion,
                 reacquireAttempted: !initialDetection.selected && !!region,
                 reacquired,
@@ -1018,10 +1074,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 candidateCount,
                 rejectedCandidateCount,
                 selectionMethod,
-              } satisfies Omit<
-                DetectorAttemptDraft,
-                "status" | "acceptedKeypoints" | "missReason"
-              >;
+              } satisfies Omit<DetectorAttemptDraft, "status" | "acceptedKeypoints" | "missReason">;
               detectorAttemptDrafts.push(
                 chosen && detectionRegion
                   ? {
@@ -1342,9 +1395,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // only). The result is persisted with the Run and editable on the
         // Detection Preview; Panning Capture has no single whole-Route frame, so
         // it keeps undefined holds and falls back to the on-the-fly path (ADR 0009).
-        const holds: StoredHold[] | undefined = !shouldDetectHolds || panning
-          ? undefined
-          : detectHoldsVideoSpace(frames, videoMeta.width, videoMeta.height);
+        const holds: StoredHold[] | undefined =
+          !shouldDetectHolds || panning
+            ? undefined
+            : detectHoldsVideoSpace(frames, videoMeta.width, videoMeta.height);
 
         saveAttempt({
           id,

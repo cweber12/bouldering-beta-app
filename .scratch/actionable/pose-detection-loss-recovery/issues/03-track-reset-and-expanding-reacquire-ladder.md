@@ -1,6 +1,7 @@
 # Track reset and tight-first reacquire ladder
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/detection-03-reacquire-ladder
 Type: AFK
 
 ## Parent
@@ -82,32 +83,36 @@ hope that 05 covers these frames.
 
 ## Acceptance criteria
 
-- [ ] `MISS_RESET_RUN` and the ladder's scale factors are exported tunables on
+- [x] `MISS_RESET_RUN` and the ladder's scale factors are exported tunables on
       `pipeline/tracking/climberTracker.ts` with documented defaults, and the
       defaults are justified against the size-floor evidence in ADR 0024.
-- [ ] A pure `buildReacquireLadder(lastBox, velocity, frameW, frameH)` returns
+- [x] A pure `buildReacquireLadder(lastBox, velocity, frameW, frameH)` returns
       the ordered rungs tightest-first, clamped to the frame, with the full
       frame always last and no duplicate rungs when a scaled rung already covers
       the frame.
-- [ ] After `MISS_RESET_RUN` consecutive misses the adaptive crop is cleared and
+- [x] After `MISS_RESET_RUN` consecutive misses the adaptive crop is cleared and
       the next acquisition region is the Climber Crop seed (or the full frame
       when no seed exists).
-- [ ] Reacquire stops at the first rung that finds the Climber; later rungs are
+- [x] Reacquire stops at the first rung that finds the Climber; later rungs are
       not searched.
-- [ ] `reacquireSteps[]` records every rung tried, in order, with its normalized
+- [x] `reacquireSteps[]` records every rung tried, in order, with its normalized
       region and `found` flag — the full-frame rung's own rescue yield must be
       readable from the corpus so a future issue can drop it if it stays dead.
-- [ ] The identity gate widens with consecutive misses via a pure, unit-tested
+- [x] The identity gate widens with consecutive misses via a pure, unit-tested
       function; with zero consecutive misses the gate equals today's value; the
       curve's parameters are documented against the per-cause
       `median_best_unselected_candidate_score` CSV columns (gated median 0.878).
-- [ ] Regression: a continuously tracked Climber still detects on the Adaptive
+- [x] Regression: a continuously tracked Climber still detects on the Adaptive
       Crop, never escalates to a ladder, and produces the same regions as before.
-- [ ] Regression: a bystander far from a **fresh** prediction is still rejected.
+- [x] Regression: a bystander far from a **fresh** prediction is still rejected.
 - [ ] Per-attempt inference count is bounded — the ladder adds at most
       `rungs - 1` extra MediaPipe passes on a missing frame, and none on a hit —
       and each pass is covered by `inferenceMs` (issue 06, which now ships
-      *before* this issue).
+      *before* this issue). **Half met:** the bound is enforced and unit-tested
+      (`buildReacquireLadder` returns `REACQUIRE_LADDER_SCALES.length + 1` rungs,
+      first-hit-wins, zero extra passes on a hit). `inferenceMs` does not exist
+      yet — issue 06 is still `ready-for-agent`, so it was implemented out of the
+      round-2 sequence. See the note in `## Comments`.
 
 ## Target metrics (harness re-measures, post-reset baseline only)
 
@@ -150,3 +155,31 @@ bucket (`missReason` authored, `candidateCount` retro-derivation elsewhere).
   and why full frame was demoted (the 88% decision read plus the size table),
   the CSV-fit age-driven gate, and their interaction with the ADR 0013
   acquisition seed.
+
+### Sequencing deviation (2026-07-26)
+
+Implemented **before** issue 06, against the round-2 sequence
+(01 → 02 → 06 → post-reset baseline → 03 → 04 → 05). Consequences to settle
+before this issue is measured:
+
+- The last acceptance criterion is only half met — the ladder's inference bound
+  is enforced in code and pinned by a test, but no `inferenceMs` exists to
+  measure the resulting cost delta against.
+- 06 is now a **behavioral** change relative to this code rather than the pure
+  instrumentation it was designed to be, in one place: it retargets
+  `selectionMethod` to the path actually taken, and this issue adds ladder rungs
+  to that path. 06's "no detection behavior changes" criterion still holds; its
+  *baseline* claim does not, because the baseline batch would now carry ladder
+  behavior.
+- Land 06 next and take the post-reset baseline batch **before** issue 04, or
+  accept that 03's headline movement is measured against a pre-reset corpus.
+
+### Values chosen (defaults justified in ADR 0024)
+
+- `MISS_RESET_RUN = 2` — median IoU 0.000 on truth-present misses, so a twice-
+  failed box is pointed elsewhere; one miss stays as slack for a blur frame.
+- `REACQUIRE_LADDER_SCALES = [1.5, 2.5]` — leaves a median miss-population
+  Climber at 15.9% / 5.7% of the searched pixels, both above the 4.73% share the
+  detector accepts on a full frame. A wider rung would fall below it.
+- `IDENTITY_GATE_AGE_STEP = DEFAULT_GATE` (0.18) per miss, `MAX_IDENTITY_GATE =
+1.0` — one detection step of unobserved motion added per missed frame.
