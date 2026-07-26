@@ -1,7 +1,8 @@
 # Track reset and tight-first reacquire ladder
 
-Status: in-progress
+Status: done
 Branch: feat/detection-03-reacquire-ladder
+Merged: e0abd70
 Type: AFK
 
 ## Parent
