@@ -16,8 +16,11 @@ behavior rather than intent.
 1. **Glossary** (`CONTEXT.md`). Add or extend the terms this PRD introduced:
    - **Track Reset** — clearing the frozen **Adaptive Crop** after a run of
      misses so acquisition falls back to the **Climber Crop** seed.
-   - **Reacquire Ladder** — the ordered expanding search (last box ×2, ×4, full
-     frame) walked on a miss, stopping at the first rung that finds the Climber.
+   - **Reacquire Ladder** — the ordered tight-first search walked on a miss:
+     rungs seeded at the last confident box and widened outward, full frame
+     demoted to a last-resort final rung, stopping at the first rung that finds
+     the Climber (inverted per the round-2 decision read — describe the shape
+     issue 03 actually shipped).
    - **Re-latch Bar** — the score plus size/position consistency test a candidate
      must clear to resume a stale track.
    - Extend **Landmark Flip** with the re-anchoring behavior, and **Detector
@@ -97,5 +100,9 @@ behavior rather than intent.
   restate points 1–3; the interim reply already carries them. The
   `nearestCandidateDistance` ask was flagged there for lead time but deliberately
   left informal — the formal ask belongs with issue 03's shipped gate semantics.
-- The interim reply is written but **not committed** in `beta-scan-analysis`;
-  that repo is PR-based and the commit is the user's call.
+- The interim reply is now tracked in `beta-scan-analysis` (confirmed in the
+  round-2 handoff §5). The round-2 handoff itself
+  (`scanner-detection-improvements-round-2.md`) supersedes parts of the interim
+  reply's framing — the closing reply must acknowledge the batch-identity
+  correction (never read `c305954` as 01-only) and answer the decision read
+  with what 03 actually shipped.
