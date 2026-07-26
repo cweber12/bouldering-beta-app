@@ -263,6 +263,91 @@ describe("dev GET/PUT /api/dev/corpus/setup", () => {
     expect(res.status).toBe(422);
   });
 
+  // -------------------------------------------------------------------------
+  // Climb window (harness ADR 0007)
+  // -------------------------------------------------------------------------
+
+  it("a climbEnd-only save leaves every scan field and the hash byte-identical", async () => {
+    const { PUT } = await importRoute("development");
+
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.7, y: 0.4 } }));
+    const before = await onDisk();
+
+    const res = await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 58 }));
+    expect(res.status).toBe(200);
+    const after = await onDisk();
+
+    // This is the criterion the whole design rests on: marking a window must
+    // not re-pair the 90 already-calibrated Bundles' prior runs (ADR 0020).
+    expect(after.setupHash).toBe(before.setupHash);
+    expect(after.climberCrop).toEqual(before.climberCrop);
+    expect(after.wallCrop).toEqual(before.wallCrop);
+    expect(after.climberPoint).toEqual(before.climberPoint);
+    expect(after.panning).toBe(before.panning);
+    expect(after.qualityTier).toBe(before.qualityTier);
+    expect(after.seedTap).toEqual(before.seedTap);
+    expect(after.climbEnd).toBe(58);
+    expect((await res.json()).setup.climbEnd).toBe(58);
+  });
+
+  it("a climbEnd survives a later crops-only save and a null clears it", async () => {
+    const { PUT } = await importRoute("development");
+
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 58 }));
+
+    const kept = (await (await PUT(makeRequest(BUNDLE_KEY, { ...CROPS, panning: true }))).json())
+      .setup;
+    expect(kept.climbEnd).toBe(58);
+
+    const cleared = (await (await PUT(makeRequest(BUNDLE_KEY, { climbEnd: null }))).json()).setup;
+    // Absent, not zero — an unmarked Bundle is an open window, not a zero-length one.
+    expect(cleared.climbEnd).toBeUndefined();
+  });
+
+  it("422s a climbEnd at or before the climb start", async () => {
+    const { PUT } = await importRoute("development");
+    // The setup tap's `t` is the climb start.
+    await PUT(makeRequest(BUNDLE_KEY, { ...CROPS, climberPoint: { x: 0.2, y: 0.3, t: 3.5 } }));
+
+    expect((await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 3.5 }))).status).toBe(422);
+    expect((await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 2 }))).status).toBe(422);
+    expect((await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 58 }))).status).toBe(200);
+  });
+
+  it("422s a non-finite or negative climbEnd and writes nothing", async () => {
+    const { PUT } = await importRoute("development");
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+    const before = await onDisk();
+
+    expect((await PUT(makeRequest(BUNDLE_KEY, { climbEnd: -1 }))).status).toBe(422);
+    expect((await PUT(makeRequest(BUNDLE_KEY, { climbEnd: "58" }))).status).toBe(422);
+    expect(await onDisk()).toEqual(before);
+  });
+
+  it("422s a climbEnd-only save with no setup to merge onto", async () => {
+    const { PUT } = await importRoute("development");
+    const res = await PUT(makeRequest(BUNDLE_KEY, { climbEnd: 58 }));
+    expect(res.status).toBe(422);
+  });
+
+  it("validates the marker against a climb start moved in the same body", async () => {
+    const { PUT } = await importRoute("development");
+    await PUT(makeRequest(BUNDLE_KEY, CROPS));
+
+    // Setup tap and marker arriving together are checked as one window, against
+    // the incoming start rather than the saved one.
+    const res = await PUT(
+      makeRequest(BUNDLE_KEY, {
+        ...CROPS,
+        climberPoint: { x: 0.2, y: 0.3, t: 40 },
+        climbEnd: 30,
+      }),
+    );
+    expect(res.status).toBe(422);
+  });
+
   it("422s a seedTap-only save when no setup has been calibrated yet", async () => {
     const { PUT } = await importRoute("development");
     const res = await PUT(makeRequest(BUNDLE_KEY, { seedTap: { x: 0.5, y: 0.5 } }));

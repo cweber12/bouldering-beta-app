@@ -23,8 +23,11 @@ import {
   parseAnalysisInputsEdit,
   parseProvenanceEdit,
   parseSeedTapEdit,
+  parseClimbEndEdit,
   bodyHasScanInputs,
   bodyHasSeedTap,
+  bodyHasClimbEnd,
+  climbStartOf,
   pickScanInput,
   hashSetupInput,
   SETUP_VERSION,
@@ -95,9 +98,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   } else if (existing) {
     input = pickScanInput(existing);
   } else {
-    // Labels-/seed-tap-only save with nothing to merge onto — crops first.
+    // Labels-/seed-tap-/climb-end-only save with nothing to merge onto — crops first.
     return NextResponse.json(
-      { error: "Save the Scan Setup before editing labels or the seed tap." },
+      { error: "Save the Scan Setup before editing labels, the seed tap, or the climb window." },
       { status: 422 },
     );
   }
@@ -111,6 +114,21 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Invalid seed tap." }, { status: 422 });
     }
     seedTap = parsed ?? undefined;
+  }
+
+  // End-of-climb marker (off-hash): same merge semantics as the seed tap. It is
+  // validated against the climb start on the *merged* input, so a body that
+  // moves the setup tap and the marker together is checked as one window.
+  let climbEnd: number | undefined = existing?.climbEnd;
+  if (bodyHasClimbEnd(body)) {
+    const parsed = parseClimbEndEdit(body, climbStartOf(input));
+    if (parsed === false) {
+      return NextResponse.json(
+        { error: "Invalid end-of-climb marker — it must be a time after the climb start." },
+        { status: 422 },
+      );
+    }
+    climbEnd = parsed ?? undefined;
   }
 
   // Condition labels: merge an edit onto the saved block, else carry it forward.
@@ -138,6 +156,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     ...(Object.keys(analysisInputs).length > 0 ? { analysisInputs } : {}),
     ...(Object.keys(provenance).length > 0 ? { analysisInputsProvenance: provenance } : {}),
     ...(seedTap ? { seedTap } : {}),
+    ...(climbEnd !== undefined ? { climbEnd } : {}),
     updatedAt: new Date().toISOString(),
   };
 

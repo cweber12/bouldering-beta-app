@@ -1,6 +1,7 @@
 # Climb window on the Scan Setup and the ViTPose request
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/adr0007-01-climb-window
 Type: AFK
 
 ## Parent
@@ -42,22 +43,42 @@ one and the corpus reset can be scheduled.
 
 ## Acceptance criteria
 
-- [ ] `climbEnd` round-trips through `setup.json` and is absent (never `null` or
+- [x] `climbEnd` round-trips through `setup.json` and is absent (never `null` or
       `0`) when unset.
-- [ ] Adding, changing, or clearing `climbEnd` leaves `setupHash` byte-identical
+- [x] Adding, changing, or clearing `climbEnd` leaves `setupHash` byte-identical
       — pinned by a test that hashes a setup with and without it.
-- [ ] A `climbEnd`-only body merges onto the saved setup without disturbing
+- [x] A `climbEnd`-only body merges onto the saved setup without disturbing
       crops, `climberPoint`, `panning`, `qualityTier`, `seedTap`, labels, or
       provenance.
-- [ ] A `climbEnd`-only body with no saved setup returns 422, matching the
+- [x] A `climbEnd`-only body with no saved setup returns 422, matching the
       `seedTap` path.
-- [ ] `climbEnd` ≤ the setup tap's `t`, negative, or non-finite returns 422 and
+- [x] `climbEnd` ≤ the setup tap's `t`, negative, or non-finite returns 422 and
       writes nothing.
-- [ ] The ViTPose request carries `climb_start` / `climb_end` when known and
+- [x] The ViTPose request carries `climb_start` / `climb_end` when known and
       omits each independently when not; a bundle with neither produces a request
       byte-identical to today's.
-- [ ] No detection behavior changes — the seek loop still analyses the whole
+- [x] No detection behavior changes — the seek loop still analyses the whole
       video, and `frames[]` for a given input is unchanged.
+
+## What landed
+
+- `ScanSetup.climbEnd?: number`, off-hash by construction (it lives on
+  `ScanSetup`, not `ScanSetupInput`, so `canonicalSetupInput` can never see it).
+- `bodyHasClimbEnd` / `parseClimbEndEdit` / `climbStartOf` on
+  `utils/harnessSetup.ts`, plus a `saveClimbEnd` client seam mirroring
+  `saveSeedTap`.
+- The setup route validates the marker against the **merged** input's climb
+  start, so a body moving the setup tap and the marker together is checked as one
+  window rather than against the stale saved start.
+- `climbStart` / `climbEnd` on `ViTPoseRequest`, relayed as `climb_start` /
+  `climb_end`, each omitted independently. The relay validates the window before
+  the clear-the-previous-run step, so a rejected window costs a 422 and never
+  deletes a good scaffold.
+- Both call sites forward the window. `ReseedSweeper`'s `SetupForJob` now carries
+  `climberPoint` separately from `seedTap`, and `Calibrator` holds `setupTap` and
+  `climbEnd` as their own state — the climb start is the **setup** tap's `t`, and
+  substituting the seed tap there would reintroduce exactly the conflation
+  ADR 0007 removes.
 
 ## Comments
 

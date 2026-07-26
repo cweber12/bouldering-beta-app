@@ -340,4 +340,83 @@ describe("dev GET/POST /api/dev/corpus/vitpose", () => {
       frames: validRequest.frames,
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Climb window relay (harness ADR 0007 §3)
+  // -------------------------------------------------------------------------
+
+  it("omits both climb bounds when the Bundle is unmarked", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ jobId: "j1" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await importRoute("development", "http://localhost:9999");
+
+    await POST(makeRequest(BUNDLE_KEY, validRequest));
+    const sent = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+    // Omitted, never null: the harness reads a missing bound off setup.json, and
+    // an explicit null would override that fallback with nothing.
+    expect("climb_start" in sent).toBe(false);
+    expect("climb_end" in sent).toBe(false);
+  });
+
+  it("relays each climb bound independently", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ jobId: "j1" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await importRoute("development", "http://localhost:9999");
+
+    await POST(makeRequest(BUNDLE_KEY, { ...validRequest, climbStart: 3.5, climbEnd: 58 }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1]!.body as string)).toMatchObject({
+      climb_start: 3.5,
+      climb_end: 58,
+    });
+
+    // An end with no start: the harness fills the start from setup.json.
+    await POST(makeRequest(BUNDLE_KEY, { ...validRequest, climbEnd: 58 }));
+    const endOnly = JSON.parse(fetchMock.mock.calls[1][1]!.body as string);
+    expect(endOnly.climb_end).toBe(58);
+    expect("climb_start" in endOnly).toBe(false);
+  });
+
+  it("422s a window the harness would reject, without submitting a job", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ jobId: "j1" }), { status: 202 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await importRoute("development", "http://localhost:9999");
+
+    // end <= start, negative, and non-numeric all fail here rather than costing
+    // a submitted job that dies downstream on the endpoint's own 422.
+    expect(
+      (await POST(makeRequest(BUNDLE_KEY, { ...validRequest, climbStart: 40, climbEnd: 30 })))
+        .status,
+    ).toBe(422);
+    expect(
+      (await POST(makeRequest(BUNDLE_KEY, { ...validRequest, climbEnd: -1 }))).status,
+    ).toBe(422);
+    expect(
+      (await POST(makeRequest(BUNDLE_KEY, { ...validRequest, climbStart: "3.5" }))).status,
+    ).toBe(422);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the existing artifact intact when the window is rejected", async () => {
+    // Validation runs before the clear-the-previous-run step, so a bad window
+    // costs a 422 and nothing else — it must never delete a good scaffold.
+    await writeFile(path.join(bundleDir, "vitpose.json"), JSON.stringify(validScaffold));
+    vi.stubGlobal("fetch", vi.fn());
+    const { POST } = await importRoute("development", "http://localhost:9999");
+
+    const res = await POST(
+      makeRequest(BUNDLE_KEY, { ...validRequest, climbStart: 40, climbEnd: 30 }),
+    );
+    expect(res.status).toBe(422);
+    expect(await fileExists(path.join(bundleDir, "vitpose.json"))).toBe(true);
+    await rm(path.join(bundleDir, "vitpose.json"), { force: true });
+  });
 });

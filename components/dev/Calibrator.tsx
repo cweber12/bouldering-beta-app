@@ -93,6 +93,12 @@ export default function Calibrator({
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [panning, setPanning] = useState(false);
+  // The climb window, both bounds read-only here. The start is the *setup* tap's
+  // time — held separately from `seedTap` precisely because conflating the two is
+  // the defect harness ADR 0007 removes. The end is carried forward so a re-seed
+  // never drops a marker the sweep authored; the gesture that sets it is issue 02.
+  const [setupTap, setSetupTap] = useState<ClimberPoint | null>(null);
+  const [climbEnd, setClimbEnd] = useState<number | undefined>(undefined);
 
   // Ground Truth review: the pure scaffold seed, the working flag review, and
   // any previously-saved GT carried onto a re-seed by timestamp. The ref is what
@@ -214,6 +220,8 @@ export default function Calibrator({
           // Pre-fill the Seed tap: the saved off-hash seed if present, else the
           // in-hash analysis tap so the common first-time case needs no re-tap.
           setSeedTap(setup.seedTap ?? setup.climberPoint ?? null);
+          setSetupTap(setup.climberPoint ?? null);
+          setClimbEnd(typeof setup.climbEnd === "number" ? setup.climbEnd : undefined);
         }
 
         // Any previously-authored Ground Truth is carried onto the next seed.
@@ -262,6 +270,11 @@ export default function Calibrator({
             climberCrop,
             wallCrop,
             panning,
+            // Climb window, each bound omitted independently so the harness can
+            // fall back to setup.json. The start is the setup tap's time — not
+            // the seed tap's, which moves freely with every re-seed.
+            ...(setupTap?.t !== undefined ? { climbStart: setupTap.t } : {}),
+            ...(climbEnd !== undefined ? { climbEnd } : {}),
             frames: grid.map((f) => ({ timestamp: f.timestamp })),
           });
           if (vitposeRequestedRef.current === grid) setVitposeStatus("polling");
@@ -272,7 +285,7 @@ export default function Calibrator({
         }
       })();
     },
-    [item.key, item.videoPath, seedTap, climberCrop, wallCrop, panning],
+    [item.key, item.videoPath, seedTap, climberCrop, wallCrop, panning, setupTap, climbEnd],
   );
 
   // Confirm: persist the Seed tap off-hash (crops + `setupHash` untouched), then

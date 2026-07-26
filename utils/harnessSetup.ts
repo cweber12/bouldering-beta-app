@@ -70,6 +70,22 @@ export interface ScanSetup extends ScanSetupInput {
    * harness-setup-calibrate-split PRD.
    */
   seedTap?: ClimberPoint;
+  /**
+   * Where the climb ends — a topout, or the point the attempt is over — in
+   * seconds into the video. The climb *start* needs no field: it is
+   * {@link climberPoint}'s `t`, which the human already gave at calibration.
+   *
+   * Deliberately excluded from {@link canonicalSetupInput}, for the same reason
+   * as {@link seedTap}: marking a window must not change `setupHash`, or adding
+   * one to the 90 already-calibrated Bundles would mark every prior run stale
+   * through the freshness chain (ADR 0020) and orphan their Ground Truth.
+   *
+   * Absent means the window is open on that side, which is exactly how the
+   * harness behaves today. The marker is a **scoring** concept the harness
+   * applies to a run's attempts — it never bounds this scanner's seek loop, which
+   * would be a detection-behavior change. See harness ADR 0007 §4.
+   */
+  climbEnd?: number;
   /** ISO timestamp, stamped server-side on write. */
   updatedAt: string;
 }
@@ -206,6 +222,36 @@ export function parseSeedTapEdit(body: unknown): ClimberPoint | null | false {
   return isPoint(raw) ? raw : false;
 }
 
+/** True when the body carries a `climbEnd` key at all (including `null`). */
+export function bodyHasClimbEnd(body: unknown): boolean {
+  return typeof body === "object" && body !== null && "climbEnd" in body;
+}
+
+/**
+ * Validate a `climbEnd` edit off an untrusted body against the climb start
+ * (`climberPoint.t`, or undefined when the setup has no tap / no tap time).
+ *
+ * `null` clears the marker; a finite second ≥ 0 that is **strictly after** the
+ * climb start sets it; anything else returns `false` so the route can 422. The
+ * ordering rule mirrors the harness endpoint's own (`climb_end > climb_start`,
+ * both ≥ 0) so a window this scanner accepts is never one the harness rejects
+ * later — a 422 here is cheaper than a scaffold job that dies on submit.
+ *
+ * Callers gate on {@link bodyHasClimbEnd} first, so a missing key never arrives.
+ */
+export function parseClimbEndEdit(body: unknown, climbStart?: number): number | null | false {
+  const raw = (body as Record<string, unknown>).climbEnd;
+  if (raw === null) return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return false;
+  if (climbStart !== undefined && raw <= climbStart) return false;
+  return raw;
+}
+
+/** The climb start for a setup: the setup tap's time, when it carries one. */
+export function climbStartOf(setup: Pick<ScanSetup, "climberPoint">): number | undefined {
+  return setup.climberPoint?.t;
+}
+
 /** Pull only the scan-input fields off a persisted setup, for re-hashing on merge. */
 export function pickScanInput(setup: ScanSetup): ScanSetupInput {
   return {
@@ -266,6 +312,25 @@ export async function saveSeedTap(
   const body = await res.json();
   if (!res.ok) throw new Error(body.error ?? "Failed to save seed tap.");
   return body.setup?.seedTap ?? null;
+}
+
+/**
+ * Persist an end-of-climb marker through the merging setup write. `null` clears
+ * it. Like {@link saveSeedTap}, this leaves `setupHash` and every scan-affecting
+ * field untouched server-side, so marking a window never re-pairs prior runs.
+ */
+export async function saveClimbEnd(
+  bundleKey: string,
+  climbEnd: number | null,
+): Promise<number | null> {
+  const res = await fetch(`/api/dev/corpus/setup?key=${encodeURIComponent(bundleKey)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ climbEnd }),
+  });
+  const body = await res.json();
+  if (!res.ok) throw new Error(body.error ?? "Failed to save the end-of-climb marker.");
+  return body.setup?.climbEnd ?? null;
 }
 
 // Re-exported so the setup route validates label edits without a second import.

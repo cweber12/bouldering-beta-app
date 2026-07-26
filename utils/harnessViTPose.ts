@@ -84,6 +84,21 @@ export interface ViTPoseRequest {
   /** Fixed vs Panning Capture flag. */
   panning: boolean;
   /**
+   * Start of the climb window (seconds) — the setup tap's `t`. Optional and
+   * independent of {@link climbEnd}: the harness reads whichever bound is absent
+   * off the bundle's `setup.json`, so an unknown bound must be **omitted**, never
+   * sent as null. Sending them is the explicit override path (harness ADR 0007
+   * §3); writing the calibration correctly is sufficient on its own.
+   */
+  climbStart?: number;
+  /**
+   * End of the climb window (seconds) — `setup.json.climbEnd`. Must be greater
+   * than {@link climbStart} when both are present; the harness 422s otherwise.
+   * Until a Bundle carries one the window is open on this side, which is exactly
+   * how the harness behaves today.
+   */
+  climbEnd?: number;
+  /**
    * The exact Detection Frame timestamps (seconds) to pose. The downloader must
    * emit one `vitpose.json` frame per entry, **echoing the same timestamp value**
    * so beta-scanner matches the seed frame-for-frame (ADR 0019). Not a denser

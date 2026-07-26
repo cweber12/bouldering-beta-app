@@ -156,6 +156,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "frames (non-empty) is required." }, { status: 422 });
   }
 
+  // Climb window (harness ADR 0007 §3). Both bounds are optional and independent
+  // — the harness falls back to the bundle's setup.json for whichever is absent,
+  // so an unmarked Bundle must send neither rather than sending null. Checked
+  // here against the endpoint's own rule (end > start, both >= 0) so a bad window
+  // costs a 422 instead of a submitted job that dies downstream.
+  const climbStart = b.climbStart;
+  const climbEnd = b.climbEnd;
+  const validBound = (v: unknown): v is number =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0;
+  if (climbStart !== undefined && !validBound(climbStart)) {
+    return NextResponse.json({ error: "climbStart must be a time in seconds." }, { status: 422 });
+  }
+  if (climbEnd !== undefined && !validBound(climbEnd)) {
+    return NextResponse.json({ error: "climbEnd must be a time in seconds." }, { status: 422 });
+  }
+  if (validBound(climbStart) && validBound(climbEnd) && climbEnd <= climbStart) {
+    return NextResponse.json(
+      { error: "climbEnd must be after climbStart." },
+      { status: 422 },
+    );
+  }
+
   // Clear the prior run's terminal status AND its artifact so the poller can
   // only ever see output of the fresh job — leaving an old vitpose.json in
   // place is what let a re-calibration's export seed from the previous
@@ -183,6 +205,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         wall_crop: b.wallCrop,
         panning: b.panning,
         frames: b.frames,
+        // Omitted rather than nulled when unknown: the harness reads the missing
+        // bound off the bundle's setup.json, and an explicit null would override
+        // that fallback with nothing.
+        ...(climbStart !== undefined ? { climb_start: climbStart } : {}),
+        ...(climbEnd !== undefined ? { climb_end: climbEnd } : {}),
       }),
     });
     // Pass the downloader's response straight through (202 accepted / 4xx).
