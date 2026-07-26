@@ -24,18 +24,8 @@
 ## Project Architecture
 
 ```
-pipeline/        Framework-agnostic processing modules (NO React imports), grouped by concern
-  pose/      poseDetection (Keypoint / PoseFrame types), mediapipePoseDetection
-             (estimateFramesMediaPipe / estimateFrameMediaPipe), poseInterpolator, flipDetection
-  tracking/  cropDetector, climberTracker, tapCropDetection, routeCropEstimator
-  matching/  orbDetector (extractFeatures, matchOrbFeatures), homography
-             (computeHomography, applyHomographyMatrix), orbThumbnail
-  analysis/  frameAnalyzer, framePreprocessor, diagnostics
-  holds/     holdDetection, holdsOverlay
-  overlay/   skeletonOverlay (buildTransformedKeypoints, drawSkeleton), skeletonRenderer
-  render/    poseVideoRenderer (renderPoseVideo — MediaRecorder + canvas.captureStream),
-             multiPoseVideoRenderer, overlayVideoRecorder
-  legacy/    orbFeatures, orbMatcher — legacy worker files, not used
+pipeline/        Framework-agnostic processing modules (NO React imports), grouped by
+                 concern — module map and pipeline rules in pipeline/CLAUDE.md
 
 hooks/           React hooks that wire pipeline modules to UI state
   useOpenCV.ts     loads /public/opencv.js; exposes { ready, cv }
@@ -88,18 +78,9 @@ workers/         Legacy Web Worker files (keep, do not delete)
 - A FOUC-prevention inline script in `app/layout.tsx` reads `localStorage` and applies `theme-light` or `theme-dark` class to `<html>` before React hydrates.
 - Canvas drawing values (map pins, skeleton overlays) use `utils/theme.ts` `dark`/`light` objects — keep them in sync with `globals.css` tokens.
 
-### OpenCV (`cv`)
+### OpenCV and pipeline modules
 
-- OpenCV runs **synchronously on the main thread** via the `cv` object from `useOpenCV`.
-- **Never** create a new WASM runtime inside a Worker — the WASM bootstrap is async and unreliable in worker scope (`importScripts` returns before `onRuntimeInitialized` fires).
-- Every function that allocates OpenCV objects **must** free them in a `finally` block.
-- Thread `cv` explicitly as a function parameter — never read it from global/window state.
-
-### Pipeline modules
-
-- Files in `pipeline/` must have **zero React imports**. Keep framework boundary clean.
-- All `pipeline/` functions accept `cv` as their first argument (or `CV = any` typed alias).
-- No `async` inside pipeline modules — all OpenCV calls are synchronous.
+- See `pipeline/CLAUDE.md` for OpenCV (`cv`) rules, pipeline module rules, the execution chain, and pipeline testing rules. Auto-loaded when working under `pipeline/`.
 
 ### Hooks
 
@@ -110,8 +91,7 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 ### TypeScript
 
-- `eslint-disable-next-line @typescript-eslint/no-explicit-any` is acceptable **only** for `type CV = any` and `type PoseDetector = any` (WASM bindings have no TS types).
-- Never use `any` elsewhere.
+- Never use `any`. The only permitted exceptions (`type CV = any`, `type PoseDetector = any` for WASM bindings) are documented in `pipeline/CLAUDE.md`.
 
 ### Run classification & S3 key format
 
@@ -124,15 +104,8 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 ### Profile & social
 
-- Profile data stored at `ProfileData/{userId}/profile.json` (displayName, location, bio, profilePicture as base64 data URL).
-- Search index at `ProfileData/_index/{userId}.json` (displayName, email, location) — updated on every profile save.
-- Following list at `ProfileData/{userId}/following.json` — array of user IDs.
-- Profile API routes: `/api/profile` (own GET/PUT), `/api/profile/[userId]` (public GET), `/api/profile/[userId]/climbs` (public climb list), `/api/profile/[userId]/climbs/detail` (single climb detail by key), `/api/profile/follow` (GET/POST/DELETE), `/api/profile/search?q=` (GET).
-- `isValidProfileKey()` and `isValidRoutePrefix()` validate cross-user reads.
-- Profile text fields capped at `PROFILE_TEXT_LIMIT` (500 chars); profile picture must be a `data:image/` URL.
-- `ClimbDetailModal` (`components/shared/ClimbDetailModal.tsx`) — reusable modal showing full climb info + thumbnail image. Used from both profile pages.
-- `ClimbsMap` (`components/map/ClimbsMap.tsx`) — accepts optional `onPinClick` callback and `key` field on pins for navigation.
 - Profile and following data live in S3 under the `ProfileData/` prefix (same bucket as route data) — there is no separate database service.
+- Storage formats, API routes, and validators: see `docs/agents/profile.md` before profile/social work.
 
 ### Authentication (Firebase)
 
@@ -153,36 +126,11 @@ workers/         Legacy Web Worker files (keep, do not delete)
 
 - Test files mirror the source tree under `__tests__/`.
 - Use `vi.stubGlobal` + `vi.unstubAllGlobals()` in afterEach for DOM globals.
-- `ImageData` not available in jsdom — use plain object casts: `{ data, width, height, colorSpace } as ImageData`.
-- OpenCV calls are never tested directly — mock `pipeline/orbDetector` or `pipeline/homography` at the module boundary.
-- `FakeOrbWorker.prototype.postMessage` save/restore prevents prototype pollution between tests.
+- Pipeline-specific testing rules (jsdom `ImageData` casts, OpenCV module-boundary mocks, `FakeOrbWorker`): see `pipeline/CLAUDE.md`.
 
 ### Media previews with crop overlays
 
-- **Never** display media with `object-contain` CSS when a `CropBoxOverlay` is involved — letterboxing causes crop fractions to map to the container rather than the actual media bounds.
-- Use an aspect-ratio-constrained container with `object-fill` class on the media element so the container IS the media bounds. Crop fractions then map 1:1 to media pixels.
-- CSS variable `--nav-h: 3rem` (NavBar height) is defined in `app/globals.css` `:root`.
-- **Viewport-fit pattern** (inline preview):
-  ```tsx
-  function mediaContainerStyle(w: number, h: number): React.CSSProperties {
-    const ratio = (w / h).toFixed(6);
-    const maxH = "calc(100dvh - var(--nav-h) - 1rem)";
-    return {
-      width: `min(100%, calc(${maxH} * ${ratio}))`,
-      maxHeight: maxH,
-      aspectRatio: `${w} / ${h}`,
-    };
-  }
-  // Media element: className="absolute inset-0 w-full h-full object-fill"
-  ```
-- **Fullscreen pattern**: `fsMediaContainerStyle` uses `maxHeight: calc(100dvh - 8rem)`.
-- **Height-filling pattern** (scan flow Steps 2 & 3): fills the available vertical space `s` with the media, width following the aspect ratio and capped to `100%`. Both orientations reach the full height (landscape caps to viewport width only on narrow screens), so the media stays flush against the footer rather than leaving a vertical gap. Helpers in `utils/mediaContainerStyle.ts`: `fitMediaStyle(w, h, s)` / `fitMediaWidth(w, h, s)` take a **measured** `s` (px, via `useMeasuredHeight` on a `flex-1 min-h-0` stage); `fitMediaMaxWidth(w, h, offset)` is the dvh-calc variant for flow layouts. The scan video stage is flush (no border/radius/padding) and centered on `bg-surface`; the transport bar aligns to `fitMediaWidth`. Default the pre-load aspect ratio to portrait `{ w: 9, h: 16 }` (ascents are recorded vertically).
-- Detect natural size: `onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}` for images; `setSize({ w: video.videoWidth || 16, h: video.videoHeight || 9 })` in the `onLoadedData`/`canplay` handler for videos. Default to `{ w: 4, h: 3 }` or `{ w: 16, h: 9 }` before load.
-- Every media container with a crop overlay must have an **Expand** button that opens a fullscreen portal: `createPortal(<div className="fixed inset-0 z-fullscreen flex flex-col bg-surface" role="dialog" aria-modal="true">…</div>, document.body)`.
-- Add an ESC key `useEffect` that closes the fullscreen when `useEffect([…], [fsState])` is active.
-- **Video previews**: show crop-mode buttons (Climber / Wall texture) in a `<div className="flex items-center gap-2 flex-wrap">` toolbar **above** the video container.
-- **Image previews**: no crop-mode toolbar — only the single `CropBoxOverlay` crop box is shown.
-- Fullscreen video uses a separate `useRef<HTMLVideoElement>` so it plays independently; sync `currentTime` on open and back to the inline player on close.
+- See `components/CLAUDE.md` for the scan/compare page flows and all media-preview/crop-overlay patterns (object-fill rule, viewport-fit/fullscreen/height-filling styles, expand button, fullscreen video ref). Auto-loaded when working under `components/`.
 
 ---
 
