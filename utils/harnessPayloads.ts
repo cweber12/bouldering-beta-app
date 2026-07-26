@@ -90,7 +90,27 @@ interface DetectorAttemptBase {
   reacquireConditions: FrameConditions | null;
   candidateCount: number;
   rejectedCandidateCount: number;
-  selectionMethod: DetectorAttemptSelectionMethod;
+  /**
+   * How the pose on this attempt was selected — the path actually taken, not
+   * the one predicted before searching.
+   *
+   * **Absent when nothing was selected.** A miss has no selection path, and
+   * asserting one made every miss read as a failed `tracked` selection even when
+   * the detector returned no candidates at all. The field stays optional rather
+   * than `never` on `missing`, because v1 payloads (the whole pre-2026-07-26
+   * corpus) do carry a method on their misses and must stay valid — readers
+   * should treat a method on a `missing` attempt as a v1 artifact, not as
+   * evidence of a selection.
+   */
+  selectionMethod?: DetectorAttemptSelectionMethod;
+  /**
+   * Wall-clock milliseconds spent inside MediaPipe on this attempt, summed over
+   * **every** pass it made — the initial search plus each reacquire ladder rung
+   * (ADR 0024). Excludes canvas/crop work and the analysis-only condition
+   * passes, so it measures detector cost rather than harness overhead. Absent on
+   * payloads produced before this field existed.
+   */
+  inferenceMs?: number;
 }
 
 export interface AcceptedDetectorAttempt extends DetectorAttemptBase {
@@ -98,6 +118,14 @@ export interface AcceptedDetectorAttempt extends DetectorAttemptBase {
   detectionRegion: DetectorAttemptRegion;
   /** Scanner-accepted keypoints after detector gates; present only for accepted attempts. */
   acceptedKeypoints: Keypoint[];
+  /**
+   * Joints the detector did not return, whose absence grew the Adaptive Crop via
+   * a reach disk (ADR 0014) and which the interpolation pipeline therefore
+   * synthesizes rather than measures. Present only on accepted attempts whose
+   * pose source is `limbExpanded`; absent (never empty) otherwise, so backend
+   * PCK can score detected and expanded joints separately.
+   */
+  synthesizedJoints?: string[];
   missReason?: never;
   /**
    * Set when the frame tripped the Landmark Flip verdict but was accepted
@@ -114,6 +142,7 @@ export interface MissingDetectorAttempt extends DetectorAttemptBase {
   rawKeypoints: [];
   detectionRegion: null;
   acceptedKeypoints?: never;
+  synthesizedJoints?: never;
   /** Why nothing was selected; absent on payloads produced before this field existed. */
   missReason?: DetectorAttemptMissReason | null;
   flipFlagged?: never;
@@ -123,6 +152,7 @@ export interface FlipRejectedDetectorAttempt extends DetectorAttemptBase {
   status: "flipRejected";
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
+  synthesizedJoints?: never;
   missReason?: never;
   /** `flipRejected` always means discarded — a flagged frame is `accepted`. */
   flipFlagged?: never;
@@ -132,6 +162,7 @@ export interface QualityRejectedDetectorAttempt extends DetectorAttemptBase {
   status: "qualityRejected";
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
+  synthesizedJoints?: never;
   missReason?: never;
   flipFlagged?: never;
 }

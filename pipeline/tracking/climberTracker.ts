@@ -422,6 +422,17 @@ export function findMissingLimbs(keypoints: Keypoint[]): LimbId[] {
   return out;
 }
 
+/**
+ * The endpoint joint names of every missing-yet-actionable limb — i.e. the
+ * joints the detector did not return and the interpolation pipeline therefore
+ * has to synthesize. Same population as {@link findMissingLimbs}, named in the
+ * keypoint vocabulary so the harness can score synthesized joints separately
+ * from measured ones.
+ */
+export function missingLimbEndpoints(keypoints: Keypoint[]): string[] {
+  return findMissingLimbs(keypoints).map((id) => LIMBS[id].endpoint);
+}
+
 /** Mean shoulder↔hip length, the stable torso scale for the reach fallback. */
 function torsoLength(map: Map<string, Keypoint>): number {
   const lens: number[] = [];

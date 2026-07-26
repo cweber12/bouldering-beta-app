@@ -485,6 +485,90 @@ describe("filterLandmarks (climbing-weighted)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// filterLandmarks — the qualityRejected envelope at the default tolerance
+// ---------------------------------------------------------------------------
+
+/**
+ * Pins *why* `qualityRejected` fired only 56 times in 45k detector attempts
+ * (0.1%), which the harness could not distinguish from a gate that is not wired
+ * in at all. It is wired in, and it is frame-level — but at
+ * {@link DEFAULT_FILTER_TOLERANCE} the budget is loose enough that MediaPipe
+ * essentially never trips it.
+ *
+ * These pin current behavior deliberately. Retuning the budget is a measured
+ * change of its own and is explicitly out of scope here.
+ */
+describe("filterLandmarks default-tolerance envelope (qualityRejected)", () => {
+  it("rejects whole frames rather than pruning keypoints", () => {
+    const good = goodFrame(0);
+    const bad = dropKeypoints(
+      goodFrame(0.1),
+      "left_wrist",
+      "right_wrist",
+      "left_shoulder",
+      "right_shoulder",
+    );
+
+    const kept = filterLandmarks([good, bad]);
+
+    // The gate is a frame-level verdict: the bad frame is gone entirely, and
+    // the surviving frame keeps every keypoint it arrived with.
+    expect(kept).toHaveLength(1);
+    expect(kept[0].timestamp).toBe(0);
+    expect(kept[0].keypoints).toHaveLength(good.keypoints.length);
+  });
+
+  it("keeps a frame that has lost both feet and both hands", () => {
+    // 4 feet × 0.25 + 2 core × 1.0 = 3.0, exactly the default budget. A pose
+    // with no hands and no feet is still accepted — this is the looseness the
+    // corpus's 0.1% rejection rate reflects.
+    const f = dropKeypoints(
+      goodFrame(0),
+      "left_ankle",
+      "right_ankle",
+      "left_foot_index",
+      "right_foot_index",
+      "left_wrist",
+      "right_wrist",
+    );
+    expect(filterLandmarks([f])).toHaveLength(1);
+  });
+
+  it("needs four of six core joints to fail before it rejects", () => {
+    const three = dropKeypoints(goodFrame(0), "left_wrist", "right_wrist", "left_shoulder");
+    const four = dropKeypoints(
+      goodFrame(0),
+      "left_wrist",
+      "right_wrist",
+      "left_shoulder",
+      "right_shoulder",
+    );
+    expect(filterLandmarks([three])).toHaveLength(1);
+    expect(filterLandmarks([four])).toHaveLength(0);
+  });
+
+  it("keeps a uniformly low-confidence pose that clears the score floor", () => {
+    // MediaPipe visibility rarely lands under 0.3, so a weak-but-present pose
+    // accrues no bad weight at all — the dominant reason the gate stays quiet.
+    const f = setScore(
+      goodFrame(0),
+      0.31,
+      "left_wrist",
+      "right_wrist",
+      "left_shoulder",
+      "right_shoulder",
+      "left_hip",
+      "right_hip",
+      "left_ankle",
+      "right_ankle",
+      "left_foot_index",
+      "right_foot_index",
+    );
+    expect(filterLandmarks([f])).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // applyLandmarkEstimator
 // ---------------------------------------------------------------------------
 

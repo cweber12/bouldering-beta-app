@@ -8,6 +8,7 @@ import {
   selectClimberByPoint,
   deriveClimberCrop,
   findMissingLimbs,
+  missingLimbEndpoints,
   expandCropBox,
   pickAcquisitionRegion,
   predictDetectionRegion,
@@ -285,6 +286,24 @@ describe("findMissingLimbs", () => {
   it("flags both legs when both ankles are gone", () => {
     const pose = without(makePose(0.5, 0.5), "left_ankle", "right_ankle");
     expect(findMissingLimbs(pose)).toEqual(["left_leg", "right_leg"]);
+  });
+});
+
+describe("missingLimbEndpoints", () => {
+  it("names the joints the pipeline has to synthesize", () => {
+    const pose = without(makePose(0.5, 0.5), "left_wrist", "right_ankle");
+    expect(missingLimbEndpoints(pose)).toEqual(["left_wrist", "right_ankle"]);
+  });
+
+  it("returns nothing for a complete pose", () => {
+    expect(missingLimbEndpoints(makePose(0.5, 0.5).keypoints)).toEqual([]);
+  });
+
+  it("stays anchor-gated, like the limb list it names", () => {
+    // No shoulder → no disk was placed, so nothing was expanded for that limb
+    // and its endpoint is not attributed to synthesis.
+    const pose = without(makePose(0.5, 0.5), "left_wrist", "left_shoulder");
+    expect(missingLimbEndpoints(pose)).toEqual([]);
   });
 });
 

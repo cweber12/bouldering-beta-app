@@ -22,6 +22,7 @@ import {
   buildReacquireLadder,
   deriveClimberCrop,
   findMissingLimbs,
+  missingLimbEndpoints,
   pickAcquisitionRegion,
   poseCentroid,
   predictCentroid,
@@ -102,13 +103,20 @@ interface ClimberDetectionResult {
   selected: PoseFrame | null;
   candidateCount: number;
   rejectedCandidateCount: number;
-  selectionMethod: DetectorAttemptSelectionMethod;
+  /**
+   * The selection path this search actually took, or null when it selected
+   * nothing — a search that found no one took no path, and reporting one made
+   * every miss read as a failed `tracked` selection.
+   */
+  selectionMethod: DetectorAttemptSelectionMethod | null;
   /**
    * Highest mean keypoint confidence among the candidates this search returned
    * but did not select; null when there were none. Only computed while
    * detector-attempt collection is on.
    */
   bestUnselectedCandidateScore: number | null;
+  /** Wall-clock milliseconds this search spent inside MediaPipe. */
+  inferenceMs: number;
 }
 
 type DetectorAttemptDraft = {
@@ -123,11 +131,13 @@ type DetectorAttemptDraft = {
   missReason?: DetectorAttemptMissReason;
   rawKeypoints: PoseFrame["keypoints"];
   acceptedKeypoints?: PoseFrame["keypoints"];
+  synthesizedJoints?: string[];
   searchConditions: ReturnType<typeof toFrameConditions> | null;
   reacquireConditions: ReturnType<typeof toFrameConditions> | null;
   candidateCount: number;
   rejectedCandidateCount: number;
-  selectionMethod: DetectorAttemptSelectionMethod;
+  selectionMethod?: DetectorAttemptSelectionMethod;
+  inferenceMs: number;
 };
 
 interface ProcessingOptions {
@@ -260,14 +270,25 @@ export function finalizeDetectorAttempts(
     if (attempt.status === "missing") return attempt;
 
     const key = timestampKey(attempt.timestamp);
-    // Demotion strips both acceptance-only fields: a discarded frame is not
-    // "accepted under suspicion", it is simply not accepted.
+    // Demotion strips every acceptance-only field: a discarded frame is not
+    // "accepted under suspicion", it is simply not accepted — and its joints
+    // were never synthesized, because its pose never reached the pipeline.
     if (flipped.has(key)) {
-      const { acceptedKeypoints: _keypoints, flipFlagged: _flagged, ...rest } = attempt;
+      const {
+        acceptedKeypoints: _keypoints,
+        synthesizedJoints: _joints,
+        flipFlagged: _flagged,
+        ...rest
+      } = attempt;
       return { ...rest, status: "flipRejected" };
     }
     if (!good.has(key)) {
-      const { acceptedKeypoints: _keypoints, flipFlagged: _flagged, ...rest } = attempt;
+      const {
+        acceptedKeypoints: _keypoints,
+        synthesizedJoints: _joints,
+        flipFlagged: _flagged,
+        ...rest
+      } = attempt;
       return { ...rest, status: "qualityRejected" };
     }
     // Tripped the flip verdict but survived the run cap: still accepted, with
@@ -741,21 +762,20 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
           predicted: Point | null,
           gate?: number,
         ): ClimberDetectionResult => {
-          const selectionMethod: DetectorAttemptSelectionMethod =
-            history.length === 0 ? (tappedPoint ? "tap" : "strongest") : "tracked";
+          /** A search that selected nobody: no candidates, and no selection path taken. */
+          const nothingSelected = (inferenceMs = 0): ClimberDetectionResult => ({
+            selected: null,
+            candidateCount: 0,
+            rejectedCandidateCount: 0,
+            selectionMethod: null,
+            bestUnselectedCandidateScore: null,
+            inferenceMs,
+          });
           const reg = region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight };
           cropCanvas.width = reg.width;
           cropCanvas.height = reg.height;
           const cctx = cropCanvas.getContext("2d", { willReadFrequently: true });
-          if (!cctx) {
-            return {
-              selected: null,
-              candidateCount: 0,
-              rejectedCandidateCount: 0,
-              selectionMethod,
-              bestUnselectedCandidateScore: null,
-            };
-          }
+          if (!cctx) return nothingSelected();
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
 
           // MediaPipe detects on the raw colour crop. We deliberately do NOT run
@@ -778,39 +798,50 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
 
           const mpTs = Math.max(lastMpTs + 0.005, mpTimestampBase + video.currentTime);
           lastMpTs = mpTs;
+          // Timed tightly around the model call: canvas/crop work and the
+          // analysis-only condition passes are harness overhead, not detector
+          // cost, and inferenceMs exists to make the detector's cost readable.
+          const inferenceStart = performance.now();
           const posesLocal = estimateFramesMediaPipe(detector, cropCanvas, mpTs);
+          const inferenceMs = performance.now() - inferenceStart;
 
-          if (posesLocal.length === 0) {
-            return {
-              selected: null,
-              candidateCount: 0,
-              rejectedCandidateCount: 0,
-              selectionMethod,
-              bestUnselectedCandidateScore: null,
-            };
-          }
+          if (posesLocal.length === 0) return nothingSelected(inferenceMs);
 
           const posesFull: PoseFrame[] = posesLocal.map((p) => ({
             timestamp: p.timestamp,
             keypoints: mapKeypointsToFullFrame(p.keypoints, reg, videoWidth, videoHeight),
           }));
 
-          // First acquisition: seed identity from the tap, else the strongest pose.
-          const selected =
-            history.length === 0
-              ? tappedPoint
-                ? selectClimberByPoint(posesFull, tappedPoint)
-                : selectClimberPose(posesFull, null)
-              : selectClimberPose(posesFull, predicted, gate);
+          // First acquisition: seed identity from the tap, else the strongest
+          // pose. The label comes from the branch that ran rather than being
+          // predicted beforehand — `strongest` is only reachable on a Setup
+          // carrying no `climberPoint`, so a calibrated Scan Setup never takes
+          // it and the label must not claim otherwise.
+          let selected: PoseFrame | null;
+          let selectionMethod: DetectorAttemptSelectionMethod;
+          if (history.length === 0) {
+            if (tappedPoint) {
+              selected = selectClimberByPoint(posesFull, tappedPoint);
+              selectionMethod = "tap";
+            } else {
+              selected = selectClimberPose(posesFull, null);
+              selectionMethod = "strongest";
+            }
+          } else {
+            selected = selectClimberPose(posesFull, predicted, gate);
+            selectionMethod = "tracked";
+          }
+
           return {
             selected,
             candidateCount: posesFull.length,
             rejectedCandidateCount: selected ? Math.max(0, posesFull.length - 1) : posesFull.length,
-            selectionMethod,
+            selectionMethod: selected ? selectionMethod : null,
             // Analysis-only evidence: never scored for user-facing scans.
             bestUnselectedCandidateScore: shouldCollectDetectorAttempts
               ? bestUnselectedCandidateScore(posesFull, selected)
               : null,
+            inferenceMs,
           };
         };
 
@@ -944,12 +975,19 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             let rejectedCandidateCount = initialDetection.rejectedCandidateCount;
             let selectionMethod = initialDetection.selectionMethod;
             let bestUnselectedScore = initialDetection.bestUnselectedCandidateScore;
+            let inferenceMs = initialDetection.inferenceMs;
+            // The search region goes in as the *climber* region — which is what
+            // makes `isBacklit` read "search region darker than the frame", the
+            // proxy we want. The Wall Crop goes in as the wall region so
+            // climber-region darkness stays separable from whole-scene darkness;
+            // omitting it left `wall` structurally null on every attempt.
             const searchConditions = shouldCollectDetectorAttempts
               ? toFrameConditions(
                   analyzeFrame(
                     cv,
                     ctx.getImageData(0, 0, videoWidth, videoHeight),
                     region ?? { x: 0, y: 0, width: videoWidth, height: videoHeight },
+                    wallCropPx,
                   ),
                 )
               : null;
@@ -980,19 +1018,24 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 const rungDetection = detectClimber(rung, predicted, reacquireGate);
                 candidateCount += rungDetection.candidateCount;
                 rejectedCandidateCount += rungDetection.rejectedCandidateCount;
-                selectionMethod = rungDetection.selectionMethod;
                 bestUnselectedScore = mergeBestUnselectedScore(
                   bestUnselectedScore,
                   rungDetection.bestUnselectedCandidateScore,
                 );
+                // Every rung is a MediaPipe pass, so the attempt's cost is their
+                // sum — that is what makes the ladder's cost a measured delta.
+                inferenceMs += rungDetection.inferenceMs;
                 reacquireSteps.push({
                   region: normalizeDetectorAttemptRegion(rung, videoWidth, videoHeight),
                   found: !!rungDetection.selected,
                 });
                 // Stop at the first rung that finds the Climber — the wider
-                // rungs are never searched, so a hit costs one extra pass.
+                // rungs are never searched, so a hit costs one extra pass. The
+                // selection path is taken from the rung that actually selected;
+                // rungs that found nobody took no path and must not overwrite it.
                 if (rungDetection.selected) {
                   chosen = rungDetection.selected;
+                  selectionMethod = rungDetection.selectionMethod;
                   reacquired = true;
                   reacquireRegion = rung;
                   break;
@@ -1000,12 +1043,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               }
               reacquireConditions = shouldCollectDetectorAttempts
                 ? toFrameConditions(
-                    analyzeFrame(cv, ctx.getImageData(0, 0, videoWidth, videoHeight), {
-                      x: 0,
-                      y: 0,
-                      width: videoWidth,
-                      height: videoHeight,
-                    }),
+                    analyzeFrame(
+                      cv,
+                      ctx.getImageData(0, 0, videoWidth, videoHeight),
+                      { x: 0, y: 0, width: videoWidth, height: videoHeight },
+                      wallCropPx,
+                    ),
                   )
                 : null;
             }
@@ -1073,8 +1116,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 reacquireConditions,
                 candidateCount,
                 rejectedCandidateCount,
-                selectionMethod,
-              } satisfies Omit<DetectorAttemptDraft, "status" | "acceptedKeypoints" | "missReason">;
+                inferenceMs,
+              } satisfies Omit<
+                DetectorAttemptDraft,
+                "status" | "acceptedKeypoints" | "missReason" | "selectionMethod"
+              >;
+              // Joints the detector never returned, so the pipeline synthesizes
+              // them downstream — reported only where they exist (ADR 0014).
+              const synthesizedJoints = chosen ? missingLimbEndpoints(chosen.keypoints) : [];
               detectorAttemptDrafts.push(
                 chosen && detectionRegion
                   ? {
@@ -1082,6 +1131,9 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                       status: "accepted",
                       detectionRegion,
                       acceptedKeypoints: cloneKeypoints(chosen.keypoints),
+                      // A miss never reaches here, so a selection path was taken.
+                      ...(selectionMethod ? { selectionMethod } : {}),
+                      ...(synthesizedJoints.length > 0 ? { synthesizedJoints } : {}),
                     }
                   : {
                       ...baseAttempt,
