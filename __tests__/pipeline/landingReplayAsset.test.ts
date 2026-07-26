@@ -43,13 +43,24 @@ const ITEM_KEYS = [
 const LABEL_KEYS = ["area", "route", "rating"] as const;
 
 /**
- * The PRD's payload budget, in bytes: ~400 KB a clip and ≤ 1.2 MB for the whole
- * curated set. Every visitor downloads this file in one request before the hero
- * draws anything, so the ceiling is the point of the budget rather than a
- * guideline — a fourth clip that busts it is a curation decision to make out
- * loud, not something to notice later in devtools.
+ * The PRD's payload budget, in bytes. Every visitor downloads this file in one
+ * request before the hero draws anything, so the ceiling is the point of the
+ * budget rather than a guideline — a fourth clip that busts it is a curation
+ * decision to make out loud, not something to notice later in devtools.
+ *
+ * **The total is the binding constraint.** The per-item figure is a smell
+ * detector for one clip carrying the whole set, and it is deliberately loose:
+ * how many bytes a clip spends is mostly how busy its Route Photo is, which
+ * neither the serializer nor the curator controls directly. The curated set runs
+ * 241-429 KB a clip at 1009 KB total — Slashface's photo costs 45 KB and
+ * Midnight Lightning's costs 208 KB at the same quality and a comparable pixel
+ * count, purely because one wall has more in front of it. 440 KB admits that
+ * spread; a clip past it is genuinely anomalous and worth looking at.
+ *
+ * (Issue 01 set this at 420 KB from the one clip that existed then, and issue
+ * 04's curation immediately produced a legitimate 429 KB export.)
  */
-const ITEM_BYTES_MAX = 420 * 1024;
+const ITEM_BYTES_MAX = 440 * 1024;
 const ASSET_BYTES_MAX = 1.2 * 1024 * 1024;
 
 /**

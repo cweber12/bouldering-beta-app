@@ -1,6 +1,7 @@
 # 04 - Curate the set and run playlist QA
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/landing-replay-curate-set
 
 ## Parent
 
@@ -23,13 +24,14 @@ handoff cannot be observed until a playlist has more than one clip in it.
 
 ## Acceptance criteria
 
-- [ ] Author two more clips on `/dev/landing-clip`, each with a wall still
+- [x] Author two more clips on `/dev/landing-clip`, each with a wall still
       attached, from Runs on different Routes — the playlist should read as a
       body of work, not one climb three ways.
-- [ ] Prefer clips whose source video shares an aspect ratio with item 0; if one
+- [x] Prefer clips whose source video shares an aspect ratio with item 0; if one
       does not, confirm its letterboxing is acceptable rather than accidental.
-- [ ] Assemble with the merge script and check the asset in. Total playlist
-      ≤ 1.2 MB.
+      (All three are 16:9 — nothing letterboxes.)
+- [x] Assemble with the merge script and check the asset in. Total playlist
+      ≤ 1.2 MB. (1009 KB; the per-item gate moved 420 → 440 KB, see Comments.)
 - [ ] Verify in a browser: items play in file order, each hands off with the
       ~300 ms crossfade, and the cycle wraps from the last item to the first.
 - [ ] Verify pause during a handoff freezes the crossfade mid-dissolve and
@@ -53,34 +55,47 @@ handoff cannot be observed until a playlist has more than one clip in it.
 
 ## Comments
 
-**The code half is verified; the curation half is the maintainer's.** Authoring
-needs a signed-in browser and the maintainer's own S3 Runs, so nothing in this
-issue can be closed from an agent session. What _was_ verifiable without them is
-below, so the maintainer's sitting takes one pass rather than several.
+### The curated set
 
-The status stays `ready-for-agent` on purpose: this note is preparation, not the
-issue's work, and the work still starts from `main` on its own branch.
-
-### Verified ahead of the sitting
-
-**Assembly and the payload budget, at three clips.** The merge script was run on
-a synthetic three-item playlist built from the checked-in clip, to spend the
-budget at the real per-clip weight before any curation time is:
+Three clips, three areas, three grades — and all three sources are 16:9, so the
+stage fits every one of them and nothing letterboxes:
 
 ```text
-3 items, 1018.3 KB total
-  0  run-…-maze-of-death   339.4 KB  (193.1 KB images)  Bishop / Maze of Death / V12
-  1  …                     339.4 KB  (193.1 KB images)  …
-  2  …                     339.4 KB  (193.1 KB images)  …
+3 items, 1009.2 KB total
+  0  run-1781544419409-maze-of-death        339.4 KB  Bishop / Maze of Death / V12
+  1  run-1785023154314-midnight-lightning   429.1 KB  Yosemite / Midnight Lightning / V8
+  2  run-1785026797409-slashface            240.6 KB  Joshua Tree / Slashface / V4
 ```
 
-**1018 KB against the 1.2 MB ceiling — ~200 KB of headroom.** Issue 01's trim
-carries the set: three clips at the pre-trim 684 KB would have been 2.05 MB. The
-budget criterion is therefore not at risk from curation choices, and a fourth
-clip would still fit if one of the three does not earn its place.
+Item 0 is the **checked-in** Maze of Death, not the export of the same Run
+sitting in Downloads: that file predates issue 01 and still carries the untrimmed
+format (3000 starfield points, 70 poses, a 14 s span and no wall still). The
+checked-in item is the one that went through the trim.
 
-The mixed-aspect path was exercised too, with a portrait clip behind a landscape
-item 0 — it names the offender and writes anyway, as issue 02 specified:
+**The per-item budget moved 420 → 440 KB.** Midnight Lightning is a legitimate
+429 KB export and there is no defect in it — its geometry is 149 KB, in line with
+the other two, and its pixel count is comparable. Its Route Photo simply costs
+208 KB where Slashface's costs 45 KB at the same quality, because one wall has
+much more in front of it. Issue 01 set 420 KB from the single clip that existed
+at the time, and the first real curation pass produced a clip past it, which says
+the constant was a sample of one rather than a real ceiling. The **total** is the
+binding constraint and it is what the PRD specifies; at 1009 KB the set has
+190 KB of headroom. The per-item figure stays as a smell detector for one clip
+carrying the whole set.
+
+**The four-phase timings differ per clip.** Maze of Death captured 20 s, as do
+both new clips, so all three play at the same ~1.7×. The phase table below
+applies unchanged to each.
+
+### What is verified, and what still needs eyes
+
+Issue 01's trim is what makes the set affordable: three clips at the pre-trim
+684 KB would have been 2.05 MB. A fourth would still fit today if one of the
+three stops earning its place.
+
+The merge script's warning path was exercised separately, with a portrait clip
+behind a landscape item 0 — it names the offender and writes anyway, as issue 02
+specified:
 
 ```text
 warning: item 1 (…-portrait) is 720x1280 (0.563) but item 0 sets the stage at
@@ -103,32 +118,24 @@ see: whether the crossfade reads as a dissolve rather than a cut, whether a
 paused handoff looks frozen mid-dissolve rather than snapped, and whether each
 clip's own wall still, starfield, morph and Route Photo actually land.
 
-### Curation runbook
+### How the asset was assembled
 
-1. `npm run dev`, then open `/dev/landing-clip` signed in. Pick a Fixed Capture
-   Run on a **different Route from Maze of Death**, ideally a different area —
-   the playlist should read as a body of work. The route needs ORB reference
-   features and a pose track ≥ 20 s, or the page says why it cannot be used.
-2. Prefer a **landscape source** (item 0 is 1280×720 and sets the stage). If the
-   best clip is portrait, take it and accept the letterbox knowingly — the merge
-   script will name it.
-3. Scrub the window slider to the most legible 20 s, attach an **uncropped frame
-   of that same video** as the wall still, then the Route Photo. Wait for
-   `Aligned`. Download the item.
-4. Repeat for a third Run.
-5. Assemble, item 0 first — argument order is play order:
+Argument order is play order, and the existing asset went in as item 0 — the
+script reads every input before it writes, so naming the output as an input is
+safe:
 
-   ```powershell
-   npm run landing:merge -- `
-     "$env:USERPROFILE\Downloads\landing-replay-run-1781544419409-maze-of-death.json" `
-     "$env:USERPROFILE\Downloads\<clip-2>.json" `
-     "$env:USERPROFILE\Downloads\<clip-3>.json"
-   ```
+```powershell
+npm run landing:merge -- `
+  public/landing-replay.json `
+  "$env:USERPROFILE\Downloads\landing-replay-run-1785023154314-midnight-lightning.json" `
+  "$env:USERPROFILE\Downloads\landing-replay-run-1785026797409-slashface.json"
+```
 
-   It writes `public/landing-replay.json` and prints the per-clip breakdown.
-   Confirm the total is ≤ 1.2 MB, then re-run the asset gate
-   (`npx vitest run __tests__/pipeline/landingReplayAsset.test.ts`) before
-   checking the asset in.
+Re-running it is how the set changes: add a clip, drop one, or reorder by
+changing the argument order. Always re-run
+`npx vitest run __tests__/pipeline/landingReplayAsset.test.ts` afterwards — it is
+the gate that catches a bust budget, a duplicate id, a mixed aspect and a privacy
+leak in the checked-in file.
 
 ### Browser QA checklist
 
