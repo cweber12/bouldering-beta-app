@@ -52,8 +52,67 @@ const CENTROID_KEYPOINTS = new Set(["left_hip", "right_hip", "left_shoulder", "r
  */
 export const DEFAULT_GATE = 0.18;
 
-/** Wider gate used when re-acquiring on the full frame after a loss. */
+/** Wider gate used when re-acquiring after a loss. */
 export const REACQUIRE_GATE = 0.35;
+
+/**
+ * Consecutive missed detection frames after which the Adaptive Crop is cleared
+ * and acquisition falls back to the **Climber Crop** seed (ADR 0024).
+ *
+ * Two, not more: the corpus measured crop containment at 31.4% on truth-present
+ * misses with a median IoU of 0.000, so a box that has failed twice in a row —
+ * on frames the reacquire ladder already searched outward from — is pointed at
+ * the wrong place, and every further frame spends an initial MediaPipe pass on
+ * it. One miss is kept as slack because a single blur/occlusion frame can miss
+ * while the box is still correct.
+ *
+ * The reset goes to the **seed**, never to the full frame: the seed is what
+ * keeps a small or distant Climber above MediaPipe's size floor (ADR 0013).
+ */
+export const MISS_RESET_RUN = 2;
+
+/**
+ * Scale factors for the tight-first reacquire ladder, applied to the last
+ * confident climber box and walked in order (ADR 0024).
+ *
+ * Sized against the miss population, not the frame. Truth-present
+ * `no-candidates` misses sit at a median truth-bbox area of 0.0242 of the frame
+ * — about half the 0.0473 the detector accepts — and the climber box built from
+ * such a pose is ≈2.8× that area ({@link DEFAULT_CROP_PAD} laterally,
+ * {@link CROP_PAD_V_BIAS} vertically), so ≈0.068. A rung of scale `s` searches
+ * `s²` × that box, leaving the Climber occupying:
+ *
+ * - `×1.5` → ~15.9% of the searched pixels (6.6× their full-frame share);
+ * - `×2.5` → ~5.7%, still above the 4.73% share the detector demonstrably
+ *   accepts on a full frame.
+ *
+ * The ladder stops there because a wider rung would drop the Climber below that
+ * accepted share — back into the regime where the full frame already returned
+ * no candidates on these very frames.
+ */
+export const REACQUIRE_LADDER_SCALES: readonly number[] = [1.5, 2.5];
+
+/**
+ * How much the identity gate widens per consecutive miss (ADR 0024).
+ *
+ * One {@link DEFAULT_GATE} per miss: that constant is already "how far the
+ * Climber may plausibly be from the prediction after one detection step", and a
+ * missed frame adds exactly one more step of unobserved motion to the stale
+ * prediction's error. Ageing is what the evidence asks for — gated misses carry
+ * a median best-unselected-candidate score of 0.878, so the gate is rejecting
+ * high-confidence poses, which is the signature of a stale predicted centroid
+ * rather than of a bystander.
+ */
+export const IDENTITY_GATE_AGE_STEP = DEFAULT_GATE;
+
+/**
+ * Saturation point of the aged gate. Past a normalised centroid distance of 1.0
+ * the gate no longer excludes anything meaningful on a single frame, so
+ * selection has effectively reduced to "nearest candidate to the prediction";
+ * widening further would only add arithmetic. Issue 04's stale-track acceptance
+ * bar is the counterweight that keeps this from admitting hallucinations.
+ */
+export const MAX_IDENTITY_GATE = 1.0;
 
 /**
  * Base padding around the Adaptive Crop, as a fraction of the pose bbox added
@@ -229,6 +288,25 @@ export function selectClimberPose(
   }
   if (!best || bestDist > gate) return null;
   return best;
+}
+
+/**
+ * The identity gate to use after `consecutiveMisses` missed detection frames.
+ *
+ * The gate in {@link selectClimberPose} is measured against a predicted
+ * centroid that stops updating the moment the track is lost, so on a long miss
+ * run a frozen prediction vetoes candidates that are really the Climber. Age the
+ * gate instead: it grows by {@link IDENTITY_GATE_AGE_STEP} per consecutive miss
+ * — one detection step of unobserved motion each — and saturates at
+ * {@link MAX_IDENTITY_GATE}.
+ *
+ * With zero consecutive misses the result is exactly `base`, so a **fresh**
+ * prediction keeps today's tight gate and still rejects bystanders (ADR 0024).
+ */
+export function agedIdentityGate(consecutiveMisses: number, base: number = REACQUIRE_GATE): number {
+  const misses = Math.max(0, Math.floor(consecutiveMisses));
+  // max(base, …) so a base already above the ceiling is never *tightened*.
+  return Math.max(base, Math.min(MAX_IDENTITY_GATE, base + misses * IDENTITY_GATE_AGE_STEP));
 }
 
 /**
@@ -553,4 +631,79 @@ export function pickAcquisitionRegion(
   }
   if (climberCropPx) return climberCropPx;
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Reacquire ladder (ADR 0024)
+// ---------------------------------------------------------------------------
+
+/** True when a box already spans the whole frame, so searching it *is* the full frame. */
+function coversFrame(box: CropBox, frameW: number, frameH: number): boolean {
+  return box.x <= 0 && box.y <= 0 && box.width >= frameW && box.height >= frameH;
+}
+
+function sameBox(a: CropBox, b: CropBox): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+/**
+ * Build the ordered regions a lost track should re-search, **tightest first**.
+ *
+ * Each rung is the last confident climber box scaled by one of `scales`,
+ * recentred by `velocity` (the per-step normalised centroid displacement, so the
+ * ladder is thrown ahead along the track rather than pinned to where the Climber
+ * stopped being seen) and clamped to the frame. The full frame is appended as
+ * the **last** rung.
+ *
+ * Tight-first, with the full frame demoted, is the whole point (ADR 0024):
+ * 88% of misses are `no-candidates` on a frame that was already searched at
+ * full-frame scale, and the missing Climber is typically half the size of an
+ * accepted one — so re-running the scale that just failed cannot help, while a
+ * correctly-placed tight crop lifts them back over MediaPipe's size floor. The
+ * full-frame rung is retained only as a bounded fallback and so its own rescue
+ * yield stays measurable in `reacquireSteps[]`.
+ *
+ * A scaled rung that already covers the frame ends the tight part of the ladder
+ * — it and every wider rung after it would duplicate the final full-frame rung,
+ * and each duplicate costs a MediaPipe pass. With no last box (nothing has ever
+ * been tracked) the ladder is the full frame alone.
+ *
+ * Pixel coordinates in, pixel coordinates out.
+ */
+export function buildReacquireLadder(
+  lastBox: CropBox | null,
+  velocity: Point | null,
+  frameW: number,
+  frameH: number,
+  scales: readonly number[] = REACQUIRE_LADDER_SCALES,
+): CropBox[] {
+  const fullFrame: CropBox = { x: 0, y: 0, width: frameW, height: frameH };
+  if (!lastBox) return [fullFrame];
+
+  const cx = lastBox.x + lastBox.width / 2 + (velocity?.x ?? 0) * frameW;
+  const cy = lastBox.y + lastBox.height / 2 + (velocity?.y ?? 0) * frameH;
+
+  const rungs: CropBox[] = [];
+  for (const scale of scales) {
+    const halfW = (lastBox.width * scale) / 2;
+    const halfH = (lastBox.height * scale) / 2;
+    // Overflow pins the offending side to the frame edge rather than shrinking
+    // the opposite one, matching predictDetectionRegion / deriveClimberCrop.
+    const x0 = Math.max(0, Math.round(cx - halfW));
+    const y0 = Math.max(0, Math.round(cy - halfH));
+    const x1 = Math.min(frameW, Math.round(cx + halfW));
+    const y1 = Math.min(frameH, Math.round(cy + halfH));
+    const rung: CropBox = {
+      x: x0,
+      y: y0,
+      width: Math.max(1, x1 - x0),
+      height: Math.max(1, y1 - y0),
+    };
+    if (coversFrame(rung, frameW, frameH)) break;
+    if (rungs.some((prev) => sameBox(prev, rung))) continue;
+    rungs.push(rung);
+  }
+
+  rungs.push(fullFrame);
+  return rungs;
 }

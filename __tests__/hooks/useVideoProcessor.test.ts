@@ -140,7 +140,9 @@ describe("detector attempt helpers", () => {
   });
 
   it("normalizes crop boxes and represents full-frame searches explicitly", () => {
-    expect(normalizeDetectorAttemptRegion({ x: 20, y: 50, width: 100, height: 200 }, 200, 500)).toEqual({
+    expect(
+      normalizeDetectorAttemptRegion({ x: 20, y: 50, width: 100, height: 200 }, 200, 500),
+    ).toEqual({
       x: 0.1,
       y: 0.1,
       w: 0.5,
@@ -365,11 +367,16 @@ describe("useVideoProcessor detector attempt evidence", () => {
   /**
    * Drive the seek loop with a scripted MediaPipe response per call, in call
    * order: each detection frame consumes one entry for its initial search and,
-   * when that search selects nothing, a second for its full-frame re-acquire.
+   * when that search selects nothing, one more per rung of the re-acquire
+   * ladder (tight ×1.5, tight ×2.5, then the full frame) until one finds the
+   * Climber.
    */
   async function runProcessor(
     responses: PoseFrame[][],
-    { duration = 0.2 }: { duration?: number } = {},
+    {
+      duration = 0.2,
+      climberCrop = { x: 0, y: 0, w: 1, h: 1 },
+    }: { duration?: number; climberCrop?: { x: number; y: number; w: number; h: number } } = {},
   ): Promise<DetectorAttempt[]> {
     const queue = [...responses];
     vi.mocked(estimateFramesMediaPipe).mockImplementation(() => queue.shift() ?? []);
@@ -394,7 +401,7 @@ describe("useVideoProcessor detector attempt evidence", () => {
         { state: "", area: "", route: "" },
         // A full-frame Climber Crop keeps crop-local and full-frame coordinates
         // identical on acquisition, so scripted poses land where they read.
-        { climberCrop: { x: 0, y: 0, w: 1, h: 1 } },
+        { climberCrop },
         0,
         "mediapipe",
         {},
@@ -445,11 +452,13 @@ describe("useVideoProcessor detector attempt evidence", () => {
     expect(miss.reacquireSteps).toEqual([{ region: FULL_FRAME, found: false }]);
   });
 
-  it("reports identity-gated when a candidate was seen but fell outside the gate", async () => {
+  it("rejects a bystander far from a fresh prediction and reports identity-gated", async () => {
     const attempts = await runProcessor([
       [pose(0.5, 0.5)], // frame 0 — acquires the Climber
       [], // frame 1 initial crop search — nothing
-      [pose(0.05, 0.05, 0.42)], // frame 1 re-acquire — a candidate far from the prediction
+      [], // frame 1 ladder rung ×1.5
+      [], // frame 1 ladder rung ×2.5
+      [pose(0.05, 0.05, 0.42)], // frame 1 full frame — a bystander far from the prediction
     ]);
 
     expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "missing"]);
@@ -460,7 +469,6 @@ describe("useVideoProcessor detector attempt evidence", () => {
     // The gated candidate's mean confidence still travels, so a near miss is
     // distinguishable from a hard one.
     expect(miss.bestUnselectedCandidateScore).toBeCloseTo(0.42, 6);
-    expect(miss.reacquireSteps).toEqual([{ region: FULL_FRAME, found: false }]);
 
     // Acceptance carries no miss reason and no re-acquire rung.
     expect("missReason" in attempts[0]).toBe(false);
@@ -468,19 +476,93 @@ describe("useVideoProcessor detector attempt evidence", () => {
     expect(attempts[0].reacquireAttempted).toBe(false);
   });
 
-  it("records the re-acquire rung that found the Climber", async () => {
+  it("walks tight rungs before the full frame and records every one", async () => {
     const attempts = await runProcessor([
       [pose(0.5, 0.5)], // frame 0 — acquires the Climber
       [], // frame 1 initial crop search — nothing
-      [pose(0.5, 0.5)], // frame 1 re-acquire — found on the full frame
+      [], // frame 1 ladder rung ×1.5
+      [], // frame 1 ladder rung ×2.5
+      [], // frame 1 full frame — still nothing
+    ]);
+
+    const steps = attempts[1].reacquireSteps ?? [];
+    expect(steps.map((step) => step.found)).toEqual([false, false, false]);
+    // Tightest first: each rung searches strictly more of the frame than the
+    // last, and the full frame is the demoted final rung.
+    const areas = steps.map((step) => step.region.w * step.region.h);
+    expect(areas[0]).toBeLessThan(areas[1]);
+    expect(areas[1]).toBeLessThan(areas[2]);
+    expect(steps[2].region).toEqual(FULL_FRAME);
+  });
+
+  it("stops at the first rung that finds the Climber", async () => {
+    const attempts = await runProcessor([
+      [pose(0.5, 0.5)], // frame 0 — acquires the Climber
+      [], // frame 1 initial crop search — nothing
+      [pose(0.5, 0.5)], // frame 1 ladder rung ×1.5 — found here
     ]);
 
     expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "accepted"]);
     const reacquired = attempts[1];
     expect(reacquired.reacquired).toBe(true);
-    expect(reacquired.reacquireSteps).toEqual([{ region: FULL_FRAME, found: true }]);
-    expect(reacquired.detectionRegion).toEqual(FULL_FRAME);
+    // One rung only — the wider rungs and the full frame were never searched.
+    expect(reacquired.reacquireSteps).toHaveLength(1);
+    expect(reacquired.reacquireSteps?.[0].found).toBe(true);
+    // The rung that found the Climber is the detection region, not "full frame".
+    expect(reacquired.detectionRegion).toEqual(reacquired.reacquireSteps?.[0].region);
+    expect(reacquired.detectionRegion).not.toEqual(FULL_FRAME);
     expect("missReason" in reacquired).toBe(false);
+
+    // Two frames, one miss: 2 initial searches + exactly 1 extra pass.
+    expect(vi.mocked(estimateFramesMediaPipe)).toHaveBeenCalledTimes(3);
+  });
+
+  it("never escalates to a ladder while the Climber stays tracked", async () => {
+    const attempts = await runProcessor([[pose(0.5, 0.5)], [pose(0.5, 0.5)]]);
+
+    expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "accepted"]);
+    for (const attempt of attempts) {
+      expect(attempt.reacquireAttempted).toBe(false);
+      expect(attempt.reacquireSteps).toEqual([]);
+      expect(attempt.detectionRegion).toEqual(attempt.initialSearchRegion);
+    }
+    // A hit costs no extra inference: one MediaPipe pass per detection frame.
+    expect(vi.mocked(estimateFramesMediaPipe)).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to the Climber Crop seed after a run of misses", async () => {
+    // A seed crop distinguishable from both the Adaptive Crop and the full
+    // frame, so the region the reset lands on is unambiguous.
+    const seed = { x: 0.2, y: 0.2, w: 0.6, h: 0.6 };
+    const attempts = await runProcessor(
+      [
+        [pose(0.5, 0.5)], // frame 0 — acquires the Climber
+        [], // frame 1 initial + ladder — all empty
+        [],
+        [],
+        [],
+        [], // frame 2 initial + ladder — all empty (MISS_RESET_RUN reached)
+        [],
+        [],
+        [],
+      ],
+      { duration: 0.4, climberCrop: seed },
+    );
+
+    expect(attempts.map((attempt) => attempt.status)).toEqual([
+      "accepted",
+      "missing",
+      "missing",
+      "missing",
+    ]);
+
+    // While the crop is still trusted, the search region is the Adaptive Crop.
+    expect(attempts[1].initialSearchRegion).not.toEqual(seed);
+    expect(attempts[2].initialSearchRegion).not.toEqual(seed);
+    // After MISS_RESET_RUN consecutive misses it is cleared, and acquisition
+    // falls back to the seed — never to the full frame, which is what keeps a
+    // small or distant Climber above the detector's size floor.
+    expect(attempts[3].initialSearchRegion).toEqual(seed);
   });
 
   it("scores the strongest candidate the initial search passed over", async () => {
