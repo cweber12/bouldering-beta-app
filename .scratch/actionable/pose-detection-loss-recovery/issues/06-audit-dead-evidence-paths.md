@@ -1,7 +1,8 @@
 # Audit dead evidence paths
 
-Status: in-progress
+Status: done
 Branch: feat/detection-06-evidence-paths
+Merged: df14003
 Type: AFK
 
 ## Parent
