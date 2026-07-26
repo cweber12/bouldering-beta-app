@@ -82,3 +82,20 @@ behavior rather than intent.
 - The handoff reply is the deliverable that closes the loop: the harness owns the
   metrics and cannot see the mechanisms, so several of its inferences are
   correctable only from this side. Write it as findings, not as a status report.
+- **An interim reply was sent early**, after issue 01 merged (`0cd9ce0`):
+  `beta-scan-analysis/docs/handoffs/scanner-detection-improvements-reply.md`. It
+  covers only what is true today — the shipped evidence fields, the `missReason`
+  contract proposal, the `candidateCount > 0` re-slice the harness can run
+  against the existing corpus without a new batch, the frozen-crop and
+  full-frame-reacquire mechanisms, and the `reacquireSteps` scope flag. It went
+  early because the backend's miss-cause classifier gates issue 01's target
+  metric: `unexplained` cannot fall on a fresh batch until the harness reads
+  `missReason`, and that field is not in its contract.
+- The closing reply therefore covers only points 4, 5, 6, and 7 of the list above
+  (flip rule declined, no histogram equalization, `qualityRejected` is wired,
+  `nearestCandidateDistance` proposal) plus the shipped behavior of 02–06. Do not
+  restate points 1–3; the interim reply already carries them. The
+  `nearestCandidateDistance` ask was flagged there for lead time but deliberately
+  left informal — the formal ask belongs with issue 03's shipped gate semantics.
+- The interim reply is written but **not committed** in `beta-scan-analysis`;
+  that repo is PR-based and the commit is the user's call.
