@@ -9,6 +9,27 @@ Type: AFK
 - Handoff: `beta-scan-analysis/docs/handoffs/scanner-detection-improvements.md` §5
 - Contract: `beta-scan-analysis/docs/handoffs/scanner-detector-attempt-evidence.md`
   ("Iteration 2 additions")
+- Decision read: `beta-scan-analysis/docs/handoffs/scanner-detection-improvements-round-2.md` §3, §5
+
+## Sequencing: this now ships BEFORE issue 03
+
+Originally last of the code issues; pulled forward by the round-2 handoff's
+sequencing. The harness's corpus reset (harness issue #101) runs before any
+03/04 measurement batch, and **the first post-reset batch on a restarted,
+correctly-stamped server is the baseline 03 and 04 are judged against.** This
+issue is pure instrumentation — no detection behavior changes — so landing it
+before that baseline batch cannot confound any behavioral metric, and it buys
+the baseline three things it otherwise lacks:
+
+- per-attempt `inferenceMs`, so issue 03's ladder cost lands as a measured
+  delta against a real latency baseline instead of a guess;
+- populated `searchConditions.wall`, so climber-region darkness is separable
+  from whole-scene darkness in the baseline itself;
+- truthful `selectionMethod`, so the baseline's selection-path distribution is
+  clean before 03 starts changing selection behavior.
+
+New sequence: 01 → 02 (both shipped) → **06** → post-reset baseline batch →
+03 → 04 → 05.
 
 ## What to build
 
@@ -38,18 +59,36 @@ and the write-up, not the investigation.
    the default tolerance of 3 is loose against MediaPipe's visibility scores, so
    it almost never fires. Confirm this in a test that pins the current behavior,
    and report the finding; **do not** retune the budget here. A threshold change
-   is its own measured change.
+   is its own measured change. (The fresh batch reads qualityRejected 0.12%, in
+   line with the baseline's 0.1% — the lane is stable, which is consistent with
+   this diagnosis.)
 
 4. **`inferenceMs` is unmeasured.** Add per-attempt wall-clock MediaPipe latency
    to the Detector Attempt (additive, optional). Stride-1 dev Analyze cost has to
-   be measurable before any always-on cadence change, and issue 03's ladder makes
-   that cost variable.
+   be measurable before any always-on cadence change, and issue 03's tight-first
+   ladder makes that cost variable — this field landing *before* 03 is the point
+   of the resequencing. The field must be defined to cover every MediaPipe pass
+   on the attempt (initial search plus any future ladder rungs) so its meaning
+   does not shift when 03 lands.
 
 Also land `synthesizedJoints[]` from the contract addendum: on accepted attempts
 whose source is `limbExpanded`, the joint names that were synthesized rather than
 detected, so backend PCK can score detected and expanded joints separately.
 `findMissingLimbs` already computes this — map limb IDs to their endpoint joint
 names.
+
+## Harness-side state this issue can rely on (schema v13)
+
+Confirmed adopted in the round-2 handoff — do not re-propose or re-negotiate
+these in the handoff reply:
+
+- `missReason` is read as authored; pre-field streams fall back to the
+  `candidateCount` derivation.
+- `reacquireSteps` is parsed with the absent/empty distinction preserved and
+  will be read as ladder rungs when 03 ships.
+- `bestUnselectedCandidateScore` is carried on every attempt row, and the
+  pooled miss-cause table publishes `median_best_unselected_candidate_score`
+  per cause.
 
 ## Acceptance criteria
 
@@ -62,20 +101,27 @@ names.
 - [ ] A test pins `filterLandmarks`' current frame-level behavior at the default
       tolerance, and the finding (gate is wired, budget is loose) is recorded in
       the handoff reply rather than acted on.
-- [ ] `inferenceMs` is exported per attempt and includes every MediaPipe pass on
-      that attempt (initial search plus any ladder rungs).
+- [ ] `inferenceMs` is exported per attempt, documented as the sum of every
+      MediaPipe pass on that attempt, and correct today for the single initial
+      search plus the single full-frame reacquire.
 - [ ] `synthesizedJoints[]` is exported on `limbExpanded` accepted attempts and
       omitted elsewhere.
 - [ ] All new fields are additive and optional; a v1 payload stays valid.
-- [ ] No detection behavior changes in this issue.
+- [ ] No detection behavior changes in this issue — search regions, gates,
+      acceptance, and `frames[]` are byte-identical for the same input, so the
+      post-reset baseline batch it feeds stays a pure 02-behavior baseline.
 
 ## Target metrics (harness re-measures)
 
 - Funnel completeness: every attempt status and selection method observed in data
   at plausible rates, and no field that is structurally always `null`.
+- The post-reset baseline batch carries `inferenceMs` on every attempt, giving
+  03 its latency baseline.
 
 ## Comments
 
-- Ships last of the code issues because it is instrumentation, not recovery — but
-  `inferenceMs` is worth pulling forward if issue 03's ladder looks expensive in
-  practice.
+- Version hygiene applies to the batch this feeds: the dev server must be
+  restarted before the post-reset baseline run so `NEXT_PUBLIC_APP_VERSION`
+  matches the running code — the round-2 correction exists because a
+  hot-reloaded server stamped 02 behavior with a stale SHA (`c305954`), which
+  cost the corpus its 01-only control window.
