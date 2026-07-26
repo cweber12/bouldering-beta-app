@@ -6,7 +6,7 @@ Merged: 25a417f
 
 ## Parent
 
-- .scratch/actionable/ui-landing-replay-multi-clip/PRD.md
+- .scratch/done/ui-landing-replay-multi-clip/PRD.md
 
 ## What to build
 
@@ -46,7 +46,7 @@ state, and does not publish anything — same posture as the authoring route.
 
 ## Blocked by
 
-- .scratch/actionable/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
+- .scratch/done/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
 
 ## Comments
 

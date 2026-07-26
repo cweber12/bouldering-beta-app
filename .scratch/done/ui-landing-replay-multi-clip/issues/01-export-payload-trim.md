@@ -6,7 +6,7 @@ Merged: cf82393
 
 ## Parent
 
-- .scratch/actionable/ui-landing-replay-multi-clip/PRD.md
+- .scratch/done/ui-landing-replay-multi-clip/PRD.md
 
 ## What to build
 

@@ -1,11 +1,12 @@
 # 04 - Curate the set and run playlist QA
 
-Status: in-progress
+Status: done
 Branch: feat/landing-replay-curate-set
+Merged: f86604c
 
 ## Parent
 
-- .scratch/actionable/ui-landing-replay-multi-clip/PRD.md
+- .scratch/done/ui-landing-replay-multi-clip/PRD.md
 
 ## What to build
 
@@ -32,26 +33,26 @@ handoff cannot be observed until a playlist has more than one clip in it.
       (All three are 16:9 — nothing letterboxes.)
 - [x] Assemble with the merge script and check the asset in. Total playlist
       ≤ 1.2 MB. (1009 KB; the per-item gate moved 420 → 440 KB, see Comments.)
-- [ ] Verify in a browser: items play in file order, each hands off with the
+- [x] Verify in a browser: items play in file order, each hands off with the
       ~300 ms crossfade, and the cycle wraps from the last item to the first.
-- [ ] Verify pause during a handoff freezes the crossfade mid-dissolve and
+- [x] Verify pause during a handoff freezes the crossfade mid-dissolve and
       resuming continues it, rather than snapping to either item.
-- [ ] Verify the four-phase behaviour holds for every clip, not just item 0 —
+- [x] Verify the four-phase behaviour holds for every clip, not just item 0 —
       each one's own wall still, starfield, morph and overlay.
-- [ ] Re-confirm reduced motion parks on the first clip's finished Route Overlay
+- [x] Re-confirm reduced motion parks on the first clip's finished Route Overlay
       and stays there until play, and that the pause control is keyboard
       reachable and operable.
-- [ ] Re-confirm graceful degradation: temporarily move the asset aside and
+- [x] Re-confirm graceful degradation: temporarily move the asset aside and
       confirm the hero renders nothing and the page keeps its text content.
-- [ ] Close out the transferred criterion in
+- [x] Close out the transferred criterion in
       `.scratch/done/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md`
       by noting where it was satisfied.
 
 ## Blocked by
 
-- .scratch/actionable/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
-- .scratch/actionable/ui-landing-replay-multi-clip/issues/02-playlist-assembly-and-asset-gate.md
-- .scratch/actionable/ui-landing-replay-multi-clip/issues/03-deferred-decode-for-later-clips.md
+- .scratch/done/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
+- .scratch/done/ui-landing-replay-multi-clip/issues/02-playlist-assembly-and-asset-gate.md
+- .scratch/done/ui-landing-replay-multi-clip/issues/03-deferred-decode-for-later-clips.md
 
 ## Comments
 
@@ -87,7 +88,7 @@ carrying the whole set.
 both new clips, so all three play at the same ~1.7×. The phase table below
 applies unchanged to each.
 
-### What is verified, and what still needs eyes
+### What the tests carry, and what the eyes did
 
 Issue 01's trim is what makes the set affordable: three clips at the pre-trim
 684 KB would have been 2.05 MB. A fourth would still fit today if one of the
@@ -113,10 +114,15 @@ clips, reduced motion parking on the static final frame, the pause control's
 keyboard reachability, and the three degradation paths (missing asset, rejected
 fetch, guard-failing item).
 
-That is what the browser pass is _not_ for. It is for the things jsdom cannot
+That is what the browser pass was _not_ for. It was for the things jsdom cannot
 see: whether the crossfade reads as a dissolve rather than a cut, whether a
 paused handoff looks frozen mid-dissolve rather than snapped, and whether each
 clip's own wall still, starfield, morph and Route Photo actually land.
+
+**The pass came back clean** against the checklist below, on the three-clip asset
+in a real browser. That closes the last criterion of this PRD, and with it the
+one that transferred here unticked from the curation PRD's issue 17 — cycling,
+handoff and wrap could not be observed while the playlist held one clip.
 
 ### How the asset was assembled
 
@@ -139,8 +145,10 @@ leak in the checked-in file.
 
 ### Browser QA checklist
 
-Three items is a **36 s cycle**; each clip owns 12 s, with a 300 ms crossfade
-opening every slot (at 12.0 s, 24.0 s, and 36.0 s → wrap). Within one clip:
+What was walked through, and what to walk through again whenever the curated set
+changes. Three items is a **36 s cycle**; each clip owns 12 s, with a 300 ms
+crossfade opening every slot (at 12.0 s, 24.0 s, and 36.0 s → wrap). Within one
+clip:
 
 | Clip time | What should be on screen                                      |
 | --------- | ------------------------------------------------------------- |
@@ -163,6 +171,7 @@ opening every slot (at 12.0 s, 24.0 s, and 36.0 s → wrap). Within one clip:
 - Rename `public/landing-replay.json` aside, reload: the hero renders nothing
   and the rest of the page keeps its text. Rename it back.
 
-When the pass is clean, tick the boxes above, close this issue, and note in
-`.scratch/done/ui-public-landing-replay-curation/issues/17-playlist-cycling-curated-assets-and-docs.md`
-that its transferred criterion was satisfied here.
+Reduced motion is worth re-checking specifically after any change to the set,
+because it parks on **item 0's** finished Route Overlay — reordering the playlist
+changes which clip a reduced-motion visitor sees, and that visitor sees only that
+one.

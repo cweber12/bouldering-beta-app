@@ -43,9 +43,10 @@ there is no reorder UI, no designated default, and no per-item skip machinery.
       rollback path (revert the asset file).
 - [x] Confirm legacy planning slices 01-14 remain superseded and linked for
       traceability.
-- [ ] Run end-to-end regression checks: phase behavior, cycling and handoff,
+- [x] Run end-to-end regression checks: phase behavior, cycling and handoff,
       graceful degradation when the asset is absent, reduced-motion output, and
-      pause/play keyboard access. **Partly transferred — see the closing note.**
+      pause/play keyboard access. **Partly transferred, and since satisfied — see
+      the closing note.**
 - [x] Tests cover ordered cycling, handoff timing, and wrap behavior.
 
 ## Blocked by
@@ -102,8 +103,8 @@ The first authored clip surfaced four things, all now fixed:
   now takes the **first item's source plane** and holds it for the whole playlist
   — one shape, so a handoff still cannot reflow the layout.
 - **The authoring route's Holds preview was lying.** It hand-rolled sky/orange
-  arcs *over* the Skeleton, while every shipping surface draws the real
-  ADR-0012 rings *beneath* it. The preview now calls `drawHolds` with the same
+  arcs _over_ the Skeleton, while every shipping surface draws the real
+  ADR-0012 rings _beneath_ it. The preview now calls `drawHolds` with the same
   clustering and progressive reveal, so the curator approves what actually ships.
   The shipped ring look is unchanged — it was never the problem.
 - **Phase 1 had nothing behind the figure.** Items may now carry an optional
@@ -118,7 +119,7 @@ The first authored clip surfaced four things, all now fixed:
 
 - **The hero rendered at a fraction of its column.** The `<figure>` sits in a
   `flex flex-col items-center` parent, so with no explicit width it shrink-to-fits
-  and the stage's own `w-full` resolved against the *caption's* text width — the
+  and the stage's own `w-full` resolved against the _caption's_ text width — the
   hero was as wide as "Maze of Death · Bishop V12". `w-full` on the figure fixes
   it; the height cap now only binds on portrait clips, which would otherwise run
   taller than the pitch beside them.
@@ -182,4 +183,20 @@ splits three ways:
   checked in, so this part is blocked on curating more — it transfers to the
   multi-clip PRD rather than being ticked here.
 
-Transferred to: `.scratch/actionable/ui-landing-replay-multi-clip/PRD.md`
+Transferred to: `.scratch/done/ui-landing-replay-multi-clip/PRD.md`
+
+### Satisfied, 2026-07-25
+
+The transferred part is now done. The multi-clip PRD's issue 04 curated the
+playlist to three clips — Maze of Death (Bishop, V12), Midnight Lightning
+(Yosemite, V8) and Slashface (Joshua Tree, V4) — and the browser pass ran against
+that asset: file order, the ~300 ms crossfade at each handoff, the wrap from item
+2 back to item 0, and a pause taken mid-handoff freezing the dissolve rather than
+snapping to either clip. Reduced motion, keyboard access and the asset-absent
+path were re-confirmed by eye on the same asset, alongside the assertions that
+already covered them.
+
+The criterion is therefore ticked above. The evidence lives at
+`.scratch/done/ui-landing-replay-multi-clip/issues/04-curate-the-set-and-playlist-qa.md`
+(merged `f86604c`); the three-way split recorded here is kept as the reason it was
+closed late.

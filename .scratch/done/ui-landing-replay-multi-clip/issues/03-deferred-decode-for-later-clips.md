@@ -6,7 +6,7 @@ Merged: 834b449
 
 ## Parent
 
-- .scratch/actionable/ui-landing-replay-multi-clip/PRD.md
+- .scratch/done/ui-landing-replay-multi-clip/PRD.md
 
 ## What to build
 
@@ -39,7 +39,7 @@ curation-PRD invariant and this slice does not reopen it. Only decode moves.
 
 ## Blocked by
 
-- .scratch/actionable/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
+- .scratch/done/ui-landing-replay-multi-clip/issues/01-export-payload-trim.md
 
 ## Comments
 

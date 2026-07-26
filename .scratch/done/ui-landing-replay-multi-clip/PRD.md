@@ -1,7 +1,7 @@
 # PRD: Landing Replay Multi-Clip Playlist
 
-Status: in-progress
-Disposition: actionable
+Status: done
+Disposition: done
 
 ## Problem Statement
 
