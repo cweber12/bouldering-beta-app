@@ -69,6 +69,8 @@ import { APP_VERSION } from "@/utils/appVersion";
 import {
   DETECTOR_ATTEMPT_FULL_FRAME_REGION,
   type DetectorAttempt,
+  type DetectorAttemptMissReason,
+  type DetectorAttemptReacquireStep,
   type DetectorAttemptRegion,
   type DetectorAttemptSelectionMethod,
   type DetectorAttemptStatus,
@@ -97,6 +99,12 @@ interface ClimberDetectionResult {
   candidateCount: number;
   rejectedCandidateCount: number;
   selectionMethod: DetectorAttemptSelectionMethod;
+  /**
+   * Highest mean keypoint confidence among the candidates this search returned
+   * but did not select; null when there were none. Only computed while
+   * detector-attempt collection is on.
+   */
+  bestUnselectedCandidateScore: number | null;
 }
 
 type DetectorAttemptDraft = {
@@ -106,6 +114,9 @@ type DetectorAttemptDraft = {
   detectionRegion: DetectorAttemptRegion | null;
   reacquireAttempted: boolean;
   reacquired: boolean;
+  reacquireSteps: DetectorAttemptReacquireStep[];
+  bestUnselectedCandidateScore: number | null;
+  missReason?: DetectorAttemptMissReason;
   rawKeypoints: PoseFrame["keypoints"];
   acceptedKeypoints?: PoseFrame["keypoints"];
   searchConditions: ReturnType<typeof toFrameConditions> | null;
@@ -182,6 +193,53 @@ export function normalizeDetectorAttemptRegion(
     w: box.width / videoWidth,
     h: box.height / videoHeight,
   };
+}
+
+/**
+ * Highest mean keypoint confidence among the candidates a single search
+ * returned but did not select. Candidates with no keypoints have no mean and
+ * are skipped, so an all-empty candidate set reads the same as an empty one:
+ * `null`, meaning "there was no unselected candidate to score".
+ *
+ * Selection is compared by reference — the selector returns one of the very
+ * pose objects it was handed.
+ */
+export function bestUnselectedCandidateScore(
+  candidates: readonly PoseFrame[],
+  selected: PoseFrame | null,
+): number | null {
+  let best: number | null = null;
+  for (const candidate of candidates) {
+    if (candidate === selected) continue;
+    const count = candidate.keypoints.length;
+    if (count === 0) continue;
+    const mean = candidate.keypoints.reduce((sum, kp) => sum + kp.score, 0) / count;
+    if (best === null || mean > best) best = mean;
+  }
+  return best;
+}
+
+/**
+ * Fold the best-unselected score of one search into the attempt's running best,
+ * so the attempt reports the strongest candidate it passed over across *every*
+ * region it searched.
+ */
+export function mergeBestUnselectedScore(a: number | null, b: number | null): number | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return Math.max(a, b);
+}
+
+/**
+ * Why a missing attempt selected nothing. Full-frame re-acquire already
+ * searches every pixel, so a miss with candidates in hand was a gate rejection
+ * in `selectClimberPose`, not a detector failure — that is the distinction the
+ * harness cannot draw without this field.
+ *
+ * @param candidateCount Poses MediaPipe returned across every region searched.
+ */
+export function deriveMissReason(candidateCount: number): DetectorAttemptMissReason {
+  return candidateCount === 0 ? "no-candidates" : "identity-gated";
 }
 
 export function finalizeDetectorAttempts(
@@ -676,6 +734,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               candidateCount: 0,
               rejectedCandidateCount: 0,
               selectionMethod,
+              bestUnselectedCandidateScore: null,
             };
           }
           cctx.drawImage(canvas, reg.x, reg.y, reg.width, reg.height, 0, 0, reg.width, reg.height);
@@ -708,6 +767,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
               candidateCount: 0,
               rejectedCandidateCount: 0,
               selectionMethod,
+              bestUnselectedCandidateScore: null,
             };
           }
 
@@ -728,6 +788,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             candidateCount: posesFull.length,
             rejectedCandidateCount: selected ? Math.max(0, posesFull.length - 1) : posesFull.length,
             selectionMethod,
+            // Analysis-only evidence: never scored for user-facing scans.
+            bestUnselectedCandidateScore: shouldCollectDetectorAttempts
+              ? bestUnselectedCandidateScore(posesFull, selected)
+              : null,
           };
         };
 
@@ -852,6 +916,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             let candidateCount = initialDetection.candidateCount;
             let rejectedCandidateCount = initialDetection.rejectedCandidateCount;
             let selectionMethod = initialDetection.selectionMethod;
+            let bestUnselectedScore = initialDetection.bestUnselectedCandidateScore;
             const searchConditions =
               shouldCollectDetectorAttempts
                 ? toFrameConditions(
@@ -867,13 +932,24 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             // identity rather than locking onto a bystander.
             let reacquired = false;
             let reacquireConditions: ReturnType<typeof toFrameConditions> | null = null;
+            // The rungs the re-acquire walked, in search order. Today that is a
+            // single full-frame rung; the ladder fills it out.
+            const reacquireSteps: DetectorAttemptReacquireStep[] = [];
             if (!chosen && region) {
               const reacquireDetection = detectClimber(null, predicted, REACQUIRE_GATE);
               chosen = reacquireDetection.selected;
               candidateCount += reacquireDetection.candidateCount;
               rejectedCandidateCount += reacquireDetection.rejectedCandidateCount;
               selectionMethod = reacquireDetection.selectionMethod;
+              bestUnselectedScore = mergeBestUnselectedScore(
+                bestUnselectedScore,
+                reacquireDetection.bestUnselectedCandidateScore,
+              );
               reacquired = !!chosen;
+              reacquireSteps.push({
+                region: { ...DETECTOR_ATTEMPT_FULL_FRAME_REGION },
+                found: reacquired,
+              });
               reacquireConditions =
                 shouldCollectDetectorAttempts
                   ? toFrameConditions(
@@ -925,13 +1001,18 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                 detectionRegion,
                 reacquireAttempted: !initialDetection.selected && !!region,
                 reacquired,
+                reacquireSteps,
+                bestUnselectedCandidateScore: bestUnselectedScore,
                 rawKeypoints,
                 searchConditions,
                 reacquireConditions,
                 candidateCount,
                 rejectedCandidateCount,
                 selectionMethod,
-              } satisfies Omit<DetectorAttemptDraft, "status" | "acceptedKeypoints">;
+              } satisfies Omit<
+                DetectorAttemptDraft,
+                "status" | "acceptedKeypoints" | "missReason"
+              >;
               detectorAttemptDrafts.push(
                 chosen && detectionRegion
                   ? {
@@ -945,6 +1026,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                       status: "missing",
                       detectionRegion: null,
                       rawKeypoints: [],
+                      missReason: deriveMissReason(candidateCount),
                     },
               );
             }
