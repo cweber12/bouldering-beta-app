@@ -25,7 +25,8 @@ PRDs actively eligible for the next implementation branch, in pick order.
 | Order | PRD                                                           | Priority |
 | ----- | ------------------------------------------------------------- | -------- |
 | 1     | `.scratch/actionable/pose-ground-truth-detection-eval/PRD.md` | `P1`     |
-| 2     | `.scratch/actionable/pose-vitpose-climber-identity/PRD.md`    | `P1`     |
+| 2     | `.scratch/actionable/pose-detection-loss-recovery/PRD.md`     | `P1`     |
+| 3     | `.scratch/actionable/pose-vitpose-climber-identity/PRD.md`    | `P1`     |
 
 ## Next
 

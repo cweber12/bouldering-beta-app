@@ -1,0 +1,80 @@
+# Exposure-compensate flagged search regions
+
+Status: ready-for-agent
+Type: AFK
+
+## Parent
+
+- `.scratch/actionable/pose-detection-loss-recovery/PRD.md`
+- Handoff: `beta-scan-analysis/docs/handoffs/scanner-detection-improvements.md` §4
+
+## What to build
+
+Give MediaPipe a better-exposed crop on the frames where lighting is the
+plausible cause of failure. Failure lives in the condition flags, not the
+medians: missing frames are `isUnderexposed` 7.9% and `isBacklit` 5.6% of the
+time against 0.8% / 0.3% for accepted, and flip-rejected frames are underexposed
+10.0% — roughly a 10× odds shift. Absolute luma barely moves by status (accepted
+119.8 vs missing 120.0), so the flags carry the signal and the levels do not.
+
+Add a colour-preserving compensation to `pipeline/analysis/framePreprocessor.ts`
+and apply it in `detectClimber` to the crop drawn on `cropCanvas`, **only** when
+the region's `FrameAnalysis` raises `isUnderexposed`, `isBacklit`, or
+`isLowContrast`. Ship it behind a `ProcessingOptions` toggle so dev Analyze can
+A/B it against an uncompensated run before any user-facing change.
+
+## The constraint that decides the implementation
+
+`applyPosePreprocessing` already exists and must not be reused. It converts the
+crop to grayscale and equalises it, which blinded MediaPipe's RGB-trained model
+and produced **zero detections on every frame `analyzeFrame` flagged** — a
+data-dependent total failure documented in the comment at the top of
+`detectClimber`. The handoff's suggestion of "histogram equalization" is that
+exact operation.
+
+The new function must therefore keep chroma: gamma correction applied across RGB,
+or CLAHE on the luma channel with chroma untouched. `analyzeFrame` already
+computes a `suggestedGamma` sized to the severity of the backlight or
+underexposure — prefer driving the correction from it over inventing a second
+severity model.
+
+## Acceptance criteria
+
+- [ ] A new exported function in `pipeline/analysis/framePreprocessor.ts` applies
+      colour-preserving exposure compensation to a canvas region, frees every
+      OpenCV allocation in a `finally`, and takes `cv` as its first argument.
+- [ ] The output retains chroma — a unit test asserts a saturated input region is
+      not returned grayscale (R, G, B do not collapse to equal values).
+- [ ] Compensation runs only when the region's analysis raises
+      `isUnderexposed`, `isBacklit`, or `isLowContrast`; flag-quiet frames reach
+      MediaPipe byte-identical to today.
+- [ ] The correction strength is derived from `FrameAnalysis` (e.g.
+      `suggestedGamma`), not a fixed constant.
+- [ ] Gated behind a `ProcessingOptions` toggle, default off, so user-facing scan
+      behavior is unchanged until the A/B says otherwise.
+- [ ] A processor test proves the compensation path is entered for a flagged
+      region and skipped for a clean one, with OpenCV mocked at the module
+      boundary.
+- [ ] `applyPosePreprocessing` is left unused and gains a comment pointing at
+      this function and at why it must not be wired into detection.
+
+## Target metrics (harness re-measures)
+
+- Missing / flipRejected rate on flag-firing frames versus flag-quiet frames —
+  the odds ratio should compress toward 1. Read from
+  `eval_attempt_funnel_flags.csv`, which carries the per-run distribution beside
+  each pooled rate.
+- `adverse-conditions` miss share — 5.4% baseline.
+
+## Comments
+
+- Sits at #4 in the sequence for a reason: flag-firing frames fail much more
+  often, but most failures happen on frames where no flag fired at all, so the
+  ceiling on this change is small. Do not let it delay 01–04.
+- Flags cluster hard within a run — one dark video can flood the pooled rate.
+  Read the per-run distribution, not just the pooled figure, when judging whether
+  this shipped a real improvement.
+- Cost: this adds an `analyzeFrame` pass per attempt on the production path,
+  which today only runs under `collectDetectorAttempts`. Measure it before
+  enabling for user scans; a cheaper region-luma probe may be enough to decide
+  whether the full analysis is worth running.
