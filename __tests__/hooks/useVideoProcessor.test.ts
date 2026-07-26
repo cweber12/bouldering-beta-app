@@ -77,6 +77,7 @@ import {
   useVideoProcessor,
 } from "@/hooks/useVideoProcessor";
 import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
+import { analyzeFrame } from "@/pipeline/analysis/frameAnalyzer";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { AcceptedDetectorAttempt, DetectorAttempt } from "@/utils/harnessPayloads";
 
@@ -187,10 +188,11 @@ describe("detector attempt helpers", () => {
       reacquireConditions: null,
       candidateCount: 0,
       rejectedCandidateCount: 0,
-      selectionMethod: "strongest",
     };
 
     expect(finalizeDetectorAttempts([missing], [], [])).toEqual([missing]);
+    // A miss carries no selection path — nothing selected it.
+    expect("selectionMethod" in missing).toBe(false);
   });
 
   it("marks flagged timestamps accepted-under-suspicion rather than rejected", () => {
@@ -314,7 +316,11 @@ describe("useVideoProcessor detector attempt evidence", () => {
     "right_hip",
   ];
 
-  /** A compact synthetic pose centred on (cx, cy) in the search region's space. */
+  /**
+   * A compact synthetic pose centred on (cx, cy) in the search region's space.
+   * Carries no ankles, so both legs read as missing-yet-actionable limbs —
+   * the `limbExpanded` case (ADR 0014).
+   */
   function pose(cx: number, cy: number, score = 0.9): PoseFrame {
     return {
       timestamp: 0,
@@ -324,6 +330,19 @@ describe("useVideoProcessor detector attempt evidence", () => {
         y: cy + (i < 2 ? -0.02 : 0.02),
         score,
       })),
+    };
+  }
+
+  /** The same pose with both ankles detected, so no limb is missing. */
+  function wholePose(cx: number, cy: number): PoseFrame {
+    const base = pose(cx, cy);
+    return {
+      ...base,
+      keypoints: [
+        ...base.keypoints,
+        { name: "left_ankle", x: cx - 0.02, y: cy + 0.04, score: 0.9 },
+        { name: "right_ankle", x: cx + 0.02, y: cy + 0.04, score: 0.9 },
+      ],
     };
   }
 
@@ -376,10 +395,28 @@ describe("useVideoProcessor detector attempt evidence", () => {
     {
       duration = 0.2,
       climberCrop = { x: 0, y: 0, w: 1, h: 1 },
-    }: { duration?: number; climberCrop?: { x: number; y: number; w: number; h: number } } = {},
+      climberPoint,
+      wallCrop,
+      spinMs = 0,
+    }: {
+      duration?: number;
+      climberCrop?: { x: number; y: number; w: number; h: number };
+      climberPoint?: { x: number; y: number };
+      wallCrop?: { x: number; y: number; w: number; h: number };
+      /** Burn this long inside each MediaPipe pass so inferenceMs is observable. */
+      spinMs?: number;
+    } = {},
   ): Promise<DetectorAttempt[]> {
     const queue = [...responses];
-    vi.mocked(estimateFramesMediaPipe).mockImplementation(() => queue.shift() ?? []);
+    vi.mocked(estimateFramesMediaPipe).mockImplementation(() => {
+      if (spinMs > 0) {
+        const until = performance.now() + spinMs;
+        while (performance.now() < until) {
+          /* busy-wait: the model call is what inferenceMs is meant to time */
+        }
+      }
+      return queue.shift() ?? [];
+    });
 
     const realCreateElement = document.createElement.bind(document);
     createElementSpy = vi
@@ -401,7 +438,11 @@ describe("useVideoProcessor detector attempt evidence", () => {
         { state: "", area: "", route: "" },
         // A full-frame Climber Crop keeps crop-local and full-frame coordinates
         // identical on acquisition, so scripted poses land where they read.
-        { climberCrop },
+        {
+          climberCrop,
+          ...(climberPoint ? { climberPoint } : {}),
+          ...(wallCrop ? { wallCrop } : {}),
+        },
         0,
         "mediapipe",
         {},
@@ -528,6 +569,102 @@ describe("useVideoProcessor detector attempt evidence", () => {
     }
     // A hit costs no extra inference: one MediaPipe pass per detection frame.
     expect(vi.mocked(estimateFramesMediaPipe)).toHaveBeenCalledTimes(2);
+  });
+
+  it("labels the selection path actually taken and asserts none on a miss", async () => {
+    const attempts = await runProcessor([
+      [pose(0.5, 0.5)], // frame 0 — no tap in this Setup, so the strongest pose wins
+      [], // frame 1 initial + ladder — nothing anywhere
+      [],
+      [],
+      [],
+    ]);
+
+    expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "missing"]);
+    // Reachable only because this Setup carries no climberPoint. Every
+    // calibrated Scan Setup has one, which is why the corpus never saw it.
+    expect(attempts[0].selectionMethod).toBe("strongest");
+    // Nothing was selected, so no path was taken — the field is absent, not
+    // "tracked". Previously every miss claimed a method it never exercised.
+    expect("selectionMethod" in attempts[1]).toBe(false);
+  });
+
+  it("labels the tap path when the Setup carries a climber point", async () => {
+    const attempts = await runProcessor([[pose(0.5, 0.5)], [pose(0.5, 0.5)]], {
+      climberPoint: { x: 0.5, y: 0.5 },
+    });
+
+    expect(attempts.map((attempt) => attempt.selectionMethod)).toEqual(["tap", "tracked"]);
+  });
+
+  it("takes the selection path from the ladder rung that selected", async () => {
+    const attempts = await runProcessor([
+      [pose(0.5, 0.5)], // frame 0 — acquires
+      [], // frame 1 initial crop search — nothing
+      [pose(0.5, 0.5)], // frame 1 rung ×1.5 — found here
+    ]);
+
+    expect(attempts[1].reacquired).toBe(true);
+    expect(attempts[1].selectionMethod).toBe("tracked");
+  });
+
+  it("sums MediaPipe latency across every pass on the attempt", async () => {
+    const attempts = await runProcessor(
+      [
+        [pose(0.5, 0.5)], // frame 0 — one pass, a hit
+        [], // frame 1 — initial + three ladder rungs, all empty
+        [],
+        [],
+        [],
+      ],
+      { spinMs: 2 },
+    );
+
+    const [hit, miss] = attempts;
+    expect(hit.inferenceMs).toBeGreaterThan(0);
+    // Four passes against one: the ladder's cost lands in the same field, which
+    // is what makes it a measured delta rather than an unattributed regression.
+    expect(miss.inferenceMs).toBeGreaterThan(hit.inferenceMs as number);
+  });
+
+  it("reports the joints a limb-expanded pose left the pipeline to synthesize", async () => {
+    const attempts = await runProcessor([[pose(0.5, 0.5)]], { duration: 0.1 });
+
+    expect(attempts[0].status).toBe("accepted");
+    expect(attempts[0].synthesizedJoints).toEqual(["left_ankle", "right_ankle"]);
+  });
+
+  it("omits synthesized joints when the detector returned every limb", async () => {
+    const attempts = await runProcessor([[wholePose(0.5, 0.5)]], { duration: 0.1 });
+
+    expect(attempts[0].status).toBe("accepted");
+    // Absent, never an empty array — the field means "these were synthesized".
+    expect("synthesizedJoints" in attempts[0]).toBe(false);
+  });
+
+  it("analyses the Wall Crop alongside the search region", async () => {
+    vi.mocked(analyzeFrame).mockClear();
+    const wallCrop = { x: 0.1, y: 0.1, w: 0.8, h: 0.8 };
+    const expectedWallPx = {
+      x: Math.round(wallCrop.x * VIDEO_W),
+      y: Math.round(wallCrop.y * VIDEO_H),
+      width: Math.round(wallCrop.w * VIDEO_W),
+      height: Math.round(wallCrop.h * VIDEO_H),
+    };
+
+    // Two tracked frames: frame 1 searches the Adaptive Crop, a region smaller
+    // than both the seed and the frame, so its condition pass is identifiable.
+    await runProcessor([[pose(0.5, 0.5)], [pose(0.5, 0.5)]], { wallCrop });
+
+    // searchConditions.wall was structurally null because the wall argument was
+    // never passed at all. The search region stays in the *climber* slot on
+    // purpose — that is what makes isBacklit read "search region darker than the
+    // frame", which is the proxy we want.
+    const attemptCall = vi
+      .mocked(analyzeFrame)
+      .mock.calls.find((call) => (call[2]?.width ?? VIDEO_W) < VIDEO_W);
+    expect(attemptCall).toBeDefined();
+    expect(attemptCall?.[3]).toMatchObject(expectedWallPx);
   });
 
   it("falls back to the Climber Crop seed after a run of misses", async () => {

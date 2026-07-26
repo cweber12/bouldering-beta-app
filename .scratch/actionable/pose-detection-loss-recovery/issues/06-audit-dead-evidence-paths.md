@@ -1,6 +1,7 @@
 # Audit dead evidence paths
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/detection-06-evidence-paths
 Type: AFK
 
 ## Parent
@@ -92,24 +93,31 @@ these in the handoff reply:
 
 ## Acceptance criteria
 
-- [ ] `searchConditions.wall` is populated on runs that have a **Wall Crop**, and
-      stays `null` only when no wall region exists.
-- [ ] `selectionMethod` reflects the path that produced the selection, and
+- [x] `searchConditions.wall` is populated on runs that have a **Wall Crop**, and
+      stays `null` only when no wall region exists. Also fixed on
+      `reacquireConditions`, which carried the identical always-null defect.
+- [x] `selectionMethod` reflects the path that produced the selection, and
       attempts with no selected pose do not assert one.
-- [ ] The `strongest` path's reachability is documented in code where the label
+- [x] The `strongest` path's reachability is documented in code where the label
       is produced — it requires a Setup with no `climberPoint`.
-- [ ] A test pins `filterLandmarks`' current frame-level behavior at the default
+- [x] A test pins `filterLandmarks`' current frame-level behavior at the default
       tolerance, and the finding (gate is wired, budget is loose) is recorded in
-      the handoff reply rather than acted on.
-- [ ] `inferenceMs` is exported per attempt, documented as the sum of every
+      the handoff reply rather than acted on. Finding written up below for 07 to
+      carry into the reply; no threshold was touched.
+- [x] `inferenceMs` is exported per attempt, documented as the sum of every
       MediaPipe pass on that attempt, and correct today for the single initial
-      search plus the single full-frame reacquire.
-- [ ] `synthesizedJoints[]` is exported on `limbExpanded` accepted attempts and
-      omitted elsewhere.
-- [ ] All new fields are additive and optional; a v1 payload stays valid.
-- [ ] No detection behavior changes in this issue — search regions, gates,
-      acceptance, and `frames[]` are byte-identical for the same input, so the
-      post-reset baseline batch it feeds stays a pure 02-behavior baseline.
+      search plus the single full-frame reacquire. Since 03 landed first it
+      already covers every ladder rung — which is the definition the field was
+      specified with, so no meaning shift.
+- [x] `synthesizedJoints[]` is exported on `limbExpanded` accepted attempts and
+      omitted elsewhere, and is stripped when an attempt is demoted to
+      `flipRejected` / `qualityRejected`.
+- [x] All new fields are additive and optional; a v1 payload stays valid —
+      including a v1 `missing` attempt that carries a `selectionMethod`.
+- [x] No detection behavior changes in this issue — search regions, gates,
+      acceptance, and `frames[]` are byte-identical for the same input. **But the
+      baseline claim no longer holds:** 03 landed first, so the batch this feeds
+      is a 03-behavior baseline, not a 02-behavior one. See below.
 
 ## Target metrics (harness re-measures)
 
@@ -125,3 +133,40 @@ these in the handoff reply:
   matches the running code — the round-2 correction exists because a
   hot-reloaded server stamped 02 behavior with a stale SHA (`c305954`), which
   cost the corpus its 01-only control window.
+
+### Sequencing deviation (2026-07-26)
+
+Shipped **after** 03, not before it. This issue's own guarantee holds — it
+changes no detection behavior relative to `e0abd70` — but the guarantee it was
+resequenced to provide does not: the post-reset batch it feeds now carries the
+tight-first reacquire ladder, so it is a **03-behavior baseline**. Consequences:
+
+- 03's headline movement (no-candidates share, reacquire success, missing p90)
+  has no clean pre-03 post-reset control. It must be read against the pre-reset
+  02-behavior figures, with the 44%-contamination caveat the round-2 handoff
+  attached to them.
+- 04's baseline is unaffected and clean: it is measured against this batch,
+  which is exactly the "03 landed, 04 has not" state 04 wants.
+- `inferenceMs` still does its job for 03 — it just measures the ladder's cost
+  as an absolute rather than as a delta against a ladderless run. To recover the
+  delta, set `REACQUIRE_LADDER_SCALES` to `[]` for one batch: that collapses the
+  ladder to the single full-frame rung, reproducing pre-03 reacquire cost
+  without a revert.
+
+### Finding for the handoff reply (issue 07): the quality gate is wired but loose
+
+`filterLandmarks` is genuinely wired into dev Analyze classification and is
+genuinely frame-level — it drops whole frames on a weighted bad-keypoint budget
+and never prunes individual keypoints. The 0.1% `qualityRejected` rate is the
+budget, not a dead path. Pinned in
+`__tests__/pipeline/poseInterpolator.test.ts`:
+
+- Core joints (wrists, shoulders, hips) weigh 1.0 each; feet weigh 0.25 each;
+  total available bad weight is 7.0 against a default tolerance of 3.
+- A pose that lost **both hands and both feet** scores exactly 3.0 and is kept.
+- Rejection needs **four of six** core joints to fail.
+- A uniformly weak pose at score 0.31 accrues zero bad weight, because the
+  keypoint floor is 0.3 — and MediaPipe visibility rarely lands below it. This
+  is the dominant reason the gate stays quiet.
+
+Not acted on here. Retuning the budget is its own measured change.
