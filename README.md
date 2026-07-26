@@ -523,8 +523,10 @@ when an item's source aspect disagrees with item 0's, naming the item that will
 letterbox — item 0 sets the stage shape for the whole playlist. Finally it prints
 the written size with a per-clip breakdown, so the payload budget is visible at
 the moment it is spent. `__tests__/pipeline/landingReplayAsset.test.ts` re-checks
-the same invariants against whatever is committed, plus a ~400 KB per-clip and
-1.2 MB total ceiling.
+the same invariants against whatever is committed, plus a 1.2 MB total ceiling
+and a looser 440 KB per-clip one. The total is the binding constraint; how many
+bytes a single clip spends is mostly how busy its route photo is, and the shipped
+set runs 241-429 KB a clip at 1009 KB total.
 
 **A downloaded export is not live until it is at `public/landing-replay.json`**;
 the hero fetches `/landing-replay.json` and nothing else. Nothing is written to
