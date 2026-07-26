@@ -99,6 +99,14 @@ export interface AcceptedDetectorAttempt extends DetectorAttemptBase {
   /** Scanner-accepted keypoints after detector gates; present only for accepted attempts. */
   acceptedKeypoints: Keypoint[];
   missReason?: never;
+  /**
+   * Set when the frame tripped the Landmark Flip verdict but was accepted
+   * anyway because the flip gate's consecutive-rejection cap fired and the
+   * comparison reference re-anchored to it. The attempt is a normal `accepted`
+   * — the contract fixes four statuses — carrying the caveat that its pose is
+   * accepted under suspicion. Absent means not flagged; never `false`.
+   */
+  flipFlagged?: true;
 }
 
 export interface MissingDetectorAttempt extends DetectorAttemptBase {
@@ -108,6 +116,7 @@ export interface MissingDetectorAttempt extends DetectorAttemptBase {
   acceptedKeypoints?: never;
   /** Why nothing was selected; absent on payloads produced before this field existed. */
   missReason?: DetectorAttemptMissReason | null;
+  flipFlagged?: never;
 }
 
 export interface FlipRejectedDetectorAttempt extends DetectorAttemptBase {
@@ -115,6 +124,8 @@ export interface FlipRejectedDetectorAttempt extends DetectorAttemptBase {
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
   missReason?: never;
+  /** `flipRejected` always means discarded — a flagged frame is `accepted`. */
+  flipFlagged?: never;
 }
 
 export interface QualityRejectedDetectorAttempt extends DetectorAttemptBase {
@@ -122,6 +133,7 @@ export interface QualityRejectedDetectorAttempt extends DetectorAttemptBase {
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
   missReason?: never;
+  flipFlagged?: never;
 }
 
 export type DetectorAttempt =

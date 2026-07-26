@@ -78,7 +78,7 @@ import {
 } from "@/hooks/useVideoProcessor";
 import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
-import type { DetectorAttempt } from "@/utils/harnessPayloads";
+import type { AcceptedDetectorAttempt, DetectorAttempt } from "@/utils/harnessPayloads";
 
 describe("useVideoProcessor ORB preview cadence", () => {
   it("emits immediately for the first preview", () => {
@@ -121,7 +121,7 @@ describe("tagFlipDiscardedFrames", () => {
 describe("detector attempt helpers", () => {
   const keypoints = [{ name: "nose", x: 0.5, y: 0.25, score: 0.9 }];
 
-  const acceptedAttempt = (timestamp: number): DetectorAttempt => ({
+  const acceptedAttempt = (timestamp: number): AcceptedDetectorAttempt => ({
     timestamp,
     status: "accepted",
     initialSearchRegion: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
@@ -189,6 +189,41 @@ describe("detector attempt helpers", () => {
     };
 
     expect(finalizeDetectorAttempts([missing], [], [])).toEqual([missing]);
+  });
+
+  it("marks flagged timestamps accepted-under-suspicion rather than rejected", () => {
+    const attempts = [acceptedAttempt(0), acceptedAttempt(0.1)];
+    const goodFrames: PoseFrame[] = [
+      { timestamp: 0, keypoints },
+      { timestamp: 0.1, keypoints },
+    ];
+
+    const result = finalizeDetectorAttempts(attempts, [], goodFrames, [0.1]);
+
+    expect(result.map((attempt) => attempt.status)).toEqual(["accepted", "accepted"]);
+    expect(result[1].flipFlagged).toBe(true);
+    // Not flagged means the field is absent, never `false`.
+    expect("flipFlagged" in result[0]).toBe(false);
+  });
+
+  it("keeps a discarded flip rejected and strips the flag from a demoted attempt", () => {
+    const flagged: DetectorAttempt = { ...acceptedAttempt(0), flipFlagged: true };
+
+    // A timestamp cannot be both discarded and flagged coming out of
+    // detectFlips, but demotion must never leave acceptance-only fields behind.
+    const [result] = finalizeDetectorAttempts([flagged], [0], []);
+
+    expect(result.status).toBe("flipRejected");
+    expect("flipFlagged" in result).toBe(false);
+    expect("acceptedKeypoints" in result).toBe(false);
+  });
+
+  it("defaults to no flagged timestamps so existing callers are unaffected", () => {
+    const goodFrames: PoseFrame[] = [{ timestamp: 0, keypoints }];
+    const [result] = finalizeDetectorAttempts([acceptedAttempt(0)], [], goodFrames);
+
+    expect(result.status).toBe("accepted");
+    expect("flipFlagged" in result).toBe(false);
   });
 
   it("accepts a payload without the iteration-2 evidence fields", () => {

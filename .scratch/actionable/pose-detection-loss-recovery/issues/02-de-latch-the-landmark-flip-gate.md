@@ -1,6 +1,7 @@
 # De-latch the Landmark Flip gate
 
-Status: ready-for-agent
+Status: in-progress
+Branch: fix/detection-02-flip-gate-latch
 Type: AFK
 
 ## Parent
@@ -55,25 +56,25 @@ cheaply-reversible follow-up — the tunables are exported for that.
 
 ## Acceptance criteria
 
-- [ ] `FLIP_MAX_RUN` is an exported tunable on `pipeline/pose/flipDetection.ts`
+- [x] `FLIP_MAX_RUN` is an exported tunable on `pipeline/pose/flipDetection.ts`
       with a documented default and rationale.
-- [ ] A single-frame flip followed by recovery is still discarded, and the
+- [x] A single-frame flip followed by recovery is still discarded, and the
       recovered frame is accepted (regression test over the existing fixtures).
-- [ ] A sustained mislabel run produces at most `FLIP_MAX_RUN` consecutive
+- [x] A sustained mislabel run produces at most `FLIP_MAX_RUN` consecutive
       discards; the next frame is accepted and appears in `flaggedTimestamps`.
-- [ ] After the cap fires, `prevKept` is the accepted-with-flag frame — a unit
+- [x] After the cap fires, `prevKept` is the accepted-with-flag frame — a unit
       test asserts an in-sequence following frame is judged against it and is not
       discarded merely because it is far from the pre-run reference.
-- [ ] A synthetic 400-frame sustained-mislabel sequence loses no more than
+- [x] A synthetic 400-frame sustained-mislabel sequence loses no more than
       `FLIP_MAX_RUN` frames per re-anchor cycle (the 398-frame latch cannot
       reproduce).
-- [ ] `detectFlips` returns `flaggedTimestamps` alongside `kept` and
+- [x] `detectFlips` returns `flaggedTimestamps` alongside `kept` and
       `flippedTimestamps`.
-- [ ] Detector Attempts on flagged timestamps have `status: "accepted"` and
+- [x] Detector Attempts on flagged timestamps have `status: "accepted"` and
       `flipFlagged: true`; `flipRejected` still means discarded.
-- [ ] `tagFlipDiscardedFrames` and the diagnostics `wasFlip` row still key off
+- [x] `tagFlipDiscardedFrames` and the diagnostics `wasFlip` row still key off
       discarded (not flagged) timestamps.
-- [ ] Both verdict paths — left/right swap and vertical inversion — still fire on
+- [x] Both verdict paths — left/right swap and vertical inversion — still fire on
       their existing unit fixtures.
 
 ## Target metrics (harness re-measures)
@@ -98,3 +99,25 @@ frames moves the pooled 46.5% figure without touching the gate's judgement.
   sustained-evidence entry rule was declined.
 - The quality gate is clean by comparison — 56 rejections in the whole corpus, 29
   truth-checkable, none wrongly rejected. Do not touch `filterLandmarks` here.
+- **The PRD's buffering decision was superseded, not just the handoff's entry
+  rule.** The parent PRD's Implementation Decisions carried "buffer candidate
+  flips, discard the run retroactively if it reaches the confirmation length" —
+  which is the same sustained-evidence rule in retroactive clothing and fails for
+  the same reason: a one-frame glitch is a one-frame run, never reaches the
+  confirmation length, so its buffer is accepted and the glitch reaches the
+  overlay. The PRD's Solution item 2 and Implementation Decisions bullet were
+  reconciled in this branch so the spec matches what shipped; ADR 0023 records
+  both rejected alternatives.
+- `maxRun` is exposed on `FlipDetectionOptions` as well as the exported
+  `FLIP_MAX_RUN` const, so the cap is unit-testable at small values and
+  re-tunable from the corpus without touching the walk. `isLandmarkFlip` ignores
+  it — the per-frame verdict has no notion of a run.
+- **Adaptive Refinement's own flip gate was left alone.** The refinement loop
+  calls `isLandmarkFlip(prevAccepted, candidate)` and skips on true, which has the
+  same latch shape in principle. It is out of scope here: its reference advances
+  on every acceptance and the per-gap budget bounds the damage, so it cannot
+  produce the 398-frame run. Worth re-measuring once the corpus reflects this
+  change.
+- Scan Diagnostics still reports `flippedFrames` (discarded only); a flagged
+  count was not added because changing the `ScanDiagnostics` shape is a contract
+  ripple this issue does not need — `flipFlagged` on the attempt stream carries it.
