@@ -1,6 +1,6 @@
 # Detection Loss Recovery and Gate Correctness
 
-Status: ready-for-agent
+Status: in-progress
 Disposition: actionable
 
 Spec inputs: `beta-scan-analysis/docs/handoffs/scanner-detection-improvements.md`

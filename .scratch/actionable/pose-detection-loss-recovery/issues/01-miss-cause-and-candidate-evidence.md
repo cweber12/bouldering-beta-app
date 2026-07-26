@@ -1,7 +1,8 @@
 # Miss-cause and candidate evidence
 
-Status: in-progress
+Status: done
 Branch: feat/detection-01-miss-cause-evidence
+Merged: 0cd9ce0
 Type: AFK
 
 ## Parent
