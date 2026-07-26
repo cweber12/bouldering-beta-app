@@ -5,6 +5,9 @@ import {
   parseScanSetupInput,
   bodyHasSeedTap,
   parseSeedTapEdit,
+  bodyHasClimbEnd,
+  parseClimbEndEdit,
+  climbStartOf,
   SETUP_VERSION,
   type ScanSetupInput,
 } from "@/utils/harnessSetup";
@@ -131,6 +134,74 @@ describe("seedTap is excluded from the setup hash", () => {
     // seedTap lives on ScanSetup, not ScanSetupInput — the canonical string is
     // built only from the scan inputs, so it can never mention a seed tap.
     expect(canonicalSetupInput(base)).not.toContain("seedTap");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Climb window (harness ADR 0007)
+// ---------------------------------------------------------------------------
+
+describe("bodyHasClimbEnd", () => {
+  it("detects a climbEnd key (including an explicit null) and rejects non-objects", () => {
+    expect(bodyHasClimbEnd({ climbEnd: 58 })).toBe(true);
+    expect(bodyHasClimbEnd({ climbEnd: null })).toBe(true);
+    expect(bodyHasClimbEnd({ seedTap: null })).toBe(false);
+    expect(bodyHasClimbEnd(null)).toBe(false);
+    expect(bodyHasClimbEnd("nope")).toBe(false);
+  });
+});
+
+describe("parseClimbEndEdit", () => {
+  it("returns null to clear and the seconds value to set", () => {
+    expect(parseClimbEndEdit({ climbEnd: null })).toBeNull();
+    expect(parseClimbEndEdit({ climbEnd: 58 })).toBe(58);
+    expect(parseClimbEndEdit({ climbEnd: 0 })).toBe(0);
+  });
+
+  it("rejects anything that is not a finite, non-negative number", () => {
+    expect(parseClimbEndEdit({ climbEnd: -1 })).toBe(false);
+    expect(parseClimbEndEdit({ climbEnd: Number.NaN })).toBe(false);
+    expect(parseClimbEndEdit({ climbEnd: Infinity })).toBe(false);
+    expect(parseClimbEndEdit({ climbEnd: "58" })).toBe(false);
+    expect(parseClimbEndEdit({ climbEnd: { t: 58 } })).toBe(false);
+  });
+
+  it("enforces the harness's window rule: the end must be after the start", () => {
+    // Mirrors `climb_end > climb_start` so a window we accept is never one the
+    // harness 422s on after a job has been submitted.
+    expect(parseClimbEndEdit({ climbEnd: 58 }, 3.5)).toBe(58);
+    expect(parseClimbEndEdit({ climbEnd: 3.5 }, 3.5)).toBe(false);
+    expect(parseClimbEndEdit({ climbEnd: 2 }, 3.5)).toBe(false);
+  });
+
+  it("accepts any non-negative end when the climb start is unknown", () => {
+    // A Bundle whose setup tap carries no `t` has no start to order against.
+    expect(parseClimbEndEdit({ climbEnd: 0.5 }, undefined)).toBe(0.5);
+  });
+
+  it("still clears on null even when the start would reject that value", () => {
+    expect(parseClimbEndEdit({ climbEnd: null }, 3.5)).toBeNull();
+  });
+});
+
+describe("climbStartOf", () => {
+  it("reads the setup tap's time, and nothing when it has none", () => {
+    expect(climbStartOf({ climberPoint: { x: 0.5, y: 0.5, t: 3.5 } })).toBe(3.5);
+    expect(climbStartOf({ climberPoint: { x: 0.5, y: 0.5 } })).toBeUndefined();
+    expect(climbStartOf({ climberPoint: null })).toBeUndefined();
+  });
+});
+
+describe("climbEnd is excluded from the setup hash", () => {
+  it("never reaches the canonical pre-image", () => {
+    // climbEnd lives on ScanSetup, not ScanSetupInput. This is what keeps a
+    // marker from invalidating the 90 already-calibrated Bundles (ADR 0020).
+    expect(canonicalSetupInput(base)).not.toContain("climbEnd");
+  });
+
+  it("leaves the hash byte-identical whether or not a marker exists", async () => {
+    const withMarker = { ...base, climbEnd: 58 } as ScanSetupInput;
+    expect(await hashSetupInput(withMarker)).toBe(await hashSetupInput(base));
   });
 });
 

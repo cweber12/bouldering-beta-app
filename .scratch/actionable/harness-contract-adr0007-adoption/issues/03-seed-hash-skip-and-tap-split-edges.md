@@ -63,6 +63,18 @@ because `setupHash` matches either way.
 
 ## Comments
 
+- **Found while building issue 01, and it likely blocks §2 outright:** the relay
+  deletes `vitpose.json` from the bundle dir *before* forwarding the request
+  (`app/api/dev/corpus/vitpose/route.ts`, the export-race fix for harness issue
+  #21). If that file is the same artifact the harness hashes against — the skip
+  response names `analysis/<route>/<video_key>/vitpose.json`, which resolves under
+  the shared `HARNESS_ANALYSIS_ROOT` — then the harness can never see an
+  unchanged seed and `200 skipped` can never fire. Confirm the storage layout
+  with the harness before building the skip handler, then decide: stop deleting
+  when the seed is unchanged (needs the seed hash client-side to know), or delete
+  only after a 202 comes back. The export race the deletion prevents is real, so
+  it cannot simply be dropped.
+
 - Both call sites request scaffolds on the truth's 100 ms grid already
   (`Calibrator.tsx`, `ReseedSweeper.tsx`, via `buildDetectionGrid`), so no
   request-side sampling work is needed. The 8 legacy bundles at 1.0 s predate

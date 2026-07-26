@@ -110,6 +110,14 @@ interface SetupForJob {
   wallCrop: CropFraction;
   /** The off-hash Seed tap, falling back to the analysis tap when unset. */
   seedTap?: { x: number; y: number; t?: number };
+  /**
+   * The **setup** tap, kept distinct from {@link seedTap} — its `t` is the climb
+   * start (harness ADR 0007). Never substitute the seed tap here: conflating the
+   * two is the defect ADR 0007 exists to remove.
+   */
+  climberPoint?: { x: number; y: number; t?: number };
+  /** End-of-climb marker, when the Bundle has been marked. */
+  climbEnd?: number;
   panning: boolean;
 }
 
@@ -125,6 +133,8 @@ async function loadSetupForJob(bundleKey: string): Promise<SetupForJob> {
     // Prefer the dedicated Seed tap; fall back to the analysis tap (absent
     // seedTap means "use climberPoint" — harness-setup-calibrate-split issue 01).
     seedTap: setup.seedTap ?? setup.climberPoint ?? undefined,
+    climberPoint: setup.climberPoint ?? undefined,
+    climbEnd: typeof setup.climbEnd === "number" ? setup.climbEnd : undefined,
     panning: !!setup.panning,
   };
 }
@@ -196,6 +206,11 @@ function ReseedItemRunner({
           climberCrop: setup.climberCrop,
           wallCrop: setup.wallCrop,
           panning: setup.panning,
+          // Climb window, when the Bundle carries one. Each bound is omitted
+          // independently so the harness can fall back to setup.json for it.
+          // The start is the *setup* tap's time, never the seed tap's.
+          ...(setup.climberPoint?.t !== undefined ? { climbStart: setup.climberPoint.t } : {}),
+          ...(setup.climbEnd !== undefined ? { climbEnd: setup.climbEnd } : {}),
           frames: grid.map((f) => ({ timestamp: f.timestamp })),
         });
         if (cancelled) return;
