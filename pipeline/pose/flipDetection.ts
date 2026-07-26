@@ -36,6 +36,11 @@
  * produce a wrong pose. The caller re-detects across the resulting gap
  * (Adaptive Refinement).
  *
+ * Because each frame is judged against the last *accepted* frame, a rejection
+ * run would otherwise sustain itself indefinitely — see {@link FLIP_MAX_RUN} and
+ * ADR 0023 (`docs/adr/0023-re-anchoring-landmark-flip-gate.md`) for the cap and
+ * re-anchor that end it.
+ *
  * This module is framework-agnostic — no React imports, no `cv`. All coordinates
  * are normalised to [0, 1] of the full frame.
  */
@@ -97,6 +102,26 @@ export const MIN_UP_VECTOR_LENGTH = 0.01;
  */
 export const ORIENTATION_TELEPORT_TORSO_FACTOR = 0.6;
 
+/**
+ * Maximum consecutive frames {@link detectFlips} may discard before it accepts
+ * the next one (flagged) and re-anchors its comparison reference.
+ *
+ * The per-frame verdict is sound; the *walk* was not. Because each frame is
+ * judged against the last **accepted** frame, a rejection leaves the reference
+ * stale, the Climber keeps moving away from it, and every later frame trips the
+ * teleport test harder than the last — the gate's own output becomes its next
+ * input and nothing in the walk can end the run. Measured runs reached 398
+ * consecutive frames, and 76.7% of rejections on frames where the Climber was
+ * actually present discarded a pose that agreed with Ground Truth.
+ *
+ * 5 is chosen against the detection cadence, not the geometry: at the default
+ * frameStep 5 on the 100 ms grid a detection frame is every 500 ms, so this caps
+ * a run at ~2.5 s of video. Real left/right glitches last one to two detection
+ * frames and are still discarded whole; only a run long enough to be evidence
+ * that the *reference* is stale reaches the cap.
+ */
+export const FLIP_MAX_RUN = 5;
+
 export interface FlipDetectionOptions {
   /** See {@link DEFAULT_TELEPORT_THRESHOLD}. */
   teleportThreshold?: number;
@@ -104,13 +129,25 @@ export interface FlipDetectionOptions {
   swapMargin?: number;
   /** See {@link DEFAULT_ORIENTATION_FLIP_COS}. */
   orientationFlipCos?: number;
+  /**
+   * See {@link FLIP_MAX_RUN}. Walk-level only — {@link isLandmarkFlip} ignores
+   * it, since the per-frame verdict has no notion of a run.
+   */
+  maxRun?: number;
 }
 
 export interface FlipScanResult {
-  /** Frames that passed (not flipped), in input order. */
+  /** Frames that passed the gate, in input order. Includes flagged frames. */
   kept: PoseFrame[];
   /** Timestamps of frames discarded as Landmark Flips. */
   flippedTimestamps: number[];
+  /**
+   * Timestamps of frames that tripped the verdict but were **accepted anyway**
+   * because the run cap fired. These are in `kept` and are not discarded — they
+   * are reported so the caller can mark them as accepted-under-suspicion without
+   * inventing a fifth Detector Attempt status.
+   */
+  flaggedTimestamps: number[];
 }
 
 // ---------------------------------------------------------------------------
@@ -262,26 +299,50 @@ export function isLandmarkFlip(
  *
  * The first frame is always accepted (nothing to compare against).
  *
+ * **Run cap and re-anchor.** Comparing against the last accepted frame is what
+ * makes a rejection run self-sustaining: the reference stays where the Climber
+ * was before the run started, so every later frame is further from it than the
+ * one before. After {@link FLIP_MAX_RUN} consecutive discards the walk therefore
+ * accepts the current frame — recording it in `flaggedTimestamps` rather than
+ * `flippedTimestamps` — and **re-anchors `prevKept` to it**, so comparison
+ * resumes against fresh geometry. The re-anchor is the part that actually ends
+ * the run; the cap alone would only convert a discard run into a flag run.
+ *
+ * A sustained mislabel therefore costs at most `FLIP_MAX_RUN` frames per
+ * re-anchor cycle instead of the whole stretch, while a genuine one-or-two-frame
+ * glitch is still discarded in full and never reaches the overlay.
+ *
  * @param frames  - Sparse detected poses, ascending by timestamp.
  * @param options - Flip-detection thresholds (scale `teleportThreshold` with frameStep).
- * @returns Kept frames plus the timestamps discarded as flips (for Adaptive Refinement).
+ * @returns Kept frames, the timestamps discarded as flips (for Adaptive
+ *          Refinement), and the timestamps accepted under the run cap.
  */
 export function detectFlips(
   frames: PoseFrame[],
   options: FlipDetectionOptions = {},
 ): FlipScanResult {
+  const maxRun = options.maxRun ?? FLIP_MAX_RUN;
   const kept: PoseFrame[] = [];
   const flippedTimestamps: number[] = [];
+  const flaggedTimestamps: number[] = [];
   let prevKept: PoseFrame | null = null;
+  let run = 0;
 
   for (const frame of frames) {
     if (prevKept && isLandmarkFlip(prevKept, frame, options)) {
-      flippedTimestamps.push(frame.timestamp);
-      continue;
+      if (run < maxRun) {
+        run += 1;
+        flippedTimestamps.push(frame.timestamp);
+        continue;
+      }
+      // Cap reached: a run this long is evidence the reference is stale, not
+      // that every pose since is wrong. Accept under suspicion and re-anchor.
+      flaggedTimestamps.push(frame.timestamp);
     }
     kept.push(frame);
     prevKept = frame;
+    run = 0;
   }
 
-  return { kept, flippedTimestamps };
+  return { kept, flippedTimestamps, flaggedTimestamps };
 }

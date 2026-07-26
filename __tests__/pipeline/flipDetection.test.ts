@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectFlips, isLandmarkFlip } from "@/pipeline/pose/flipDetection";
+import { detectFlips, isLandmarkFlip, FLIP_MAX_RUN } from "@/pipeline/pose/flipDetection";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 
 // ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ describe("detectFlips — vertical inversion", () => {
 
 describe("detectFlips", () => {
   it("returns empty result for empty input", () => {
-    expect(detectFlips([])).toEqual({ kept: [], flippedTimestamps: [] });
+    expect(detectFlips([])).toEqual({ kept: [], flippedTimestamps: [], flaggedTimestamps: [] });
   });
 
   it("always keeps the first frame (nothing to compare against)", () => {
@@ -249,5 +249,106 @@ describe("detectFlips", () => {
     const result = detectFlips(frames);
     expect(result.flippedTimestamps).toEqual([1, 2]);
     expect(result.kept.map((f) => f.timestamp)).toEqual([0, 3]);
+    // Well under the cap, so nothing is accepted under suspicion.
+    expect(result.flaggedTimestamps).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// detectFlips — run cap and re-anchor (the de-latch)
+// ---------------------------------------------------------------------------
+
+describe("detectFlips — run cap and re-anchor", () => {
+  /**
+   * A mislabelled frame that also drifts, which is what makes the original latch
+   * self-sustaining: each frame sits further from the pre-run reference than the
+   * last, so the teleport test trips harder every step. Consecutive drifting
+   * frames are near each other, so they do NOT trip against one another — that
+   * is exactly why re-anchoring ends the run.
+   */
+  const MISLABELLED = (t: number, drift = 0.001) => {
+    const d = t * drift;
+    return torso(t, 0.65 + d, 0.35 + d, 0.6 + d, 0.4 + d);
+  };
+
+  it("still discards a one-frame glitch in full rather than flagging it", () => {
+    // The regression that matters: the module exists to keep a singleton glitch
+    // off the overlay, and the cap must not re-admit it.
+    const result = detectFlips([FACING(0), torso(1, 0.65, 0.35, 0.6, 0.4), FACING(2)]);
+    expect(result.flippedTimestamps).toEqual([1]);
+    expect(result.flaggedTimestamps).toEqual([]);
+    expect(result.kept.map((f) => f.timestamp)).toEqual([0, 2]);
+  });
+
+  it("caps the run at FLIP_MAX_RUN discards, then accepts the next frame flagged", () => {
+    const frames = [FACING(0)];
+    for (let t = 1; t <= FLIP_MAX_RUN + 1; t++) frames.push(MISLABELLED(t));
+
+    const result = detectFlips(frames);
+
+    expect(result.flippedTimestamps).toHaveLength(FLIP_MAX_RUN);
+    expect(result.flaggedTimestamps).toEqual([FLIP_MAX_RUN + 1]);
+    // The flagged frame is kept, not discarded.
+    expect(result.kept.map((f) => f.timestamp)).toContain(FLIP_MAX_RUN + 1);
+  });
+
+  it("re-anchors to the flagged frame so the next in-sequence frame survives", () => {
+    // Frame FLIP_MAX_RUN+2 is far from the pre-run reference (frame 0) but close
+    // to the flagged frame. Judged against the stale reference it would be
+    // discarded; judged against the re-anchored one it is fine.
+    const frames = [FACING(0)];
+    for (let t = 1; t <= FLIP_MAX_RUN + 2; t++) frames.push(MISLABELLED(t));
+
+    const result = detectFlips(frames);
+    const follower = FLIP_MAX_RUN + 2;
+
+    expect(result.flippedTimestamps).not.toContain(follower);
+    expect(result.flaggedTimestamps).not.toContain(follower);
+    expect(result.kept.map((f) => f.timestamp)).toContain(follower);
+    // Proof the reference moved: it is still a flip against the pre-run frame.
+    expect(isLandmarkFlip(FACING(0), MISLABELLED(follower))).toBe(true);
+  });
+
+  it("cannot reproduce the 398-frame latch over a 400-frame mislabel run", () => {
+    const frames = [FACING(0)];
+    for (let t = 1; t < 400; t++) frames.push(MISLABELLED(t));
+
+    const result = detectFlips(frames);
+
+    // Longest consecutive discard run, measured over the input order.
+    const discarded = new Set(result.flippedTimestamps);
+    let longest = 0;
+    let run = 0;
+    for (const f of frames) {
+      run = discarded.has(f.timestamp) ? run + 1 : 0;
+      if (run > longest) longest = run;
+    }
+
+    expect(longest).toBeLessThanOrEqual(FLIP_MAX_RUN);
+    // Once the reference re-anchors into the mislabelled regime the rest of the
+    // run is ordinary motion, so the gate stops firing entirely.
+    expect(result.flippedTimestamps).toHaveLength(FLIP_MAX_RUN);
+    expect(result.kept).toHaveLength(400 - FLIP_MAX_RUN);
+  });
+
+  it("honours a caller-supplied maxRun", () => {
+    const frames = [FACING(0)];
+    for (let t = 1; t <= 4; t++) frames.push(MISLABELLED(t));
+
+    const result = detectFlips(frames, { maxRun: 2 });
+
+    expect(result.flippedTimestamps).toEqual([1, 2]);
+    expect(result.flaggedTimestamps).toEqual([3]);
+  });
+
+  it("caps a sustained vertical inversion the same way", () => {
+    // The orientation path latches identically, so the cap must cover it too.
+    const frames = [UPRIGHT(0)];
+    for (let t = 1; t <= FLIP_MAX_RUN + 1; t++) frames.push(INVERTED(t));
+
+    const result = detectFlips(frames);
+
+    expect(result.flippedTimestamps).toHaveLength(FLIP_MAX_RUN);
+    expect(result.flaggedTimestamps).toEqual([FLIP_MAX_RUN + 1]);
   });
 });

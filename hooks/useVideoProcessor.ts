@@ -246,21 +246,30 @@ export function finalizeDetectorAttempts(
   attempts: readonly DetectorAttempt[],
   flippedTimestamps: readonly number[],
   goodFrames: readonly PoseFrame[],
+  flaggedTimestamps: readonly number[] = [],
 ): DetectorAttempt[] {
   const flipped = new Set(flippedTimestamps.map(timestampKey));
+  const flagged = new Set(flaggedTimestamps.map(timestampKey));
   const good = new Set(goodFrames.map((frame) => timestampKey(frame.timestamp)));
 
   return attempts.map((attempt): DetectorAttempt => {
     if (attempt.status === "missing") return attempt;
 
     const key = timestampKey(attempt.timestamp);
+    // Demotion strips both acceptance-only fields: a discarded frame is not
+    // "accepted under suspicion", it is simply not accepted.
     if (flipped.has(key)) {
-      const { acceptedKeypoints: _acceptedKeypoints, ...withoutAccepted } = attempt;
-      return { ...withoutAccepted, status: "flipRejected" };
+      const { acceptedKeypoints: _keypoints, flipFlagged: _flagged, ...rest } = attempt;
+      return { ...rest, status: "flipRejected" };
     }
     if (!good.has(key)) {
-      const { acceptedKeypoints: _acceptedKeypoints, ...withoutAccepted } = attempt;
-      return { ...withoutAccepted, status: "qualityRejected" };
+      const { acceptedKeypoints: _keypoints, flipFlagged: _flagged, ...rest } = attempt;
+      return { ...rest, status: "qualityRejected" };
+    }
+    // Tripped the flip verdict but survived the run cap: still accepted, with
+    // the caveat attached rather than a fifth status.
+    if (flagged.has(key) && attempt.status === "accepted") {
+      return { ...attempt, flipFlagged: true };
     }
     return attempt;
   });
@@ -1301,7 +1310,12 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         // way (see ADR 0015).
         const goodFrames = filterLandmarks(kept, 0.3, detection.filterTolerance);
         const finalizedDetectorAttempts = shouldCollectDetectorAttempts
-          ? finalizeDetectorAttempts(detectorAttemptDrafts, flipScan.flippedTimestamps, goodFrames)
+          ? finalizeDetectorAttempts(
+              detectorAttemptDrafts,
+              flipScan.flippedTimestamps,
+              goodFrames,
+              flipScan.flaggedTimestamps,
+            )
           : null;
         if (mountedRef.current) setDetectorAttempts(finalizedDetectorAttempts);
         const processedFrames =

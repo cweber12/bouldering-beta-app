@@ -76,10 +76,11 @@ causally legible so the next round of tuning is measured rather than inferred.
    candidate came (`bestUnselectedCandidateScore`) — all additive, no behavior
    change. This is the cheapest change on the list and it is the one blocking
    the harness's `unexplained` half.
-2. **De-latch the Landmark Flip gate.** Require sustained flip evidence before
-   discarding, retroactively discarding a confirmed run so a genuine one-frame
-   glitch still never reaches the overlay, cap consecutive rejections, and
-   re-anchor the comparison reference so a rejection run cannot feed itself.
+2. **De-latch the Landmark Flip gate.** Cap consecutive rejections and re-anchor
+   the comparison reference so a rejection run cannot feed itself, leaving the
+   per-frame verdict alone so a genuine one-frame glitch is still discarded in
+   full. (The sustained-evidence entry rule this originally called for was
+   declined — see the Implementation Decisions note and ADR 0023.)
 3. **Reset the track and search a ladder.** After N consecutive misses, stop
    re-searching the frozen rectangle: reset the Adaptive Crop and walk an
    expanding ladder seeded at the last confident position (×2, ×4, full frame),
@@ -132,12 +133,17 @@ surface changes.
   hallucination risk, and the acceptance bar is what contains it. Landing 04
   before 03 would measure a bar against a gate that never opens; landing them
   together would confound both metrics.
-- **The flip fix is retroactive, not permissive.** Buffer candidate flips instead
-  of accepting them: if the run reaches the confirmation length the whole
+- **The flip fix caps the run; it does not buffer.** ~~Buffer candidate flips
+  instead of accepting them: if the run reaches the confirmation length the whole
   buffered run is discarded (so a genuine glitch never reaches the overlay); if
-  the detector recovers first the buffered frames are accepted. This is
-  implementable because `detectFlips` runs offline over the whole sparse
-  sequence, not as a stream.
+  the detector recovers first the buffered frames are accepted.~~ **Superseded by
+  issue 02 and ADR 0023.** The buffering scheme does not achieve its own stated
+  goal: a one-frame glitch is a one-frame run, so it never reaches the
+  confirmation length, its buffer is *accepted*, and the glitch reaches the
+  overlay — precisely what the module exists to prevent. What shipped instead is
+  a consecutive-rejection cap plus a re-anchor of the comparison reference, which
+  targets the same metric from the other end and keeps the singleton discard
+  intact.
 - **Re-anchoring is the actual latch fix.** Sustained-evidence and the
   consecutive cap both help, but the run cannot end while the comparison
   reference stays stale. After a capped run the reference re-anchors to the
