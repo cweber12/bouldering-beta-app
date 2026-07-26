@@ -1,7 +1,8 @@
 # De-latch the Landmark Flip gate
 
-Status: in-progress
+Status: done
 Branch: fix/detection-02-flip-gate-latch
+Merged: c59b101
 Type: AFK
 
 ## Parent
