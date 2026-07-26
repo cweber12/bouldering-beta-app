@@ -1,7 +1,8 @@
 # Climb window on the Scan Setup and the ViTPose request
 
-Status: in-progress
+Status: done
 Branch: feat/adr0007-01-climb-window
+Merged: b309400
 Type: AFK
 
 ## Parent

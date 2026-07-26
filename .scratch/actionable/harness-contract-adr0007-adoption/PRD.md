@@ -1,6 +1,6 @@
 # Split the Setup Tap from the Seed Tap, and Bound the Climb Window
 
-Status: ready-for-agent
+Status: in-progress
 Disposition: actionable
 
 Spec inputs: `beta-scan-analysis/docs/handoffs/scanner-tap-split-adr0007.md`
@@ -77,7 +77,7 @@ slot, the unhandled `200 skipped`, `force`, and the `splitTaps` capability gate.
 This PRD lands **between** `pose-detection-loss-recovery` issues 06 (done) and
 04. The chain:
 
-```
+```text
 06 (done) → 01 climbEnd plumbing → 02 capture UI → control batch → 04
                                  ↘ 03 ADR 0007 edges (independent)
 ```
