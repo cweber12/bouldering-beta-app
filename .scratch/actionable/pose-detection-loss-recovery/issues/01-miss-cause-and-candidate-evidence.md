@@ -1,6 +1,7 @@
 # Miss-cause and candidate evidence
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/detection-01-miss-cause-evidence
 Type: AFK
 
 ## Parent
@@ -47,25 +48,25 @@ issues 03 and 04 are correctly ordered.
 
 ## Acceptance criteria
 
-- [ ] `DetectorAttempt` carries `reacquireSteps`, `bestUnselectedCandidateScore`,
+- [x] `DetectorAttempt` carries `reacquireSteps`, `bestUnselectedCandidateScore`,
       and `missReason` as optional fields; a payload without them stays valid.
-- [ ] `reacquireSteps` records one entry per region searched during reacquire,
+- [x] `reacquireSteps` records one entry per region searched during reacquire,
       in search order, each with its normalized region and whether it found the
       Climber. Full-frame rungs use `{ x: 0, y: 0, w: 1, h: 1 }`.
-- [ ] `bestUnselectedCandidateScore` is populated from the candidates MediaPipe
+- [x] `bestUnselectedCandidateScore` is populated from the candidates MediaPipe
       returned across the initial and reacquire searches, and is `null` when
       every returned candidate was selected or none was returned.
-- [ ] A `missing` attempt on which MediaPipe returned no candidates anywhere
+- [x] A `missing` attempt on which MediaPipe returned no candidates anywhere
       reports `missReason: "no-candidates"`.
-- [ ] A `missing` attempt on which candidates existed but none passed the
+- [x] A `missing` attempt on which candidates existed but none passed the
       identity gate reports `missReason: "identity-gated"`.
-- [ ] `accepted`, `flipRejected`, and `qualityRejected` attempts do not carry a
+- [x] `accepted`, `flipRejected`, and `qualityRejected` attempts do not carry a
       `missReason`.
-- [ ] No detection behavior changes: search regions, gates, acceptance, and the
+- [x] No detection behavior changes: search regions, gates, acceptance, and the
       resulting `frames[]` are byte-identical to before for the same input.
-- [ ] Collection stays gated behind `collectDetectorAttempts`; user-facing scans
+- [x] Collection stays gated behind `collectDetectorAttempts`; user-facing scans
       pay no extra cost.
-- [ ] Processor tests cover both miss reasons and the reacquire-step array with
+- [x] Processor tests cover both miss reasons and the reacquire-step array with
       MediaPipe mocked at the module boundary.
 
 ## Target metrics (harness re-measures)
@@ -83,3 +84,16 @@ issues 03 and 04 are correctly ordered.
 - Note for the handoff reply: the existing corpus can already separate the two
   miss classes without a new run — a `missing` attempt with `candidateCount > 0`
   was gated out, not undetected.
+- `reacquireSteps` is emitted as an empty array (not omitted) on attempts where
+  no reacquire ran, so the harness can tell "searched nothing beyond the crop"
+  apart from a legacy payload that predates the field. It stays optional on the
+  type so those legacy payloads remain valid.
+- `bestUnselectedCandidateScore` is carried on every attempt, not just misses —
+  the contract phrases it per-attempt, and the score on an `accepted` attempt is
+  what a future selection-margin metric would need.
+- Candidates with zero keypoints are skipped rather than scored `0`, so an
+  all-empty candidate set reads `null` ("nothing worth scoring") instead of a
+  misleading floor value. `missReason` still keys off the raw `candidateCount`,
+  matching the contract's literal "returned zero poses" wording.
+- The score is computed only while `collectDetectorAttempts` is on;
+  `detectClimber` returns `null` for it on user-facing scans.

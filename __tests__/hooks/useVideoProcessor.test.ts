@@ -1,11 +1,82 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
+
+// ---------------------------------------------------------------------------
+// Module mocks — MediaPipe, OpenCV, and the seek loop's I/O are stubbed at the
+// module boundary so the processor tests exercise attempt classification and
+// evidence only.
+// ---------------------------------------------------------------------------
+
+vi.mock("@/pipeline/pose/mediapipePoseDetection", () => ({
+  estimateFramesMediaPipe: vi.fn(() => []),
+}));
+
+vi.mock("@/pipeline/analysis/frameAnalyzer", () => ({
+  analyzeFrame: vi.fn(() => ({
+    overall: { brightness: 0.5, contrast: 0.5, sharpness: 0.5 },
+    climber: null,
+    wall: null,
+    isOverexposed: false,
+    isUnderexposed: false,
+    isBacklit: false,
+    isLowContrast: false,
+    isBlurry: false,
+  })),
+}));
+
+vi.mock("@/pipeline/analysis/framePreprocessor", () => ({
+  applyOrbPreprocessing: vi.fn(),
+}));
+
+vi.mock("@/pipeline/matching/orbDetector", () => ({
+  extractFeatures: vi.fn(() => ({ keypoints: [], descriptors: null })),
+  extractFeaturesExcludingClimber: vi.fn(() => ({ keypoints: [], descriptors: null })),
+}));
+
+vi.mock("@/pipeline/matching/orbThumbnail", () => ({
+  generateOrbThumbnail: vi.fn(() => undefined),
+}));
+
+vi.mock("@/pipeline/holds/holdDetection", () => ({
+  detectHoldsVideoSpace: vi.fn(() => []),
+}));
+
+vi.mock("@/utils/cvHelpers", () => ({
+  cropImageData: vi.fn((src: ImageData) => src),
+}));
+
+vi.mock("@/utils/colorBalance", () => ({
+  neutralizeColorCast: vi.fn(() => false),
+}));
+
+vi.mock("@/storage/sessionStore", () => ({
+  saveAttempt: vi.fn(),
+}));
+
+vi.mock("@/utils/videoSeek", () => {
+  class SeekAbortedError extends Error {}
+  class SeekTimeoutError extends Error {}
+  return {
+    SeekAbortedError,
+    SeekTimeoutError,
+    seekVideo: vi.fn(async (video: { currentTime: number }, time: number) => {
+      video.currentTime = time;
+    }),
+  };
+});
+
 import {
+  bestUnselectedCandidateScore,
+  deriveMissReason,
   finalizeDetectorAttempts,
+  mergeBestUnselectedScore,
   normalizeDetectorAttemptRegion,
   ORB_PREVIEW_UPDATE_INTERVAL_SEC,
   shouldEmitOrbPreview,
   tagFlipDiscardedFrames,
+  useVideoProcessor,
 } from "@/hooks/useVideoProcessor";
+import { estimateFramesMediaPipe } from "@/pipeline/pose/mediapipePoseDetection";
 import type { PoseFrame } from "@/pipeline/pose/poseDetection";
 import type { DetectorAttempt } from "@/utils/harnessPayloads";
 
@@ -57,6 +128,8 @@ describe("detector attempt helpers", () => {
     detectionRegion: { x: 0.1, y: 0.2, w: 0.3, h: 0.4 },
     reacquireAttempted: false,
     reacquired: false,
+    reacquireSteps: [],
+    bestUnselectedCandidateScore: null,
     rawKeypoints: keypoints,
     acceptedKeypoints: keypoints,
     searchConditions: null,
@@ -91,10 +164,35 @@ describe("detector attempt helpers", () => {
     expect(result[2].rawKeypoints).toEqual(keypoints);
     expect("acceptedKeypoints" in result[1]).toBe(false);
     expect("acceptedKeypoints" in result[2]).toBe(false);
+    // Rejection is not a miss — the reason field never travels onto these.
+    expect("missReason" in result[1]).toBe(false);
+    expect("missReason" in result[2]).toBe(false);
   });
 
   it("leaves missing attempts missing even when no good frame exists", () => {
     const missing: DetectorAttempt = {
+      timestamp: 0,
+      status: "missing",
+      initialSearchRegion: { x: 0, y: 0, w: 1, h: 1 },
+      detectionRegion: null,
+      reacquireAttempted: false,
+      reacquired: false,
+      reacquireSteps: [],
+      bestUnselectedCandidateScore: null,
+      missReason: "no-candidates",
+      rawKeypoints: [],
+      searchConditions: null,
+      reacquireConditions: null,
+      candidateCount: 0,
+      rejectedCandidateCount: 0,
+      selectionMethod: "strongest",
+    };
+
+    expect(finalizeDetectorAttempts([missing], [], [])).toEqual([missing]);
+  });
+
+  it("accepts a payload without the iteration-2 evidence fields", () => {
+    const legacy: DetectorAttempt = {
       timestamp: 0,
       status: "missing",
       initialSearchRegion: { x: 0, y: 0, w: 1, h: 1 },
@@ -109,6 +207,255 @@ describe("detector attempt helpers", () => {
       selectionMethod: "strongest",
     };
 
-    expect(finalizeDetectorAttempts([missing], [], [])).toEqual([missing]);
+    expect(finalizeDetectorAttempts([legacy], [], [])).toEqual([legacy]);
+  });
+});
+
+describe("bestUnselectedCandidateScore", () => {
+  const candidate = (score: number): PoseFrame => ({
+    timestamp: 0,
+    keypoints: [
+      { name: "left_hip", x: 0.5, y: 0.5, score },
+      { name: "right_hip", x: 0.5, y: 0.5, score: score / 2 },
+    ],
+  });
+
+  it("returns the highest mean confidence among the candidates left behind", () => {
+    const strong = candidate(0.9);
+    const weak = candidate(0.4);
+    const middling = candidate(0.6);
+
+    expect(bestUnselectedCandidateScore([strong, weak, middling], strong)).toBeCloseTo(0.45, 6);
+  });
+
+  it("is null when every candidate was selected or none was returned", () => {
+    const only = candidate(0.9);
+    expect(bestUnselectedCandidateScore([only], only)).toBeNull();
+    expect(bestUnselectedCandidateScore([], null)).toBeNull();
+  });
+
+  it("skips candidates with no keypoints rather than scoring them zero", () => {
+    const empty: PoseFrame = { timestamp: 0, keypoints: [] };
+    expect(bestUnselectedCandidateScore([empty], null)).toBeNull();
+  });
+
+  it("folds one search's best into the attempt's running best", () => {
+    expect(mergeBestUnselectedScore(null, null)).toBeNull();
+    expect(mergeBestUnselectedScore(null, 0.4)).toBe(0.4);
+    expect(mergeBestUnselectedScore(0.7, null)).toBe(0.7);
+    expect(mergeBestUnselectedScore(0.7, 0.4)).toBe(0.7);
+  });
+});
+
+describe("deriveMissReason", () => {
+  it("blames the detector only when no region returned a candidate", () => {
+    expect(deriveMissReason(0)).toBe("no-candidates");
+  });
+
+  it("blames the identity gate when candidates existed", () => {
+    expect(deriveMissReason(1)).toBe("identity-gated");
+    expect(deriveMissReason(4)).toBe("identity-gated");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Processor-level attempt evidence
+// ---------------------------------------------------------------------------
+
+describe("useVideoProcessor detector attempt evidence", () => {
+  const VIDEO_W = 100;
+  const VIDEO_H = 200;
+  const FULL_FRAME = { x: 0, y: 0, w: 1, h: 1 };
+
+  /** Names carrying full weight in filterLandmarks, so a synthetic pose survives. */
+  const POSE_KEYPOINT_NAMES = [
+    "left_wrist",
+    "right_wrist",
+    "left_shoulder",
+    "right_shoulder",
+    "left_hip",
+    "right_hip",
+  ];
+
+  /** A compact synthetic pose centred on (cx, cy) in the search region's space. */
+  function pose(cx: number, cy: number, score = 0.9): PoseFrame {
+    return {
+      timestamp: 0,
+      keypoints: POSE_KEYPOINT_NAMES.map((name, i) => ({
+        name,
+        x: cx + (i % 2 === 0 ? -0.02 : 0.02),
+        y: cy + (i < 2 ? -0.02 : 0.02),
+        score,
+      })),
+    };
+  }
+
+  let createElementSpy: ReturnType<typeof vi.spyOn> | null = null;
+
+  /** A minimal 2D context: every pixel operation the seek loop makes is a stub. */
+  function fakeContext() {
+    return {
+      drawImage: vi.fn(),
+      putImageData: vi.fn(),
+      getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => ({
+        data: new Uint8ClampedArray(Math.max(1, w * h) * 4),
+        width: w,
+        height: h,
+        colorSpace: "srgb",
+      })),
+    };
+  }
+
+  /** A video element whose metadata resolves on src assignment. */
+  function fakeVideo(duration: number) {
+    const video: Record<string, unknown> = {
+      muted: false,
+      playsInline: false,
+      currentTime: 0,
+      duration,
+      videoWidth: VIDEO_W,
+      videoHeight: VIDEO_H,
+      onloadedmetadata: null,
+      onerror: null,
+    };
+    Object.defineProperty(video, "src", {
+      set() {
+        setTimeout(() => (video.onloadedmetadata as (() => void) | null)?.(), 0);
+      },
+      get: () => "blob:fake",
+    });
+    return video;
+  }
+
+  /**
+   * Drive the seek loop with a scripted MediaPipe response per call, in call
+   * order: each detection frame consumes one entry for its initial search and,
+   * when that search selects nothing, a second for its full-frame re-acquire.
+   */
+  async function runProcessor(
+    responses: PoseFrame[][],
+    { duration = 0.2 }: { duration?: number } = {},
+  ): Promise<DetectorAttempt[]> {
+    const queue = [...responses];
+    vi.mocked(estimateFramesMediaPipe).mockImplementation(() => queue.shift() ?? []);
+
+    const realCreateElement = document.createElement.bind(document);
+    createElementSpy = vi
+      .spyOn(document, "createElement")
+      .mockImplementation((tag: string, options?: ElementCreationOptions) =>
+        tag === "video"
+          ? (fakeVideo(duration) as unknown as HTMLElement)
+          : realCreateElement(tag, options),
+      ) as ReturnType<typeof vi.spyOn>;
+
+    const { result } = renderHook(() => useVideoProcessor());
+
+    await act(async () => {
+      await result.current.process(
+        new File([""], "clip.mp4", { type: "video/mp4" }),
+        {},
+        {},
+        1,
+        { state: "", area: "", route: "" },
+        // A full-frame Climber Crop keeps crop-local and full-frame coordinates
+        // identical on acquisition, so scripted poses land where they read.
+        { climberCrop: { x: 0, y: 0, w: 1, h: 1 } },
+        0,
+        "mediapipe",
+        {},
+        {
+          emitLivePreview: false,
+          frameOutput: "detected",
+          detectHolds: false,
+          generateThumbnail: false,
+          collectDetectorAttempts: true,
+        },
+      );
+    });
+
+    return result.current.detectorAttempts ?? [];
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:fake"),
+      revokeObjectURL: vi.fn(),
+    });
+    HTMLCanvasElement.prototype.getContext = vi.fn(
+      fakeContext,
+    ) as unknown as HTMLCanvasElement["getContext"];
+    HTMLCanvasElement.prototype.toBlob = vi.fn();
+  });
+
+  afterEach(() => {
+    createElementSpy?.mockRestore();
+    createElementSpy = null;
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("reports no-candidates when no region returned a pose", async () => {
+    // Initial crop search, then the full-frame re-acquire — both empty.
+    const attempts = await runProcessor([[], []], { duration: 0.1 });
+
+    expect(attempts).toHaveLength(1);
+    const [miss] = attempts;
+    expect(miss.status).toBe("missing");
+    expect(miss.missReason).toBe("no-candidates");
+    expect(miss.candidateCount).toBe(0);
+    expect(miss.bestUnselectedCandidateScore).toBeNull();
+    expect(miss.reacquireAttempted).toBe(true);
+    expect(miss.reacquired).toBe(false);
+    expect(miss.reacquireSteps).toEqual([{ region: FULL_FRAME, found: false }]);
+  });
+
+  it("reports identity-gated when a candidate was seen but fell outside the gate", async () => {
+    const attempts = await runProcessor([
+      [pose(0.5, 0.5)], // frame 0 — acquires the Climber
+      [], // frame 1 initial crop search — nothing
+      [pose(0.05, 0.05, 0.42)], // frame 1 re-acquire — a candidate far from the prediction
+    ]);
+
+    expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "missing"]);
+
+    const miss = attempts[1];
+    expect(miss.missReason).toBe("identity-gated");
+    expect(miss.candidateCount).toBe(1);
+    // The gated candidate's mean confidence still travels, so a near miss is
+    // distinguishable from a hard one.
+    expect(miss.bestUnselectedCandidateScore).toBeCloseTo(0.42, 6);
+    expect(miss.reacquireSteps).toEqual([{ region: FULL_FRAME, found: false }]);
+
+    // Acceptance carries no miss reason and no re-acquire rung.
+    expect("missReason" in attempts[0]).toBe(false);
+    expect(attempts[0].reacquireSteps).toEqual([]);
+    expect(attempts[0].reacquireAttempted).toBe(false);
+  });
+
+  it("records the re-acquire rung that found the Climber", async () => {
+    const attempts = await runProcessor([
+      [pose(0.5, 0.5)], // frame 0 — acquires the Climber
+      [], // frame 1 initial crop search — nothing
+      [pose(0.5, 0.5)], // frame 1 re-acquire — found on the full frame
+    ]);
+
+    expect(attempts.map((attempt) => attempt.status)).toEqual(["accepted", "accepted"]);
+    const reacquired = attempts[1];
+    expect(reacquired.reacquired).toBe(true);
+    expect(reacquired.reacquireSteps).toEqual([{ region: FULL_FRAME, found: true }]);
+    expect(reacquired.detectionRegion).toEqual(FULL_FRAME);
+    expect("missReason" in reacquired).toBe(false);
+  });
+
+  it("scores the strongest candidate the initial search passed over", async () => {
+    const attempts = await runProcessor([[pose(0.5, 0.5, 0.9), pose(0.55, 0.55, 0.4)]], {
+      duration: 0.1,
+    });
+
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0].status).toBe("accepted");
+    expect(attempts[0].candidateCount).toBe(2);
+    expect(attempts[0].bestUnselectedCandidateScore).toBeCloseTo(0.4, 6);
   });
 });

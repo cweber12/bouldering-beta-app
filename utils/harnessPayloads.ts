@@ -36,6 +36,25 @@ export interface DetectorAttemptRegion {
 export type DetectorAttemptStatus = "accepted" | "missing" | "flipRejected" | "qualityRejected";
 export type DetectorAttemptSelectionMethod = "tap" | "tracked" | "strongest";
 
+/** One rung of the re-acquire search: the region searched, and what it found there. */
+export interface DetectorAttemptReacquireStep {
+  /** Normalized rectangle fed to MediaPipe for this rung. */
+  region: DetectorAttemptRegion;
+  /** True when this rung produced the Climber pose the attempt selected. */
+  found: boolean;
+}
+
+/**
+ * Why a `missing` attempt selected nothing:
+ *
+ * - `no-candidates` — MediaPipe returned zero poses on every region searched,
+ *   so there was nothing to select. A detector failure.
+ * - `identity-gated` — candidates existed, but every one fell outside the
+ *   identity gate in `selectClimberPose`. A scanner gating decision, not a
+ *   detector failure.
+ */
+export type DetectorAttemptMissReason = "no-candidates" | "identity-gated";
+
 interface DetectorAttemptBase {
   /** Video timestamp in seconds on the dev Analyze 100 ms grid. */
   timestamp: number;
@@ -48,6 +67,21 @@ interface DetectorAttemptBase {
   reacquireAttempted: boolean;
   /** True only when full-frame fallback found and accepted the Climber. */
   reacquired: boolean;
+  /**
+   * The regions the re-acquire searched, in search order, each flagged with
+   * whether it found the Climber. Empty when no re-acquire ran. Absent on
+   * payloads produced before this field existed — `reacquireAttempted` /
+   * `reacquired` remain the compatible summary.
+   */
+  reacquireSteps?: DetectorAttemptReacquireStep[];
+  /**
+   * Highest mean keypoint confidence among the MediaPipe candidates that were
+   * *not* selected on this attempt, across every region searched. `null` when
+   * every returned candidate was selected or none was returned — which is what
+   * separates a hard miss (nothing seen) from a near miss (a candidate just
+   * outside the gate). Absent on payloads produced before this field existed.
+   */
+  bestUnselectedCandidateScore?: number | null;
   /** Selected MediaPipe Climber pose before scanner-side rejection or mutation; empty when none was selected. */
   rawKeypoints: Keypoint[];
   /** Pixel conditions for `initialSearchRegion`; `null` when unavailable. */
@@ -64,6 +98,7 @@ export interface AcceptedDetectorAttempt extends DetectorAttemptBase {
   detectionRegion: DetectorAttemptRegion;
   /** Scanner-accepted keypoints after detector gates; present only for accepted attempts. */
   acceptedKeypoints: Keypoint[];
+  missReason?: never;
 }
 
 export interface MissingDetectorAttempt extends DetectorAttemptBase {
@@ -71,18 +106,22 @@ export interface MissingDetectorAttempt extends DetectorAttemptBase {
   rawKeypoints: [];
   detectionRegion: null;
   acceptedKeypoints?: never;
+  /** Why nothing was selected; absent on payloads produced before this field existed. */
+  missReason?: DetectorAttemptMissReason | null;
 }
 
 export interface FlipRejectedDetectorAttempt extends DetectorAttemptBase {
   status: "flipRejected";
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
+  missReason?: never;
 }
 
 export interface QualityRejectedDetectorAttempt extends DetectorAttemptBase {
   status: "qualityRejected";
   detectionRegion: DetectorAttemptRegion;
   acceptedKeypoints?: never;
+  missReason?: never;
 }
 
 export type DetectorAttempt =
