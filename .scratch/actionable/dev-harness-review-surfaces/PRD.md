@@ -1,6 +1,6 @@
 # Make the Harness's Evidence Human-Reviewable
 
-Status: ready-for-agent
+Status: in-progress
 Disposition: actionable
 
 Spec inputs: this repo's own artifacts — `detections/<ts>_pose.json`

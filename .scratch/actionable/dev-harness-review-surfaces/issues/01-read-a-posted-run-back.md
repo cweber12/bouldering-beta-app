@@ -1,7 +1,8 @@
 # Read a posted detection run back off disk
 
-Status: in-progress
+Status: done
 Branch: feat/harness-run-read
+Merged: da23515
 Type: AFK
 
 ## Parent
