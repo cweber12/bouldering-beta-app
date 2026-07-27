@@ -1,6 +1,7 @@
 # Read a posted detection run back off disk
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-run-read
 Type: AFK
 
 ## Parent
@@ -60,21 +61,21 @@ missing them is valid v1 evidence and must load, not 422.
 
 ## Acceptance criteria
 
-- [ ] `GET` with a `key` lists every `*_pose.json` in the Bundle's
+- [x] `GET` with a `key` lists every `*_pose.json` in the Bundle's
       `detections/`, newest first, with `runTs`, `writtenAt`, `setupHash`,
       `groundTruthHash`, `pairsWithTruth` and verdict counts.
-- [ ] `GET` with `key` + `run` returns that run's `HarnessPosePayload`.
-- [ ] Neither shape returns frames or detector attempts on the *list* response.
-- [ ] A run written before `detectorAttempts` / `missReason` /
+- [x] `GET` with `key` + `run` returns that run's `HarnessPosePayload`.
+- [x] Neither shape returns frames or detector attempts on the *list* response.
+- [x] A run written before `detectorAttempts` / `missReason` /
       `selectionMethod` existed loads successfully with those fields absent.
-- [ ] A malformed or truncated run file yields a clean error, never a partial
+- [x] A malformed or truncated run file yields a clean error, never a partial
       object or an unhandled throw.
-- [ ] The route 404s outside development (`HARNESS_ENABLED`), 400s an invalid or
+- [x] The route 404s outside development (`HARNESS_ENABLED`), 400s an invalid or
       traversing bundle key, and 404s an unknown run — matching the sibling
       routes' status vocabulary.
-- [ ] `POST` behaviour is unchanged: still a verbatim pass-through relay to the
+- [x] `POST` behaviour is unchanged: still a verbatim pass-through relay to the
       downloader.
-- [ ] No `any`. The parser returns a typed payload or an error.
+- [x] No `any`. The parser returns a typed payload or an error.
 
 ## Tests
 
@@ -83,3 +84,23 @@ missing them is valid v1 evidence and must load, not 422.
   and single-run happy paths, unknown run, malformed file.
 - `__tests__/utils/harnessRuns.test.ts` for the pure parser, including the
   legacy-fields-absent case.
+
+## Comments
+
+Two things shipped beyond the written criteria, both from validating the parser
+against the real corpus (396 run files under `HARNESS_ANALYSIS_ROOT`) before
+writing the tests:
+
+- **`malformed` on the list entry.** A run file the reviewer cannot open still
+  belongs in the list — it exists on disk and the operator should see it — but a
+  row showing all-null stamps is indistinguishable from a legitimate legacy run.
+  One boolean says which.
+- **Verdict counts keep the verified / unverified split** (`{ verified,
+  unverified }` rather than one merged `VerdictCounts`). Merging them would hide
+  exactly the distinction `harnessScoring` exists to preserve, and the split
+  costs sixteen numbers.
+
+The rollup nests its counts one level deeper than assumed while writing the
+parser (`rollup.verified.counts`, not `rollup.verified`) — the corpus probe is
+what caught it. All 396 run files parse; the 14 that yield no verdicts are
+exactly the 14 that posted unscored.

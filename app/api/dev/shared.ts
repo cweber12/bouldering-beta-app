@@ -20,6 +20,7 @@ import {
   scaffoldIsUntrackable,
 } from "@/utils/harnessFreshness";
 import { parseViTPoseScaffold, type ViTPoseScaffold } from "@/utils/harnessViTPose";
+import { summarizeRunFile, type HarnessRunFacts } from "@/utils/harnessRuns";
 
 /** True only in a local dev server — the harness never exists in prod. */
 export const HARNESS_ENABLED = process.env.NODE_ENV === "development";
@@ -220,27 +221,6 @@ async function readJsonSetupHash(filePath: string): Promise<string | null> {
   }
 }
 
-/**
- * Read a detection run's stamped `setupHash`. The downloader wraps each posted
- * run in an envelope (`{ video_key, route_folder, run_ts, written_at, type,
- * data }`) with the scanner's payload under `data`, so the stamp lives at
- * `data.setupHash`; a bare payload (top-level `setupHash`) is accepted too.
- */
-async function readRunSetupHash(filePath: string): Promise<string | null> {
-  try {
-    const parsed = JSON.parse(await readFile(filePath, "utf8")) as Record<string, unknown>;
-    const data =
-      typeof parsed.data === "object" && parsed.data !== null
-        ? (parsed.data as Record<string, unknown>)
-        : parsed;
-    return typeof data.setupHash === "string" && data.setupHash.length > 0
-      ? data.setupHash
-      : null;
-  } catch {
-    return null;
-  }
-}
-
 /** The bundle's current `setup.json` `setupHash`, or null when uncalibrated. */
 export async function readSetupHash(bundleDir: string): Promise<string | null> {
   return readJsonSetupHash(path.join(bundleDir, "setup.json"));
@@ -256,6 +236,63 @@ async function readScaffold(bundleDir: string): Promise<ViTPoseScaffold | null> 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Detection runs — one walk, one per-file read, shared by the corpus lister's
+// counts and the run-list route. The files are the large artifacts in a bundle
+// (tens of MB each), so the walk is separated from the read: a caller that only
+// needs the count never parses them.
+// ---------------------------------------------------------------------------
+
+/** A detection run file located on disk, before it has been read. */
+export interface RunFileRef {
+  /** The run identifier — the `<runTs>` of `<runTs>_pose.json`. */
+  runTs: string;
+  /** Absolute path to the run file. */
+  filePath: string;
+}
+
+/** The `detections/` directory of a bundle. */
+export function detectionsDir(bundleDir: string): string {
+  return path.join(bundleDir, "detections");
+}
+
+/**
+ * Every `*_pose.json` run file in a bundle's `detections/`, newest first. Run
+ * identifiers are `YYYYMMDD-HHMMSS`, so a reverse lexicographic sort is
+ * chronological. Empty when the bundle has never been analyzed.
+ */
+export async function listRunFiles(dir: string): Promise<RunFileRef[]> {
+  let files: string[];
+  try {
+    files = (await readdir(dir)).filter((f) => f.endsWith("_pose.json"));
+  } catch {
+    return [];
+  }
+  return files
+    .map((f) => ({ runTs: f.slice(0, -"_pose.json".length), filePath: path.join(dir, f) }))
+    .sort((a, b) => b.runTs.localeCompare(a.runTs));
+}
+
+/**
+ * Read one run file's list-level facts — the stamps and the verdict rollup,
+ * never the frames or detector attempts. An unreadable or non-JSON file comes
+ * back flagged `malformed` rather than throwing: one bad file must not take out
+ * a bundle's listing (or the whole corpus walk).
+ */
+export async function readRunFacts(ref: RunFileRef): Promise<HarnessRunFacts> {
+  try {
+    return summarizeRunFile(JSON.parse(await readFile(ref.filePath, "utf8")));
+  } catch {
+    return {
+      writtenAt: null,
+      setupHash: null,
+      groundTruthHash: null,
+      verdicts: null,
+      malformed: true,
+    };
+  }
+}
+
 /** Detection-run counts: total `*_pose.json` runs and how many pair with truth. */
 interface RunCounts {
   runCount: number;
@@ -268,31 +305,28 @@ interface RunCounts {
  * the bundle has Ground Truth — split them into those whose stamped `setupHash`
  * pairs with the truth (real evaluation evidence) and those that do not (they
  * produce none in the harness). A truthless bundle pairs nothing, so both
- * counts stay 0 there — that is its own already-surfaced state.
+ * counts stay 0 there — that is its own already-surfaced state, and it is why
+ * the files are only opened when there is truth to pair against.
  */
 async function countRuns(
-  detectionsDir: string,
+  dir: string,
   truthSetupHash: string | null,
   setupHash: string | null,
   hasTruth: boolean,
 ): Promise<RunCounts> {
-  let files: string[];
-  try {
-    files = (await readdir(detectionsDir)).filter((f) => f.endsWith("_pose.json"));
-  } catch {
-    return { runCount: 0, pairedRunCount: 0, unpairedRunCount: 0 };
+  const refs = await listRunFiles(dir);
+  if (!hasTruth) {
+    return { runCount: refs.length, pairedRunCount: 0, unpairedRunCount: 0 };
   }
 
   let pairedRunCount = 0;
   let unpairedRunCount = 0;
-  if (hasTruth) {
-    for (const f of files) {
-      const runHash = await readRunSetupHash(path.join(detectionsDir, f));
-      if (runPairsWithTruth(runHash, truthSetupHash, setupHash)) pairedRunCount += 1;
-      else unpairedRunCount += 1;
-    }
+  for (const ref of refs) {
+    const { setupHash: runHash } = await readRunFacts(ref);
+    if (runPairsWithTruth(runHash, truthSetupHash, setupHash)) pairedRunCount += 1;
+    else unpairedRunCount += 1;
   }
-  return { runCount: files.length, pairedRunCount, unpairedRunCount };
+  return { runCount: refs.length, pairedRunCount, unpairedRunCount };
 }
 
 /**
@@ -344,7 +378,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
       const [scaffold, { runCount, pairedRunCount, unpairedRunCount }, setupFacts] =
         await Promise.all([
           readScaffold(bundleDir),
-          countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
+          countRuns(detectionsDir(bundleDir), truthSetupHash, setupHash, hasGroundTruth),
           readSetupFacts(bundleDir),
         ]);
       const truthStale = hasGroundTruth && truthIsStale(truthSetupHash, setupHash);
