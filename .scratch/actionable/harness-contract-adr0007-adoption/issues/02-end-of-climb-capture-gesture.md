@@ -1,6 +1,7 @@
 # End-of-climb capture gesture in the Calibrator
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/adr0007-02-climb-end-gesture
 Type: interactive
 
 ## Parent
@@ -36,21 +37,65 @@ Open design questions to settle before building (not to guess at):
   behaves as today, so it is not an error state, but it is a to-do the sweep
   needs to surface.
 
+## Design decisions
+
+The three open questions, settled before building:
+
+- **Both surfaces, one editor.** `ClimbEndEditor` owns the gesture; a corpus-wide
+  `ClimbEndSweeper` wraps it for the ninety-bundle backlog, and the Calibrator
+  opens the same editor in a `Modal` for revising a single bundle mid-
+  re-calibration. Sweep ergonomics was the requirement that decided it — a
+  per-bundle-only path leaves the afternoon intact.
+- **Scrub plus a local film strip.** The paused video frame is the primary
+  confirmation; a ±2 s strip of Detection Frame thumbnails gives frame-accurate
+  context. Deliberately *local*: thumbnailing a whole video is hundreds of
+  sequential seeks per bundle, which at ninety bundles is the whole cost.
+- **Unmarked is visible.** A `climb` column on the corpus table reads the window
+  or `unmarked`, and the Batch **Mark ends** button carries the backlog count. Not
+  an error state — a to-do the sweep surfaces.
+
 ## Acceptance criteria
 
-- [ ] A human can set, change, and clear `climbEnd` for a bundle without editing
+- [x] A human can set, change, and clear `climbEnd` for a bundle without editing
       JSON by hand.
-- [ ] The marker is confirmable against the video — the operator can see the
+- [x] The marker is confirmable against the video — the operator can see the
       frame they are marking, not just a number.
-- [ ] Bundles without a marker are distinguishable from bundles marked at the
+- [x] Bundles without a marker are distinguishable from bundles marked at the
       video's end, both in the UI and in `setup.json` (absent, not `duration`).
-- [ ] Setting the marker leaves `setupHash` unchanged, so no run goes stale and
+- [x] Setting the marker leaves `setupHash` unchanged, so no run goes stale and
       no Ground Truth is orphaned.
-- [ ] A marker at or before the setup tap's `t` is rejected in the UI with a
+- [x] A marker at or before the setup tap's `t` is rejected in the UI with a
       reason, not silently clamped.
-- [ ] Dismiss/close seams use `useClickOutside` / `useEscapeKey` or
+- [x] Dismiss/close seams use `useClickOutside` / `useEscapeKey` or
       `components/ui/Modal`, per the hooks rule in AGENTS.md.
-- [ ] Semantic colour tokens only — no raw Tailwind palette classes.
+- [x] Semantic colour tokens only — no raw Tailwind palette classes.
+
+## What landed
+
+- `utils/harnessClimbWindow.ts` — the pure layer: `planClimbEndSweep` (queue =
+  set-up-but-unmarked, already-marked counted, no-Setup skipped because the route
+  422s a climb-end-only write with nothing to merge onto), `checkClimbEnd`
+  (mirrors `parseClimbEndEdit`, pinned by a test that walks both over the same
+  candidates), `snapToDetectionFrame`, `detectionFrameWindow`, and the window
+  labels. `detectionFrameCount` / `detectionFrameTime` were lifted out of
+  `buildDetectionGrid` so snapping and windowing bound an index without
+  allocating a whole grid per keystroke.
+- `components/dev/ClimbEndEditor.tsx` — presentational; owns scrub position only,
+  so the same editor drives both surfaces. Opens at the saved marker, else the
+  **last** frame: a topout is near the end, so the search is a short drag back
+  rather than a scrub across the clip. The marker snaps to the nearest Detection
+  Frame because scoring is per Detection Frame. A candidate at or before the
+  climb start disables Set and shows the reason, naming the setup tap's time.
+- `components/dev/ClimbEndSweeper.tsx` — walks the backlog, one video in memory at
+  a time, auto-advancing on set or clear. Skip leaves a bundle unmarked, which the
+  harness reads as an open window, so skipping is a deferral, never a wrong
+  answer. Submits no jobs and burns no GPU time.
+- `climbStart` / `climbEnd` on the corpus listing (`app/api/dev/shared.ts`,
+  `utils/harnessCorpus.ts`), read off the `setup.json` already opened for the
+  labels. `climbStart` is `climberPoint.t` — the **setup** tap, never the seed
+  tap.
+- Harness page: the Batch **Mark ends** button with its backlog count, and the
+  `climb` column.
 
 ## Comments
 

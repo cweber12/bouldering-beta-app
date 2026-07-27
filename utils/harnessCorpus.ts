@@ -27,6 +27,10 @@ export interface CorpusItem {
    * re-seed lands landmarks (utils/harnessFreshness, scoped in app/api/dev/shared).
    */
   untrackable: boolean;
+  /** The climb start: the *setup* tap's `t`, when the Setup carries one. */
+  climbStart?: number;
+  /** The end-of-climb marker; absent means the window is open on that side. */
+  climbEnd?: number;
   runCount: number;
   /** Runs whose stamped hash pairs with the truth — real evidence; 0 ⇒ un-analyzed. */
   pairedRunCount: number;

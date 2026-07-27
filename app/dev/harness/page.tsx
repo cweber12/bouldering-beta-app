@@ -26,6 +26,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Analyzer from "@/components/dev/Analyzer";
 import BatchAnalyzer from "@/components/dev/BatchAnalyzer";
 import ReseedSweeper, { BATCH_CALIBRATE_COPY } from "@/components/dev/ReseedSweeper";
+import ClimbEndSweeper from "@/components/dev/ClimbEndSweeper";
 import SetupEditor from "@/components/dev/SetupEditor";
 import Calibrator from "@/components/dev/Calibrator";
 import { planBatchAnalyze, type BatchAnalyzePlan } from "@/utils/harnessBatch";
@@ -35,6 +36,12 @@ import {
   type ReseedPlan,
   type BatchCalibratePlan,
 } from "@/utils/harnessReseed";
+import {
+  planClimbEndSweep,
+  formatClimbWindow,
+  CLIMB_WINDOW_UNMARKED,
+  type ClimbEndPlan,
+} from "@/utils/harnessClimbWindow";
 import { type CorpusItem, type HarnessMode } from "@/utils/harnessCorpus";
 
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -90,6 +97,10 @@ export default function HarnessPage() {
   // truthless (never yet accepted) population instead of the stale one.
   const [calibratePlan, setCalibratePlan] = useState<BatchCalibratePlan<CorpusItem> | null>(null);
   const calibratePreview = useMemo(() => (items ? planBatchCalibrate(items) : null), [items]);
+  // A running Mark-ends sweep. Frozen at click like the others, though this one
+  // submits no jobs — every write is an off-hash merging PUT.
+  const [climbEndPlan, setClimbEndPlan] = useState<ClimbEndPlan<CorpusItem> | null>(null);
+  const climbEndPreview = useMemo(() => (items ? planClimbEndSweep(items) : null), [items]);
 
   const refreshList = useCallback(async () => {
     setListError(null);
@@ -158,6 +169,19 @@ export default function HarnessPage() {
     );
   }
 
+  if (climbEndPlan) {
+    return (
+      <ClimbEndSweeper
+        plan={climbEndPlan}
+        onBack={() => {
+          setClimbEndPlan(null);
+          void refreshList();
+        }}
+        onSaved={refreshList}
+      />
+    );
+  }
+
   if (selected?.mode === "analyze") {
     return (
       <Analyzer
@@ -219,6 +243,16 @@ export default function HarnessPage() {
           <span className="mr-1 text-xs font-medium uppercase tracking-wide text-fg-muted">
             Batch
           </span>
+          <button
+            type="button"
+            onClick={() => climbEndPreview && setClimbEndPlan(climbEndPreview)}
+            disabled={!climbEndPreview || climbEndPreview.queue.length === 0}
+            title="Walk every set-up bundle that has no end-of-climb marker, one at a time — scrub to the topout and mark it. Off-hash: no run goes stale and no Ground Truth is orphaned."
+            className={BTN_NEUTRAL}
+          >
+            Mark ends
+            {climbEndPreview && <CountPill n={climbEndPreview.queue.length} tone="neutral" />}
+          </button>
           <button
             type="button"
             onClick={() => calibratePreview && setCalibratePlan(calibratePreview)}
@@ -287,6 +321,7 @@ export default function HarnessPage() {
                 <th className="py-2 pr-3 font-medium">video</th>
                 <th className="py-2 pr-3 font-medium">setup</th>
                 <th className="py-2 pr-3 font-medium">truth</th>
+                <th className="py-2 pr-3 font-medium">climb</th>
                 <th className="py-2 pr-3 font-medium tabular-nums">runs</th>
                 <th className="py-2 font-medium text-right">actions</th>
               </tr>
@@ -359,6 +394,23 @@ export default function HarnessPage() {
                     ) : (
                       <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
                         accepted
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-3">
+                    {it.climbEnd === undefined ? (
+                      <span
+                        className="rounded bg-surface-alt px-1.5 py-0.5 text-xs text-fg-muted"
+                        title="No end-of-climb marker — the window is open on that side, so post-topout frames are scored in-scope. Not an error; use Mark ends to author one."
+                      >
+                        {CLIMB_WINDOW_UNMARKED}
+                      </span>
+                    ) : (
+                      <span
+                        className="font-mono text-xs tabular-nums text-fg-muted"
+                        title="The climb window: setup tap to end-of-climb marker. Off-hash — marking it never changed this bundle's setupHash."
+                      >
+                        {formatClimbWindow(it.climbStart, it.climbEnd)}
                       </span>
                     )}
                   </td>
