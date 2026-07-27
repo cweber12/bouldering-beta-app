@@ -19,6 +19,12 @@ its existing `setupHash` freshness gate); off-hash convention (`utils/harnessSet
 Glossary: CONTEXT.md — **Scan Setup**, **Ground Truth**, **Detection Frame**,
 **Detection Error**. This feature adds **Detection Annotation**, **failure class**,
 **distractor**.
+Depends on: `.scratch/actionable/dev-harness-review-surfaces/PRD.md`. That PRD
+builds the run reviewer — the frame image with the run pose, the Ground Truth
+pose and the attempt's pixel conditions drawn together. An operator cannot
+classify a distractor or a failure mode they cannot see, so the annotation
+surface here composes onto that viewer rather than standing up its own. This PRD
+sits behind it in `.scratch/ROADMAP.md`.
 
 ## Problem Statement
 

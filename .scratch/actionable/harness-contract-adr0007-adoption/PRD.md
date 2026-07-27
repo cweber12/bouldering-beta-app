@@ -66,7 +66,11 @@ slot, the unhandled `200 skipped`, `force`, and the `splitTaps` capability gate.
    invalidate the 90 existing calibrations or disturb the freshness chain
    (ADR 0020). `climb_start` is the setup tap's `t` — no new gesture.
 2. **A capture gesture for `climbEnd`** in the harness Calibrator, so the marker
-   can be authored at corpus scale rather than hand-edited.
+   can be authored at corpus scale rather than hand-edited. *(Landed as issue 02.
+   The corpus-wide `ClimbEndSweeper` half is superseded by
+   `.scratch/actionable/dev-harness-review-surfaces/issues/05-climb-end-in-review-retire-sweep.md`,
+   which folds marker authoring into the Ground Truth review; `ClimbEndEditor`
+   and the off-hash save path are unchanged and carry forward.)*
 3. **The ADR 0007 edges**: drop the `climber_point` alias, treat `200 skipped` as
    success with the artifact present (never poll it), send `force`, and gate the
    new request fields on the `splitTaps` capability so a mixed-version deployment

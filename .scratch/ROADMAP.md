@@ -34,9 +34,18 @@ Actionable PRDs that are not first in line.
 
 | Order | PRD                                                              | Priority |
 | ----- | ---------------------------------------------------------------- | -------- |
-| 1     | `.scratch/actionable/dev-detection-annotation-ui/PRD.md`         | `P2`     |
-| 2     | `.scratch/actionable/pose-pipeline-contract-authority/PRD.md`    | `P2`     |
-| 3     | `.scratch/actionable/scan-pipeline-isolation-testability/PRD.md` | `P2`     |
+| 1     | `.scratch/actionable/dev-harness-review-surfaces/PRD.md`         | `P2`     |
+| 2     | `.scratch/actionable/dev-detection-annotation-ui/PRD.md`         | `P2`     |
+| 3     | `.scratch/actionable/pose-pipeline-contract-authority/PRD.md`    | `P2`     |
+| 4     | `.scratch/actionable/scan-pipeline-isolation-testability/PRD.md` | `P2`     |
+
+`dev-detection-annotation-ui` sits behind `dev-harness-review-surfaces`: its
+`failureClass` / `distractor` controls annotate conditions the operator has to
+be able to see first, and the review surfaces PRD builds that viewer.
+
+`harness-contract-adr0007-adoption` is `in-progress` and not listed above — its
+remaining issue 03 is an independent correctness fix that can land in any order.
+Its issue 02 sweep is superseded by `dev-harness-review-surfaces` issue 05.
 
 ## Parked
 

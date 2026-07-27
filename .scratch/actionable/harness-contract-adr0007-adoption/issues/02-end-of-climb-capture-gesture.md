@@ -108,3 +108,14 @@ The three open questions, settled before building:
 - Ninety bundles need a marker for the reset to be worth running once. Whatever
   the surface, sweep ergonomics are the requirement that matters most.
 - Dev-harness only. No user-visible scan surface changes.
+- **Partially superseded (2026-07-27).** The "both surfaces, one editor" decision
+  above is revised by
+  `.scratch/actionable/dev-harness-review-surfaces/issues/05-climb-end-in-review-retire-sweep.md`:
+  the corpus-wide `ClimbEndSweeper` and the **Mark ends** batch button are
+  retired, and the marker is authored inside the Ground Truth review, where the
+  operator is already looking at the same frames of the same Bundle. Sweep
+  ergonomics — the requirement that decided the sweep here — is met by that
+  review's prev/next Bundle traversal instead. `ClimbEndEditor`, the off-hash
+  `saveClimbEnd` path, the `climb` column and the pure helpers in
+  `utils/harnessClimbWindow.ts` are unchanged and carry forward. This issue
+  stays `done`: it landed and its acceptance criteria held.
