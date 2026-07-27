@@ -1,7 +1,8 @@
 # Run review: the per-frame viewer
 
-Status: in-progress
+Status: done
 Branch: feat/harness-run-reviewer
+Merged: de9e2ec
 Type: interactive
 
 ## Parent
