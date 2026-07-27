@@ -114,3 +114,65 @@ describe("GroundTruthReviewer", () => {
     expect(screen.queryByTitle(/Place right_wrist/i)).toBeNull();
   });
 });
+
+/**
+ * The seek / canvas / zoom machinery moved into the shared `FrameStage` so the
+ * run reviewer could draw two skeletons on the same stage. These pin the parts
+ * of it that reach the author through this component, so the extraction stays
+ * behaviour-preserving.
+ */
+describe("GroundTruthReviewer stage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the zoom control on the reviewer's toolbar", () => {
+    renderReviewer();
+
+    const zoomIn = screen.getByRole("button", { name: "Zoom in" });
+    const zoomOut = screen.getByRole("button", { name: "Zoom out" });
+
+    // At 1x there is nothing to zoom out of, and no reset to offer.
+    expect(zoomOut.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("1.0x")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "reset" })).toBeNull();
+
+    fireEvent.click(zoomIn);
+    expect(screen.getByText("1.5x")).toBeTruthy();
+    expect(zoomOut.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "reset" }));
+    expect(screen.getByText("1.0x")).toBeTruthy();
+  });
+
+  it("seeks the frame's video to the seed frame's timestamp", () => {
+    let time = 0;
+    Object.defineProperty(HTMLMediaElement.prototype, "currentTime", {
+      configurable: true,
+      get: () => time,
+      set: (v: number) => {
+        time = v;
+      },
+    });
+
+    const { container } = render(
+      <GroundTruthReviewer
+        videoSrc="blob:video"
+        videoWidth={720}
+        videoHeight={1280}
+        seedFrame={frame({ timestamp: 4.2 })}
+        flag="auto"
+        contextKeypoints={{}}
+        onFlagChange={vi.fn()}
+      />,
+    );
+
+    const video = container.querySelector("video");
+    expect(video?.getAttribute("src")).toBe("blob:video");
+    // jsdom reports readyState 0, so the seek waits for loadeddata.
+    fireEvent.loadedData(video!);
+    expect(time).toBe(4.2);
+
+    delete (HTMLMediaElement.prototype as Partial<HTMLMediaElement>).currentTime;
+  });
+});

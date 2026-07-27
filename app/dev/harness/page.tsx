@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Dev-only detection eval harness — three-act corpus manager.
+ * Dev-only detection eval harness — corpus manager.
  *
  * Lists the external downloader's Test Video corpus (via /api/dev/corpus) and
- * routes each video into one of three explicit acts, kept separate:
+ * routes each video into one of three explicit authoring acts, kept separate:
  *
  *  - **Setup** (SetupEditor): author the Scan Setup — Climber Crop, Wall Crop,
  *    analysis tap, panning, Quality Tier — plus condition-label metadata, by
@@ -18,6 +18,11 @@
  *  - **Analyze** (Analyzer): run the production pipeline against the saved Scan
  *    Setup, render the skeleton + diagnostics, and post the run.
  *
+ * Plus a read-only fourth, **Review** (RunReviewer): open a run already posted
+ * to disk and step its frames against Ground Truth. It writes nothing, and
+ * unlike the acts above it works on evidence from any session — a batch-posted
+ * run reviews exactly like a manual one.
+ *
  * Bulk actions batch Analyze over fresh-truth bundles and re-seed stale-truth
  * ones. Rendered only in development. See docs/adr/0017, 0018, 0019 and 0020.
  */
@@ -29,6 +34,7 @@ import ReseedSweeper, { BATCH_CALIBRATE_COPY } from "@/components/dev/ReseedSwee
 import ClimbEndSweeper from "@/components/dev/ClimbEndSweeper";
 import SetupEditor from "@/components/dev/SetupEditor";
 import Calibrator from "@/components/dev/Calibrator";
+import RunReviewer from "@/components/dev/RunReviewer";
 import { planBatchAnalyze, type BatchAnalyzePlan } from "@/utils/harnessBatch";
 import {
   planReseedSweep,
@@ -192,6 +198,10 @@ export default function HarnessPage() {
         onDone={refreshList}
       />
     );
+  }
+
+  if (selected?.mode === "review") {
+    return <RunReviewer item={selected.item} onBack={() => setSelected(null)} />;
   }
 
   if (selected?.mode === "setup") {
@@ -447,6 +457,19 @@ export default function HarnessPage() {
                         className={`${BTN_NEUTRAL} ${ROW_BTN}`}
                       >
                         {it.hasGroundTruth ? "Re-calibrate" : "Calibrate"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelected({ item: it, mode: "review" })}
+                        disabled={it.runCount === 0}
+                        title={
+                          it.runCount === 0
+                            ? "No posted run to review — analyze this video first"
+                            : "Look at what the detector saw frame by frame, against Ground Truth"
+                        }
+                        className={`${BTN_NEUTRAL} ${ROW_BTN}`}
+                      >
+                        Review
                       </button>
                       <button
                         type="button"

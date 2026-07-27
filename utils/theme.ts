@@ -79,6 +79,11 @@ export const dark = {
   cropRegion: "#38bdf8", // Adaptive Crop search region (detected)
   cropLandmark: "#c084fc", // tight landmark box (deriveClimberCrop)
   cropMiss: "#f87171", // search region on a miss (no pose found)
+  // Run review overlay poses — the two skeletons compared on the frame stage.
+  // Displacement reads as the gap between them, so the pair is chosen for
+  // contrast against each other and the crop colours above.
+  truthPose: "#a3e635", // the Ground Truth reference
+  runPose: "#f472b6", // the pose the run actually held
 } as const;
 
 // ─── Light theme canvas values ───────────────────────────────
@@ -108,6 +113,8 @@ export const light = {
   cropRegion: "#38bdf8", // same colours (dev harness overlay, theme-independent)
   cropLandmark: "#c084fc",
   cropMiss: "#f87171",
+  truthPose: "#a3e635",
+  runPose: "#f472b6",
 } as const;
 
 export type Theme = typeof dark;
