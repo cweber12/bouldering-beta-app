@@ -1,7 +1,8 @@
 # End-of-climb capture gesture in the Calibrator
 
-Status: in-progress
+Status: done
 Branch: feat/adr0007-02-climb-end-gesture
+Merged: 269c68f
 Type: interactive
 
 ## Parent
