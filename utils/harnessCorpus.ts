@@ -39,5 +39,9 @@ export interface CorpusItem {
   analysisInputs: unknown;
 }
 
-/** Which act the corpus list opened a video for — the three are kept separate. */
-export type HarnessMode = "setup" | "calibrate" | "analyze";
+/**
+ * Which act the corpus list opened a video for. The three authoring acts are
+ * kept separate; `review` is the read-only fourth — it looks at evidence a run
+ * already posted and writes nothing.
+ */
+export type HarnessMode = "setup" | "calibrate" | "analyze" | "review";

@@ -1,6 +1,7 @@
 # Run review: the per-frame viewer
 
-Status: ready-for-agent
+Status: in-progress
+Branch: feat/harness-run-reviewer
 Type: interactive
 
 ## Parent
@@ -91,22 +92,22 @@ without leaving the surface.
 
 ## Acceptance criteria
 
-- [ ] A **Review** action on each corpus row opens the reviewer; it is disabled
+- [x] A **Review** action on each corpus row opens the reviewer; it is disabled
       when the Bundle has no posted run.
-- [ ] The reviewer works identically for a run posted by Batch Analyze and one
+- [x] The reviewer works identically for a run posted by Batch Analyze and one
       posted by a manual Analyze, and works after a full page reload.
-- [ ] The run picker defaults to the newest paired run and marks runs scored
+- [x] The run picker defaults to the newest paired run and marks runs scored
       against a superseded `groundTruthHash`.
-- [ ] Stepping the filmstrip changes the frame image, both skeletons, the
+- [x] Stepping the filmstrip changes the frame image, both skeletons, the
       verdict and the conditions together and consistently.
-- [ ] The Ground Truth pose and the run pose are visually distinguishable on the
+- [x] The Ground Truth pose and the run pose are visually distinguishable on the
       stage, and either can be hidden.
-- [ ] The frame's Ground Truth `review` and `state` are visible on the frame.
-- [ ] `searchConditions` are shown for every attempt that carries them, and a
+- [x] The frame's Ground Truth `review` and `state` are visible on the frame.
+- [x] `searchConditions` are shown for every attempt that carries them, and a
       run predating `detectorAttempts` degrades to scoring-only without error.
-- [ ] Semantic colour tokens only; overlay colours also defined in
+- [x] Semantic colour tokens only; overlay colours also defined in
       `utils/theme.ts`.
-- [ ] No `any`.
+- [x] No `any`.
 
 ## Tests
 
@@ -114,3 +115,37 @@ without leaving the surface.
   stepping, a run with no `detectorAttempts`, and a frame with no scored row.
 - Extend `__tests__/components/dev/GroundTruthReviewer.test.tsx` to cover the
   extracted stage so the refactor is pinned.
+
+## Comments
+
+Verified in the browser against the real corpus, not only under vitest: opened
+`brown-power/CpO4rw3K8NM_20260721-224102` (8 runs) and stepped the strip. The
+`wrong` verdict at 0:00.5 reads as a visible leg-splay between the two
+skeletons, with `drift max 0.571 (right_knee)`, `auto` truth provenance and the
+attempt's `accepted / tracked / 1 candidate / 54.8 ms` beside it — the three
+causes the surface exists to separate. No console errors.
+
+Shape notes beyond the brief:
+
+- **The load seam is `hooks/useRunReview.ts`**, not inline in the component —
+  video + truth + run list + selected payload is the same kind of async
+  lifecycle `useAnalyzeRun` owns, and the list is deliberately kept separate
+  from the payload so picking a run does not pull tens of megabytes per option.
+- **The extracted base is `components/dev/FrameStage.tsx`**, taking a `paint`
+  callback plus `controls` / `status` / `caption` slots. `GroundTruthReviewer`
+  keeps its exact layout and behaviour through those slots — its seven existing
+  tests passed unchanged across the refactor, which is the real pin.
+- **Verdict tints collapse onto the strip's existing detector vocabulary**
+  (`good` → detected, `drift` → weak, everything worse → missing, `unscored` and
+  unprobed → no status). A verdict-native status vocabulary belongs with issue
+  03's fault stretches rather than as a widening of the shared stepper here.
+
+**Pre-existing defect found, not fixed here:** in the *light* theme the
+harness's neutral buttons render as black boxes with invisible labels, because
+`bg-surface-alt` bakes to its build-time (dark) value while `.text-fg` is
+correctly re-bound by the semantic utility bridge in `globals.css`. Confirmed
+pre-existing by reverting this branch's `globals.css` change and re-measuring:
+the untouched **Setup** button still computes `color: #1c1915` on
+`background: #15130f`. It affects Setup / Calibrate / Analyze and the run
+reviewer's sidebar identically, and it is a global theming issue worth its own
+issue rather than a widening of this one.

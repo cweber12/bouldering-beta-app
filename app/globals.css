@@ -64,6 +64,14 @@
   --color-hand-hold: #39b1d1;
   --color-foot-hold: #f6850c;
 
+  /* ─── Run review overlay poses (dev harness only) ───── */
+  /* The two skeletons compared on the run reviewer's frame stage. Displacement
+     has to read as the gap between them, so the pair is chosen for contrast
+     against each other and against the crop-overlay colours below.
+     Mirror of `truthPose` / `runPose` in utils/theme.ts. */
+  --color-truth-pose: #a3e635; /* the Ground Truth reference */
+  --color-run-pose: #f472b6; /* the pose the run actually held */
+
   /* ─── Fonts ──────────────────────────────────────────── */
   --font-sans: var(--font-inter);
   --font-display: var(--font-archivo);
@@ -157,6 +165,10 @@
   /* ── Holds overlay markers — same colours (drawn on a photo, theme-independent) ── */
   --color-hand-hold: #39b1d1;
   --color-foot-hold: #f6850c;
+
+  /* ── Run review overlay poses — same colours (drawn over video, theme-independent) ── */
+  --color-truth-pose: #a3e635;
+  --color-run-pose: #f472b6;
 
   /* ── Shadows — lighter, warmer transparency in light mode ── */
   --shadow-overlay: 0 12px 32px rgba(28, 25, 21, 0.18);
