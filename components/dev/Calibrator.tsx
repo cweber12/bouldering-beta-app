@@ -26,7 +26,9 @@ import SeedTapEditor from "@/components/dev/SeedTapEditor";
 import DetectionFrameStepper from "@/components/dev/DetectionFrameStepper";
 import GroundTruthReviewer from "@/components/dev/GroundTruthReviewer";
 import GroundTruthSeedStatus from "@/components/dev/GroundTruthSeedStatus";
+import ClimbEndEditor from "@/components/dev/ClimbEndEditor";
 import LoadingSpinner from "@/components/ui/LoadingSpinner";
+import Modal from "@/components/ui/Modal";
 import {
   buildGroundTruthScaffold,
   contextKeypointsAt,
@@ -62,7 +64,8 @@ import { scaffoldIsStale, truthIsStale } from "@/utils/harnessFreshness";
 import { probeVideoMeta, type VideoMeta } from "@/utils/probeVideoMeta";
 import { deriveSeedRegion } from "@/utils/cropContainment";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
-import { saveSeedTap, type ClimberPoint } from "@/utils/harnessSetup";
+import { saveSeedTap, saveClimbEnd, type ClimberPoint } from "@/utils/harnessSetup";
+import { formatClimbWindow } from "@/utils/harnessClimbWindow";
 import type { CorpusItem } from "@/utils/harnessCorpus";
 
 type RunPhase = "idle" | "saving" | "review" | "done" | "error";
@@ -93,12 +96,16 @@ export default function Calibrator({
   const [climberCrop, setClimberCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [wallCrop, setWallCrop] = useState<CropFraction>(DEFAULT_CROP);
   const [panning, setPanning] = useState(false);
-  // The climb window, both bounds read-only here. The start is the *setup* tap's
-  // time — held separately from `seedTap` precisely because conflating the two is
-  // the defect harness ADR 0007 removes. The end is carried forward so a re-seed
-  // never drops a marker the sweep authored; the gesture that sets it is issue 02.
+  // The climb window. The start is the *setup* tap's time — held separately from
+  // `seedTap` precisely because conflating the two is the defect harness ADR 0007
+  // removes — and is read-only here; only the Setup act moves it. The end is
+  // authored through the ClimbEndEditor modal below (issue 02) and carried
+  // forward onto the ViTPose request so a re-seed never drops it.
   const [setupTap, setSetupTap] = useState<ClimberPoint | null>(null);
   const [climbEnd, setClimbEnd] = useState<number | undefined>(undefined);
+  const [climbEndOpen, setClimbEndOpen] = useState(false);
+  const [climbEndSaving, setClimbEndSaving] = useState(false);
+  const [climbEndError, setClimbEndError] = useState<string | null>(null);
 
   // Ground Truth review: the pure scaffold seed, the working flag review, and
   // any previously-saved GT carried onto a re-seed by timestamp. The ref is what
@@ -306,6 +313,29 @@ export default function Calibrator({
     setPhase("review");
     requestViTPoseForGrid(gridFrames);
   }, [gridFrames, item.key, seedTap, requestViTPoseForGrid]);
+
+  // Persist the end-of-climb marker off-hash (`saveClimbEnd` is a merging PUT,
+  // so crops, the seed tap and `setupHash` are untouched — no run goes stale).
+  // `null` clears it, reopening the window. The route re-validates against the
+  // climb start and 422s, which surfaces in the editor rather than being clamped.
+  const handleClimbEndCommit = useCallback(
+    (value: number | null) => {
+      setClimbEndSaving(true);
+      setClimbEndError(null);
+      void (async () => {
+        try {
+          const saved = await saveClimbEnd(item.key, value);
+          setClimbEnd(saved ?? undefined);
+          setClimbEndOpen(false);
+        } catch (err) {
+          setClimbEndError(err instanceof Error ? err.message : String(err));
+        } finally {
+          setClimbEndSaving(false);
+        }
+      })();
+    },
+    [item.key],
+  );
 
   // Enter the flag review straight from the seed-ready scaffold on disk: no
   // ViTPose POST, no waiting. The seeding effect below carries prior flags
@@ -677,6 +707,24 @@ export default function Calibrator({
               {phaseLabel[phase]}
             </span>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              setClimbEndError(null);
+              setClimbEndOpen(true);
+            }}
+            title="Mark where this climb ends — a topout, or the point the attempt is over. Off-hash, so it never changes setupHash or unpairs prior runs."
+            className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
+          >
+            Climb end{" "}
+            <span
+              className={`font-mono tabular-nums ${
+                climbEnd === undefined ? "text-fg-muted" : "text-send"
+              }`}
+            >
+              {formatClimbWindow(setupTap?.t, climbEnd)}
+            </span>
+          </button>
           {showReviewShortcut && (
             <button
               type="button"
@@ -769,6 +817,44 @@ export default function Calibrator({
           disabled={busy}
         />
       </div>
+
+      {/* The per-Bundle marker path. The corpus-wide one is the Mark-ends sweep;
+          this is for revising a single Bundle while re-calibrating it. */}
+      <Modal
+        open={climbEndOpen}
+        onClose={() => setClimbEndOpen(false)}
+        ariaLabel="Mark the end of the climb"
+        containerClassName="p-4"
+        panelClassName="flex h-[min(90dvh,48rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-edge/40 bg-surface"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge/30 px-4 py-2">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium text-fg">End of climb</div>
+            <div className="truncate text-xs text-fg-muted">
+              Scrub to the topout — or where the attempt is over — and mark it. The window is a
+              scoring bound the harness applies; it never changes what this scanner analyses.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setClimbEndOpen(false)}
+            className="shrink-0 rounded-md bg-surface-alt px-3 py-1.5 text-xs text-fg"
+          >
+            Close
+          </button>
+        </div>
+        <div className="min-h-0 flex-1">
+          <ClimbEndEditor
+            key={videoUrl}
+            videoSrc={videoUrl}
+            climbStart={setupTap?.t}
+            climbEnd={climbEnd}
+            onCommit={handleClimbEndCommit}
+            busy={climbEndSaving}
+            error={climbEndError}
+          />
+        </div>
+      </Modal>
     </div>
   );
 }

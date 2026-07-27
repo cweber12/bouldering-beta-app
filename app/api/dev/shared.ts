@@ -134,6 +134,20 @@ export interface CorpusItem {
    * landmarks; the corpus row flags them rather than dropping them.
    */
   untrackable: boolean;
+  /**
+   * The climb start — the **setup** tap's `t` (`climberPoint.t`), when the Scan
+   * Setup carries one. Never the seed tap's: the seed tap moves with every
+   * re-seed, and conflating the two is the defect harness ADR 0007 removes.
+   * Absent when the bundle has no Setup, no tap, or a legacy tap without a time.
+   */
+  climbStart?: number;
+  /**
+   * The end-of-climb marker (`setup.json.climbEnd`), when the bundle has been
+   * marked. Absent means the window is open on that side — how the harness
+   * behaves today — so the corpus row reads it as a to-do, not an error. Surfaced
+   * so the Mark-ends sweep can plan its queue without reading ninety setups.
+   */
+  climbEnd?: number;
   /** Number of detection runs already written to the bundle. */
   runCount: number;
   /**
@@ -162,19 +176,35 @@ async function exists(p: string): Promise<boolean> {
   }
 }
 
-/**
- * The bundle's `setup.json` `analysisInputs` block, or null. The harness reads
- * condition labels only from here — the `metadata.json` `analysis_inputs`
- * passthrough is a legacy fallback for bundles calibrated before the move.
- */
-async function readSetupAnalysisInputs(bundleDir: string): Promise<unknown> {
+/** The `setup.json` facts the corpus row shows beyond the hash and its existence. */
+interface SetupFacts {
+  /**
+   * The `analysisInputs` block, or null. The harness reads condition labels only
+   * from here — the `metadata.json` `analysis_inputs` passthrough is a legacy
+   * fallback for bundles calibrated before the move.
+   */
+  analysisInputs: unknown;
+  /** `climberPoint.t` — the climb start. Absent on a legacy tap with no time. */
+  climbStart?: number;
+  /** The end-of-climb marker, absent when the bundle is unmarked. */
+  climbEnd?: number;
+}
+
+/** Read the bundle's `setup.json` facts, or empty when missing/invalid. */
+async function readSetupFacts(bundleDir: string): Promise<SetupFacts> {
   try {
     const parsed = JSON.parse(
       await readFile(path.join(bundleDir, "setup.json"), "utf8"),
     ) as Record<string, unknown>;
-    return parsed.analysisInputs ?? null;
+    const point = parsed.climberPoint as { t?: unknown } | null | undefined;
+    const climbStart = typeof point?.t === "number" && Number.isFinite(point.t) ? point.t : undefined;
+    const climbEnd =
+      typeof parsed.climbEnd === "number" && Number.isFinite(parsed.climbEnd)
+        ? parsed.climbEnd
+        : undefined;
+    return { analysisInputs: parsed.analysisInputs ?? null, climbStart, climbEnd };
   } catch {
-    return null;
+    return { analysisInputs: null };
   }
 }
 
@@ -311,11 +341,11 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         readSetupHash(bundleDir),
         readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
       ]);
-      const [scaffold, { runCount, pairedRunCount, unpairedRunCount }, setupLabels] =
+      const [scaffold, { runCount, pairedRunCount, unpairedRunCount }, setupFacts] =
         await Promise.all([
           readScaffold(bundleDir),
           countRuns(path.join(bundleDir, "detections"), truthSetupHash, setupHash, hasGroundTruth),
-          readSetupAnalysisInputs(bundleDir),
+          readSetupFacts(bundleDir),
         ]);
       const truthStale = hasGroundTruth && truthIsStale(truthSetupHash, setupHash);
       // Untrackable only matters where there is no fresh evidence to fall back on:
@@ -335,10 +365,12 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         truthStale,
         seedReady: scaffoldIsSeedReady(scaffold, setupHash),
         untrackable,
+        ...(setupFacts.climbStart !== undefined ? { climbStart: setupFacts.climbStart } : {}),
+        ...(setupFacts.climbEnd !== undefined ? { climbEnd: setupFacts.climbEnd } : {}),
         runCount,
         pairedRunCount,
         unpairedRunCount,
-        analysisInputs: setupLabels ?? meta.analysis_inputs ?? null,
+        analysisInputs: setupFacts.analysisInputs ?? meta.analysis_inputs ?? null,
       });
     }
   }

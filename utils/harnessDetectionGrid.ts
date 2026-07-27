@@ -32,6 +32,26 @@ export interface DetectionGridFrame {
 }
 
 /**
+ * How many Detection Frames a video of `durationSec` seconds has — the length
+ * {@link buildDetectionGrid} returns, without materialising it. Callers that
+ * only need to bound a grid index (snapping a marker, windowing a film strip)
+ * read this rather than allocating thousands of frames per keystroke.
+ *
+ * Zero for a duration that is not a usable number, matching the empty grid.
+ */
+export function detectionFrameCount(durationSec: number): number {
+  if (!Number.isFinite(durationSec) || durationSec < 0) return 0;
+  return (
+    Math.floor((durationSec * 1000 + DURATION_EPSILON_MS) / DETECTION_GRID_INTERVAL_MS) + 1
+  );
+}
+
+/** The timestamp of Detection Frame `index`, in seconds. */
+export function detectionFrameTime(index: number): number {
+  return (index * DETECTION_GRID_INTERVAL_MS) / 1000;
+}
+
+/**
  * The Detection Frame grid for a video of `durationSec` seconds: `i × 100 ms`
  * for `i = 0 … floor(duration / 100 ms)`, inclusive of the final frame when the
  * duration lands on a stride boundary. Deterministic for a given duration.
@@ -41,13 +61,10 @@ export interface DetectionGridFrame {
  * the video element themselves.
  */
 export function buildDetectionGrid(durationSec: number): DetectionGridFrame[] {
-  if (!Number.isFinite(durationSec) || durationSec < 0) return [];
-  const lastIndex = Math.floor(
-    (durationSec * 1000 + DURATION_EPSILON_MS) / DETECTION_GRID_INTERVAL_MS,
-  );
+  const count = detectionFrameCount(durationSec);
   const frames: DetectionGridFrame[] = [];
-  for (let i = 0; i <= lastIndex; i += 1) {
-    frames.push({ timestamp: (i * DETECTION_GRID_INTERVAL_MS) / 1000 });
+  for (let i = 0; i < count; i += 1) {
+    frames.push({ timestamp: detectionFrameTime(i) });
   }
   return frames;
 }
