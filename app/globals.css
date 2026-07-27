@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
-@theme inline {
+/*
+ * Not `@theme inline`. The `inline` variant bakes each value straight into the
+ * generated utilities (`.bg-surface { background-color: #1a1815 }`), which
+ * silently defeats the `.theme-light` overrides below — those rebind the
+ * variables, and a baked utility never reads them. Plain `@theme` emits
+ * `var(--color-*)` references instead, so a theme class switch reaches every
+ * utility, opacity modifiers (`bg-surface-alt/40`) included.
+ */
+@theme {
   /* ─── Surfaces — wet-basalt warm charcoal (hue ~35°, sat 4–9%) ───
      Depth is drawn: page < card < card-hover steps, inset recessed. */
   --color-surface: #1a1815;
@@ -194,90 +202,13 @@
   --ease-out-quart: cubic-bezier(0.16, 1, 0.3, 1); /* enters, progress */
 }
 
-/* ─── Semantic utility bridge ─────────────────────────────────────────────
-   Some generated utility classes resolve to static colors at build time.
-   Re-bind semantic classes to CSS variables so theme class switches update
-   text/accent colors correctly at runtime. */
-
-.text-fg {
-  color: var(--color-fg) !important;
-}
-.text-fg-secondary {
-  color: var(--color-fg-secondary) !important;
-}
-.text-fg-muted {
-  color: var(--color-fg-muted) !important;
-}
-.text-fg-light {
-  color: var(--color-fg-light) !important;
-}
-.text-fg-placeholder {
-  color: var(--color-fg-placeholder) !important;
-}
-.text-fg-inverse {
-  color: var(--color-fg-inverse) !important;
-}
-
-.text-accent {
-  color: var(--color-accent) !important;
-}
-.text-success {
-  color: var(--color-success) !important;
-}
-
-.bg-accent {
-  background-color: var(--color-accent) !important;
-}
-.bg-accent-hover {
-  background-color: var(--color-accent-hover) !important;
-}
-
-.hover\:bg-accent-hover:hover {
-  background-color: var(--color-accent-hover) !important;
-}
-.hover\:text-accent:hover {
-  color: var(--color-accent) !important;
-}
-
-.theme-light .text-fg {
-  color: var(--color-fg) !important;
-}
-.theme-light .text-fg-secondary {
-  color: var(--color-fg-secondary) !important;
-}
-.theme-light .text-fg-muted {
-  color: var(--color-fg-muted) !important;
-}
-.theme-light .text-fg-light {
-  color: var(--color-fg-light) !important;
-}
-.theme-light .text-fg-placeholder {
-  color: var(--color-fg-placeholder) !important;
-}
-.theme-light .text-fg-inverse {
-  color: var(--color-fg-inverse) !important;
-}
-
-.theme-light .text-accent {
-  color: var(--color-accent) !important;
-}
-.theme-light .text-success {
-  color: var(--color-success) !important;
-}
-
-.theme-light .bg-accent {
-  background-color: var(--color-accent) !important;
-}
-.theme-light .bg-accent-hover {
-  background-color: var(--color-accent-hover) !important;
-}
-
-.theme-light .hover\:bg-accent-hover:hover {
-  background-color: var(--color-accent-hover) !important;
-}
-.theme-light .hover\:text-accent:hover {
-  color: var(--color-accent) !important;
-}
+/* The semantic utility bridge that used to sit here is gone. It re-bound a
+   dozen text/accent utilities to their variables with `!important`, to work
+   around the baked values `@theme inline` produced. Plain `@theme` emits those
+   `var()` references for every utility, so the bridge is redundant — and its
+   `!important` actively broke hover states, since a generated
+   `.hover\:text-fg:hover` rule carries no `!important` and so lost to the base
+   `.text-fg-muted` declaration on the same element. */
 
 /* ─── Base styles ────────────────── */
 
