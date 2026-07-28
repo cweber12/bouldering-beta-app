@@ -1,6 +1,7 @@
 # Anchor the flaky timing tests on real readiness signals
 
-Status: ready-for-agent
+Status: in-progress
+Branch: test/anchor-timing-tests
 Type: AFK
 
 ## Parent
