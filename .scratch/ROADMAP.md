@@ -24,9 +24,16 @@ PRDs actively eligible for the next implementation branch, in pick order.
 
 | Order | PRD                                                           | Priority |
 | ----- | ------------------------------------------------------------- | -------- |
-| 1     | `.scratch/actionable/pose-ground-truth-detection-eval/PRD.md` | `P1`     |
-| 2     | `.scratch/actionable/pose-detection-loss-recovery/PRD.md`     | `P1`     |
-| 3     | `.scratch/actionable/pose-vitpose-climber-identity/PRD.md`    | `P1`     |
+| 1     | `.scratch/actionable/arch-conventions-and-enforcement/PRD.md` | `P1`     |
+| 2     | `.scratch/actionable/pose-ground-truth-detection-eval/PRD.md` | `P1`     |
+| 3     | `.scratch/actionable/pose-detection-loss-recovery/PRD.md`     | `P1`     |
+| 4     | `.scratch/actionable/pose-vitpose-climber-identity/PRD.md`    | `P1`     |
+
+`arch-conventions-and-enforcement` leads on timing, not importance. Its issue 03
+moves the 16 `harness*.ts` files out of `utils/` into a `harness/` module, and
+three of the PRDs behind it write directly into those files — the move is
+cheapest while nothing is in flight, and every pose issue authored afterwards is
+written against final paths and enforced boundary rules.
 
 ## Next
 
@@ -38,10 +45,20 @@ Actionable PRDs that are not first in line.
 | 2     | `.scratch/actionable/dev-detection-annotation-ui/PRD.md`         | `P2`     |
 | 3     | `.scratch/actionable/pose-pipeline-contract-authority/PRD.md`    | `P2`     |
 | 4     | `.scratch/actionable/scan-pipeline-isolation-testability/PRD.md` | `P2`     |
+| 5     | `.scratch/actionable/arch-consolidation-cleanup/PRD.md`          | `P2`     |
 
 `dev-detection-annotation-ui` sits behind `dev-harness-review-surfaces`: its
 `failureClass` / `distractor` controls annotate conditions the operator has to
 be able to see first, and the review surfaces PRD builds that viewer.
+
+`arch-consolidation-cleanup` depends on `arch-conventions-and-enforcement` and
+is otherwise conflict-tolerant — its issues are mechanical consolidations that
+can interleave with pose work. Its issue 09 closes out the `knip` ignore block
+opened by the foundation PRD's issue 06.
+
+`scan-pipeline-isolation-testability` owns `hooks/useVideoProcessor.ts`; both
+`arch-` PRDs exclude that file by design, so the three can proceed without
+contending for it.
 
 `harness-contract-adr0007-adoption` is `in-progress` and not listed above — its
 remaining issue 03 is an independent correctness fix that can land in any order.
