@@ -1,10 +1,11 @@
 # Make the Test Suite Deterministic
 
-Status: ready-for-agent
-Disposition: actionable
+Status: done
+Disposition: done
 
 Spec inputs: the suite itself — `__tests__/components/skeleton/LandingReplay.test.tsx`
 and `__tests__/app/profile/mapViewportPolicy.test.tsx`.
+Parent path: `.scratch/done/test-suite-flake-stabilisation/`.
 Glossary: CONTEXT.md — **Landing Replay** (overlay & review), **Run** (persistence).
 
 ## Problem Statement
@@ -78,3 +79,9 @@ and both are fixable without touching a line of `components/`.
 - `LandingReplay` fails in more than one test and in a different one each run,
   which is why the fix belongs in the file's shared `advance`/setup seam rather
   than in whichever assertion happened to fail last.
+- Closed by issue 01 (`e408eeb`): `npx vitest run` now passes 10 consecutive
+  times, 1404 tests, 0 failures. The gate surfaced two flakes beyond the two
+  named files — `useVideoProcessor` (wall-clock inference comparison) and
+  `ClimbsMap` (700 ms sleep against a 600 ms debounce) — both the same defect
+  class and both fixed under the "only failures actually observed" rule. See the
+  issue's closing record.

@@ -1,12 +1,13 @@
 # Anchor the flaky timing tests on real readiness signals
 
-Status: in-progress
+Status: done
 Branch: test/anchor-timing-tests
+Merged: e408eeb
 Type: AFK
 
 ## Parent
 
-- `.scratch/actionable/test-suite-flake-stabilisation/PRD.md`
+- `.scratch/done/test-suite-flake-stabilisation/PRD.md`
 
 ## What to build
 
@@ -69,16 +70,16 @@ even though it has not been observed failing yet.
 
 ## Acceptance criteria
 
-- [ ] `LandingReplay` establishes its rAF baseline from the stub actually holding
+- [x] `LandingReplay` establishes its rAF baseline from the stub actually holding
       a callback, not from a caption appearing, and the fix lives in the file's
       shared setup/helper rather than in individual assertions.
-- [ ] `mapViewportPolicy` waits for the mount counter to settle before every
+- [x] `mapViewportPolicy` waits for the mount counter to settle before every
       snapshot of it, including the ones not yet observed failing.
-- [ ] No file under `components/`, `app/`, `hooks/` or `utils/` is modified — if a
+- [x] No file under `components/`, `app/`, `hooks/` or `utils/` is modified — if a
       product change looks necessary, stop and say why rather than making it.
-- [ ] `npx vitest run` passes **10 consecutive times** with no exclusions. Record
+- [x] `npx vitest run` passes **10 consecutive times** with no exclusions. Record
       the actual run count and any failure seen in `## Comments`.
-- [ ] The two files are no longer excluded from anyone's verification gate.
+- [x] The two files are no longer excluded from anyone's verification gate.
 
 ## Comments
 
@@ -96,3 +97,52 @@ even though it has not been observed failing yet.
 - Both root causes are races the test owns. If a fix seems to require changing
   `LandingReplay.tsx` or the profile page, that is a signal the diagnosis moved —
   write down what changed before touching product code.
+
+### Closing record
+
+Both diagnoses held; no product code was touched. `LandingReplay` got a
+`waitForFirstFrame()` seam that waits for the rAF stub to hold a callback and
+then anchors the baseline, and all ten anchor sites in the file go through it —
+including the re-anchor after a resume, so no hand-rolled anchor is left.
+`mapViewportPolicy` got `waitForMapMounts(count)`, used at both snapshots.
+
+**Verification: `npx vitest run` × 10 consecutive, 0 failures, 1404 tests each.**
+No exclusions — and none existed to remove: the workaround during
+`harness-contract-adr0007-adoption` issue 04 was an ad-hoc command-line filter,
+never checked in, so nothing in the repo referenced these files.
+
+Reproduction before the fix was load-dependent. `mapViewportPolicy` failed on the
+third of three full-suite runs with the anchor instrumented. The `LandingReplay`
+race never fired on this machine (8 isolated runs, 3 full-suite runs) even with a
+probe that threw when `advance(0)` found an empty map — the fix rests on the
+mechanism being demonstrable from the code rather than on a local repro.
+
+### Scope added: two more flakes, both blocking the 10-run gate
+
+The gate surfaced two failures outside the two named files. Neither could be left
+alone without making the 10-consecutive-run criterion unreachable, and both are
+the same defect — an assertion synchronised on a proxy instead of the state it
+depends on — so they were fixed here under the PRD's rule that only failures
+actually observed get fixed. Both fixes are test-only.
+
+- `useVideoProcessor > sums MediaPipe latency across every pass on the attempt`
+  busy-waited 2 ms per mocked MediaPipe pass and compared real wall-clock, so a
+  scheduler preemption during the one-pass attempt could make it out-measure the
+  four-pass one and invert the assertion. Each pass now advances a stubbed
+  `performance.now()` by exactly its charge — the hook reads that clock nowhere
+  else — which let the assertion tighten from *the miss cost more* to the exact
+  sums (2 ms and 8 ms), i.e. the summing the test is named for.
+- `ClimbsMap > hides below threshold and re-renders from cache on zoom re-entry`
+  slept 700 ms against a 600 ms debounce. Two candidate anchors were also wrong
+  and are worth recording: the `Zoom in to see nearby crags` hint appears a full
+  debounce early because `onZoomEnd` sets the zoom state synchronously, and a
+  bare `expect(osmClearLayers).toHaveBeenCalled()` was already true from the
+  first query because `renderOsmFeatures` clears the layer itself — that
+  assertion had been passing vacuously. It now waits for the clear *count* to
+  grow past a baseline, the only signal that the zoom-out query ran. Fixing it
+  also closed a latent false pass: `markersAfterFirstQuery` was snapshotted right
+  after the fetch call rather than after the render, so it could be captured as 0
+  and make the final `toBeGreaterThan` trivially true.
+
+The suite is deterministic at 10 runs, not proven deterministic forever. If a
+fifth flake appears it wants its own issue rather than more growth here.

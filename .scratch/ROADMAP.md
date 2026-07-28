@@ -43,10 +43,6 @@ Actionable PRDs that are not first in line.
 `failureClass` / `distractor` controls annotate conditions the operator has to
 be able to see first, and the review surfaces PRD builds that viewer.
 
-`test-suite-flake-stabilisation` is `P0`: `npx vitest run` currently fails in a
-different test each run, so the suite cannot be used to verify anything else
-until it is deterministic.
-
 `harness-contract-adr0007-adoption` is `in-progress` and not listed above — its
 remaining issue 03 is an independent correctness fix that can land in any order.
 Its two open questions are now answered in the issue's Comments against the
@@ -84,6 +80,7 @@ Completed PRDs retained for history.
 | `.scratch/done/pose-untrackable-bundle-quarantine/PRD.md`        | see issue files |
 | `.scratch/done/scan-moving-video-displays/PRD.md`                | see issue files |
 | `.scratch/done/scan-pipeline-audit-upload-scan-view-save/PRD.md` | see issue files |
+| `.scratch/done/test-suite-flake-stabilisation/PRD.md`            | `e408eeb`       |
 | `.scratch/done/ui-adaptive-overlay-contrast/PRD.md`              | see issue files |
 | `.scratch/done/ui-landing-replay-multi-clip/PRD.md`              | see issue files |
 | `.scratch/done/ui-public-landing-replay-curation/PRD.md`         | see issue files |
