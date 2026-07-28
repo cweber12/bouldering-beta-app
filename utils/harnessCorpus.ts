@@ -22,6 +22,13 @@ export interface CorpusItem {
    * `seedHash`. A re-seed moves only the second (utils/harnessFreshness).
    */
   truthStale: boolean;
+  /**
+   * Truth is *probably* authored from a superseded scaffold, inferred from a
+   * present-frame shortfall because it carries no stamp to compare. An inference,
+   * kept out of `truthStale`, and retired per bundle the first time its truth is
+   * re-accepted (utils/harnessFreshness).
+   */
+  truthDrifted: boolean;
   /** A fresh, posed ViTPose scaffold is on disk — review needs no new job. */
   seedReady: boolean;
   /**

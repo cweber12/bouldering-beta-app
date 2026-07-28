@@ -152,6 +152,16 @@ export function scaffoldHasPose(scaffold: ViTPoseScaffold): boolean {
 }
 
 /**
+ * How many Detection Frames the scaffold actually posed the Climber on. The
+ * magnitude behind {@link scaffoldHasPose}, and the scaffold side of the
+ * drift heuristic that stands in for a `seedHash` comparison on unstamped truth
+ * (utils/harnessFreshness `truthScaffoldLikelyDrifted`).
+ */
+export function countPosedFrames(scaffold: ViTPoseScaffold): number {
+  return scaffold.frames.reduce((n, f) => n + (f.keypoints.length > 0 ? 1 : 0), 0);
+}
+
+/**
  * The terminal message for a landed-but-poseless scaffold. When the job sidecar
  * reports `seedFound: false` the cause is pinpointed — the tracker ran but no
  * tracked person ever matched the Climber tap — so the message names the remedy

@@ -401,6 +401,13 @@ export default function HarnessPage() {
                       >
                         stale
                       </span>
+                    ) : it.truthDrifted ? (
+                      <span
+                        className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
+                        title="This truth carries no scaffold stamp and calls far fewer frames present than the scaffold poses — it was most likely authored before the scaffold was re-seeded, so its absent frames score as hallucinations. A guess, not a proof: open Re-calibrate, use Review seed, and re-accept. That stamps the truth and retires the guess."
+                      >
+                        accepted · drift?
+                      </span>
                     ) : (
                       <span className="rounded bg-send-surface px-1.5 py-0.5 text-xs text-send">
                         accepted

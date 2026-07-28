@@ -73,6 +73,51 @@ export function truthScaffoldIsStale(
   );
 }
 
+/**
+ * Minimum present-frame shortfall before the drift heuristic will fire. Loose on
+ * purpose (harness PR #118): ordinary human flagging removes a handful of frames
+ * from the present population, and none of that should read as drift.
+ */
+export const TRUTH_DRIFT_MIN_SHORTFALL = 20;
+
+/**
+ * The **inference** that stands in for {@link truthScaffoldIsStale} on truth that
+ * carries no `scaffoldSeedHash` — the fallback the harness ships as
+ * `scaffold_truth_drift` (their PR #118).
+ *
+ * Truth authored from a scaffold is expected to call roughly the same frames
+ * present that the scaffold posed. When the truth holds *far* fewer, the most
+ * likely explanation is that the scaffold was regenerated underneath it: every
+ * newly-posed frame the old truth calls absent then scores as a hallucination.
+ * Fires only on a shortfall of at least {@link TRUTH_DRIFT_MIN_SHORTFALL} frames
+ * **and** a truth holding under half the posed count, so ordinary flagging never
+ * trips it.
+ *
+ * Silent the moment both sides carry a stamp: an exact hash comparison is
+ * available then, and it both misses less and annoys less than an inference. So
+ * a bundle leaves this heuristic's reach permanently the first time its truth is
+ * re-accepted — which is the point. This is a transitional signal, not a second
+ * source of truth about staleness.
+ */
+export function truthScaffoldLikelyDrifted(evidence: {
+  /** Whether the truth carries a `scaffoldSeedHash`. */
+  truthStamped: boolean;
+  /** Whether the scaffold on disk carries a `seedHash`. */
+  scaffoldStamped: boolean;
+  /** Detection Frames the truth calls `present`. */
+  truthPresentCount: number;
+  /** Detection Frames the scaffold posed. */
+  scaffoldPosedCount: number;
+}): boolean {
+  // An exact comparison is authoritative wherever it can be made.
+  if (evidence.truthStamped && evidence.scaffoldStamped) return false;
+  const shortfall = evidence.scaffoldPosedCount - evidence.truthPresentCount;
+  return (
+    shortfall >= TRUTH_DRIFT_MIN_SHORTFALL &&
+    evidence.truthPresentCount < evidence.scaffoldPosedCount / 2
+  );
+}
+
 /** Which axis an accepted Ground Truth has gone stale on, if any. */
 export type TruthStaleAxis = "none" | "calibration" | "scaffold";
 

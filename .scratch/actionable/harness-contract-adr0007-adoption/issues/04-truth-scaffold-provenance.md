@@ -71,6 +71,15 @@ corpus UI.
    row and unfixable in the act it links to. Its seed probe must run for the
    scaffold axis too, and re-accepting in-session must clear the state.
 
+5. **A heuristic fallback for unstamped truth.** *(Added after the first landing
+   — see Comments.)* The stamp only helps truth written from now on, so on the
+   corpus as it stands **every** bundle fails open and the 11 adrift ones stay
+   invisible. Mirror the harness's `scaffold_truth_drift` inference (PR #118) —
+   present-frame shortfall ≥20 **and** truth under half the posed count — as a
+   **separate** corpus signal from `truthStale`, since it is a guess rather than
+   a proof. Silent the moment both sides carry a stamp, so re-accepting a bundle
+   retires the guess for it permanently.
+
 ## Acceptance criteria
 
 - [x] `parseViTPoseScaffold` carries a non-empty `seedHash` through and omits it
@@ -90,6 +99,11 @@ corpus UI.
 - [x] Badge and banner wording names both axes — an accepted badge must not read
       as healthy when the scaffold has moved, exactly as it must not when the
       calibration has.
+- [x] The heuristic fallback surfaces the adrift bundles as their own state,
+      stays out of `truthStale`, does not fire on ordinary human flagging, and
+      goes silent for a bundle once an exact hash comparison is available.
+- [x] Run against the real corpus, the fallback reports exactly the 11 bundles
+      the harness measured — no more, no fewer.
 
 ## Comments
 
@@ -110,6 +124,18 @@ corpus UI.
 - Overlaps issue 03 only at the artifact parse: 03 handles the `seedHash` on the
   POST **response** (`200 skipped`), this one the `seedHash` on the **artifact**.
   Whichever lands second inherits the parsed field.
+
+- **Why §5 was added.** The stamp landed and every bundle still read `accepted`.
+  That was correct — all 89 scaffolds carry a `seedHash`, **zero** truths carried
+  a `scaffoldSeedHash`, so every one fails open — but it made the change inert
+  against the corpus that motivated it, and circular: the 11 adrift bundles would
+  stay invisible until re-accepted, with nothing saying which to re-accept. The
+  handoff said the harness keeps its heuristic as the fallback for unstamped
+  truth; we had never built the scanner-side equivalent, so our UI could not
+  point at them. Run over the real corpus the fallback returns exactly the
+  harness's 11, matching the handoff table frame-for-frame
+  (`fKjfXtqLA1I` 190/1811, `w420jGWP2W0` 0/1235, `The_Mandala` 68/600,
+  `VxhW7T4vg7E` 0/463).
 
 ## Implementation notes
 
@@ -135,3 +161,11 @@ corpus UI.
   share one parse instead of two.
 - CONTEXT.md's **Ground Truth** entry is updated in the same commit — "stale" now
   means two different things and the glossary said only one of them.
+- The heuristic is a **transitional** signal and is written to retire itself:
+  `truthScaffoldLikelyDrifted` returns false the moment both sides carry a stamp,
+  so each re-accept removes one bundle from its reach and the corpus reset
+  removes all of them. It is scoped to bundles not already `truthStale` — a
+  proven signal needs no weaker second opinion about the same thing.
+- Drifted bundles are deliberately **not** added to the re-seed sweep queue.
+  Their scaffolds are already fresh; what they need is re-accepting, and queuing
+  them would burn GPU re-posing scaffolds that are fine.

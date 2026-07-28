@@ -16,10 +16,15 @@ import path from "node:path";
 import {
   runPairsWithTruth,
   truthStaleAxis,
+  truthScaffoldLikelyDrifted,
   scaffoldIsSeedReady,
   scaffoldIsUntrackable,
 } from "@/utils/harnessFreshness";
-import { parseViTPoseScaffold, type ViTPoseScaffold } from "@/utils/harnessViTPose";
+import {
+  parseViTPoseScaffold,
+  countPosedFrames,
+  type ViTPoseScaffold,
+} from "@/utils/harnessViTPose";
 import { summarizeRunFile, type HarnessRunFacts } from "@/utils/harnessRuns";
 
 /** True only in a local dev server — the harness never exists in prod. */
@@ -126,6 +131,17 @@ export interface CorpusItem {
    * stamp: unknown provenance is never stale.
    */
   truthStale: boolean;
+  /**
+   * True when the truth is *probably* authored from a superseded scaffold but no
+   * hash can prove it: the truth carries no `scaffoldSeedHash`, and it calls far
+   * fewer frames present than the scaffold poses (utils/harnessFreshness
+   * `truthScaffoldLikelyDrifted`, mirroring the harness's `scaffold_truth_drift`).
+   *
+   * An inference, deliberately kept out of {@link truthStale} — that flag means
+   * "a stamp proves this". Scoped to bundles not already stale, and silent once
+   * both sides carry a stamp, so re-accepting a bundle retires the guess for good.
+   */
+  truthDrifted: boolean;
   /**
    * True when the bundle's ViTPose scaffold can seed Ground Truth review with
    * no new job: `vitpose.json` exists, stamps the current calibration's
@@ -242,13 +258,16 @@ interface TruthStamps {
   /** The ViTPose scaffold the truth was authored from (ADR 0007). Null when the
    * seeding scaffold predated the hash — unknown provenance, never stale. */
   scaffoldSeedHash: string | null;
+  /** Detection Frames the truth calls `present` — the truth side of the drift
+   * heuristic that covers unstamped truth (utils/harnessFreshness). */
+  presentCount: number;
 }
 
 /**
- * Read both of a bundle's Ground Truth stamps in one pass. `ground-truth.json`
- * is a large artifact (up to 100k frames), so the two staleness axes share a
- * single read rather than parsing it twice. Both stamps come back null when the
- * file is absent or unreadable.
+ * Read everything the corpus row needs from a bundle's Ground Truth in one pass.
+ * `ground-truth.json` is a large artifact (up to 100k frames), so both staleness
+ * axes and the drift heuristic share a single read rather than parsing it three
+ * times. An absent or unreadable file reads as no stamps and no present frames.
  */
 async function readTruthStamps(bundleDir: string): Promise<TruthStamps> {
   try {
@@ -256,9 +275,19 @@ async function readTruthStamps(bundleDir: string): Promise<TruthStamps> {
       await readFile(path.join(bundleDir, "ground-truth.json"), "utf8"),
     ) as Record<string, unknown>;
     const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
-    return { setupHash: str(parsed.setupHash), scaffoldSeedHash: str(parsed.scaffoldSeedHash) };
+    const frames = Array.isArray(parsed.frames) ? parsed.frames : [];
+    const presentCount = frames.reduce(
+      (n: number, f: unknown) =>
+        n + ((f as { state?: unknown } | null)?.state === "present" ? 1 : 0),
+      0,
+    );
+    return {
+      setupHash: str(parsed.setupHash),
+      scaffoldSeedHash: str(parsed.scaffoldSeedHash),
+      presentCount,
+    };
   } catch {
-    return { setupHash: null, scaffoldSeedHash: null };
+    return { setupHash: null, scaffoldSeedHash: null, presentCount: 0 };
   }
 }
 
@@ -429,6 +458,19 @@ export async function listCorpus(): Promise<CorpusItem[]> {
           truthScaffoldSeedHash: truthStamps.scaffoldSeedHash,
           scaffoldSeedHash: scaffold?.seedHash,
         }) !== "none";
+      // The heuristic fallback for truth the hash comparison cannot reach.
+      // Scoped to truth that is otherwise healthy: a bundle already surfaced as
+      // stale needs no weaker second opinion about the same thing.
+      const truthDrifted =
+        hasGroundTruth &&
+        !truthStale &&
+        !!scaffold &&
+        truthScaffoldLikelyDrifted({
+          truthStamped: !!truthStamps.scaffoldSeedHash,
+          scaffoldStamped: !!scaffold.seedHash,
+          truthPresentCount: truthStamps.presentCount,
+          scaffoldPosedCount: countPosedFrames(scaffold),
+        });
       // Untrackable only matters where there is no fresh evidence to fall back on:
       // a fresh-truth bundle keeps its accepted Ground Truth even if a later
       // re-seed posed nothing, so it is never held out of the sweeps.
@@ -444,6 +486,7 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         hasSetup,
         hasGroundTruth,
         truthStale,
+        truthDrifted,
         seedReady: scaffoldIsSeedReady(scaffold, setupHash),
         untrackable,
         ...(setupFacts.climbStart !== undefined ? { climbStart: setupFacts.climbStart } : {}),

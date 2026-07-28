@@ -167,8 +167,15 @@ export default function Calibrator({
   // `item.truthStale` is in the gate because the scaffold axis cannot be
   // evaluated until the probe has fetched the scaffold — gating the probe on the
   // answer it produces would be circular, so the corpus row's verdict opens it
-  // and the probed scaffold then decides.
-  const wantSeedProbe = calibrationStale || item.truthStale || (!truthAccepted && item.seedReady);
+  // and the probed scaffold then decides. `item.truthDrifted` is in for the same
+  // reason plus one more: a bundle badged `accepted · drift?` is *only*
+  // actionable through Review seed, so arriving here without the shortcut would
+  // be a dead end.
+  const wantSeedProbe =
+    calibrationStale ||
+    item.truthStale ||
+    item.truthDrifted ||
+    (!truthAccepted && item.seedReady);
   const [probedScaffold, setProbedScaffold] = useState<ViTPoseScaffold | null>(null);
   const [probedWarnings, setProbedWarnings] = useState<string[]>([]);
   useEffect(() => {
@@ -207,6 +214,13 @@ export default function Calibrator({
       })
     : "none";
   const truthStale = staleAxis !== "none";
+
+  // The heuristic's verdict, carried from the corpus row rather than recomputed:
+  // it needs the truth's present-frame count, which this act never loads (it
+  // works from the scaffold seed, not the saved truth's frames). Suppressed once
+  // this session re-accepts — the save stamps the truth, which is exactly what
+  // retires the guess. Never shown alongside a proven stale state.
+  const truthDriftSuspected = item.truthDrifted && !truthStale && truthScaffoldSeedHash === "";
 
   // A Seed tap from a setup calibrated before the tap-timestamp contract: the
   // downloader can only seed by global tap position, which grabs a bystander who
@@ -813,6 +827,20 @@ export default function Calibrator({
             ? "A fresh ViTPose scaffold is already on disk: use Review seed to go straight to the review and re-accept — no new job needed."
             : "Use Re-seed Ground Truth to re-run ViTPose and re-accept."}{" "}
           Your Wrong/Absent flags carry forward by timestamp.
+        </div>
+      ) : truthDriftSuspected ? (
+        <div
+          role="status"
+          className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
+        >
+          This video&apos;s Ground Truth carries no scaffold stamp and calls far fewer frames
+          present than the scaffold on disk poses — most likely it was authored before the scaffold
+          was re-seeded, which makes its absent frames score as hallucinations. This is a guess, not
+          a proof.{" "}
+          {reseedAffordance === "review-seed"
+            ? "Use Review seed to check it against the current scaffold and re-accept — no new job needed."
+            : "Use Re-seed Ground Truth to re-run ViTPose and re-accept."}{" "}
+          Re-accepting stamps the truth and retires the guess for this video.
         </div>
       ) : truthAccepted ? (
         <div
