@@ -1,7 +1,8 @@
 # Stamp the scaffold seedHash into Ground Truth, and read staleness off it
 
-Status: in-progress
+Status: done
 Branch: feat/adr0007-04-truth-scaffold-provenance
+Merged: e0701f1
 Type: AFK
 
 ## Parent
