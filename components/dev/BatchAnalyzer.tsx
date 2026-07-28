@@ -22,6 +22,17 @@ import type { BatchAnalyzeCandidate, BatchAnalyzePlan } from "@/utils/harnessBat
 /** What became of one batch entry. */
 type EntryStatus = "pending" | "running" | "posted" | "failed";
 
+/**
+ * How long one entry may show no sign of progress before the sweep gives up on
+ * it. The pipeline's own waits are bounded (see `utils/videoSeek`), so this is a
+ * backstop rather than the mechanism: any *future* unbounded await would
+ * otherwise stall the whole sweep on a single video, which is how a 45-minute
+ * batch used to be lost to one stuck bundle. Generous, because ORB extraction
+ * runs between the last frame and the diagnostics that end the run, and reports
+ * no progress of its own.
+ */
+const ENTRY_STALL_TIMEOUT_MS = 10 * 60_000;
+
 interface EntryOutcome {
   status: "posted" | "failed";
   message: string;
@@ -77,6 +88,21 @@ function BatchItemRunner({
     startedRef.current = true;
     void run();
   }, [ready, run]);
+
+  // Stall backstop. The effect re-arms whenever any progress signal changes, so
+  // the timer only reaches zero if the entry has genuinely stopped moving.
+  // `report` is idempotent, so a late fire after a real outcome is harmless.
+  const progress = `${loading}|${phase}|${currentFrame}|${post.status}`;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      report({
+        status: "failed",
+        message: `No progress for ${ENTRY_STALL_TIMEOUT_MS / 60_000} min — skipped.`,
+        scored: false,
+      });
+    }, ENTRY_STALL_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [progress, report]);
 
   useEffect(() => {
     if (loadError) {

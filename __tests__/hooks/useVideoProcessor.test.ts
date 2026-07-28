@@ -62,6 +62,7 @@ vi.mock("@/utils/videoSeek", () => {
     seekVideo: vi.fn(async (video: { currentTime: number }, time: number) => {
       video.currentTime = time;
     }),
+    loadVideoMetadata: vi.fn(async () => {}),
   };
 });
 
@@ -348,6 +349,8 @@ describe("useVideoProcessor detector attempt evidence", () => {
 
   let createElementSpy: ReturnType<typeof vi.spyOn> | null = null;
   let inferenceClockSpy: ReturnType<typeof vi.spyOn> | null = null;
+  /** Every `<video>` the processor created this test, newest last. */
+  const createdVideos: Record<string, unknown>[] = [];
 
   /** A minimal 2D context: every pixel operation the seek loop makes is a stub. */
   function fakeContext() {
@@ -363,7 +366,11 @@ describe("useVideoProcessor detector attempt evidence", () => {
     };
   }
 
-  /** A video element whose metadata resolves on src assignment. */
+  /**
+   * A video element whose metadata resolves on src assignment. `releaseCount`
+   * records the `removeAttribute("src")` + `load()` teardown that frees the
+   * browser's decoder slot — a sweep that skips it exhausts the decoder pool.
+   */
   function fakeVideo(duration: number) {
     const video: Record<string, unknown> = {
       muted: false,
@@ -372,11 +379,20 @@ describe("useVideoProcessor detector attempt evidence", () => {
       duration,
       videoWidth: VIDEO_W,
       videoHeight: VIDEO_H,
+      readyState: 0,
       onloadedmetadata: null,
       onerror: null,
+      releaseCount: 0,
+      removeAttribute: (name: string) => {
+        if (name === "src") video.readyState = 0;
+      },
+      load: () => {
+        video.releaseCount = (video.releaseCount as number) + 1;
+      },
     };
     Object.defineProperty(video, "src", {
       set() {
+        video.readyState = 1;
         setTimeout(() => (video.onloadedmetadata as (() => void) | null)?.(), 0);
       },
       get: () => "blob:fake",
@@ -434,11 +450,12 @@ describe("useVideoProcessor detector attempt evidence", () => {
     const realCreateElement = document.createElement.bind(document);
     createElementSpy = vi
       .spyOn(document, "createElement")
-      .mockImplementation((tag: string, options?: ElementCreationOptions) =>
-        tag === "video"
-          ? (fakeVideo(duration) as unknown as HTMLElement)
-          : realCreateElement(tag, options),
-      ) as ReturnType<typeof vi.spyOn>;
+      .mockImplementation((tag: string, options?: ElementCreationOptions) => {
+        if (tag !== "video") return realCreateElement(tag, options);
+        const video = fakeVideo(duration);
+        createdVideos.push(video);
+        return video as unknown as HTMLElement;
+      }) as ReturnType<typeof vi.spyOn>;
 
     const { result } = renderHook(() => useVideoProcessor());
 
@@ -473,6 +490,7 @@ describe("useVideoProcessor detector attempt evidence", () => {
   }
 
   beforeEach(() => {
+    createdVideos.length = 0;
     vi.stubGlobal("URL", {
       ...URL,
       createObjectURL: vi.fn(() => "blob:fake"),
@@ -728,5 +746,28 @@ describe("useVideoProcessor detector attempt evidence", () => {
     expect(attempts[0].status).toBe("accepted");
     expect(attempts[0].candidateCount).toBe(2);
     expect(attempts[0].bestUnselectedCandidateScore).toBeCloseTo(0.4, 6);
+  });
+
+  // Browsers cap concurrent media decoders per renderer. A batch sweep creates
+  // one element per Test Video, and an element left to GC keeps its slot; once
+  // the pool is exhausted `loadedmetadata` stops firing with no error event and
+  // the sweep hangs at "detecting 0%" on a video it never decoded. Releasing the
+  // element when the run ends is what keeps a long sweep alive.
+  it("releases the video element's decoder when the run ends", async () => {
+    await runProcessor([[pose(0.5, 0.5, 0.9)]], { duration: 0.1 });
+
+    expect(createdVideos).toHaveLength(1);
+    expect(createdVideos[0].releaseCount).toBe(1);
+    expect(createdVideos[0].readyState).toBe(0);
+  });
+
+  it("releases the decoder even when the run throws", async () => {
+    vi.mocked(estimateFramesMediaPipe).mockImplementation(() => {
+      throw new Error("detector exploded");
+    });
+    await runProcessor([], { duration: 0.1 });
+
+    expect(createdVideos).toHaveLength(1);
+    expect(createdVideos[0].releaseCount).toBe(1);
   });
 });
