@@ -51,6 +51,15 @@ export interface ViTPoseScaffold {
    * may omit it; the harness then falls back to the setup save response.
    */
   setupHash?: string;
+  /**
+   * The downloader's seed hash for this scaffold (harness ADR 0007): seed tap,
+   * seed region, climb window and video binary. It is the signal `setupHash`
+   * could never be — re-seeding moves it while leaving the calibration alone —
+   * so it is what Ground Truth stamps to record *which* scaffold it was authored
+   * from. Artifacts written before ADR 0007 omit it; provenance is then unknown,
+   * never stale.
+   */
+  seedHash?: string;
   frames: ViTPoseFrame[];
 }
 
@@ -143,6 +152,16 @@ export function scaffoldHasPose(scaffold: ViTPoseScaffold): boolean {
 }
 
 /**
+ * How many Detection Frames the scaffold actually posed the Climber on. The
+ * magnitude behind {@link scaffoldHasPose}, and the scaffold side of the
+ * drift heuristic that stands in for a `seedHash` comparison on unstamped truth
+ * (utils/harnessFreshness `truthScaffoldLikelyDrifted`).
+ */
+export function countPosedFrames(scaffold: ViTPoseScaffold): number {
+  return scaffold.frames.reduce((n, f) => n + (f.keypoints.length > 0 ? 1 : 0), 0);
+}
+
+/**
  * The terminal message for a landed-but-poseless scaffold. When the job sidecar
  * reports `seedFound: false` the cause is pinpointed — the tracker ran but no
  * tracked person ever matched the Climber tap — so the message names the remedy
@@ -196,6 +215,7 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
   const b = body as Record<string, unknown>;
   if (!Number.isInteger(b.version)) return null;
   if (b.setupHash !== undefined && typeof b.setupHash !== "string") return null;
+  if (b.seedHash !== undefined && typeof b.seedHash !== "string") return null;
   if (!Array.isArray(b.frames) || b.frames.length > MAX_FRAMES) return null;
   const frames: ViTPoseFrame[] = [];
   for (const raw of b.frames) {
@@ -208,6 +228,7 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
     ...(typeof b.setupHash === "string" && b.setupHash.length > 0
       ? { setupHash: b.setupHash }
       : {}),
+    ...(typeof b.seedHash === "string" && b.seedHash.length > 0 ? { seedHash: b.seedHash } : {}),
     frames,
   };
 }

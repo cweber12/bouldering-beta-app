@@ -113,6 +113,93 @@ beforeAll(async () => {
     JSON.stringify({ version: 1, setupHash: "new-hash", frames: [{ timestamp: 0, keypoints: [] }] }),
   );
 
+  // Scaffold-drift bundles (harness ADR 0007 / issue #119). The calibration
+  // matches on every one of them — a re-seed does not touch `setupHash` — so
+  // only the scaffold's `seedHash` can tell these apart.
+  const driftBundle = async (
+    videoKey: string,
+    truthSeedHash: string | undefined,
+    scaffoldSeedHash: string | undefined,
+  ) => {
+    const dir = path.join(root, "route-j", videoKey);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "metadata.json"), JSON.stringify({}));
+    await writeFile(path.join(dir, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+    await writeFile(
+      path.join(dir, "ground-truth.json"),
+      JSON.stringify({ setupHash: "new-hash", scaffoldSeedHash: truthSeedHash }),
+    );
+    await writeFile(
+      path.join(dir, "vitpose.json"),
+      JSON.stringify({
+        version: 1,
+        setupHash: "new-hash",
+        seedHash: scaffoldSeedHash,
+        frames: [{ timestamp: 0.1, keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] }],
+      }),
+    );
+  };
+  // Adrift: truth describes a scaffold that has since been re-seeded.
+  await driftBundle("vid_drift", "seed-old", "seed-new");
+  // Same scaffold — the healthy case.
+  await driftBundle("vid_same", "seed-one", "seed-one");
+  // Unstamped truth (written before this contract) against a stamped scaffold.
+  await driftBundle("vid_notruthstamp", undefined, "seed-new");
+  // Stamped truth against a pre-ADR 0007 scaffold that carries no seed hash.
+  await driftBundle("vid_noscaffoldstamp", "seed-old", undefined);
+
+  // Drift-heuristic bundles: truth carries no scaffold stamp, so only the
+  // present-vs-posed shortfall can suggest the scaffold moved underneath it.
+  // Frame counts are the real `get-carter/fKjfXtqLA1I` shape, scaled down.
+  const heuristicBundle = async (
+    videoKey: string,
+    presentFrames: number,
+    posedFrames: number,
+    stamps: { truthSeedHash?: string; scaffoldSeedHash?: string } = {},
+  ) => {
+    const dir = path.join(root, "route-k", videoKey);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "metadata.json"), JSON.stringify({}));
+    await writeFile(path.join(dir, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+    await writeFile(
+      path.join(dir, "ground-truth.json"),
+      JSON.stringify({
+        setupHash: "new-hash",
+        scaffoldSeedHash: stamps.truthSeedHash,
+        frames: Array.from({ length: posedFrames }, (_, i) => ({
+          frameIndex: i,
+          timestamp: i / 10,
+          state: i < presentFrames ? "present" : "absent",
+          joints: {},
+          review: "auto",
+          verified: true,
+        })),
+      }),
+    );
+    await writeFile(
+      path.join(dir, "vitpose.json"),
+      JSON.stringify({
+        version: 1,
+        setupHash: "new-hash",
+        seedHash: stamps.scaffoldSeedHash ?? "seed-new",
+        frames: Array.from({ length: posedFrames }, (_, i) => ({
+          timestamp: i / 10,
+          keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }],
+        })),
+      }),
+    );
+  };
+  // Adrift: truth holds a fraction of what the scaffold poses.
+  await heuristicBundle("vid_shortfall", 19, 181);
+  // Ordinary authoring: a handful of frames flagged absent.
+  await heuristicBundle("vid_flagged", 178, 181);
+  // Same lopsided counts, but the truth is stamped — the exact comparison is
+  // available and agrees, so the guess must stay silent.
+  await heuristicBundle("vid_stamped", 19, 181, {
+    truthSeedHash: "seed-new",
+    scaffoldSeedHash: "seed-new",
+  });
+
   process.env.HARNESS_ANALYSIS_ROOT = root;
 });
 
@@ -135,6 +222,13 @@ describe("listCorpus", () => {
       "route-g/vid_6",
       "route-h/vid_7",
       "route-i/vid_8",
+      "route-j/vid_drift",
+      "route-j/vid_noscaffoldstamp",
+      "route-j/vid_notruthstamp",
+      "route-j/vid_same",
+      "route-k/vid_flagged",
+      "route-k/vid_shortfall",
+      "route-k/vid_stamped",
     ]);
 
     const a = items.find((i) => i.key === "route-a/vid_1")!;
@@ -172,6 +266,58 @@ describe("listCorpus", () => {
     expect(d.runCount).toBe(2);
     expect(d.pairedRunCount).toBe(1);
     expect(d.unpairedRunCount).toBe(1);
+  });
+
+  it("marks truth stale when it was authored from a superseded scaffold", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    // The calibration matches on all four — re-seeding never moves `setupHash`,
+    // which is exactly why the scaffold axis had to be added rather than derived.
+    const drift = byKey("route-j/vid_drift");
+    expect(drift.hasGroundTruth).toBe(true);
+    expect(drift.truthStale).toBe(true);
+
+    expect(byKey("route-j/vid_same").truthStale).toBe(false);
+  });
+
+  // Fail-open: a missing stamp on either side is *unknown* provenance, never a
+  // failure. Degrading these to stale would have flagged the whole corpus on the
+  // day this shipped, which is the opposite of a trustworthy signal.
+  it("never marks truth stale when either scaffold stamp is missing", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    expect(byKey("route-j/vid_notruthstamp").truthStale).toBe(false);
+    expect(byKey("route-j/vid_noscaffoldstamp").truthStale).toBe(false);
+  });
+
+  // The fallback for the truth a hash comparison cannot reach — every bundle in
+  // the corpus on the day the stamp shipped. Reported separately from
+  // `truthStale` because it is a guess, not a proof.
+  it("infers drift for unstamped truth holding far fewer present frames than the scaffold poses", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    const drifted = byKey("route-k/vid_shortfall");
+    expect(drifted.truthDrifted).toBe(true);
+    // Kept out of the proven signal — nothing here stamps anything.
+    expect(drifted.truthStale).toBe(false);
+
+    // Ordinary flagging must never read as drift.
+    expect(byKey("route-k/vid_flagged").truthDrifted).toBe(false);
+
+    // Once the truth is stamped the exact comparison takes over and agrees, so
+    // the guess retires for this bundle however lopsided its counts stay.
+    expect(byKey("route-k/vid_stamped").truthDrifted).toBe(false);
+    expect(byKey("route-k/vid_stamped").truthStale).toBe(false);
+  });
+
+  it("never guesses at drift on a bundle already proven stale", async () => {
+    const items = await listCorpus();
+    const drift = items.find((i) => i.key === "route-j/vid_drift")!;
+    expect(drift.truthStale).toBe(true);
+    expect(drift.truthDrifted).toBe(false);
   });
 
   it("flags seed-ready only for a fresh, posed scaffold", async () => {

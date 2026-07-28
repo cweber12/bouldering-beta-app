@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   effectiveTruthHash,
   truthIsStale,
+  truthScaffoldIsStale,
+  truthStaleAxis,
+  truthScaffoldLikelyDrifted,
   scaffoldIsStale,
   scaffoldIsSeedReady,
   scaffoldIsUntrackable,
@@ -39,6 +42,138 @@ describe("truthIsStale", () => {
   it("never marks truth stale when the bundle has no setup hash to compare against", () => {
     expect(truthIsStale("t1", null)).toBe(false);
     expect(truthIsStale("t1", "")).toBe(false);
+  });
+});
+
+describe("truthScaffoldIsStale", () => {
+  it("flags truth authored from a superseded scaffold", () => {
+    expect(truthScaffoldIsStale("seed-old", "seed-new")).toBe(true);
+    expect(truthScaffoldIsStale("seed-same", "seed-same")).toBe(false);
+  });
+
+  // Fail-open on both sides: truth written before the stamp existed, and truth
+  // authored from a pre-ADR 0007 scaffold, have *unknown* provenance. Degrading
+  // either to "stale" would flag most of the corpus on the day this shipped.
+  it("never marks truth stale when either stamp is missing", () => {
+    expect(truthScaffoldIsStale(undefined, "seed-new")).toBe(false);
+    expect(truthScaffoldIsStale("", "seed-new")).toBe(false);
+    expect(truthScaffoldIsStale("seed-old", undefined)).toBe(false);
+    expect(truthScaffoldIsStale("seed-old", null)).toBe(false);
+    expect(truthScaffoldIsStale(null, null)).toBe(false);
+  });
+
+  // The whole reason this axis exists: a re-seed leaves the calibration alone,
+  // so the setupHash comparison reads healthy while the truth describes a
+  // scaffold that no longer exists (harness issue #119).
+  it("catches drift the calibration axis structurally cannot see", () => {
+    expect(truthIsStale("setup-1", "setup-1")).toBe(false);
+    expect(truthScaffoldIsStale("seed-old", "seed-new")).toBe(true);
+  });
+});
+
+describe("truthStaleAxis", () => {
+  const fresh = {
+    truthSetupHash: "setup-1",
+    setupHash: "setup-1",
+    truthScaffoldSeedHash: "seed-1",
+    scaffoldSeedHash: "seed-1",
+  };
+
+  it("is none when both stamps still match", () => {
+    expect(truthStaleAxis(fresh)).toBe("none");
+  });
+
+  it("names the calibration axis when the setup hash moved", () => {
+    expect(truthStaleAxis({ ...fresh, setupHash: "setup-2" })).toBe("calibration");
+  });
+
+  it("names the scaffold axis when only the seed hash moved", () => {
+    expect(truthStaleAxis({ ...fresh, scaffoldSeedHash: "seed-2" })).toBe("scaffold");
+  });
+
+  // Re-calibrating is the larger remedy and re-seeds as part of itself, so
+  // naming the scaffold would send the operator after the smaller problem.
+  it("prefers the calibration axis when both have moved", () => {
+    expect(truthStaleAxis({ ...fresh, setupHash: "setup-2", scaffoldSeedHash: "seed-2" })).toBe(
+      "calibration",
+    );
+  });
+
+  it("is none on an empty verdict — no stamps anywhere", () => {
+    expect(truthStaleAxis({})).toBe("none");
+  });
+});
+
+describe("truthScaffoldLikelyDrifted", () => {
+  const unstamped = { truthStamped: false, scaffoldStamped: true };
+
+  // The four bundles named in the harness handoff, to the frame.
+  it("flags the measured adrift bundles", () => {
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 190, scaffoldPosedCount: 1811 }),
+    ).toBe(true);
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 0, scaffoldPosedCount: 1235 }),
+    ).toBe(true);
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 68, scaffoldPosedCount: 600 }),
+    ).toBe(true);
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 0, scaffoldPosedCount: 463 }),
+    ).toBe(true);
+  });
+
+  // Loose on purpose: flagging Absent frames is the normal authoring gesture and
+  // must never read as drift.
+  it("does not fire on ordinary human flagging", () => {
+    // A big video with a handful of frames flagged absent.
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 570, scaffoldPosedCount: 600 }),
+    ).toBe(false);
+    // Right at the boundary: a 19-frame shortfall is under the threshold.
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 21, scaffoldPosedCount: 40 }),
+    ).toBe(false);
+  });
+
+  it("needs both a 20-frame shortfall and a truth under half the posed count", () => {
+    // Shortfall met, but the truth still holds well over half.
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 80, scaffoldPosedCount: 120 }),
+    ).toBe(false);
+    // Under half, but the shortfall is only 15 frames.
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 10, scaffoldPosedCount: 25 }),
+    ).toBe(false);
+    // Both met.
+    expect(
+      truthScaffoldLikelyDrifted({ ...unstamped, truthPresentCount: 10, scaffoldPosedCount: 100 }),
+    ).toBe(true);
+  });
+
+  // The heuristic exists only to cover what the hash comparison cannot reach.
+  // Once both sides carry a stamp it must stay silent, however lopsided the
+  // counts — otherwise a legitimately absent-heavy video is flagged forever.
+  it("is silent once an exact hash comparison is available", () => {
+    expect(
+      truthScaffoldLikelyDrifted({
+        truthStamped: true,
+        scaffoldStamped: true,
+        truthPresentCount: 0,
+        scaffoldPosedCount: 1235,
+      }),
+    ).toBe(false);
+  });
+
+  it("still applies when only one side carries a stamp", () => {
+    expect(
+      truthScaffoldLikelyDrifted({
+        truthStamped: true,
+        scaffoldStamped: false,
+        truthPresentCount: 0,
+        scaffoldPosedCount: 1235,
+      }),
+    ).toBe(true);
   });
 });
 

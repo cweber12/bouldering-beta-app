@@ -17,6 +17,7 @@ const ITEM: CorpusItem = {
   hasSetup: true,
   hasGroundTruth: true,
   truthStale: false,
+  truthDrifted: false,
   seedReady: false,
   untrackable: false,
   runCount: 3,

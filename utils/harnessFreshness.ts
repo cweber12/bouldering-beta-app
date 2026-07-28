@@ -11,6 +11,13 @@
  * under — these helpers are the scanner-side mirror of that contract, shared
  * by the corpus listing (server), the calibration page, and Analyze (client).
  *
+ * Staleness has **two axes**, because two different things a truth was authored
+ * against can move underneath it: the calibration ({@link truthIsStale}, keyed
+ * on `setupHash`) and the ViTPose scaffold ({@link truthScaffoldIsStale}, keyed
+ * on the ADR 0007 `seedHash`). A re-seed moves the second while leaving the
+ * first untouched, so neither predicate subsumes the other. Every predicate here
+ * fails **open** on a missing stamp: unknown provenance is never a failure.
+ *
  * Framework-agnostic — no React imports.
  */
 
@@ -39,6 +46,106 @@ export function truthIsStale(
   setupHash: string | null | undefined,
 ): boolean {
   return !!truthSetupHash && !!setupHash && truthSetupHash !== setupHash;
+}
+
+/**
+ * True when saved Ground Truth was authored from a **superseded ViTPose
+ * scaffold**: the truth stamps a `scaffoldSeedHash` and the scaffold on disk
+ * stamps a different `seedHash` (harness ADR 0007, their issue #119).
+ *
+ * The scaffold axis of staleness, and the one {@link truthIsStale} structurally
+ * cannot see: `setupHash` tracks the *calibration*, and re-seeding does not
+ * change the calibration, so truth authored from a two-week-old scaffold still
+ * matches. Every frame the new scaffold poses that the old truth calls absent
+ * then lands in the truth-absent population and is scored as a scanner
+ * hallucination.
+ *
+ * Fails open on either side, matching {@link truthIsStale} and
+ * {@link scaffoldIsStale}: truth written before the stamp existed, or authored
+ * from a pre-ADR 0007 scaffold, has *unknown* provenance — never stale.
+ */
+export function truthScaffoldIsStale(
+  truthScaffoldSeedHash: string | null | undefined,
+  scaffoldSeedHash: string | null | undefined,
+): boolean {
+  return (
+    !!truthScaffoldSeedHash && !!scaffoldSeedHash && truthScaffoldSeedHash !== scaffoldSeedHash
+  );
+}
+
+/**
+ * Minimum present-frame shortfall before the drift heuristic will fire. Loose on
+ * purpose (harness PR #118): ordinary human flagging removes a handful of frames
+ * from the present population, and none of that should read as drift.
+ */
+export const TRUTH_DRIFT_MIN_SHORTFALL = 20;
+
+/**
+ * The **inference** that stands in for {@link truthScaffoldIsStale} on truth that
+ * carries no `scaffoldSeedHash` — the fallback the harness ships as
+ * `scaffold_truth_drift` (their PR #118).
+ *
+ * Truth authored from a scaffold is expected to call roughly the same frames
+ * present that the scaffold posed. When the truth holds *far* fewer, the most
+ * likely explanation is that the scaffold was regenerated underneath it: every
+ * newly-posed frame the old truth calls absent then scores as a hallucination.
+ * Fires only on a shortfall of at least {@link TRUTH_DRIFT_MIN_SHORTFALL} frames
+ * **and** a truth holding under half the posed count, so ordinary flagging never
+ * trips it.
+ *
+ * Silent the moment both sides carry a stamp: an exact hash comparison is
+ * available then, and it both misses less and annoys less than an inference. So
+ * a bundle leaves this heuristic's reach permanently the first time its truth is
+ * re-accepted — which is the point. This is a transitional signal, not a second
+ * source of truth about staleness.
+ */
+export function truthScaffoldLikelyDrifted(evidence: {
+  /** Whether the truth carries a `scaffoldSeedHash`. */
+  truthStamped: boolean;
+  /** Whether the scaffold on disk carries a `seedHash`. */
+  scaffoldStamped: boolean;
+  /** Detection Frames the truth calls `present`. */
+  truthPresentCount: number;
+  /** Detection Frames the scaffold posed. */
+  scaffoldPosedCount: number;
+}): boolean {
+  // An exact comparison is authoritative wherever it can be made.
+  if (evidence.truthStamped && evidence.scaffoldStamped) return false;
+  const shortfall = evidence.scaffoldPosedCount - evidence.truthPresentCount;
+  return (
+    shortfall >= TRUTH_DRIFT_MIN_SHORTFALL &&
+    evidence.truthPresentCount < evidence.scaffoldPosedCount / 2
+  );
+}
+
+/** Which axis an accepted Ground Truth has gone stale on, if any. */
+export type TruthStaleAxis = "none" | "calibration" | "scaffold";
+
+/**
+ * The composite staleness verdict for accepted Ground Truth, across both axes —
+ * shared by the corpus listing (which needs only the boolean) and the
+ * Calibrator (which words its banner from the axis). Callers gate on the truth
+ * actually being accepted; this only compares stamps.
+ *
+ * `calibration` wins when both have moved: re-calibrating is the larger remedy
+ * and subsumes the re-seed, so naming the scaffold there would send the operator
+ * after the smaller of two problems.
+ */
+export function truthStaleAxis(stamps: {
+  /** `setupHash` the truth stamps. */
+  truthSetupHash?: string | null;
+  /** `setupHash` the bundle's current `setup.json` stamps. */
+  setupHash?: string | null;
+  /** `scaffoldSeedHash` the truth stamps. */
+  truthScaffoldSeedHash?: string | null;
+  /** `seedHash` of the ViTPose scaffold now in hand. */
+  scaffoldSeedHash?: string | null;
+}): TruthStaleAxis {
+  if (truthIsStale(stamps.truthSetupHash, stamps.setupHash)) return "calibration";
+  if (truthScaffoldIsStale(stamps.truthScaffoldSeedHash, stamps.scaffoldSeedHash)) {
+    return "scaffold";
+  }
+  return "none";
 }
 
 /**
