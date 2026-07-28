@@ -31,9 +31,14 @@ PRDs actively eligible for the next implementation branch, in pick order.
 
 `arch-conventions-and-enforcement` leads on timing, not importance. Its issue 03
 moves the 16 `harness*.ts` files out of `utils/` into a `harness/` module, and
-three of the PRDs behind it write directly into those files — the move is
-cheapest while nothing is in flight, and every pose issue authored afterwards is
-written against final paths and enforced boundary rules.
+three of the PRDs behind it write directly into those files — the overlap is
+smallest now and grows with every issue that lands first, and every pose issue
+authored afterwards is written against final paths and enforced boundary rules.
+
+One unmerged local branch, `fix/harness-review-seed-corpus` (`250b2bb`), edits
+two of the files issue 03 renames; merge or abandon it before that issue starts.
+`feat/landing-clip-playlist-update` (`b372a77`) collides with
+`arch-consolidation-cleanup` issue 01 over `app/dev/landing-clip/page.tsx`.
 
 ## Next
 

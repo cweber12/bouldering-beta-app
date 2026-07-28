@@ -79,10 +79,17 @@ Write a short `harness/README.md` in the register of the existing `pipeline/READ
 - Verification rests on `tsc` rather than on new tests, and that is deliberate: under
   `"strict": true` with `moduleResolution: "bundler"`, a pure move that type-checks and leaves
   1,404 assertions green has no runtime path on which a broken import could survive.
-- The move is scheduled early because the tree is clean with nothing in flight. Three of the
-  queued P1 PRDs (`pose-ground-truth-detection-eval`, `pose-vitpose-climber-identity`,
-  `dev-harness-review-surfaces`) write directly into these files, so every issue that lands first
-  makes this more expensive.
+- The move is scheduled early because the overlap is currently small and grows with every issue
+  that lands first. Three of the queued P1 PRDs (`pose-ground-truth-detection-eval`,
+  `pose-vitpose-climber-identity`, `dev-harness-review-surfaces`) write directly into these files.
+- **Reconcile `fix/harness-review-seed-corpus` before starting.** That unmerged local branch
+  (`250b2bb`, 2026-07-22) edits `utils/harnessCorpus.ts` and `utils/harnessFreshness.ts`, both of
+  which this issue renames. Either merge it into `main` first or confirm it is abandoned — do not
+  rename underneath it and leave the branch to be rebased across a 16-file move.
+- Two other unmerged local branches exist. `feat/landing-clip-playlist-update` (`b372a77`) does
+  not touch `utils/harness*` and is unaffected here, though it collides with
+  `arch-consolidation-cleanup` issue 01 over `app/dev/landing-clip/page.tsx`.
+  `refactor/overlay-video-recorder` (`cd75be0`, 2026-07-01) touches neither.
 - `utils/harnessCorpus.ts` declares a `CorpusItem` type that mirrors the one in
   `app/api/dev/shared.ts` by hand. Leave the duplication alone here —
   `arch-consolidation-cleanup` issue 03 owns it. Moving it is enough for this issue.
