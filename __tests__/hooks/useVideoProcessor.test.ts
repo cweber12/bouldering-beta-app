@@ -347,6 +347,7 @@ describe("useVideoProcessor detector attempt evidence", () => {
   }
 
   let createElementSpy: ReturnType<typeof vi.spyOn> | null = null;
+  let inferenceClockSpy: ReturnType<typeof vi.spyOn> | null = null;
 
   /** A minimal 2D context: every pixel operation the seek loop makes is a stub. */
   function fakeContext() {
@@ -403,20 +404,32 @@ describe("useVideoProcessor detector attempt evidence", () => {
       climberCrop?: { x: number; y: number; w: number; h: number };
       climberPoint?: { x: number; y: number };
       wallCrop?: { x: number; y: number; w: number; h: number };
-      /** Burn this long inside each MediaPipe pass so inferenceMs is observable. */
+      /** Charge each MediaPipe pass this long, so inferenceMs is observable. */
       spinMs?: number;
     } = {},
   ): Promise<DetectorAttempt[]> {
     const queue = [...responses];
-    vi.mocked(estimateFramesMediaPipe).mockImplementation(() => {
-      if (spinMs > 0) {
-        const until = performance.now() + spinMs;
-        while (performance.now() < until) {
-          /* busy-wait: the model call is what inferenceMs is meant to time */
-        }
-      }
-      return queue.shift() ?? [];
-    });
+
+    // `inferenceMs` is measured with `performance.now()` around the model call,
+    // so charging a pass means owning that clock rather than burning real time
+    // in it. A busy-wait would leave the measurement at the mercy of the
+    // scheduler: preempt the one-pass attempt and it can out-measure the
+    // four-pass one, inverting the comparison for reasons that have nothing to
+    // do with the code under test. Here the clock only moves when a pass runs,
+    // so "four passes cost four times one" is arithmetic. The hook reads
+    // `performance.now()` nowhere else, so nothing else can notice.
+    if (spinMs > 0) {
+      let inferenceClock = 0;
+      inferenceClockSpy = vi
+        .spyOn(performance, "now")
+        .mockImplementation(() => inferenceClock) as ReturnType<typeof vi.spyOn>;
+      vi.mocked(estimateFramesMediaPipe).mockImplementation(() => {
+        inferenceClock += spinMs;
+        return queue.shift() ?? [];
+      });
+    } else {
+      vi.mocked(estimateFramesMediaPipe).mockImplementation(() => queue.shift() ?? []);
+    }
 
     const realCreateElement = document.createElement.bind(document);
     createElementSpy = vi
@@ -474,6 +487,8 @@ describe("useVideoProcessor detector attempt evidence", () => {
   afterEach(() => {
     createElementSpy?.mockRestore();
     createElementSpy = null;
+    inferenceClockSpy?.mockRestore();
+    inferenceClockSpy = null;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -621,10 +636,12 @@ describe("useVideoProcessor detector attempt evidence", () => {
     );
 
     const [hit, miss] = attempts;
-    expect(hit.inferenceMs).toBeGreaterThan(0);
-    // Four passes against one: the ladder's cost lands in the same field, which
-    // is what makes it a measured delta rather than an unattributed regression.
-    expect(miss.inferenceMs).toBeGreaterThan(hit.inferenceMs as number);
+    // Four passes against one, each charged 2 ms: the ladder's cost lands in the
+    // same field, which is what makes it a measured delta rather than an
+    // unattributed regression. The charge is exact, so the sum is what gets
+    // asserted rather than merely "the miss cost more".
+    expect(hit.inferenceMs).toBe(2);
+    expect(miss.inferenceMs).toBe(8);
   });
 
   it("reports the joints a limb-expanded pose left the pipeline to synthesize", async () => {

@@ -170,25 +170,48 @@ describe("ClimbsMap", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Nearby crags" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    // Issuing the fetch is not rendering its features. Both counters below are
+    // baselines for "did the *next* query happen", so they have to be read after
+    // the first one has finished moving them.
+    await waitFor(() => expect(mocks.leaflet.marker.mock.calls.length).toBeGreaterThan(0), {
+      timeout: 3000,
+    });
     const markersAfterFirstQuery = mocks.leaflet.marker.mock.calls.length;
+    const clearsAfterFirstQuery = mocks.osmClearLayers.mock.calls.length;
 
     mocks.setZoom(8);
     act(() => {
       mocks.trigger("zoomend");
     });
-    await waitMs(700);
 
-    expect(mocks.osmClearLayers).toHaveBeenCalled();
+    // Both re-queries sit behind the 600 ms move debounce and an async query
+    // after it, so a fixed sleep is racing real time with ~100 ms of margin —
+    // under load it loses, and the step reads the state from before the debounce
+    // fired. Wait for the outcome each step is about instead.
+    //
+    // That outcome is the zoom-out query having run, which is what drops the
+    // bounds key and lets re-entry re-render at all. Neither the hint nor a bare
+    // "the layer was cleared" says so: `zoomend` puts the hint on screen a full
+    // debounce early, and rendering the first query's own features already
+    // cleared the layer once — hence the count rather than the call.
+    await waitFor(
+      () => expect(mocks.osmClearLayers.mock.calls.length).toBeGreaterThan(clearsAfterFirstQuery),
+      { timeout: 3000 },
+    );
     expect(screen.queryByText("Zoom in to see nearby crags")).toBeTruthy();
 
     mocks.setZoom(10);
     act(() => {
       mocks.trigger("zoomend");
     });
-    await waitMs(700);
 
+    await waitFor(
+      () => expect(mocks.leaflet.marker.mock.calls.length).toBeGreaterThan(markersAfterFirstQuery),
+      { timeout: 3000 },
+    );
+    // Asserted after the re-render, so it covers the whole settle window: the
+    // markers came back without the network being touched again.
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(mocks.leaflet.marker.mock.calls.length).toBeGreaterThan(markersAfterFirstQuery);
   });
 
   it("auto-fits only on first load and true pin-set changes", async () => {

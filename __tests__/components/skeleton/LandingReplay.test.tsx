@@ -62,6 +62,10 @@ let clockNow: number;
  * deltas, so the first call after mounting only anchors the baseline; every call
  * after that advances replay time by exactly `ms`. Cancelled frames really are
  * cancelled here, so a paused clock cannot be advanced by a stale callback.
+ *
+ * It drains whatever is registered at this instant and nothing more — anchoring
+ * is `waitForFirstFrame`'s job, because only that knows the frame exists to
+ * anchor on.
  */
 function advance(ms: number): void {
   clockNow += ms;
@@ -70,6 +74,26 @@ function advance(ms: number): void {
     rafCallbacks.clear();
     for (const cb of due) cb(clockNow);
   });
+}
+
+/**
+ * Wait until the hero has actually scheduled a frame, then anchor the clock on it.
+ *
+ * This is the seam every timing test starts from, and it exists because the
+ * caption is not a readiness signal for the clock. Both come from the playlist
+ * fetch, but the caption is in the DOM as soon as that commit paints, while the
+ * frame is scheduled by a passive effect that flushes afterwards. Gating on the
+ * caption therefore lets `advance(0)` drain an empty map: no baseline is
+ * anchored, and every later `advance` is one frame short — the clip sits at time
+ * 0 instead of where the test put it.
+ *
+ * Waiting on the stub itself closes that gap, and it subsumes the caption wait:
+ * the clock only runs once the playlist is non-empty, so a scheduled frame
+ * already implies a captioned clip.
+ */
+async function waitForFirstFrame(): Promise<void> {
+  await waitFor(() => expect(rafCallbacks.size).toBeGreaterThan(0));
+  advance(0); // anchor the clock's frame delta
 }
 
 /** The route name currently captioned. */
@@ -307,9 +331,8 @@ describe("LandingReplay", () => {
   it("draws no Holds — they are a secondary feature the hero leaves out", async () => {
     stubPlaylist({ version: 1, items: [ITEM] });
     render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
 
-    advance(0);
     advance(CLIP_MS * 0.9); // deep into phase 4, where Holds used to be revealed
     expect(drawHolds).not.toHaveBeenCalled();
   });
@@ -335,11 +358,10 @@ describe("LandingReplay", () => {
       ],
     });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
     const canvas = container.querySelector("canvas") as HTMLCanvasElement;
     const before = { w: canvas.width, h: canvas.height };
 
-    advance(0);
     advance(CLIP_MS + HANDOFF_MS); // hand off to the portrait item
     expect(captionedRoute(container)).toBe("Crimp Ladder");
 
@@ -353,9 +375,8 @@ describe("LandingReplay", () => {
       items: [ITEM, itemNamed("clip-b", "Crimp Ladder"), itemNamed("clip-c", "Sloper Traverse")],
     });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
 
-    advance(0); // anchor the clock's frame delta
     expect(captionedRoute(container)).toBe("Slab Master");
 
     // A slot boundary hands off; the first item holds its finished overlay until
@@ -378,9 +399,8 @@ describe("LandingReplay", () => {
   it("hands off across the crossfade rather than cutting", async () => {
     stubPlaylist({ version: 1, items: [ITEM, itemNamed("clip-b", "Crimp Ladder")] });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
 
-    advance(0);
     // A third of the way through the handoff the outgoing clip is still dominant.
     advance(CLIP_MS + HANDOFF_MS / 3);
     expect(captionedRoute(container)).toBe("Slab Master");
@@ -392,9 +412,8 @@ describe("LandingReplay", () => {
   it("freezes the cycling while paused, then resumes from the same point", async () => {
     stubPlaylist({ version: 1, items: [ITEM, itemNamed("clip-b", "Crimp Ladder")] });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
 
-    advance(0);
     advance(CLIP_MS - 1000);
 
     act(() => {
@@ -406,7 +425,8 @@ describe("LandingReplay", () => {
     act(() => {
       screen.getByLabelText("Play replay").click();
     });
-    advance(0); // re-anchor after the resume — this must not replay the gap
+    // Re-anchor on the resumed clock's own first frame — this must not replay the gap.
+    await waitForFirstFrame();
     expect(captionedRoute(container)).toBe("Slab Master");
     advance(1000 + HANDOFF_MS); // the remaining second of the clip, then the handoff
     expect(captionedRoute(container)).toBe("Crimp Ladder");
@@ -416,9 +436,9 @@ describe("LandingReplay", () => {
     const items = Array.from({ length: 7 }, (_, i) => itemNamed(`clip-${i}`, `Route ${i}`));
     stubPlaylist({ version: 1, items });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Route 0")).toBeTruthy());
+    await waitForFirstFrame();
+    expect(captionedRoute(container)).toBe("Route 0");
 
-    advance(0);
     advance(4 * CLIP_MS + HANDOFF_MS);
     expect(captionedRoute(container)).toBe("Route 4");
     advance(CLIP_MS); // the sixth slot is the first item again, not "Route 5"
@@ -429,10 +449,9 @@ describe("LandingReplay", () => {
     const blits = stubRecordingContexts();
     stubPlaylist({ version: 1, items: [ITEM, itemNamed("clip-b", "Crimp Ladder")] });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
     const stage = container.querySelector("canvas") as HTMLCanvasElement;
 
-    advance(0);
     const mark = (blits.get(stage) ?? []).length; // ignore the frames drawn so far
     advance(CLIP_MS + HANDOFF_MS / 2);
 
@@ -450,10 +469,9 @@ describe("LandingReplay", () => {
     const blits = stubRecordingContexts();
     stubPlaylist({ version: 1, items: [ITEM, itemNamed("clip-b", "Crimp Ladder")] });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
     const stage = container.querySelector("canvas") as HTMLCanvasElement;
 
-    advance(0);
     advance(CLIP_MS + HANDOFF_MS / 2); // mid-handoff: learn the layer canvas
     const layer = (blits.get(stage) ?? []).at(-1)?.source;
     expect(layer).toBeTruthy();
@@ -481,7 +499,7 @@ describe("LandingReplay", () => {
       ],
     });
     const { container } = render(<LandingReplay />);
-    await waitFor(() => expect(screen.getByText("Slab Master")).toBeTruthy());
+    await waitForFirstFrame();
 
     // Only the clip that is about to play has been asked for. The four images
     // belonging to clips twelve and twenty-four seconds out are not competing
@@ -490,7 +508,6 @@ describe("LandingReplay", () => {
 
     // …and the hero is already up and painting with all three still pending.
     const stage = container.querySelector("canvas") as HTMLCanvasElement;
-    advance(0);
     advance(CLIP_MS * 0.05);
     expect(captionedRoute(container)).toBe("Slab Master");
 

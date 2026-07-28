@@ -77,6 +77,21 @@ function response(json: unknown, ok = true) {
   };
 }
 
+/**
+ * Wait until the mocked map has actually recorded `count` mounts.
+ *
+ * These tests prove the map is *not* remounted, which means every reading of
+ * `mapStats.mountCount` has to be taken after the mount it is counting. A
+ * `findBy*` on the mock's button is not that point: it resolves on the render
+ * that puts the button in the DOM, and the effect that increments the counter
+ * flushes after. Snapshotting straight off the query can therefore capture 0,
+ * leaving the later assertion to compare 1 against 0 and report a remount that
+ * never happened — the exact opposite of what is being asserted.
+ */
+async function waitForMapMounts(count: number): Promise<void> {
+  await waitFor(() => expect(mapStats.mountCount).toBe(count));
+}
+
 describe("profile map viewport policy", () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -131,6 +146,7 @@ describe("profile map viewport policy", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Map" }));
     await screen.findByRole("button", { name: "Mock pin click" });
+    await waitForMapMounts(1);
 
     const mountCountBeforeClick = mapStats.mountCount;
     const pinCallsBeforeClick = fetchMock.mock.calls.filter(([url]) =>
@@ -189,6 +205,7 @@ describe("profile map viewport policy", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Map" }));
     await screen.findByRole("button", { name: "Mock pin click" });
+    await waitForMapMounts(1);
 
     const mountCountAfterFirstMapView = mapStats.mountCount;
     const pinCallsAfterFirstMapView = fetchMock.mock.calls.filter(([url]) =>
