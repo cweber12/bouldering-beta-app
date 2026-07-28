@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { seekVideo, SeekTimeoutError, SeekAbortedError } from "@/utils/videoSeek";
+import {
+  seekVideo,
+  loadVideoMetadata,
+  SeekTimeoutError,
+  SeekAbortedError,
+} from "@/utils/videoSeek";
 
 // ---------------------------------------------------------------------------
 // Fake HTMLVideoElement — tracks listeners and records currentTime assignment.
@@ -108,5 +113,54 @@ describe("seekVideo", () => {
     // Still pending — resolve it so the promise settles.
     video.emit("seeked");
     await expect(p).resolves.toBeUndefined();
+  });
+});
+
+describe("loadVideoMetadata", () => {
+  it("resolves when loadedmetadata fires, and cleans up", async () => {
+    const video = makeVideo();
+    const p = loadVideoMetadata(video, { timeoutMs: 1000 });
+    video.emit("loadedmetadata");
+    await expect(p).resolves.toBeUndefined();
+    expect(video.listenerCount()).toBe(0);
+  });
+
+  // The batch-sweep freeze: once Chrome's decoder pool is exhausted the element
+  // silently never reports metadata — no error event, no timeout of its own.
+  // Without this bound the run hangs at "detecting 0%" forever.
+  it("rejects when loadedmetadata never arrives", async () => {
+    vi.useFakeTimers();
+    const video = makeVideo();
+    const p = loadVideoMetadata(video, { timeoutMs: 30_000 });
+    const assertion = expect(p).rejects.toThrow(/metadata.*30000ms/i);
+    vi.advanceTimersByTime(30_000);
+    await assertion;
+    expect(video.listenerCount()).toBe(0);
+  });
+
+  it("rejects on a video error event", async () => {
+    const video = makeVideo();
+    const p = loadVideoMetadata(video, { timeoutMs: 1000 });
+    video.emit("error");
+    await expect(p).rejects.toThrow(/Failed to load video metadata/);
+    expect(video.listenerCount()).toBe(0);
+  });
+
+  it("rejects promptly when aborted mid-flight, so Stop batch is responsive", async () => {
+    const video = makeVideo();
+    const controller = new AbortController();
+    const p = loadVideoMetadata(video, { signal: controller.signal, timeoutMs: 30_000 });
+    controller.abort();
+    await expect(p).rejects.toThrow(/aborted/i);
+    expect(video.listenerCount()).toBe(0);
+  });
+
+  it("rejects immediately when the signal is already aborted", async () => {
+    const video = makeVideo();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      loadVideoMetadata(video, { signal: controller.signal }),
+    ).rejects.toThrow(/aborted/i);
   });
 });
