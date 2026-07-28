@@ -37,8 +37,10 @@ restructure it here.** Substituting its inline block for a call to the shared de
 it is a clean one-line swap; if it is entangled, leave it and note it in `## Comments`.
 
 **Video seek and metadata.** `utils/videoSeek.ts` already exists and already provides `seekVideo`
-with `SeekAbortedError` and `SeekTimeoutError`, and `utils/probeVideoMeta.ts` handles metadata —
-but hand-rolled `seeked` / `loadedmetadata` listeners still live at `app/dev/orb-bench/page.tsx:129`,
+with `SeekAbortedError` and `SeekTimeoutError`, plus `loadVideoMetadata` — a bounded
+`loadedmetadata` wait added by `733d9ac` after an unbounded one hung a batch sweep for 45 minutes.
+`utils/probeVideoMeta.ts` also handles metadata. Between them the canonical implementations exist;
+hand-rolled `seeked` / `loadedmetadata` listeners still live at `app/dev/orb-bench/page.tsx:129`,
 `components/dev/FrameStage.tsx:143`, `components/skeleton/FramePlayer.tsx:376` and `:625`, and
 `hooks/useDetectionThumbnails.ts:69` and `:105`.
 

@@ -54,7 +54,12 @@ import {
   type StoredHold,
 } from "@/storage/sessionStore";
 import { detectHoldsVideoSpace } from "@/pipeline/holds/holdDetection";
-import { seekVideo, SeekAbortedError, SeekTimeoutError } from "@/utils/videoSeek";
+import {
+  seekVideo,
+  loadVideoMetadata,
+  SeekAbortedError,
+  SeekTimeoutError,
+} from "@/utils/videoSeek";
 import type { CropFraction } from "@/utils/cropFraction";
 import type { CropTrace, CropTraceEntry } from "@/utils/cropTrace";
 import type { PoseBackend } from "@/utils/poseConstants";
@@ -634,10 +639,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       }
 
       try {
-        await new Promise<void>((resolve, reject) => {
-          video.onloadedmetadata = () => resolve();
-          video.onerror = () => reject(new Error("Failed to load video metadata."));
-        });
+        await loadVideoMetadata(video, { signal: seekController.signal });
 
         const { duration, videoWidth, videoHeight } = video;
         canvas.width = videoWidth;
@@ -1696,6 +1698,14 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
         setErrorMessage(msg);
       } finally {
         URL.revokeObjectURL(objectUrl);
+        // Release the decoder now rather than leaving it to GC. Browsers cap
+        // concurrent media decoders per renderer, and a batch sweep creates one
+        // element per Test Video; elements still awaiting collection keep their
+        // slot. Once the pool is exhausted `loadedmetadata` stops firing with no
+        // error event, which stalled sweeps at "detecting 0%". Same teardown
+        // `probeVideoMeta` already does.
+        video.removeAttribute("src");
+        video.load();
       }
     },
     [frameIntervalMs],

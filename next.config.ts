@@ -32,6 +32,21 @@ const nextConfig: NextConfig = {
   // is not compatible with the Edge runtime or browser bundles).
   serverExternalPackages: ["firebase-admin"],
 
+  experimental: {
+    // `proxy.ts` runs on every request, so Next buffers each request body to let
+    // both the proxy and the route handler read it — capped at 10MB by default,
+    // and **silently truncated** past that rather than rejected. A truncated body
+    // reaches the route as invalid JSON, so `POST /api/dev/detections` answers
+    // 400 and the detection run is discarded after the scan has already been
+    // paid for. 77 of the 400 runs in the corpus exceed 10MB (largest 19.4MB),
+    // so a batch sweep loses roughly one run in five to this.
+    //
+    // Sized for the largest plausible run rather than today's maximum: a
+    // detection payload scales with video length, and this is a ceiling on
+    // buffering, not an allocation.
+    proxyClientMaxBodySize: "64mb",
+  },
+
   // The /view and /match routes were consolidated into the /compare climb
   // console. Redirect stale links — the query string (?key=…) is preserved
   // automatically, and the console reads ?key= as a single-climb alias.
