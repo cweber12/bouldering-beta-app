@@ -63,6 +63,54 @@ because `setupHash` matches either way.
 
 ## Comments
 
+### Both open questions answered against the harness source (2026-07-27)
+
+Checked while closing issue 04. Read these before starting — they change what §1
+and §2 have to do.
+
+**§1 — the harness still reads `climber_point`, and the alias is actively
+harmful.** Two call sites in `beta-scan-analysis/app.py`:
+
+- `app.py:341` — `tap_src = payload.seed_tap if payload.seed_tap is not None
+  else payload.climber_point`. Harmless: `seed_tap` wins, so the alias is dead
+  weight on this path.
+- `app.py:509-512` — `climber_point_t = payload.climber_point.t` when present,
+  **else** `setup.json`'s `climberPoint.t`. Not harmless: this feeds the
+  video-stats window, so sending `climber_point: b.seedTap` overwrites the
+  *setup* tap's time with the *seed* tap's. The seed tap moves with every
+  re-seed, so this is the ADR 0007 conflation still doing live damage in the
+  harness's own stats.
+
+So the answer to "confirm the harness no longer reads it before deleting" is: it
+does read it. Per §1's own fallback instruction, send `climberPoint` there — or
+omit the field entirely and let the harness fall back to `setup.json`, which is
+the value we would be sending anyway.
+
+**§2 — the export-race deletion does block `200 skipped`, exactly as suspected.**
+The chain: `app.py:427` `seed_is_unchanged()` → `vitpose_job.py:918`
+`artifact_seed_hash(bundle_dir)` → reads `vitpose.json` **from the bundle dir**.
+Our relay `rm`s that file before forwarding
+(`app/api/dev/corpus/vitpose/route.ts:186`), so `artifact_seed_hash` always
+returns `None`, `seed_is_unchanged` is always `False`, and the harness can never
+answer `skipped`. §2 is unbuildable until the deletion moves.
+
+Of the two options §2 offers, **delete only after a 202** is the one to take. The
+other ("stop deleting when the seed is unchanged") needs the seed hash computed
+client-side, duplicating `vitpose_job.seed_hash` in TypeScript — a second
+implementation of a hash whose inputs the harness owns, which will drift.
+Deleting after a 202 needs nothing new: a 202 means a job really is starting, so
+the artifact is about to be rewritten and clearing it first is safe; a 200
+`skipped` means the artifact on disk *is* the answer and must survive.
+
+**One hazard this removes:** the harness also writes a terminal skip sidecar
+(`write_skip_status`, `app.py:433`) specifically so a client that only knows the
+202-and-poll flow terminates instead of hanging. Our relay clears the status file
+*before* the POST, and the harness writes the skip status *during* it, so that
+ordering is already safe — the sidecar path works even before §2 lands. Worth
+knowing: §2 is a correctness and latency fix, not a hang fix.
+
+### Original notes
+
 - **Found while building issue 01, and it likely blocks §2 outright:** the relay
   deletes `vitpose.json` from the bundle dir *before* forwarding the request
   (`app/api/dev/corpus/vitpose/route.ts`, the export-race fix for harness issue

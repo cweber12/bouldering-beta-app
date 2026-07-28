@@ -43,8 +43,16 @@ Actionable PRDs that are not first in line.
 `failureClass` / `distractor` controls annotate conditions the operator has to
 be able to see first, and the review surfaces PRD builds that viewer.
 
+`test-suite-flake-stabilisation` is `P0`: `npx vitest run` currently fails in a
+different test each run, so the suite cannot be used to verify anything else
+until it is deterministic.
+
 `harness-contract-adr0007-adoption` is `in-progress` and not listed above — its
 remaining issue 03 is an independent correctness fix that can land in any order.
+Its two open questions are now answered in the issue's Comments against the
+harness source: `climber_point` is still read (and corrupts the harness's
+video-stats window), and the relay's pre-POST artifact deletion does block
+`200 skipped` outright.
 Its issue 02 sweep is superseded by `dev-harness-review-surfaces` issue 05.
 Issue 04 landed the scaffold provenance stamp: truth written from now on carries
 it, and the eleven bundles whose unstamped truth predates a re-seed badge
