@@ -15,7 +15,7 @@ import { readdir, readFile, access } from "node:fs/promises";
 import path from "node:path";
 import {
   runPairsWithTruth,
-  truthIsStale,
+  truthStaleAxis,
   scaffoldIsSeedReady,
   scaffoldIsUntrackable,
 } from "@/utils/harnessFreshness";
@@ -111,10 +111,19 @@ export interface CorpusItem {
    */
   hasGroundTruth: boolean;
   /**
-   * True when the truth exists but stamps an older calibration's `setupHash`
-   * than the current `setup.json` — it pairs with no run scanned under the
-   * current Setup, so an "accepted" badge must not read as healthy
-   * (utils/harnessFreshness, harness issue #21).
+   * True when the truth exists but was authored against something that has since
+   * moved — on either axis (utils/harnessFreshness):
+   *
+   * - an older calibration's `setupHash` than the current `setup.json`, so it
+   *   pairs with no run scanned under the current Setup (harness issue #21); or
+   * - an older ViTPose scaffold's `seedHash` than the `vitpose.json` on disk, so
+   *   it describes a superseded scaffold and every newly-posed frame it calls
+   *   absent scores as a hallucination (harness ADR 0007 / issue #119).
+   *
+   * A re-seed moves the second without touching the first, which is why the
+   * scaffold axis had to be added rather than derived. Either way an "accepted"
+   * badge must not read as healthy. Both comparisons fail open on a missing
+   * stamp: unknown provenance is never stale.
    */
   truthStale: boolean;
   /**
@@ -224,6 +233,33 @@ async function readJsonSetupHash(filePath: string): Promise<string | null> {
 /** The bundle's current `setup.json` `setupHash`, or null when uncalibrated. */
 export async function readSetupHash(bundleDir: string): Promise<string | null> {
   return readJsonSetupHash(path.join(bundleDir, "setup.json"));
+}
+
+/** What accepted Ground Truth stamps about the inputs it was authored against. */
+interface TruthStamps {
+  /** The Scan Setup the truth's seed was built from. Null on legacy truth. */
+  setupHash: string | null;
+  /** The ViTPose scaffold the truth was authored from (ADR 0007). Null when the
+   * seeding scaffold predated the hash — unknown provenance, never stale. */
+  scaffoldSeedHash: string | null;
+}
+
+/**
+ * Read both of a bundle's Ground Truth stamps in one pass. `ground-truth.json`
+ * is a large artifact (up to 100k frames), so the two staleness axes share a
+ * single read rather than parsing it twice. Both stamps come back null when the
+ * file is absent or unreadable.
+ */
+async function readTruthStamps(bundleDir: string): Promise<TruthStamps> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(path.join(bundleDir, "ground-truth.json"), "utf8"),
+    ) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" && v.length > 0 ? v : null);
+    return { setupHash: str(parsed.setupHash), scaffoldSeedHash: str(parsed.scaffoldSeedHash) };
+  } catch {
+    return { setupHash: null, scaffoldSeedHash: null };
+  }
 }
 
 /** The bundle's parsed `vitpose.json` scaffold, or null when absent/malformed. */
@@ -369,19 +405,30 @@ export async function listCorpus(): Promise<CorpusItem[]> {
         continue; // no / invalid metadata → not a bundle
       }
 
-      const [hasSetup, hasGroundTruth, setupHash, truthSetupHash] = await Promise.all([
+      const [hasSetup, hasGroundTruth, setupHash, truthStamps] = await Promise.all([
         exists(path.join(bundleDir, "setup.json")),
         exists(path.join(bundleDir, "ground-truth.json")),
         readSetupHash(bundleDir),
-        readJsonSetupHash(path.join(bundleDir, "ground-truth.json")),
+        readTruthStamps(bundleDir),
       ]);
+      const truthSetupHash = truthStamps.setupHash;
       const [scaffold, { runCount, pairedRunCount, unpairedRunCount }, setupFacts] =
         await Promise.all([
           readScaffold(bundleDir),
           countRuns(detectionsDir(bundleDir), truthSetupHash, setupHash, hasGroundTruth),
           readSetupFacts(bundleDir),
         ]);
-      const truthStale = hasGroundTruth && truthIsStale(truthSetupHash, setupHash);
+      // Both axes: the calibration the truth pairs to, and the scaffold it was
+      // authored from. A re-seed moves only the second, so the first can never
+      // stand in for it (harness ADR 0007 / issue #119).
+      const truthStale =
+        hasGroundTruth &&
+        truthStaleAxis({
+          truthSetupHash,
+          setupHash,
+          truthScaffoldSeedHash: truthStamps.scaffoldSeedHash,
+          scaffoldSeedHash: scaffold?.seedHash,
+        }) !== "none";
       // Untrackable only matters where there is no fresh evidence to fall back on:
       // a fresh-truth bundle keeps its accepted Ground Truth even if a later
       // re-seed posed nothing, so it is never held out of the sweeps.

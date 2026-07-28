@@ -16,7 +16,11 @@ export interface CorpusItem {
   videoPath: string;
   hasSetup: boolean;
   hasGroundTruth: boolean;
-  /** Truth exists but stamps an older calibration's hash — stale evidence. */
+  /**
+   * Truth exists but was authored against something that has since moved —
+   * either an older calibration's `setupHash` or an older ViTPose scaffold's
+   * `seedHash`. A re-seed moves only the second (utils/harnessFreshness).
+   */
   truthStale: boolean;
   /** A fresh, posed ViTPose scaffold is on disk — review needs no new job. */
   seedReady: boolean;

@@ -51,6 +51,15 @@ export interface ViTPoseScaffold {
    * may omit it; the harness then falls back to the setup save response.
    */
   setupHash?: string;
+  /**
+   * The downloader's seed hash for this scaffold (harness ADR 0007): seed tap,
+   * seed region, climb window and video binary. It is the signal `setupHash`
+   * could never be — re-seeding moves it while leaving the calibration alone —
+   * so it is what Ground Truth stamps to record *which* scaffold it was authored
+   * from. Artifacts written before ADR 0007 omit it; provenance is then unknown,
+   * never stale.
+   */
+  seedHash?: string;
   frames: ViTPoseFrame[];
 }
 
@@ -196,6 +205,7 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
   const b = body as Record<string, unknown>;
   if (!Number.isInteger(b.version)) return null;
   if (b.setupHash !== undefined && typeof b.setupHash !== "string") return null;
+  if (b.seedHash !== undefined && typeof b.seedHash !== "string") return null;
   if (!Array.isArray(b.frames) || b.frames.length > MAX_FRAMES) return null;
   const frames: ViTPoseFrame[] = [];
   for (const raw of b.frames) {
@@ -208,6 +218,7 @@ export function parseViTPoseScaffold(body: unknown): ViTPoseScaffold | null {
     ...(typeof b.setupHash === "string" && b.setupHash.length > 0
       ? { setupHash: b.setupHash }
       : {}),
+    ...(typeof b.seedHash === "string" && b.seedHash.length > 0 ? { seedHash: b.seedHash } : {}),
     frames,
   };
 }

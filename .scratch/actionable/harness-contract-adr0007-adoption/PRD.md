@@ -7,10 +7,13 @@ Spec inputs: `beta-scan-analysis/docs/handoffs/scanner-tap-split-adr0007.md`
 (harness ADR 0007, the delta this PRD adopts);
 `beta-scan-analysis/docs/handoffs/scanner-reset-sequencing-reply.md`
 (2026-07-26: what the corpus reset is waiting on, and why);
+`beta-scan-analysis/docs/handoffs/scanner-truth-scaffold-provenance.md`
+(2026-07-27: the same blind spot one layer up, between scaffold and truth —
+issue 04);
 companion contracts `scanner-seed-contract-adr0006.md` (the `seed_tap` /
 `seed_region` split this amends) and `scanner-data-contract.md` (bundle layout,
 the `/api/contract` capability probe).
-Harness refs: their ADR 0007, issue #101 stories 41–45.
+Harness refs: their ADR 0007, issue #101 stories 41–45, issue #119.
 Glossary: CONTEXT.md — **Climber**, **Scan Setup**, **Ground Truth**,
 **Detection Frame**, **Bundle**.
 
@@ -37,6 +40,14 @@ Three defects, measured on the corpus as it stands (90 bundles):
   the seed, so re-calibrating the seed point left the old `vitpose.json` in place
   with nothing able to tell. The harness now stamps a `seedHash` and answers
   `200 skipped` for an unchanged seed — a response this scanner does not handle.
+- **A moved scaffold leaves stale truth, silently.** The identical hole sits one
+  layer up: Ground Truth is authored *from* a scaffold and records nothing about
+  which one, so a re-seed leaves the truth describing the superseded scaffold.
+  `setupHash` tracks calibration and re-seeding does not change it, so both
+  `hasGroundTruth` and `truthStale` read healthy. **11 bundles are adrift** after
+  the #101 reset — two recording *zero* present frames against fully-posed
+  scaffolds, and every frame the new scaffold poses that the old truth calls
+  absent is scored as a scanner hallucination.
 
 Reading the corpus against this repo narrows the work considerably. Much of
 ADR 0006/0007 is already in place:
@@ -75,6 +86,12 @@ slot, the unhandled `200 skipped`, `force`, and the `splitTaps` capability gate.
    success with the artifact present (never poll it), send `force`, and gate the
    new request fields on the `splitTaps` capability so a mixed-version deployment
    degrades visibly.
+4. **Scaffold provenance on Ground Truth**: stamp the seeding scaffold's
+   `seedHash` into `ground-truth.json` at accept time, and extend `truthStale` to
+   read the scaffold axis off it — null-guarded, so unstamped truth degrades to
+   today's behaviour rather than to "stale". This is the ADR 0007 `seedHash`
+   applied one layer up; it makes drift visible and changes nothing about who
+   accepts truth.
 
 ## Sequencing
 
@@ -84,12 +101,16 @@ This PRD lands **between** `pose-detection-loss-recovery` issues 06 (done) and
 ```text
 06 (done) → 01 climbEnd plumbing → 02 capture UI → control batch → 04
                                  ↘ 03 ADR 0007 edges (independent)
+                                 ↘ 04 truth scaffold provenance (independent)
 ```
 
 Issue 01 is what unblocks the harness: once `climbEnd` is *writable*, a
 re-calibration produces a correct bundle and the reset can be scheduled. Issue 02
-makes it authorable at scale. Issue 03 is independent of both and fixes a live
-correctness bug; it can land in any order.
+makes it authorable at scale. Issues 03 and 04 are independent of both and of
+each other, and each fixes a live correctness bug; they can land in any order.
+04 is worth landing **before** the corpus re-accept pass, so every truth written
+during it is stamped and the harness can drop its inference heuristic for those
+bundles immediately.
 
 The control batch is deliberately **after** 01 and 02. Post-climb frames are
 missing frames by construction, and since the reacquire ladder (ADR 0024) fires
@@ -106,7 +127,11 @@ cost during actual climbing.
   03-behavior reading.
 - Migrating existing bundles. No migration can recover a setup tap that was
   already overwritten — that is why harness issue #101 ends in a corpus reset
-  rather than a repair.
+  rather than a repair. The same holds for the 11 scaffold-adrift truths: no
+  stamp can be back-filled honestly, so re-accepting them is corpus work under
+  #101, not work here.
+- Auto-accepting Ground Truth when a scaffold changes. Issue 04 makes staleness
+  visible; the human stays in acceptance.
 - Re-requesting the 8 legacy 1.0 s scaffolds as a separate task; the reset
   regenerates them.
 - Any user-visible scan surface. `climbEnd` is dev-harness calibration only.

@@ -150,6 +150,18 @@ describe("hashGroundTruthInput", () => {
     expect(await hashGroundTruthInput(reflagged)).not.toBe(a);
   });
 
+  // Scaffold provenance records where the reference came from, not what it is.
+  // Folding it into the pre-image would re-hash every truth that gains a stamp
+  // without a frame moving, staling scores that are still perfectly valid.
+  it("does not change when the scaffoldSeedHash is stamped or moves", async () => {
+    const unstamped = await hashGroundTruthInput(base);
+    expect(await hashGroundTruthInput({ ...base, scaffoldSeedHash: "seed-old" })).toBe(unstamped);
+    expect(await hashGroundTruthInput({ ...base, scaffoldSeedHash: "seed-new" })).toBe(unstamped);
+    expect(canonicalGroundTruthInput({ ...base, scaffoldSeedHash: "seed-old" })).not.toContain(
+      "seed-old",
+    );
+  });
+
   it("changes when the setupHash changes", async () => {
     const a = await hashGroundTruthInput(base);
     expect(await hashGroundTruthInput({ ...base, setupHash: "different" })).not.toBe(a);
@@ -240,6 +252,21 @@ describe("parseGroundTruthInput", () => {
     );
     expect(parsed?.setupHash).toBe("");
     expect(parsed?.frames.map((f) => f.review)).toEqual(["auto", "auto"]);
+  });
+
+  it("carries a scaffoldSeedHash through, and omits it when absent or blank", () => {
+    const body = { ...base, scaffoldSeedHash: "3c6b5831a1b2c3d4" };
+    expect(parseGroundTruthInput(body)?.scaffoldSeedHash).toBe("3c6b5831a1b2c3d4");
+    // A scaffold that predates ADR 0007 has nothing to stamp — omit rather than
+    // invent, so provenance reads as unknown instead of as an empty mismatch.
+    expect(parseGroundTruthInput(base)).not.toHaveProperty("scaffoldSeedHash");
+    expect(parseGroundTruthInput({ ...base, scaffoldSeedHash: "" })).not.toHaveProperty(
+      "scaffoldSeedHash",
+    );
+  });
+
+  it("rejects a non-string scaffoldSeedHash", () => {
+    expect(parseGroundTruthInput({ ...base, scaffoldSeedHash: 123 })).toBeNull();
   });
 
   it("rejects malformed bodies", () => {

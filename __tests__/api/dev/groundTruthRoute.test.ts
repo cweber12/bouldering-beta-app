@@ -103,6 +103,40 @@ describe("dev GET/PUT /api/dev/corpus/ground-truth", () => {
     expect((await getRes.json()).groundTruth.groundTruthHash).toBe(saved.groundTruthHash);
   });
 
+  // Scaffold provenance (harness ADR 0007 / issue #119): which ViTPose scaffold
+  // this truth was authored from. Unlike `setupHash` it is not gated — the 11
+  // adrift bundles went adrift because their scaffolds were regenerated *after*
+  // acceptance, which no write-time gate could have caught. Stamp and surface.
+  it("persists a scaffoldSeedHash without disturbing the groundTruthHash", async () => {
+    const { GET, PUT } = await importRoute("development");
+
+    const unstamped = await PUT(makeRequest(BUNDLE_KEY, validInput));
+    const unstampedHash = (await unstamped.json()).groundTruth.groundTruthHash;
+
+    const res = await PUT(
+      makeRequest(BUNDLE_KEY, { ...validInput, scaffoldSeedHash: "3c6b5831a1b2c3d4" }),
+    );
+    expect(res.status).toBe(200);
+    const saved = (await res.json()).groundTruth;
+    expect(saved.scaffoldSeedHash).toBe("3c6b5831a1b2c3d4");
+    // Provenance is not part of the reference being scored, so stamping it must
+    // not re-hash a truth whose frames never moved.
+    expect(saved.groundTruthHash).toBe(unstampedHash);
+
+    const onDisk = JSON.parse(await readFile(path.join(bundleDir, "ground-truth.json"), "utf8"));
+    expect(onDisk.scaffoldSeedHash).toBe("3c6b5831a1b2c3d4");
+    const getRes = await GET(makeRequest(BUNDLE_KEY));
+    expect((await getRes.json()).groundTruth.scaffoldSeedHash).toBe("3c6b5831a1b2c3d4");
+  });
+
+  it("omits the scaffoldSeedHash for truth seeded from a pre-ADR 0007 scaffold", async () => {
+    const { PUT } = await importRoute("development");
+    const res = await PUT(makeRequest(BUNDLE_KEY, validInput));
+    expect((await res.json()).groundTruth).not.toHaveProperty("scaffoldSeedHash");
+    const onDisk = JSON.parse(await readFile(path.join(bundleDir, "ground-truth.json"), "utf8"));
+    expect(onDisk).not.toHaveProperty("scaffoldSeedHash");
+  });
+
   it("recomputes the hash server-side, ignoring any client-sent hash", async () => {
     const { PUT } = await importRoute("development");
     const clean = await PUT(makeRequest(BUNDLE_KEY, validInput));

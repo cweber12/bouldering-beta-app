@@ -113,6 +113,41 @@ beforeAll(async () => {
     JSON.stringify({ version: 1, setupHash: "new-hash", frames: [{ timestamp: 0, keypoints: [] }] }),
   );
 
+  // Scaffold-drift bundles (harness ADR 0007 / issue #119). The calibration
+  // matches on every one of them — a re-seed does not touch `setupHash` — so
+  // only the scaffold's `seedHash` can tell these apart.
+  const driftBundle = async (
+    videoKey: string,
+    truthSeedHash: string | undefined,
+    scaffoldSeedHash: string | undefined,
+  ) => {
+    const dir = path.join(root, "route-j", videoKey);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "metadata.json"), JSON.stringify({}));
+    await writeFile(path.join(dir, "setup.json"), JSON.stringify({ setupHash: "new-hash" }));
+    await writeFile(
+      path.join(dir, "ground-truth.json"),
+      JSON.stringify({ setupHash: "new-hash", scaffoldSeedHash: truthSeedHash }),
+    );
+    await writeFile(
+      path.join(dir, "vitpose.json"),
+      JSON.stringify({
+        version: 1,
+        setupHash: "new-hash",
+        seedHash: scaffoldSeedHash,
+        frames: [{ timestamp: 0.1, keypoints: [{ name: "nose", x: 0.5, y: 0.5, score: 0.9 }] }],
+      }),
+    );
+  };
+  // Adrift: truth describes a scaffold that has since been re-seeded.
+  await driftBundle("vid_drift", "seed-old", "seed-new");
+  // Same scaffold — the healthy case.
+  await driftBundle("vid_same", "seed-one", "seed-one");
+  // Unstamped truth (written before this contract) against a stamped scaffold.
+  await driftBundle("vid_notruthstamp", undefined, "seed-new");
+  // Stamped truth against a pre-ADR 0007 scaffold that carries no seed hash.
+  await driftBundle("vid_noscaffoldstamp", "seed-old", undefined);
+
   process.env.HARNESS_ANALYSIS_ROOT = root;
 });
 
@@ -135,6 +170,10 @@ describe("listCorpus", () => {
       "route-g/vid_6",
       "route-h/vid_7",
       "route-i/vid_8",
+      "route-j/vid_drift",
+      "route-j/vid_noscaffoldstamp",
+      "route-j/vid_notruthstamp",
+      "route-j/vid_same",
     ]);
 
     const a = items.find((i) => i.key === "route-a/vid_1")!;
@@ -172,6 +211,30 @@ describe("listCorpus", () => {
     expect(d.runCount).toBe(2);
     expect(d.pairedRunCount).toBe(1);
     expect(d.unpairedRunCount).toBe(1);
+  });
+
+  it("marks truth stale when it was authored from a superseded scaffold", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    // The calibration matches on all four — re-seeding never moves `setupHash`,
+    // which is exactly why the scaffold axis had to be added rather than derived.
+    const drift = byKey("route-j/vid_drift");
+    expect(drift.hasGroundTruth).toBe(true);
+    expect(drift.truthStale).toBe(true);
+
+    expect(byKey("route-j/vid_same").truthStale).toBe(false);
+  });
+
+  // Fail-open: a missing stamp on either side is *unknown* provenance, never a
+  // failure. Degrading these to stale would have flagged the whole corpus on the
+  // day this shipped, which is the opposite of a trustworthy signal.
+  it("never marks truth stale when either scaffold stamp is missing", async () => {
+    const items = await listCorpus();
+    const byKey = (k: string) => items.find((i) => i.key === k)!;
+
+    expect(byKey("route-j/vid_notruthstamp").truthStale).toBe(false);
+    expect(byKey("route-j/vid_noscaffoldstamp").truthStale).toBe(false);
   });
 
   it("flags seed-ready only for a fresh, posed scaffold", async () => {

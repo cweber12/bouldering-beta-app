@@ -357,9 +357,14 @@ dragging and per-joint editing are gone. Each frame carries a `review` value:
 **human-flagged-absent**; scoring splits auto (agreement-tier) from human-flagged
 (accuracy-tier) evidence. Paired to its **Scan Setup** by a stored `setupHash` —
 the hash of the calibration whose ViTPose scaffold seeded it, and the hash a run
-must stamp to be evaluated against it (ADR 0020). A Setup save that changes the
-hash flips the truth to a surfaced **stale** state (never silently healthy, never
-discarded); re-seeding under the current calibration carries the human flags
+must stamp to be evaluated against it (ADR 0020) — and stamped with the
+`scaffoldSeedHash` of the ViTPose scaffold it was actually authored from
+(the scaffold's own `seedHash`, harness ADR 0007). A change to **either** flips
+the truth to a surfaced **stale** state (never silently healthy, never
+discarded): a Setup save moves the first, a **re-seed** moves only the second,
+and neither can stand in for the other. An unstamped truth, or one seeded from a
+scaffold that carries no `seedHash`, has _unknown_ provenance and is never read
+as stale. Re-seeding under the current calibration carries the human flags
 forward by timestamp, and export is refused while the scaffold on disk belongs to
 an older calibration. Frozen alongside the video's crops as calibration output;
 the scaffold that seeds it is discarded — only the Ground Truth persists, not a

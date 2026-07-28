@@ -60,7 +60,7 @@ import {
   type ViTPoseScaffold,
 } from "@/utils/harnessViTPose";
 import { buildDetectionGrid, type DetectionGridFrame } from "@/utils/harnessDetectionGrid";
-import { scaffoldIsStale, truthIsStale } from "@/utils/harnessFreshness";
+import { scaffoldIsStale, truthIsStale, truthStaleAxis } from "@/utils/harnessFreshness";
 import { probeVideoMeta, type VideoMeta } from "@/utils/probeVideoMeta";
 import { deriveSeedRegion } from "@/utils/cropContainment";
 import { type CropFraction, DEFAULT_CROP } from "@/utils/cropFraction";
@@ -115,6 +115,9 @@ export default function Calibrator({
   const [truthAccepted, setTruthAccepted] = useState(false);
   /** The saved truth's stamped setupHash ("" legacy) — drives the stale state. */
   const [truthSetupHash, setTruthSetupHash] = useState("");
+  /** The saved truth's stamped scaffold seedHash ("" when unstamped) — the
+   * second stale axis, which `setupHash` cannot see (harness ADR 0007). */
+  const [truthScaffoldSeedHash, setTruthScaffoldSeedHash] = useState("");
   const [gtSeed, setGtSeed] = useState<GroundTruthInput | null>(null);
   const [controlPoints, setControlPoints] = useState<Map<number, ReviewFlag>>(new Map());
   const [gtSave, setGtSave] = useState<{ ok: boolean; message: string } | null>(null);
@@ -149,8 +152,10 @@ export default function Calibrator({
 
   // Accepted truth whose stamped hash no longer matches the current Setup: it
   // reads as stale until ViTPose is re-run and the truth re-accepted. Because the
-  // Seed tap is off-hash, a seed re-tap alone never changes `currentSetupHash`.
-  const truthStale = truthAccepted && truthIsStale(truthSetupHash, currentSetupHash);
+  // Seed tap is off-hash, a seed re-tap alone never changes `currentSetupHash`
+  // — which is exactly why this axis cannot see a re-seed, and why the scaffold
+  // axis is folded in below once a scaffold is in hand.
+  const calibrationStale = truthAccepted && truthIsStale(truthSetupHash, currentSetupHash);
 
   // Smart seed probe (batch re-seed / batch calibrate PRDs): ask the existing
   // ViTPose GET whether a fresh posed scaffold is on disk before ever offering
@@ -158,7 +163,12 @@ export default function Calibrator({
   // covers two review-without-a-job cases: a stale-truth bundle, and a truthless
   // bundle that Batch Calibrate already seeded (seed ready, never accepted). A
   // fresh-accepted bundle has nothing to review, so it is never probed.
-  const wantSeedProbe = truthStale || (!truthAccepted && item.seedReady);
+  //
+  // `item.truthStale` is in the gate because the scaffold axis cannot be
+  // evaluated until the probe has fetched the scaffold — gating the probe on the
+  // answer it produces would be circular, so the corpus row's verdict opens it
+  // and the probed scaffold then decides.
+  const wantSeedProbe = calibrationStale || item.truthStale || (!truthAccepted && item.seedReady);
   const [probedScaffold, setProbedScaffold] = useState<ViTPoseScaffold | null>(null);
   const [probedWarnings, setProbedWarnings] = useState<string[]>([]);
   useEffect(() => {
@@ -181,6 +191,22 @@ export default function Calibrator({
     };
   }, [wantSeedProbe, item.key]);
   const reseedAffordance = reseedAffordanceDecision(probedScaffold, currentSetupHash);
+
+  // The full verdict, once a scaffold is in hand: the calibration axis above
+  // plus the scaffold axis (harness ADR 0007 / issue #119), which catches truth
+  // authored from a scaffold that has since been re-seeded. Compared against the
+  // scaffold this act actually holds — the one loaded into review if there is
+  // one, else the probed one on disk — and fails open on either missing stamp,
+  // so nothing pre-ADR 0007 reads stale.
+  const staleAxis = truthAccepted
+    ? truthStaleAxis({
+        truthSetupHash,
+        setupHash: currentSetupHash,
+        truthScaffoldSeedHash,
+        scaffoldSeedHash: vitpose?.seedHash ?? probedScaffold?.seedHash,
+      })
+    : "none";
+  const truthStale = staleAxis !== "none";
 
   // A Seed tap from a setup calibrated before the tap-timestamp contract: the
   // downloader can only seed by global tap position, which grabs a bystander who
@@ -238,11 +264,15 @@ export default function Calibrator({
           existingGtRef.current = gt;
           setTruthAccepted(hasAcceptedGroundTruth(gt));
           setTruthSetupHash(typeof gt?.setupHash === "string" ? gt.setupHash : "");
+          setTruthScaffoldSeedHash(
+            typeof gt?.scaffoldSeedHash === "string" ? gt.scaffoldSeedHash : "",
+          );
         } catch {
           if (revoked) return;
           existingGtRef.current = null;
           setTruthAccepted(false);
           setTruthSetupHash("");
+          setTruthScaffoldSeedHash("");
         }
       } catch (err) {
         if (!revoked) setLoadError(err instanceof Error ? err.message : String(err));
@@ -484,16 +514,28 @@ export default function Calibrator({
       }
       const input: GroundTruthInput = {
         setupHash,
+        // Which scaffold this truth was authored from (harness ADR 0007 / issue
+        // #119). Taken from the scaffold in hand, never re-read from disk at save
+        // time: a re-seed that landed mid-review would otherwise stamp the new
+        // scaffold onto truth authored from the old one, masking the exact drift
+        // this exists to expose. A pre-ADR 0007 scaffold has none to stamp, and
+        // the field is omitted rather than invented.
+        ...(vitpose?.seedHash ? { scaffoldSeedHash: vitpose.seedHash } : {}),
         frames: materializeReview(gtSeed.frames, controlPoints).map((f) => ({
           ...f,
           verified: true,
         })),
       };
       const saved = await saveGroundTruth(item.key, input);
-      const savedInput: GroundTruthInput = { setupHash: saved.setupHash, frames: saved.frames };
+      const savedInput: GroundTruthInput = {
+        setupHash: saved.setupHash,
+        ...(saved.scaffoldSeedHash ? { scaffoldSeedHash: saved.scaffoldSeedHash } : {}),
+        frames: saved.frames,
+      };
       existingGtRef.current = savedInput;
       setTruthAccepted(hasAcceptedGroundTruth(savedInput));
       setTruthSetupHash(saved.setupHash);
+      setTruthScaffoldSeedHash(saved.scaffoldSeedHash ?? "");
       setGtSave({ ok: true, message: "Ground Truth saved." });
     } catch (err) {
       setGtSave({ ok: false, message: err instanceof Error ? err.message : String(err) });
@@ -764,8 +806,9 @@ export default function Calibrator({
           role="status"
           className="mx-4 mt-2 shrink-0 rounded-md border border-caution-border bg-caution-surface px-3 py-2 text-xs text-caution"
         >
-          This video&apos;s Ground Truth was accepted under an older calibration — it pairs with no
-          run scanned under the current Setup, so it is stale evidence.{" "}
+          {staleAxis === "calibration"
+            ? "This video's Ground Truth was accepted under an older calibration — it pairs with no run scanned under the current Setup, so it is stale evidence."
+            : "This video's Ground Truth was authored from an older ViTPose scaffold — the scaffold on disk has been re-seeded since, so every frame it now poses that this truth calls absent scores as a hallucination."}{" "}
           {reseedAffordance === "review-seed"
             ? "A fresh ViTPose scaffold is already on disk: use Review seed to go straight to the review and re-accept — no new job needed."
             : "Use Re-seed Ground Truth to re-run ViTPose and re-accept."}{" "}

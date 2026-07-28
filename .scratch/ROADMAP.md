@@ -44,7 +44,9 @@ Actionable PRDs that are not first in line.
 be able to see first, and the review surfaces PRD builds that viewer.
 
 `harness-contract-adr0007-adoption` is `in-progress` and not listed above — its
-remaining issue 03 is an independent correctness fix that can land in any order.
+remaining issues 03 and 04 are independent correctness fixes that can land in any
+order. Issue 04 (scaffold provenance on Ground Truth) is worth landing before the
+harness's corpus re-accept pass so those truths are stamped as they are written.
 Its issue 02 sweep is superseded by `dev-harness-review-surfaces` issue 05.
 
 ## Parked

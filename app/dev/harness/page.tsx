@@ -383,21 +383,21 @@ export default function HarnessPage() {
                     ) : it.truthStale && it.untrackable ? (
                       <span
                         className="rounded bg-surface-alt px-1.5 py-0.5 text-xs text-fg-muted"
-                        title="Ground Truth is stale and the last re-seed tracked no Climber with the current seed — held out of the batch sweeps. Open Re-calibrate, re-tap the Climber, and re-seed to retry."
+                        title="Ground Truth is stale (an older calibration or an older ViTPose scaffold) and the last re-seed tracked no Climber with the current seed — held out of the batch sweeps. Open Re-calibrate, re-tap the Climber, and re-seed to retry."
                       >
                         stale · no landmarks
                       </span>
                     ) : it.truthStale && it.seedReady ? (
                       <span
                         className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
-                        title="Annotations were accepted under an older calibration, but a fresh ViTPose scaffold is already on disk — open Re-calibrate to review and re-accept, no new job needed"
+                        title="Annotations were accepted against an older calibration or an older ViTPose scaffold, but a fresh scaffold is already on disk — open Re-calibrate to review and re-accept, no new job needed"
                       >
                         stale · seed ready
                       </span>
                     ) : it.truthStale ? (
                       <span
                         className="rounded bg-caution-surface px-1.5 py-0.5 text-xs text-caution"
-                        title="Annotations were accepted under an older calibration — re-run ViTPose and re-accept"
+                        title="Annotations were accepted against an older calibration or an older ViTPose scaffold — re-run ViTPose and re-accept"
                       >
                         stale
                       </span>

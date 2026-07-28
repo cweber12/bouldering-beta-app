@@ -10,7 +10,10 @@
  * core-joint positions (video-normalized), a per-joint `occluded` flag, a
  * `review` provenance value, and a `verified` flag. The file also carries the
  * top-level `setupHash` of the Scan Setup its seed was built from, so the
- * harness refuses to compare truth against runs from a different setup.
+ * harness refuses to compare truth against runs from a different setup, and the
+ * `scaffoldSeedHash` of the ViTPose scaffold it was authored from, so a
+ * regenerated scaffold cannot leave the truth silently describing the
+ * superseded one.
  *
  * Framework-agnostic — no React imports. Used by the calibration page (client),
  * the dev proxy (server), and the headless scoring pass, so it must produce a
@@ -114,6 +117,20 @@ export interface GroundTruthInput {
    * the canonical pre-image so a re-pairing yields a new `groundTruthHash`.
    */
   setupHash: string;
+  /**
+   * The `seedHash` of the ViTPose scaffold this truth was authored from (harness
+   * ADR 0007, their issue #119). `setupHash` tracks the *calibration*, which a
+   * re-seed leaves untouched — so without this a regenerated scaffold leaves the
+   * truth describing the superseded one with nothing able to tell, and every
+   * newly-posed frame the old truth calls absent is scored as a hallucination.
+   *
+   * Absent when the seeding scaffold predates ADR 0007 and carried no hash:
+   * unknown provenance, never a failure (see {@link truthScaffoldIsStale}).
+   * Deliberately **not** part of the canonical pre-image — it is provenance
+   * about where the reference came from, not part of the reference being scored,
+   * so stamping it moves no existing `groundTruthHash`.
+   */
+  scaffoldSeedHash?: string;
 }
 
 /** A persisted Ground Truth: the content plus its joint set, hash, timestamp. */
@@ -146,6 +163,10 @@ function canonJoints(joints: Record<string, GroundTruthJoint>) {
  * Deterministic string form of the Ground Truth (frames sorted by index, joints
  * sorted by name, numbers rounded, joint-set definition folded in) — the
  * pre-image for {@link hashGroundTruthInput}.
+ *
+ * `scaffoldSeedHash` is deliberately absent: it records where the reference came
+ * from, not what the reference *is*, and folding it in would move the hash of
+ * every truth that gains a stamp without its frames changing. Do not add it.
  */
 export function canonicalGroundTruthInput(input: GroundTruthInput): string {
   const frames = [...input.frames]
@@ -275,6 +296,15 @@ export function parseGroundTruthInput(
     return null;
   }
 
+  // Scaffold provenance is always optional — truth authored from a pre-ADR 0007
+  // scaffold has none to stamp. A present-but-wrong-typed value is still a
+  // malformed body and is rejected.
+  if (b.scaffoldSeedHash !== undefined && typeof b.scaffoldSeedHash !== "string") return null;
+  const scaffoldSeedHash =
+    typeof b.scaffoldSeedHash === "string" && b.scaffoldSeedHash.length > 0
+      ? b.scaffoldSeedHash
+      : undefined;
+
   const frames: GroundTruthFrame[] = [];
   const seen = new Set<number>();
   for (const raw of b.frames) {
@@ -285,7 +315,7 @@ export function parseGroundTruthInput(
     frames.push(frame);
   }
 
-  return { frames, setupHash };
+  return { frames, setupHash, ...(scaffoldSeedHash ? { scaffoldSeedHash } : {}) };
 }
 
 // ---------------------------------------------------------------------------

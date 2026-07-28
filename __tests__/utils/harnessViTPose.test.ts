@@ -183,11 +183,27 @@ describe("parseViTPoseScaffold", () => {
     });
   });
 
+  // The ADR 0007 seed hash — the stamp Ground Truth copies to record which
+  // scaffold it was authored from. `setupHash` cannot stand in for it: a re-seed
+  // moves the seed hash and leaves the calibration alone.
+  it("accepts an optional seedHash on ADR 0007 artifacts", () => {
+    expect(parseViTPoseScaffold({ ...scaffold, seedHash: "3c6b5831a1b2c3d4" })).toEqual({
+      ...scaffold,
+      seedHash: "3c6b5831a1b2c3d4",
+    });
+  });
+
+  it("omits an absent or empty seedHash rather than carrying a blank stamp", () => {
+    expect(parseViTPoseScaffold(scaffold)).not.toHaveProperty("seedHash");
+    expect(parseViTPoseScaffold({ ...scaffold, seedHash: "" })).not.toHaveProperty("seedHash");
+  });
+
   it("rejects a non-object, a missing version, and a non-array frames", () => {
     expect(parseViTPoseScaffold(null)).toBeNull();
     expect(parseViTPoseScaffold({ frames: [] })).toBeNull();
     expect(parseViTPoseScaffold({ version: 1, frames: {} })).toBeNull();
     expect(parseViTPoseScaffold({ version: 1, setupHash: 123, frames: [] })).toBeNull();
+    expect(parseViTPoseScaffold({ version: 1, seedHash: 123, frames: [] })).toBeNull();
   });
 
   it("rejects a malformed keypoint or frame", () => {
