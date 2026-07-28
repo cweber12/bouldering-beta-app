@@ -103,13 +103,35 @@ export const DEFAULT_METADATA_TIMEOUT_MS = 30_000;
 const HAVE_METADATA = 1;
 
 /**
+ * JS heap usage, when the browser reports it (Chrome only, non-standard).
+ *
+ * Attached to the timeout message because a metadata stall leaves no evidence of
+ * its own: no error event, no state change, nothing to inspect afterwards. A
+ * heap reading taken at the moment of the stall is the one cheap discriminator
+ * between "the tab is out of memory" and "something else is wrong", and a batch
+ * sweep is expensive enough to repeat that it is worth capturing in-band.
+ */
+function heapNote(): string {
+  const memory = (
+    performance as unknown as {
+      memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+    }
+  ).memory;
+  if (!memory) return "";
+  const mb = (bytes: number) => Math.round(bytes / 1e6);
+  return ` (JS heap ${mb(memory.usedJSHeapSize)}/${mb(memory.jsHeapSizeLimit)} MB)`;
+}
+
+/**
  * Resolve once `video` has reported its metadata (duration and dimensions).
  *
- * Bounded for the same reason as {@link seekVideo}, and for one specific
- * failure: a browser whose media-decoder pool is exhausted stops firing
- * `loadedmetadata` **silently** — no `error` event ever arrives. A batch sweep
- * that creates one element per video walks into this, and an unbounded await
- * then hangs the whole sweep on a run that has not decoded a single frame.
+ * Bounded for the same reason as {@link seekVideo}, and for one observed
+ * failure: partway through a batch sweep the browser stops firing
+ * `loadedmetadata` **silently** — no `error` event ever arrives — and an
+ * unbounded await then hangs the whole sweep on a video it never decoded.
+ * Why it stops is still open (decoder-pool exhaustion was ruled out by probe;
+ * tab memory is the current suspect), which is why the timeout carries a heap
+ * reading rather than a diagnosis.
  *
  * Rejects with a plain `Error` — unlike a seek, neither a timeout nor an abort
  * is recoverable here, so the caller has no reason to tell them apart beyond
@@ -164,10 +186,7 @@ export function loadVideoMetadata(
       timer = setTimeout(() => {
         cleanup();
         reject(
-          new Error(
-            `Video metadata did not load within ${timeoutMs}ms — the browser's ` +
-              `media decoder pool may be exhausted.`,
-          ),
+          new Error(`Video metadata did not load within ${timeoutMs}ms${heapNote()}`),
         );
       }, timeoutMs);
     }
