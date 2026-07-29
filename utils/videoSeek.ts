@@ -102,24 +102,50 @@ export const DEFAULT_METADATA_TIMEOUT_MS = 30_000;
 /** `HTMLMediaElement.HAVE_METADATA` — not a global in every test environment. */
 const HAVE_METADATA = 1;
 
+/** `HTMLMediaElement.networkState` values, named for the stall message. */
+const NETWORK_STATE = ["empty", "idle", "loading", "no-source"] as const;
+
 /**
- * JS heap usage, when the browser reports it (Chrome only, non-standard).
+ * Is the page hidden, and therefore not being given media-loading time?
  *
- * Attached to the timeout message because a metadata stall leaves no evidence of
- * its own: no error event, no state change, nothing to inspect afterwards. A
- * heap reading taken at the moment of the stall is the one cheap discriminator
- * between "the tab is out of memory" and "something else is wrong", and a batch
- * sweep is expensive enough to repeat that it is worth capturing in-band.
+ * Exported so callers that also measure progress against a clock can hold it
+ * while the browser is not letting anything progress.
  */
-function heapNote(): string {
+export function isHidden(): boolean {
+  return typeof document !== "undefined" && document.hidden;
+}
+
+/**
+ * The element's own account of why it is not progressing, captured at the moment
+ * a stall is declared.
+ *
+ * A metadata stall leaves no evidence behind — no error event, no state change,
+ * nothing to inspect afterwards — so whatever is not captured here is lost, and
+ * the sweep that produces it is expensive to repeat. `networkState` is the field
+ * that discriminates: `no-source` means the source was rejected outright, `idle`
+ * means loading was started and then **suspended** (what a deprioritised or
+ * backgrounded page looks like), and `loading` means bytes were still being
+ * pulled when the clock ran out. `visibilityState` is here because a hidden page
+ * is the most common reason a browser suspends media loading while leaving
+ * `fetch` untouched.
+ */
+function stallNote(video: HTMLVideoElement): string {
+  const parts = [
+    `network ${NETWORK_STATE[video.networkState] ?? video.networkState}`,
+    `readyState ${video.readyState}`,
+  ];
+  if (video.error) parts.push(`mediaError ${video.error.code}`);
+  if (typeof document !== "undefined") parts.push(`page ${document.visibilityState}`);
   const memory = (
     performance as unknown as {
       memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
     }
   ).memory;
-  if (!memory) return "";
-  const mb = (bytes: number) => Math.round(bytes / 1e6);
-  return ` (JS heap ${mb(memory.usedJSHeapSize)}/${mb(memory.jsHeapSizeLimit)} MB)`;
+  if (memory) {
+    const mb = (bytes: number) => Math.round(bytes / 1e6);
+    parts.push(`JS heap ${mb(memory.usedJSHeapSize)}/${mb(memory.jsHeapSizeLimit)} MB`);
+  }
+  return ` (${parts.join(", ")})`;
 }
 
 /**
@@ -183,12 +209,26 @@ export function loadVideoMetadata(
     signal?.addEventListener("abort", onAbort);
 
     if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error(`Video metadata did not load within ${timeoutMs}ms${heapNote()}`),
-        );
-      }, timeoutMs);
+      // Browsers suspend media loading on a hidden page while leaving `fetch`
+      // untouched: no bytes move, no events fire, and nothing is wrong. Elapsed
+      // wall-clock therefore says nothing about the element's health, so a
+      // hidden page gets the budget back rather than being called a stall — the
+      // wait resumes when the page is visible again. This is what a background
+      // tab did to a batch sweep: it stalled at whichever video was in flight
+      // when the operator looked away.
+      const arm = () => {
+        timer = setTimeout(() => {
+          if (isHidden()) {
+            arm();
+            return;
+          }
+          cleanup();
+          reject(
+            new Error(`Video metadata did not load within ${timeoutMs}ms${stallNote(video)}`),
+          );
+        }, timeoutMs);
+      };
+      arm();
     }
   });
 }

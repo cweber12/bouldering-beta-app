@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAnalyzeRun, type AnalyzeRunItem } from "@/hooks/useAnalyzeRun";
+import { isHidden } from "@/utils/videoSeek";
 import type { BatchAnalyzeCandidate, BatchAnalyzePlan } from "@/utils/harnessBatch";
 
 /** What became of one batch entry. */
@@ -92,15 +93,28 @@ function BatchItemRunner({
   // Stall backstop. The effect re-arms whenever any progress signal changes, so
   // the timer only reaches zero if the entry has genuinely stopped moving.
   // `report` is idempotent, so a late fire after a real outcome is harmless.
+  //
+  // A hidden page is held, not failed: the browser suspends media loading while
+  // the tab is in the background, so no progress is expected and none of that
+  // time counts. Without this the sweep would burn one entry every backstop
+  // period for as long as the operator was looking elsewhere.
   const progress = `${loading}|${phase}|${currentFrame}|${post.status}`;
   useEffect(() => {
-    const timer = setTimeout(() => {
-      report({
-        status: "failed",
-        message: `No progress for ${ENTRY_STALL_TIMEOUT_MS / 60_000} min — skipped.`,
-        scored: false,
-      });
-    }, ENTRY_STALL_TIMEOUT_MS);
+    let timer: ReturnType<typeof setTimeout>;
+    const arm = () => {
+      timer = setTimeout(() => {
+        if (isHidden()) {
+          arm();
+          return;
+        }
+        report({
+          status: "failed",
+          message: `No progress for ${ENTRY_STALL_TIMEOUT_MS / 60_000} min — skipped.`,
+          scored: false,
+        });
+      }, ENTRY_STALL_TIMEOUT_MS);
+    };
+    arm();
     return () => clearTimeout(timer);
   }, [progress, report]);
 
@@ -235,7 +249,9 @@ export default function BatchAnalyzer({
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-surface p-4">
         <p className="text-xs text-fg-muted">
           Sweeping the {entries.length} corpus video{entries.length === 1 ? "" : "s"} with
-          accepted Ground Truth.{" "}
+          accepted Ground Truth. Keep this tab visible — browsers suspend video
+          decoding in a background tab, so the sweep pauses (it does not fail) while
+          you are looking elsewhere.{" "}
           {plan.skippedNoTruth > 0 && (
             <span className="text-caution">
               {plan.skippedNoTruth} skipped — no accepted Ground Truth.{" "}
