@@ -106,6 +106,16 @@ const HAVE_METADATA = 1;
 const NETWORK_STATE = ["empty", "idle", "loading", "no-source"] as const;
 
 /**
+ * Is the page hidden, and therefore not being given media-loading time?
+ *
+ * Exported so callers that also measure progress against a clock can hold it
+ * while the browser is not letting anything progress.
+ */
+export function isHidden(): boolean {
+  return typeof document !== "undefined" && document.hidden;
+}
+
+/**
  * The element's own account of why it is not progressing, captured at the moment
  * a stall is declared.
  *
@@ -199,12 +209,26 @@ export function loadVideoMetadata(
     signal?.addEventListener("abort", onAbort);
 
     if (timeoutMs > 0) {
-      timer = setTimeout(() => {
-        cleanup();
-        reject(
-          new Error(`Video metadata did not load within ${timeoutMs}ms${stallNote(video)}`),
-        );
-      }, timeoutMs);
+      // Browsers suspend media loading on a hidden page while leaving `fetch`
+      // untouched: no bytes move, no events fire, and nothing is wrong. Elapsed
+      // wall-clock therefore says nothing about the element's health, so a
+      // hidden page gets the budget back rather than being called a stall — the
+      // wait resumes when the page is visible again. This is what a background
+      // tab did to a batch sweep: it stalled at whichever video was in flight
+      // when the operator looked away.
+      const arm = () => {
+        timer = setTimeout(() => {
+          if (isHidden()) {
+            arm();
+            return;
+          }
+          cleanup();
+          reject(
+            new Error(`Video metadata did not load within ${timeoutMs}ms${stallNote(video)}`),
+          );
+        }, timeoutMs);
+      };
+      arm();
     }
   });
 }

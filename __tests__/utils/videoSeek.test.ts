@@ -163,4 +163,40 @@ describe("loadVideoMetadata", () => {
       loadVideoMetadata(video, { signal: controller.signal }),
     ).rejects.toThrow(/aborted/i);
   });
+
+  // The batch-sweep stall: a background tab has its media loading suspended by
+  // the browser, so no bytes move and no events fire. Counting that as elapsed
+  // failed whichever video was in flight when the operator looked away.
+  it("holds the timeout while the page is hidden, and resumes when visible", async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    const video = makeVideo();
+    let settled = false;
+    const p = loadVideoMetadata(video, { timeoutMs: 1000 }).catch(() => {
+      settled = true;
+    });
+
+    // Far past the budget, but the page is hidden — that is not a stall.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(settled).toBe(false);
+
+    // Visible again: the next full budget applies, then it gives up.
+    hidden.mockReturnValue(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    await p;
+    expect(settled).toBe(true);
+    expect(video.listenerCount()).toBe(0);
+    hidden.mockRestore();
+  });
+
+  it("still resolves while hidden if metadata does arrive", async () => {
+    vi.useFakeTimers();
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    const video = makeVideo();
+    const p = loadVideoMetadata(video, { timeoutMs: 1000 });
+    await vi.advanceTimersByTimeAsync(5000);
+    video.emit("loadedmetadata");
+    await expect(p).resolves.toBeUndefined();
+    hidden.mockRestore();
+  });
 });
