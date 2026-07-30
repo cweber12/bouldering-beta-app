@@ -325,6 +325,20 @@ trend analysis and rendered live in a dev panel. Self-contained by design: it
 never needs joining back to the Run's pose/ORB data to be useful.
 _Avoid_: logs, telemetry (those imply prod-side, server-collected streams).
 
+**Build Identity**:
+The pair of stamps every **Scan Diagnostics** record carries saying which code
+produced the run: `appVersion` (the checkout's short git SHA, resolved once when
+the dev server starts) and `detectorCodeHash` (a content hash of the detector
+modules read off disk when the run began — ADR 0025). Neither answers the
+question alone. `appVersion` is frozen at server start, so a hot reload moves the
+detector without moving it; `detectorCodeHash` moves with the code but names no
+commit. Read together they are diagnostic: **same `appVersion`, different hash**
+means a hot reload landed mid-batch and those runs are not one build, while
+**different `appVersion`, same hash** means a commit that never touched
+detection, so those runs pool legitimately. A null hash is _unknown provenance_,
+never a conflict — the same fail-open rule as an unstamped **Ground Truth**.
+_Avoid_: version, build number (both imply a single field settles it).
+
 **Match Diagnostics**:
 The detection-quality measurements produced when a **Run**'s reference features
 are matched to one image — the reference frame's conditions, the matched image's

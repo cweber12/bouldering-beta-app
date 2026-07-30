@@ -3,9 +3,13 @@
  *
  * Each scan produces a {@link ScanDiagnostics} record; each route-photo match
  * produces a {@link MatchDiagnostics} record. Both are self-contained — they
- * carry the full input conditions, resolved detection config, an `appVersion`
- * git SHA, and the result, keyed by SHA-256 content hashes — so dev-local trend
- * analysis needs no join back to the pose/ORB artifacts. One field,
+ * carry the full input conditions, resolved detection config, the build the run
+ * came from, and the result, keyed by SHA-256 content hashes — so dev-local
+ * trend analysis needs no join back to the pose/ORB artifacts. A scan record
+ * stamps the build as a *pair*: `appVersion` (the git SHA, frozen at dev-server
+ * start) and `detectorCodeHash` (derived from the detector source on disk when
+ * the run began), because a hot reload moves the second without the first. One
+ * field,
  * {@link ReferenceFrameMeta}, lives in S3 on the Run artifact (read back at
  * match time) rather than locally.
  *
@@ -169,6 +173,20 @@ export interface ScanDiagnostics {
   createdAt: string;
   videoHash: string;
   appVersion: string;
+  /**
+   * Content hash of the detector modules that produced this run, or null when
+   * it could not be resolved (unknown provenance — never a conflict).
+   *
+   * `appVersion` is resolved once at dev-server start, so a hot reload moves the
+   * detector without moving it. This field is derived from the source on disk at
+   * the moment the run began, which makes the drift visible: **the pair** is the
+   * signal. Same `appVersion` with a different hash means a hot reload landed
+   * mid-batch and those runs must not be pooled; a different `appVersion` with
+   * the same hash means a commit that never touched detection, and those runs
+   * legitimately pool. Neither field says anything useful alone, which is why
+   * both are stamped. See `app/api/dev/detectorSources.ts` for what it covers.
+   */
+  detectorCodeHash: string | null;
   input: {
     video: {
       width: number;
@@ -387,6 +405,8 @@ export interface ScanDiagnosticsInput {
   scanId: string;
   videoHash: string;
   appVersion: string;
+  /** Required, so a caller cannot silently drop the run's build identity. */
+  detectorCodeHash: string | null;
   video: ScanDiagnostics["input"]["video"];
   captureMode: CaptureMode;
   referenceAnalysis: FrameAnalysis;
@@ -411,6 +431,7 @@ export function buildScanDiagnostics(input: ScanDiagnosticsInput): ScanDiagnosti
     createdAt: input.createdAt ?? new Date().toISOString(),
     videoHash: input.videoHash,
     appVersion: input.appVersion,
+    detectorCodeHash: input.detectorCodeHash,
     input: {
       video: input.video,
       captureMode: input.captureMode,

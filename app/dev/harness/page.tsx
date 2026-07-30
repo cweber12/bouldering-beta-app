@@ -80,8 +80,43 @@ function CountPill({ n, tone }: { n: number; tone: "neutral" | "accent" }) {
   );
 }
 
+/**
+ * The build a batch is about to be spent under. `appVersion` is the git SHA the
+ * dev server booted from and freezes there; `detectorCodeHash` is derived from
+ * the detector source on disk, so it moves with a hot reload. Shown together
+ * because the cheapest pre-batch check is comparing this pair against the last
+ * posted run's — a matching stamp with a differing hash is the contamination
+ * signature (harness issue #130).
+ */
+function BuildIdentity({ appVersion, detectorCodeHash }: BuildIdentityState) {
+  return (
+    <div
+      className="flex items-center gap-2 font-mono text-xs text-fg-muted"
+      title="The build identity every run started from here will be stamped with. appVersion is frozen when the dev server boots; the detector hash is re-read from disk per run, so it moves when a hot reload changes detection code. Same appVersion with a different hash across a batch means the batch is not one build."
+    >
+      <span>{appVersion ?? "…"}</span>
+      <span aria-hidden className="text-edge">
+        ·
+      </span>
+      <span className={detectorCodeHash === null ? "text-caution" : undefined}>
+        detector {detectorCodeHash ?? "unavailable"}
+      </span>
+    </div>
+  );
+}
+
+/** The corpus response's build-identity pair, before the first load resolves. */
+interface BuildIdentityState {
+  appVersion: string | null;
+  detectorCodeHash: string | null;
+}
+
 export default function HarnessPage() {
   const [items, setItems] = useState<CorpusItem[] | null>(null);
+  const [build, setBuild] = useState<BuildIdentityState>({
+    appVersion: null,
+    detectorCodeHash: null,
+  });
   const [listError, setListError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Selection | null>(null);
   // A running batch sweep. The plan is frozen at click so a mid-sweep refresh
@@ -115,6 +150,11 @@ export default function HarnessPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Failed to load corpus.");
       setItems(body.items as CorpusItem[]);
+      setBuild({
+        appVersion: typeof body.appVersion === "string" ? body.appVersion : null,
+        detectorCodeHash:
+          typeof body.detectorCodeHash === "string" ? body.detectorCodeHash : null,
+      });
     } catch (err) {
       setListError(err instanceof Error ? err.message : String(err));
       setItems([]);
@@ -240,14 +280,17 @@ export default function HarnessPage() {
               Set up each Test Video, calibrate its Ground Truth, then run detection.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void refreshList()}
-            title="Reload the corpus list"
-            className="shrink-0 rounded-md border border-edge px-3 py-1.5 text-sm text-fg-muted transition-colors hover:border-edge-hover hover:text-fg"
-          >
-            Refresh
-          </button>
+          <div className="flex shrink-0 items-center gap-3">
+            <BuildIdentity {...build} />
+            <button
+              type="button"
+              onClick={() => void refreshList()}
+              title="Reload the corpus list — also re-reads the detector hash from disk"
+              className="rounded-md border border-edge px-3 py-1.5 text-sm text-fg-muted transition-colors hover:border-edge-hover hover:text-fg"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-t border-edge/40 pt-3">
           <span className="mr-1 text-xs font-medium uppercase tracking-wide text-fg-muted">

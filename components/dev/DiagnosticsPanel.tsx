@@ -159,7 +159,20 @@ export default function DiagnosticsPanel({ record, defaultOpen = false }: Diagno
       {open && (
         <div className="max-h-[60vh] overflow-y-auto rounded-b-md border border-t-0 border-edge bg-surface px-3 py-2.5">
           <div className="mb-2 flex items-center justify-between text-[10px] text-fg-muted">
-            <span className="font-mono">{record.appVersion}</span>
+            <span className="font-mono">
+              {record.appVersion}
+              {/* The other half of the build identity: appVersion freezes at
+                  dev-server start, this moves with a hot reload. Shown next to
+                  it so the pair can be read against the harness header's. */}
+              {record.recordType === "scan" && (
+                <span
+                  className="ml-1.5"
+                  title="Content hash of the detector modules this run executed. A run whose appVersion matches another's but whose detector hash does not came from different code."
+                >
+                  · {record.detectorCodeHash ?? "no hash"}
+                </span>
+              )}
+            </span>
             <span>{new Date(record.createdAt).toLocaleTimeString()}</span>
           </div>
 
