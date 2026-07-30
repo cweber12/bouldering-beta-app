@@ -76,6 +76,7 @@ import {
 import { hashFile } from "@/utils/hashFile";
 import { shipDiagnostics } from "@/utils/shipDiagnostics";
 import { APP_VERSION } from "@/utils/appVersion";
+import { fetchDetectorCodeHash } from "@/utils/detectorCodeHash";
 import {
   DETECTOR_ATTEMPT_FULL_FRAME_REGION,
   type DetectorAttempt,
@@ -639,6 +640,13 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
       }
 
       try {
+        // Build identity for this run, captured *before* a frame is touched: the
+        // detector modules as they are on disk at the moment the run starts.
+        // APP_VERSION is frozen when the dev server boots, so on its own it
+        // cannot tell a hot-reloaded batch from a clean one — this is the half
+        // that moves with the code. Read once per run, outside the frame loop.
+        const detectorCodeHash = DIAGNOSTICS_ENABLED ? await fetchDetectorCodeHash() : null;
+
         await loadVideoMetadata(video, { signal: seekController.signal });
 
         const { duration, videoWidth, videoHeight } = video;
@@ -1602,9 +1610,10 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
             );
 
             // ── Assemble + ship the Scan Diagnostics record ──────────────────
-            // Self-contained: full input conditions, resolved config, appVersion,
-            // and result, keyed by the video's content hash. Shipped to the
-            // dev-only sink and surfaced to the DiagnosticsPanel.
+            // Self-contained: full input conditions, resolved config, the
+            // appVersion + detectorCodeHash build-identity pair, and result,
+            // keyed by the video's content hash. Shipped to the dev-only sink
+            // and surfaced to the DiagnosticsPanel.
             if (DIAGNOSTICS_ENABLED && referenceFrameAnalysis && videoHash) {
               try {
                 const detectedRows = sampledStatus.filter((r) => r.detected);
@@ -1629,6 +1638,7 @@ export function useVideoProcessor(frameIntervalMs = 100): VideoProcessorResult {
                   scanId: id,
                   videoHash,
                   appVersion: APP_VERSION,
+                  detectorCodeHash,
                   video: {
                     width: videoWidth,
                     height: videoHeight,

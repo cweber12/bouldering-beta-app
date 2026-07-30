@@ -176,6 +176,7 @@ function scanInput(overrides: Partial<ScanDiagnosticsInput> = {}): ScanDiagnosti
     scanId: "run-1",
     videoHash: "abc",
     appVersion: "deadbee",
+    detectorCodeHash: "9f2c1a7b4d80",
     video: {
       width: 1920,
       height: 1080,
@@ -222,6 +223,8 @@ describe("buildScanDiagnostics", () => {
     expect(rec.schemaVersion).toBe(DIAGNOSTICS_SCHEMA_VERSION);
     expect(rec.recordType).toBe("scan");
     expect(rec.scanId).toBe("run-1");
+    expect(rec.appVersion).toBe("deadbee");
+    expect(rec.detectorCodeHash).toBe("9f2c1a7b4d80");
     expect(rec.input.referenceFrame.flags.isBacklit).toBe(true);
     expect(rec.result.pose.detectionRate).toBeCloseTo(0.875);
     expect(rec.result.overlayQuality).toBeNull();
@@ -231,6 +234,12 @@ describe("buildScanDiagnostics", () => {
     expect(buildScanDiagnostics(scanInput({ overlayQuality: "drift" })).result.overlayQuality).toBe(
       "drift",
     );
+  });
+
+  it("carries a null detectorCodeHash through as unknown provenance", () => {
+    // The route that derives it can fail; the record must say so rather than
+    // guess, because the harness reads an absent hash as "never a conflict".
+    expect(buildScanDiagnostics(scanInput({ detectorCodeHash: null })).detectorCodeHash).toBeNull();
   });
 
   it("uses a provided createdAt", () => {
