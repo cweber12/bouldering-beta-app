@@ -39,8 +39,14 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * Digest length in hex characters. Matches the shape of the other hashes in the
- * harness contract (`setupHash`, `seedHash`): lowercase hex, truncated.
+ * Digest length in hex characters — a SHA-256 truncated to lowercase hex.
+ *
+ * 12 because the harness handoff asked for 12–16 for this field. It is *not*
+ * parity with `setupHash` / `seedHash`: those are stored as full 64-char
+ * digests and truncated only for display (`hashSetupInput` in
+ * `utils/harnessSetup.ts`). The handoff described them as 12–16 and was wrong.
+ * Nothing depends on the two matching — the harness never parses this value, it
+ * compares it for equality and fails open on null.
  */
 export const DETECTOR_CODE_HASH_LENGTH = 12;
 
